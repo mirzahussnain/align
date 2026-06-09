@@ -1,26 +1,296 @@
 @import "tailwindcss";
 
+@custom-variant dark (&:where(.dark, .dark *));
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* HSL Color Tokens for Light Mode (default) */
+  --bg-primary: 210 20% 98%;
+  /* #f8fafc */
+  --bg-secondary: 0 0% 100%;
+  /* #f8fafc */
+  --bg-tertiary: 220 14% 96%;
+  /* #f1f5f9 */
+  --bg-elevated: 220 13% 91%;
+  /* #e2e8f0 */
+
+  --text-primary: 222 47% 11%;
+  /* #0f172a */
+  --text-secondary: 215 16% 47%;
+  /* #64748b */
+  --text-tertiary: 215 13% 64%;
+  /* #94a3b8 */
+
+  --border-subtle: 220 13% 91%;
+  --border-default: 220 13% 85%;
+
+  /* Semantic UI Backgrounds */
+  --bg-panel: 0 0% 100%;
+  --bg-card: 210 20% 98%;
+
+  /* Chart Colors (Light) */
+  --chart-1: 262 83% 58%; /* Purple */
+  --chart-2: 199 89% 48%; /* Cyan */
+  --chart-3: 38 92% 50%;  /* Amber */
+  --chart-4: 142 71% 45%; /* Emerald */
+  --chart-5: 346 84% 61%; /* Rose */
+
+  --glass-bg: rgba(255, 255, 255, 0.7);
+  --glass-border: rgba(15, 23, 42, 0.08);
+  --glass-shadow: rgba(15, 23, 42, 0.05);
+
+  --accent-purple: 262 83% 58%;
+  --accent-cyan: 199 89% 48%;
+
+  --success: 142 71% 45%;
+  --warning: 38 92% 50%;
+  --error: 346 84% 61%;
+  --info: 217 91% 60%;
+
+  /* Effects */
+  --shimmer-color: var(--accent-cyan);
+
+  /* Dynamic Gradients for Light Mode */
+  --gradient-purple: linear-gradient(135deg, hsl(262, 83%, 58%), hsl(280, 85%, 55%));
+  --gradient-cyan: linear-gradient(135deg, hsl(199, 89%, 48%), hsl(190, 75%, 45%));
+  --gradient-hero: linear-gradient(135deg, hsl(210, 40%, 98%) 0%, hsl(220, 25%, 96%) 50%, hsl(210, 40%, 98%) 100%);
+  --gradient-card: linear-gradient(145deg, hsl(0, 0%, 100%), hsl(210, 20%, 98%));
+
+  --background: hsl(var(--bg-primary));
+  --foreground: hsl(var(--text-primary));
 }
 
-@theme inline {
+.dark {
+  /* HSL Color Tokens for Dark Mode */
+  --bg-primary: 222 47% 6%;
+  /* Deep Navy Dark */
+  --bg-secondary: 222 30% 10%;
+  --bg-tertiary: 222 25% 14%;
+  --bg-elevated: 222 20% 18%;
+
+  --text-primary: 210 40% 95%;
+  --text-secondary: 215 20% 70%;
+  --text-tertiary: 215 15% 50%;
+
+  --border-subtle: 222 20% 18%;
+  --border-default: 222 15% 25%;
+
+  /* Semantic UI Backgrounds */
+  --bg-panel: 222 30% 10%;
+  --bg-card: 222 25% 14%;
+
+  /* Chart Colors (Dark) */
+  --chart-1: 262 83% 65%;
+  --chart-2: 199 89% 55%;
+  --chart-3: 38 92% 55%;
+  --chart-4: 142 71% 50%;
+  --chart-5: 346 84% 65%;
+
+  --glass-bg: rgba(15, 20, 35, 0.6);
+  --glass-border: rgba(255, 255, 255, 0.08);
+  --glass-shadow: rgba(0, 0, 0, 0.3);
+
+  /* Effects */
+  --shimmer-color: 199 89% 55%;
+
+  /* Dynamic Gradients for Dark Mode */
+  --gradient-hero: linear-gradient(135deg, hsl(222, 47%, 6%) 0%, hsl(250, 40%, 12%) 50%, hsl(222, 47%, 6%) 100%);
+  --gradient-card: linear-gradient(145deg, hsl(222, 30%, 12%), hsl(222, 35%, 8%));
+}
+
+@theme {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+
+  --color-bg-primary: hsl(var(--bg-primary));
+  --color-bg-secondary: hsl(var(--bg-secondary));
+  --color-bg-tertiary: hsl(var(--bg-tertiary));
+  --color-bg-elevated: hsl(var(--bg-elevated));
+  --color-bg-panel: hsl(var(--bg-panel));
+  --color-bg-card: hsl(var(--bg-card));
+
+  --color-text-primary: hsl(var(--text-primary));
+  --color-text-secondary: hsl(var(--text-secondary));
+  --color-text-tertiary: hsl(var(--text-tertiary));
+
+  --color-accent-purple: hsl(var(--accent-purple));
+  --color-accent-cyan: hsl(var(--accent-cyan));
+
+  --color-success: hsl(var(--success));
+  --color-warning: hsl(var(--warning));
+  --color-error: hsl(var(--error));
+  --color-info: hsl(var(--info));
+
+  --color-border-subtle: hsl(var(--border-subtle));
+  --color-border-default: hsl(var(--border-default));
+
+  --color-shimmer-color: hsl(var(--shimmer-color));
+
+  --color-chart-1: hsl(var(--chart-1));
+  --color-chart-2: hsl(var(--chart-2));
+  --color-chart-3: hsl(var(--chart-3));
+  --color-chart-4: hsl(var(--chart-4));
+  --color-chart-5: hsl(var(--chart-5));
+
+  /* Complex Backgrounds */
+  --background-image-flow-grid: radial-gradient(circle at 15% 25%, rgba(148, 163, 184, 0.18) 0 2px, transparent 3px), radial-gradient(circle at 85% 15%, rgba(148, 163, 184, 0.14) 0 2px, transparent 3px), radial-gradient(circle at 75% 75%, rgba(148, 163, 184, 0.18) 0 2px, transparent 3px), radial-gradient(circle at 25% 70%, rgba(148, 163, 184, 0.14) 0 2px, transparent 3px), linear-gradient(180deg, rgba(248, 250, 252, 0.96) 0%, rgba(255, 255, 255, 0.98) 60%, rgba(248, 250, 252, 1) 100%);
+  --background-image-hero-composite: linear-gradient(180deg, rgba(2, 60, 105, 0.85) 0%, rgba(56, 189, 248, 0.15) 100%), url('/assets/images/hero_composite_bg.png');
+  --background-image-cosmic-flare: radial-gradient(circle at center, hsla(199, 89%, 48%, 0.1) 0%, hsla(262, 83%, 58%, 0.03) 45%, transparent 70%);
+  --background-image-text-shimmer: linear-gradient(to right, rgba(255, 255, 255, 0.4) 0%, var(--color-shimmer-color) 25%, var(--color-accent-cyan) 50%, var(--color-shimmer-color) 75%, rgba(255, 255, 255, 0.4) 100%);
+  --background-image-gradient-purple: var(--gradient-purple);
+  --background-image-gradient-cyan: var(--gradient-cyan);
+  --background-image-gradient-hero: var(--gradient-hero);
+
+  --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+  --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+/* ===== Base Styles ===== */
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans);
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overflow-x: hidden;
+}
+
+/* ===== Scrollbar ===== */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: hsl(var(--bg-primary));
+}
+
+::-webkit-scrollbar-thumb {
+  background: hsl(var(--border-default));
+  border-radius: 999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--accent-purple));
+}
+
+/* ===== Glass Card ===== */
+.glass-card {
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  border-radius: 16px;
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  box-shadow: 0 8px 32px var(--glass-shadow);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.glass-card:hover {
+  border-color: rgba(255, 255, 255, 0.12);
+  box-shadow: 0 12px 40px var(--glass-shadow);
+}
+
+/* ===== Glow Effects ===== */
+.glow-purple {
+  box-shadow: 0 0 20px hsla(var(--accent-purple), 0.15),
+    0 0 60px hsla(var(--accent-purple), 0.08);
+}
+
+.glow-cyan {
+  box-shadow: 0 0 20px hsla(var(--accent-cyan), 0.15),
+    0 0 60px hsla(var(--accent-cyan), 0.08);
+}
+
+/* ===== Animations ===== */
+@keyframes float {
+
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+
+  50% {
+    transform: translateY(-6px);
+  }
+}
+
+.animate-float {
+  animation: float 3s ease-in-out infinite;
+}
+
+/* ===== Utility Classes ===== */
+.text-gradient-purple {
+  background: var(--gradient-purple);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.text-gradient-cyan {
+  background: var(--gradient-cyan);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.bg-hero-gradient {
+  background: var(--gradient-hero);
+}
+
+/* ===== Focus Styles ===== */
+:focus-visible {
+  outline: 2px solid hsl(var(--accent-purple));
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* ===== Input Styles ===== */
+input,
+select,
+textarea {
+  background: hsl(var(--bg-tertiary));
+  border: 1px solid hsl(var(--border-subtle));
+  color: hsl(var(--text-primary));
+  border-radius: 10px;
+  padding: 10px 14px;
+  font-size: 14px;
+  transition: all 0.2s ease;
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+  border-color: hsl(var(--accent-purple));
+  box-shadow: 0 0 0 3px hsla(var(--accent-purple), 0.15);
+  outline: none;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: hsl(var(--text-tertiary));
+}
+
+/* ===== Visual Utilities ===== */
+/* Diagonal Chevron Perspective Polygon Clip for Hero Banner */
+.chevron-perspective-hero {
+  clip-path: url(#hero-clip);
+  background: linear-gradient(180deg, rgba(2, 60, 105, 0.85) 0%, rgba(56, 189, 248, 0.15) 100%), url('/assets/images/hero_composite_bg.png') no-repeat center 35% / cover;
+}
+
+/* Landscape Wave Dividers */
+.landscape-wave-bg {
+  fill: url(#landscape-grad);
+}
+
+@utility hero-chevron {
+  background-position: center 35%;
+  clip-path: url(#hero-clip);
 }
