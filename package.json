@@ -7,6 +7,9 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
     "check:env": "node --experimental-strip-types --no-warnings scripts/check-env.mts",
     "check:env:live": "node --experimental-strip-types --no-warnings scripts/check-env.mts --live",
     "dev:up": "docker compose up -d --wait",
@@ -61,6 +64,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.2.6",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vitest": "^4.1.10"
   }
 }
