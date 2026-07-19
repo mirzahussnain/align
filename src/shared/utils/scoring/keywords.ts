@@ -3,7 +3,7 @@ import {
   type CareerTrack,
   type Industry,
   type KeywordTerm,
-} from '@/shared/constants/industry-keywords';
+} from '@/shared/constants/sector-keywords';
 import type { KeywordAnalysis, KeywordMatch, CategoryKeywordBreakdown } from '@/shared/types/cv';
 
 function escapeRegex(str: string): string {

@@ -2,7 +2,7 @@ import { AI_CONFIG } from '@/shared/lib/config';
 import { THINKING_BUDGETS } from '@/shared/lib/config';
 import type { CVAnalysisResult } from '@/shared/types/cv';
 import type { AISemanticOutput, AIJobMatchOutput } from '@/shared/types/ai';
-import { INDUSTRY_IDS } from '@/shared/constants/industry-keywords';
+import { INDUSTRY_IDS } from '@/shared/constants/sector-keywords';
 import { generateJSONFromAI } from './ai-orchestrator';
 
 export async function getSemanticCVFeedback(

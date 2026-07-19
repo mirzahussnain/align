@@ -1,4 +1,4 @@
-import type { Industry } from '@/shared/constants/industry-keywords';
+import type { Industry } from '@/shared/constants/sector-keywords';
 
 export interface AISemanticOutput {
   /**

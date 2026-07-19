@@ -13,7 +13,12 @@
 
 import { UK_TECH_KEYWORDS, KEYWORD_CATEGORY_LABELS } from './ats-keywords';
 
-export type Industry =
+// A sector describes the employment environment a CV's vocabulary comes from —
+// never the candidate's occupation. An NHS data analyst and a registered nurse
+// share the `healthcare_nhs` sector but are evaluated as different occupations
+// (see src/shared/occupations/). `Industry` is the legacy name for the same
+// union, kept as an alias until the sweep completes.
+export type Sector =
   | 'tech'
   | 'healthcare_nhs'
   | 'warehouse_logistics'
@@ -22,6 +27,9 @@ export type Industry =
   | 'law'
   | 'engineering'
   | 'general';
+
+/** @deprecated Use {@link Sector} — same union, clearer name. */
+export type Industry = Sector;
 
 /** Career tier, for industries where terms don't apply to every seniority. */
 export type CareerTrack = 'fee_earner' | 'support' | 'chartered' | 'technician';

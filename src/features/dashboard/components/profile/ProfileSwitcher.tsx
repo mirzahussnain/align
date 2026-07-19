@@ -9,19 +9,11 @@ import {
   deleteProfile,
   setDefaultProfile,
 } from '@/features/dashboard/actions/profile-actions';
-import { INDUSTRY_IDS } from '@/shared/constants/industry-keywords';
+import { INDUSTRY_IDS } from '@/shared/constants/sector-keywords';
+import { SECTOR_LABELS } from '@/shared/constants/sector-labels';
 import type { ProfileSummary } from '@/features/dashboard/data/load-profile';
 
-const INDUSTRY_LABELS: Record<string, string> = {
-  tech: 'Technology',
-  healthcare_nhs: 'Healthcare / NHS',
-  warehouse_logistics: 'Warehouse & Logistics',
-  retail: 'Retail',
-  admin_office: 'Admin & Office',
-  law: 'Law',
-  engineering: 'Engineering',
-  general: 'General',
-};
+const INDUSTRY_LABELS: Record<string, string> = SECTOR_LABELS;
 
 interface ProfileSwitcherProps {
   profiles: ProfileSummary[];

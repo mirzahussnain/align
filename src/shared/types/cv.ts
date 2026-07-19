@@ -1,6 +1,6 @@
 // CV Analysis Types
 import type { AIJobMatchOutput } from './ai';
-import type { Industry } from '@/shared/constants/industry-keywords';
+import type { Industry } from '@/shared/constants/sector-keywords';
 
 export interface CVAnalysisResult {
   overallScore: number;

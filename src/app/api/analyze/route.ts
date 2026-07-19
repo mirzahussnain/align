@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { analyzeCV } from '@/shared/utils/scoring-engine';
 import { analyzeKeywords } from '@/shared/utils/scoring/keywords';
-import { getIndustryDictionary, isKnownIndustry } from '@/shared/constants/industry-keywords';
+import { getIndustryDictionary, isKnownIndustry } from '@/shared/constants/sector-keywords';
 import { extractTextFromPDF } from '@/shared/utils/pdf-parser';
 import { getSemanticCVFeedback, getJobMatchFeedback } from '@/shared/services/ai-analyser';
 import { SCORING_WEIGHTS } from '@/shared/constants/scoring-config';
