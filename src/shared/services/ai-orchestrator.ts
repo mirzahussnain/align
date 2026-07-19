@@ -1,5 +1,6 @@
 import { GoogleGenAI } from '@google/genai';
 import Groq from 'groq-sdk';
+import type { ZodType } from 'zod';
 import { AI_CONFIG } from '@/shared/lib/config';
 
 const geminiClient = AI_CONFIG.gemini.apiKey ? new GoogleGenAI({ apiKey: AI_CONFIG.gemini.apiKey }) : null;
@@ -24,6 +25,17 @@ interface AIOrchestratorOptions {
   thinkingBudget?: number;
 }
 
+interface AIOrchestratorOptionsWithSchema<T> extends AIOrchestratorOptions {
+  /**
+   * When set, a response that parses as JSON but fails validation counts as a
+   * provider failure and falls through the chain, exactly like unparseable
+   * output. Schemas should validate strictly only the fields the code reads
+   * and pass unknown fields through — over-strictness here discards usable
+   * results.
+   */
+  schema?: ZodType<T>;
+}
+
 /**
  * Ask every configured provider in turn until one returns parseable JSON.
  *
@@ -34,8 +46,8 @@ interface AIOrchestratorOptions {
  * returned null straight out of the first attempt, so the fallback chain never
  * ran for by far the most common failure mode.
  */
-export async function generateJSONFromAI<T>(options: AIOrchestratorOptions): Promise<T | null> {
-  const { prompt, temperature = 0.1, thinkingBudget } = options;
+export async function generateJSONFromAI<T>(options: AIOrchestratorOptionsWithSchema<T>): Promise<T | null> {
+  const { prompt, temperature = 0.1, thinkingBudget, schema } = options;
 
   const attempts: { label: string; run: () => Promise<string> }[] = [];
 
@@ -85,7 +97,20 @@ export async function generateJSONFromAI<T>(options: AIOrchestratorOptions): Pro
     try {
       console.info(`[ai-orchestrator] Querying ${attempt.label} (attempt ${index + 1}/${attempts.length}).`);
       const parsed = parseJSONContent<T>(await attempt.run());
-      if (parsed !== null) return parsed;
+      if (parsed !== null) {
+        if (!schema) return parsed;
+
+        const validated = schema.safeParse(parsed);
+        if (validated.success) return validated.data;
+
+        console.warn(
+          `[ai-orchestrator] ${attempt.label} returned JSON that failed schema validation: ${validated.error.issues
+            .slice(0, 3)
+            .map(i => `${i.path.join('.')}: ${i.message}`)
+            .join('; ')}.${isLast ? ' All providers exhausted.' : ' Trying next provider…'}`
+        );
+        continue;
+      }
 
       console.warn(
         `[ai-orchestrator] ${attempt.label} returned no usable JSON.${isLast ? ' All providers exhausted.' : ' Trying next provider…'}`

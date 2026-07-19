@@ -39,6 +39,12 @@ export const THINKING_BUDGETS = {
   rewrite: 1024 as number | undefined,
   /** Relevance matching against a supplied inventory — mostly comparison. */
   profileReconcile: 768 as number | undefined,
+  /**
+   * Occupation classification of an ambiguous CV excerpt — pure extraction,
+   * fires only when deterministic tiers can't resolve it. Never metered
+   * against user quota.
+   */
+  classification: 0 as number | undefined,
 } as const;
 
 export const API_CONFIG = {
