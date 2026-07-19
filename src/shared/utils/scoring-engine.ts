@@ -3,7 +3,7 @@
 import { SCORING_WEIGHTS, SCORE_THRESHOLDS } from '@/shared/constants/scoring-config';
 import type { CVAnalysisResult, CategoryScore } from '@/shared/types/cv';
 
-import { analyzeKeywords } from './scoring/keywords';
+import { analyzeKeywords, type AnalyzeKeywordsOptions } from './scoring/keywords';
 import { analyzeSectionOrder } from './scoring/section-order';
 import { analyzeFormatting } from './scoring/formatting';
 import { analyzeCompliance } from './scoring/compliance';
@@ -12,8 +12,12 @@ import { analyzeProfessionalSummary } from './scoring/summary';
 import { analyzeATSReadability } from './scoring/readability';
 import { generateRecommendations } from './scoring/recommendations';
 
-export function analyzeCV(text: string, pageCount: number): CVAnalysisResult {
-  const keywords = analyzeKeywords(text);
+export function analyzeCV(
+  text: string,
+  pageCount: number,
+  keywordOptions: AnalyzeKeywordsOptions = {}
+): CVAnalysisResult {
+  const keywords = analyzeKeywords(text, keywordOptions);
   const sectionOrder = analyzeSectionOrder(text);
   const formatting = analyzeFormatting(text, pageCount);
   const compliance = analyzeCompliance(text);
@@ -25,7 +29,7 @@ export function analyzeCV(text: string, pageCount: number): CVAnalysisResult {
     buildCategoryScore('compliance', 'UK Compliance', compliance.filter(c => c.passed).length, compliance.length),
     buildCategoryScore('pageCount', 'Page Count', pageCount <= 2 ? (pageCount === 2 ? 9 : 10) : Math.max(3, 10 - (pageCount - 2) * 3), 10),
     buildCategoryScore('sectionOrder', 'Section Ordering', sectionOrder.isOptimal ? 10 : Math.max(3, 10 - sectionOrder.suggestions.length * 2), 10),
-    buildCategoryScore('keywordDensity', 'Keyword Coverage', Math.round(keywords.present.length / (keywords.present.length + keywords.missing.length) * 10), 10),
+    buildCategoryScore('keywordDensity', 'Keyword Coverage', keywordCoverageScore(keywords), 10),
     buildCategoryScore('impactStatements', 'Impact Statements', impactScore, 10),
     buildCategoryScore('atsReadability', 'ATS Readability', analyzeATSReadability(text), 10),
     buildCategoryScore('professionalSummary', 'Professional Summary', summaryScore, 10),
@@ -51,6 +55,18 @@ export function analyzeCV(text: string, pageCount: number): CVAnalysisResult {
     rawText: text,
     pageCount,
   };
+}
+
+/**
+ * Coverage as a 0–10 score. An industry with no dictionary yet yields an empty
+ * analysis, which would otherwise divide by zero and poison the overall score
+ * with NaN — score it 0 and let the AI layer recompute coverage for that CV.
+ */
+function keywordCoverageScore(keywords: CVAnalysisResult['keywords']): number {
+  const total = keywords.present.length + keywords.missing.length;
+  if (total === 0) return 0;
+
+  return Math.round((keywords.present.length / total) * 10);
 }
 
 function buildCategoryScore(id: string, label: string, score: number, maxScore: number): CategoryScore {

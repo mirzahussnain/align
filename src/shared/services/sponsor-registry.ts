@@ -177,3 +177,25 @@ export async function isCompanySponsor(companyName: string): Promise<boolean> {
 
   return sponsorSetCache.has(standardized);
 }
+
+/**
+ * Batch-checks an array of company names against the UK Sponsor Registry.
+ * Loads the registry ONCE from cache, then performs all lookups in O(n) time.
+ * Use this instead of calling isCompanySponsor() in a loop to avoid N+1 async calls.
+ *
+ * @returns A Map<companyName, boolean> for O(1) lookups in the caller.
+ */
+export async function batchCheckSponsors(companyNames: string[]): Promise<Map<string, boolean>> {
+  if (!companyNames.length) return new Map();
+
+  // Ensure cache is populated once
+  await getSponsors();
+
+  const result = new Map<string, boolean>();
+  for (const name of companyNames) {
+    if (!name) { result.set(name, false); continue; }
+    const standardized = standardizeCompanyName(name);
+    result.set(name, sponsorSetCache?.has(standardized) ?? false);
+  }
+  return result;
+}

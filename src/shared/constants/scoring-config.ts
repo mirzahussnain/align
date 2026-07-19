@@ -66,7 +66,14 @@ export const SECTION_HEADINGS_MAP: Record<string, string[]> = {
   ],
 };
 
-// UK Equality Act 2010 compliance checks
+// UK Equality Act 2010 compliance checks.
+//
+// These patterns run against raw CV prose, so they are written for PRECISION,
+// not recall. A false positive silently costs the candidate a weighted 10% of
+// their score and shows them an issue that isn't there; a false negative only
+// misses a disclosure that is rare to begin with. Where a bare term collides
+// with ordinary CV vocabulary, the pattern requires the labelled-field form
+// ("Marital status: Single") that an actual disclosure takes.
 export const UK_COMPLIANCE_RULES = [
   {
     id: 'no-photo',
@@ -79,10 +86,12 @@ export const UK_COMPLIANCE_RULES = [
     rule: 'No date of birth',
     description: 'Age should not be disclosed on UK CVs',
     patterns: [
-      /\b\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}\b/,
       /\bdate of birth\b/i,
-      /\bD\.?O\.?B\.?\b/i,
-      /\bborn\s+(?:on|in)\b/i,
+      /\bD\.?O\.?B\.?\s*[:\-]/i,
+      /\bborn\s+(?:on|in)\s+\d/i,
+      // A bare dd/mm/yyyy is indistinguishable from an employment date written
+      // in UK format, so a full date only counts when a birth cue precedes it.
+      /(?:date of birth|d\.?o\.?b\.?|born)\D{0,20}\d{1,2}[\/\-.]\d{1,2}[\/\-.]\d{2,4}/i,
     ],
   },
   {
@@ -91,7 +100,13 @@ export const UK_COMPLIANCE_RULES = [
     description: 'Marital status should not appear on UK CVs',
     patterns: [
       /\bmarital status\b/i,
-      /\b(?:single|married|divorced|widowed|civil partnership)\b/i,
+      /\bcivil partnership\b/i,
+      // "single" is dropped as a bare term — it is everywhere on real CVs
+      // ("single sign-on", "single-page application", "single source of
+      // truth"), so it is only a disclosure when it labels a status field.
+      /\b(?:marital\s+)?status\s*[:\-]\s*(?:single|married|divorced|widowed)\b/i,
+      // These three have no common CV homonym, so they stand alone.
+      /\b(?:married|divorced|widowed)\b/i,
     ],
   },
   {
@@ -101,7 +116,12 @@ export const UK_COMPLIANCE_RULES = [
     patterns: [
       /\bnationality\b/i,
       /\bethnicity\b/i,
-      /\bcitizen(?:ship)?\b/i,
+      /\bethnic origin\b/i,
+      /\bplace of birth\b/i,
+      // "citizen"/"citizenship" is deliberately NOT a violation here. Stating
+      // right to work ("British citizen, no sponsorship required") is advisable
+      // for this product's audience and is a different disclosure from
+      // volunteering nationality as a personal characteristic.
     ],
   },
   {
@@ -110,8 +130,11 @@ export const UK_COMPLIANCE_RULES = [
     description: 'Gender should not be specified on UK CVs',
     patterns: [
       /\bgender\b/i,
-      /\bsex\b/i,
-      /\b(?:male|female)\b/i,
+      /\bsex\s*[:\-]/i,
+      // Bare "male"/"female" appears in legitimate context (e.g. a "Women in
+      // Tech" or "Female Founders" network under volunteering), so it only
+      // counts when labelled as a personal detail.
+      /\b(?:sex|gender)\s*[:\-]\s*(?:male|female)\b/i,
     ],
   },
   {
@@ -120,7 +143,10 @@ export const UK_COMPLIANCE_RULES = [
     description: 'Religious beliefs should not appear on CVs',
     patterns: [
       /\breligion\b/i,
-      /\bfaith\b/i,
+      /\breligious belief/i,
+      // Bare "faith" is dropped — "acted in good faith" is standard legal and
+      // commercial CV prose.
+      /\bfaith\s*[:\-]/i,
     ],
   },
 ] as const;

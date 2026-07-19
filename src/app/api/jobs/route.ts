@@ -2,13 +2,18 @@ import { NextRequest, NextResponse } from 'next/server';
 import { searchAdzunaJobs } from '@/shared/services/adzuna';
 import { searchReedJobs } from '@/shared/services/reed';
 import { searchJoobleJobs } from '@/shared/services/jooble';
-import { isCompanySponsor } from '@/shared/services/sponsor-registry';
+import { isCompanySponsor, batchCheckSponsors } from '@/shared/services/sponsor-registry';
 import type { JobSearchParams, Job } from '@/shared/types/job';
 import { withErrorHandler, APIError } from '@/shared/utils/api-error';
 import { JobsQuerySchema } from './schema';
+import { applyRateLimit, jobsLimiter } from '@/shared/lib/rate-limit';
 
 export async function GET(request: NextRequest) {
   return withErrorHandler(async () => {
+    const ip = request.headers.get('x-forwarded-for') ?? 'anonymous';
+    const rateLimitResponse = await applyRateLimit(jobsLimiter, ip);
+    if (rateLimitResponse) return rateLimitResponse;
+
     const { searchParams } = new URL(request.url);
 
     const parsed = JobsQuerySchema.safeParse(Object.fromEntries(searchParams.entries()));
@@ -56,7 +61,7 @@ export async function GET(request: NextRequest) {
       fetchPromises.push(
         searchAdzunaJobs(params)
           .then((r) => results.push({ source: 'adzuna', jobs: r.jobs, total: r.total }))
-          .catch((e) => results.push({ source: 'adzuna', jobs: [], total: 0, error: e.message }))
+          .catch(() => results.push({ source: 'adzuna', jobs: [], total: 0, error: 'PROVIDER_ERROR' }))
       );
     }
 
@@ -64,7 +69,7 @@ export async function GET(request: NextRequest) {
       fetchPromises.push(
         searchReedJobs(params)
           .then((r) => results.push({ source: 'reed', jobs: r.jobs, total: r.total }))
-          .catch((e) => results.push({ source: 'reed', jobs: [], total: 0, error: e.message }))
+          .catch(() => results.push({ source: 'reed', jobs: [], total: 0, error: 'PROVIDER_ERROR' }))
       );
     }
 
@@ -72,7 +77,7 @@ export async function GET(request: NextRequest) {
       fetchPromises.push(
         searchJoobleJobs(params)
           .then((r) => results.push({ source: 'jooble', jobs: r.jobs, total: r.total }))
-          .catch((e) => results.push({ source: 'jooble', jobs: [], total: 0, error: e.message }))
+          .catch(() => results.push({ source: 'jooble', jobs: [], total: 0, error: 'PROVIDER_ERROR' }))
       );
     }
 
@@ -81,16 +86,13 @@ export async function GET(request: NextRequest) {
     // Combine and deduplicate
     const allJobs = results.flatMap((r) => r.jobs);
 
-    // 1. Resolve Sponsorship via GOV.UK Registry
-    const enhancedJobs = await Promise.all(
-      allJobs.map(async (job) => {
-        const hasSponsorship = await isCompanySponsor(job.company);
-        return {
-          ...job,
-          hasSponsorship,
-        };
-      })
-    );
+    // 1. Batch-resolve Sponsorship via GOV.UK Registry (single registry load, O(n) lookups)
+    const companyNames = allJobs.map((job) => job.company);
+    const sponsorMap = await batchCheckSponsors(companyNames);
+    const enhancedJobs = allJobs.map((job) => ({
+      ...job,
+      hasSponsorship: sponsorMap.get(job.company) ?? false,
+    }));
 
     // 2. Post-fetch filtering
     let filteredJobs = enhancedJobs;

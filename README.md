@@ -69,7 +69,7 @@ Align is designed to bridge the gap between candidate resumes and the strict, au
 ## 🚦 Getting Started
 
 ### Prerequisites
-Ensure you have `Node.js` (v20+) installed.
+`Node.js` (v20+) and `Docker` (for the local database).
 
 ### 1. Clone the repository
 ```bash
@@ -99,7 +99,39 @@ UPSTASH_REDIS_REST_URL=your_upstash_url
 UPSTASH_REDIS_REST_TOKEN=your_upstash_token
 ```
 
-### 4. Run the Development Server
+### 4. Start the Local Database
+Development runs against a local Postgres container, **not** the hosted Neon
+instance — so resetting the schema or generating throwaway test analyses never
+pollutes real user data.
+
+```bash
+npm run db:setup   # starts Postgres, applies migrations, generates the client
+```
+
+The container uses the `pgvector` image (extensions `vector` and `pg_trgm` are
+enabled on first boot), and binds host port **5433** so it cannot collide with a
+Postgres already installed on your machine. Set in `.env.local`:
+
+```env
+DATABASE_URL="postgresql://align:align@localhost:5433/align?schema=public"
+```
+
+| Command | What it does |
+| --- | --- |
+| `npm run db:up` | Start the container and wait until it's ready |
+| `npm run db:down` | Stop it, **keeping** the data |
+| `npm run db:nuke` | Stop it and **delete the volume** — a truly clean slate |
+| `npm run db:reset` | Drop, re-apply every migration, on the current `DATABASE_URL` |
+| `npm run db:migrate` | Create a new migration from schema changes |
+| `npm run db:studio` | Browse the data in Prisma Studio |
+
+> **Connecting to Neon instead:** point `DATABASE_URL` at the pooled endpoint and
+> also set `DIRECT_URL` to the same host with `-pooler` removed. Prisma Migrate
+> needs the direct connection for DDL and advisory locks, which PgBouncer does
+> not reliably support; the app keeps using the pooled URL. Treat `db:reset` and
+> `db:nuke` as local-only commands.
+
+### 5. Run the Development Server
 ```bash
 npm run dev
 ```

@@ -50,7 +50,10 @@ const INTEGRATIONS = [
 
 export default function HubsSection() {
   return (
-    <section className="relative py-24 md:py-32 px-4 sm:px-6 lg:px-8 bg-bg-primary bg-cosmic-flare z-10 border-t border-border-subtle/40">
+    <section
+      id="features"
+      className="relative py-24 md:py-32 px-4 sm:px-6 lg:px-8 bg-bg-primary bg-cosmic-flare z-10 border-t border-border-subtle/40 scroll-mt-24"
+    >
 
       {/* Core Star Flare visuals */}
       <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 flex items-center justify-center z-10">

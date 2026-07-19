@@ -1,0 +1,397 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id               String    @id
+  name             String
+  email            String
+  emailVerified    Boolean   @default(false)
+  image            String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  subscriptionTier String?   @default("free")
+  onboardedAt      DateTime?
+  sessions         Session[]
+  accounts         Account[]
+
+  identity     ProfileIdentity?
+  profiles     Profile[]
+  analyses     Analysis[]
+  generatedCVs GeneratedCV[]
+  usage        UsageCounter[]
+
+  @@unique([email])
+  @@map("user")
+}
+
+// UK right-to-work statuses. The three permanent ones (British/Irish citizen,
+// Settled/ILR) carry no expiry; every other status is time-limited and requires
+// a `visaExpiry`. Kept in sync with src/shared/constants/visa-status.ts.
+enum VisaStatus {
+  BRITISH_CITIZEN
+  IRISH_CITIZEN
+  SETTLED
+  PRE_SETTLED
+  SKILLED_WORKER
+  HEALTH_CARE_WORKER
+  GRADUATE
+  STUDENT
+  DEPENDANT
+  GLOBAL_TALENT
+  HIGH_POTENTIAL
+  YOUTH_MOBILITY
+  OTHER_SPONSORSHIP
+}
+
+// Who the candidate *is* — the facts that never vary by which job they are
+// applying for. Held once per user so editing a phone number or a visa status
+// updates every profile at once, rather than drifting across five copies.
+model ProfileIdentity {
+  id            String      @id @default(cuid())
+  userId        String      @unique
+  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  fullName      String
+  email         String?
+  phoneDialCode String?
+  phoneNumber   String?
+  phoneCountry  String?
+  city          String?
+  state         String?
+  country       String?
+  website       String?
+  linkedin      String?
+  github        String?
+  visaStatus    VisaStatus?
+  visaExpiry    DateTime?
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  @@map("profile_identity")
+}
+
+// One career track's worth of content — "Software Engineer", "Warehouse
+// Operative", "Admin". A user may hold several (capped by their tier, see
+// src/shared/lib/entitlements.ts) and exactly one is flagged `isDefault`.
+//
+// Combined with ProfileIdentity this mirrors RewrittenCVData
+// (src/shared/templates/types.ts) so the DOCX generators consume it unchanged.
+model Profile {
+  id                  String   @id @default(cuid())
+  userId              String
+  user                User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /**
+   * User-facing name for the track, e.g. "Warehouse Operative".
+   */
+  label               String   @default("Default")
+  /**
+   * The profile used when no explicit choice is made. Exactly one per user.
+   */
+  isDefault           Boolean  @default(false)
+  /**
+   * Which `Industry` (src/shared/constants/industry-keywords.ts) this track
+   * targets. Lets a job match auto-select the right profile from its own
+   * detected industry instead of asking the user.
+   */
+  targetIndustry      String?
+  tagline             String?
+  professionalSummary String?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  experience     Experience[]
+  projects       ProjectEntry[]
+  education      Education[]
+  skillGroups    SkillGroup[]
+  certifications Certification[]
+  generatedCVs   GeneratedCV[]
+  analyses       Analysis[]
+
+  @@unique([userId, label])
+  @@index([userId])
+  @@map("profile")
+}
+
+/**
+ * Employment type. An enum rather than free text so a CV template can render a
+ * consistent label and a job match can reason about it — "FT", "full time" and
+ * "Full-Time" were all previously storable and none of them compare equal.
+ * Display labels live in src/shared/constants/employment-type.ts.
+ */
+enum EmploymentType {
+  FULL_TIME
+  PART_TIME
+  INTERNSHIP
+}
+
+model Experience {
+  id        String          @id @default(cuid())
+  profileId String
+  profile   Profile         @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  jobTitle  String
+  company   String
+  location  String?
+  type      EmploymentType?
+  /**
+   * Month precision, stored ISO as `YYYY-MM`.
+   *
+   * Deliberately not DateTime: a CV never shows a day, and a DateTime would
+   * force an arbitrary day-of-month that then has to be hidden everywhere. ISO
+   * text sorts correctly as a string and formats to "Jan 2022" at render time,
+   * which the old free-text column could not do — it stored whatever was typed.
+   */
+  startDate String
+  /** Null while `current` is true — an ongoing role has no end date. */
+  endDate   String?
+  /**
+   * "I still work here". Kept as its own flag rather than a magic endDate value
+   * so the CV can render "Present" and a date comparison never has to parse it.
+   */
+  current      Boolean @default(false)
+  achievements Json[]
+  sortOrder    Int     @default(0)
+
+  @@index([profileId])
+  @@map("experience")
+}
+
+model ProjectEntry {
+  id        String  @id @default(cuid())
+  profileId String
+  profile   Profile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  name      String
+  stack     String?
+  /**
+   * `YYYY-MM`, as on Experience — but optional on both ends. Plenty of side
+   * projects have no meaningful start or finish, and forcing a date there
+   * produces invented ones.
+   */
+  startDate    String?
+  endDate      String?
+  achievements Json[]
+  sortOrder    Int     @default(0)
+
+  @@index([profileId])
+  @@map("project_entry")
+}
+
+model Education {
+  id         String  @id @default(cuid())
+  profileId  String
+  profile    Profile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  degree     String
+  university String
+  /** `YYYY-MM`, as on Experience. Required — a degree with no dates reads as a gap. */
+  startDate  String
+  /** Null while `current` is true, i.e. still studying. */
+  endDate    String?
+  current     Boolean @default(false)
+  grade       String?
+  description String?
+  sortOrder   Int     @default(0)
+
+  @@index([profileId])
+  @@map("education")
+}
+
+model SkillGroup {
+  id        String   @id @default(cuid())
+  profileId String
+  profile   Profile  @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  category  String
+  skills    String[]
+  sortOrder Int      @default(0)
+
+  @@index([profileId])
+  @@map("skill_group")
+}
+
+model Certification {
+  id        String  @id @default(cuid())
+  profileId String
+  profile   Profile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  name      String
+  issuer    String?
+  year      String?
+
+  @@index([profileId])
+  @@map("certification")
+}
+
+// Persists a full CVAnalysisResult run (src/shared/types/cv.ts). The nested
+// AI-shaped result is stored as Json to avoid over-normalizing volatile
+// fields, while mode/overallScore stay queryable columns for history views.
+model Analysis {
+  id              String    @id @default(cuid())
+  userId          String
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /**
+   * Which career track this analysis belongs to, so the engineering profile's
+   * history doesn't show warehouse matches. Nullable and SetNull: deleting a
+   * profile must never destroy the user's scoring history, it just unfiles it.
+   */
+  profileId       String?
+  profile         Profile?  @relation(fields: [profileId], references: [id], onDelete: SetNull)
+  mode            String
+  overallScore    Int
+  rawResult       Json
+  jobDescription  String?
+  jobMatchData    Json?
+  /**
+   * Role title and hiring company extracted from the job description by the
+   * matcher itself (see ai-analyser.ts). Stored as columns rather than dug out
+   * of `jobMatchData` so history lists can render "Senior Data Engineer at
+   * FinCore" without deserialising the whole match blob for every row.
+   */
+  jobTitle        String?
+  jobCompany      String?
+  sourceFileName  String?
+  sourceFileKey   String?
+  /**
+   * Bytes of the archived source upload, so quota is computed without listing R2.
+   */
+  sourceFileSize  Int?
+  /**
+   * When the archived source file becomes eligible for pruning, set from the
+   * user's tier retention window at upload time. Null means keep indefinitely.
+   * Only the R2 object expires — the Analysis row and its scores are retained.
+   */
+  sourceExpiresAt DateTime?
+  createdAt       DateTime  @default(now())
+
+  generatedCVs GeneratedCV[]
+
+  @@index([userId])
+  @@index([profileId])
+  @@index([sourceExpiresAt])
+  @@map("analysis")
+}
+
+// Monthly AI usage, one row per user per calendar month.
+//
+// This exists because usage CANNOT be derived by counting Analysis rows: the
+// free tier prunes analyses beyond its cap (storage-quota.ts), so a user who
+// ran 40 analyses may only have 10 rows left. Counting them would silently
+// refund the quota every time something was pruned. The counter is append-only
+// and never pruned — it is the only honest record of what was consumed.
+//
+// `period` is a "YYYY-MM" key in UTC. Storing the bucket rather than computing
+// windows from a timestamp keeps the increment a single atomic upsert.
+model UsageCounter {
+  id               String   @id @default(cuid())
+  userId           String
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /**
+   * Calendar month in UTC, formatted "YYYY-MM".
+   */
+  period           String
+  /**
+   * Analyses that actually invoked a model. Rule-based-only runs are free and
+   * are deliberately not counted.
+   */
+  aiAnalyses       Int      @default(0)
+  /** Completed CV rewrites. */
+  cvGenerations    Int      @default(0)
+  /** Profile-vs-CV reconciliation calls that reached a model. */
+  profileReasoning Int      @default(0)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@unique([userId, period])
+  @@index([userId])
+  @@map("usage_counter")
+}
+
+// Persisted output of cv-rewriter.ts. Optionally linked to the Analysis it
+// was generated from, so "regenerate from this job-match analysis" can reuse
+// jobMatchData.cv_build_spec without re-running AI.
+model GeneratedCV {
+  id         String    @id @default(cuid())
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  analysisId String?
+  analysis   Analysis? @relation(fields: [analysisId], references: [id], onDelete: SetNull)
+  /**
+   * Which profile produced this CV, when it came from a profile-based path.
+   */
+  profileId  String?
+  profile    Profile?  @relation(fields: [profileId], references: [id], onDelete: SetNull)
+  template   String
+  /**
+   * Headline for this document, snapshotted from the rewritten CV's tagline at
+   * generation time. Denormalised deliberately: the dashboard lists up to 250
+   * CVs and rendering a card title should not mean deserialising 250 full CV
+   * payloads out of `data`.
+   */
+  title      String?
+  data       Json
+  fileKey    String?
+  /**
+   * Bytes of the archived DOCX, so quota is computed without listing R2.
+   */
+  fileSize   Int?
+  createdAt  DateTime  @default(now())
+
+  @@index([userId])
+  @@index([analysisId])
+  @@index([profileId])
+  @@map("generated_cv")
+}
+
+model Session {
+  id        String   @id
+  expiresAt DateTime
+  token     String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  ipAddress String?
+  userAgent String?
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([token])
+  @@index([userId])
+  @@map("session")
+}
+
+model Account {
+  id                    String    @id
+  accountId             String
+  providerId            String
+  userId                String
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  password              String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@index([userId])
+  @@map("account")
+}
+
+model Verification {
+  id         String   @id
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([identifier])
+  @@map("verification")
+}

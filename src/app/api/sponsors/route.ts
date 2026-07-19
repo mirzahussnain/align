@@ -2,9 +2,14 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getSponsors } from '@/shared/services/sponsor-registry';
 import { withErrorHandler, APIError } from '@/shared/utils/api-error';
 import { SponsorQuerySchema } from './schema';
+import { applyRateLimit, sponsorsLimiter } from '@/shared/lib/rate-limit';
 
 export async function GET(request: NextRequest) {
   return withErrorHandler(async () => {
+    const ip = request.headers.get('x-forwarded-for') ?? 'anonymous';
+    const rateLimitResponse = await applyRateLimit(sponsorsLimiter, ip);
+    if (rateLimitResponse) return rateLimitResponse;
+
     const { searchParams } = new URL(request.url);
     
     const parsed = SponsorQuerySchema.safeParse(Object.fromEntries(searchParams.entries()));

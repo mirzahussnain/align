@@ -63,7 +63,7 @@ export default function HeroSection() {
                 </Link>
                 <Link
                   href="/jobs"
-                  className="bg-[#0ea5e9] hover:bg-[#0284c7] text-white rounded-full px-6 py-3 border border-white/10 hover:shadow-2xl transition-all duration-300 text-xs font-bold flex items-center gap-2"
+                  className="bg-sky-500 hover:bg-sky-600 text-white rounded-full px-6 py-3 border border-white/10 hover:shadow-2xl transition-all duration-300 text-xs font-bold flex items-center gap-2"
                 >
                   <Sparkles size={14} className="text-white animate-pulse" />
                   <span>Search Tech Jobs</span>

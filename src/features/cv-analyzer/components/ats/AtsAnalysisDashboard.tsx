@@ -132,6 +132,18 @@ export default function AtsAnalysisDashboard({ result }: { result: CVAnalysisRes
 
   return (
     <div className="flex flex-col gap-6 w-full relative">
+      {/* The rule-based score below is complete and unaffected, but the AI
+          sections (summary, impact, rewrites) are missing. Saying so beats
+          letting the report look mysteriously thin. */}
+      {result.aiSkipped === 'quota' && (
+        <AlertBanner title="AI insights paused — monthly limit reached" type="info">
+          You&apos;ve used all the AI analyses included in your plan this month, so this report
+          shows the rule-based ATS results only: formatting, sections, keywords and compliance
+          are all still scored in full. The AI-written summary feedback, impact rewrites and
+          role detection resume when your allowance resets at the start of next month.
+        </AlertBanner>
+      )}
+
       {result.aiIsTechRole === false && (
         <AlertBanner title="Out-of-Domain CV Detected" type="warning">
           Align is specifically calibrated for Software Engineering and Tech roles. We detected that this is a non-technical CV. Your keyword and impact scores may be artificially low because our engine is looking for strict technical requirements (like Cloud platforms and Testing frameworks).

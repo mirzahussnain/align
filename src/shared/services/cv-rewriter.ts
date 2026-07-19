@@ -1,5 +1,7 @@
 import type { RewrittenCVData } from '../templates/types';
+import type { ProfileCandidate } from '@/shared/types/profile-reasoning';
 import { generateJSONFromAI } from './ai-orchestrator';
+import { THINKING_BUDGETS } from '@/shared/lib/config';
 
 export async function rewriteCV(
   originalCvText: string,
@@ -7,13 +9,19 @@ export async function rewriteCV(
   jobMatchFeedbackStr: string,
   templateId: string,
   hitlContext: Record<string, string> = {},
-  atsOptimizationData?: string | null
+  atsOptimizationData?: string | null,
+  /**
+   * Profile items the user approved bringing into this CV. Already re-resolved
+   * from the stored profile by the caller, so every entry is real.
+   */
+  approvedProfileItems: ProfileCandidate[] = []
 ): Promise<RewrittenCVData | null> {
-  let feedbackData: any = {};
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let feedbackData: Record<string, any> = {};
   try {
     feedbackData = JSON.parse(jobMatchFeedbackStr);
-  } catch (e) {
-    console.error("Failed to parse jobMatchFeedback", e);
+  } catch {
+    console.warn('[cv-rewriter] Failed to parse jobMatchFeedback — empty spec will be used.');
   }
 
   const cv_build_spec = feedbackData?.cv_build_spec ?? null;
@@ -88,6 +96,29 @@ User Context:
 ${hitlEntries}
 ` : '';
 
+  // Approved profile items. Their text comes from the user's own stored profile,
+  // so unlike the free-text HITL context this is verified content — but the
+  // model must still not embellish it into claims the profile does not make.
+  const profileBridgeSection = approvedProfileItems.length > 0 ? `
+═══ APPROVED PROFILE ITEMS (CRITICAL — must appear in the CV) ═══
+The candidate reviewed their full profile against this job and approved bringing
+the following items into this CV. Each one is verified profile data, not a claim
+to be checked. You MUST include every one of them:
+
+${approvedProfileItems
+  .map((item, i) => `${i + 1}. [${item.kind}] ${item.label}\n   Detail: ${item.detail || '(none recorded)'}`)
+  .join('\n')}
+
+Rules:
+- Place each item in the section matching its type (project → Key Projects,
+  experience → Experience, education → Education, skill → Core Skills,
+  certification → Certifications).
+- Where an approved item covers the same ground as a weaker entry already on the
+  CV, lead with the approved item and shorten or drop the weaker one.
+- Rewrite the wording for impact and JD alignment, but do NOT add achievements,
+  metrics, tools or dates that the profile detail above does not support.
+` : '';
+
   const atsSection = atsOptimizationData ? `
 ═══ ATS COMPOSITE OPTIMIZATION ═══
 The candidate opted-in to the Composite ATS Optimization. You MUST aggressively optimize the CV to score 95+ on standard ATS scanners.
@@ -99,6 +130,18 @@ Follow these RULES absolutely:
 5. **No Clichés**: Remove any fluffy corporate jargon. Replace them with hard technical facts.
 ` : '';
 
+  // The full stored job-match blob is ~1,600 tokens, and most of it is either
+  // useless to a rewriter or already spelled out above. `cv_build_spec` is
+  // rendered field-by-field in buildSpecSection, `mandatorySkills` has its own
+  // section, and `scoringBreakdown` is post-hoc audit detail explaining how the
+  // score was reached — none of it should be paid for twice.
+  const slimFeedback = {
+    domainFit: feedbackData?.domainFit,
+    experienceGap: feedbackData?.experienceGap,
+    desirableSkills: feedbackData?.desirableSkills,
+    eligibilityFlags: feedbackData?.eligibilityFlags,
+  };
+
   const prompt = `You are an expert UK Staff-Level Technical Recruiter and ATS Optimization Specialist.
 Your task is to completely rewrite the provided candidate's CV into a highly structured JSON format that perfectly matches a specific target Job Description.
 
@@ -108,6 +151,8 @@ ${templateInstructions}
 
 ${atsSection}
 
+${profileBridgeSection}
+
 ${hitlSection}
 
 ═══ MANDATORY MISSING SKILLS (do NOT fabricate these) ═══
@@ -116,8 +161,8 @@ ${mandatorySkills.missing?.join(', ') || 'None'}
 ═══ PARTIAL SKILLS (reframe honestly, do not overstate) ═══  
 ${mandatorySkills.partial?.join(', ') || 'None'}
 
-═══ FULL ANALYSIS (additional context) ═══
-${JSON.stringify(feedbackData, null, 0)}
+═══ MATCH CONTEXT ═══
+${JSON.stringify(slimFeedback, null, 0)}
 
 Raw Candidate CV:
 """
@@ -209,5 +254,9 @@ Schema:
   ]
 }`;
 
-  return generateJSONFromAI<RewrittenCVData>({ prompt, temperature: 0.2 });
+  return generateJSONFromAI<RewrittenCVData>({
+    prompt,
+    temperature: 0.2,
+    thinkingBudget: THINKING_BUDGETS.rewrite,
+  });
 }

@@ -1,4 +1,12 @@
+import type { Industry } from '@/shared/constants/industry-keywords';
+
 export interface AISemanticOutput {
+  /**
+   * Which keyword dictionary this CV should actually be scored against. The
+   * local parser can only guess (it defaults to tech), so the AI's read of the
+   * candidate's field is what selects the dictionary for the real keyword pass.
+   */
+  detectedIndustry: Industry;
   summaryScore: number;
   summaryFeedback: string;
   impactScore: number;
@@ -27,6 +35,13 @@ export interface TailoredRewrite {
 }
 
 export interface AIJobMatchOutput {
+  /**
+   * Role title and hiring company as named in the JD. Optional because they are
+   * absent from analyses run before extraction existed, and because plenty of
+   * real listings (agency posts especially) never name the employer.
+   */
+  jobTitle?: string;
+  jobCompany?: string;
   mandatorySkills: {
     present: string[];
     missing: string[];

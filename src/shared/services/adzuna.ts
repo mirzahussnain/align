@@ -54,7 +54,7 @@ export async function searchAdzunaJobs(params: JobSearchParams): Promise<JobSear
   if (params.salaryMax) {
     searchParams.set('salary_max', String(params.salaryMax));
   }
-  if (params.contractType && params.contractType !== 'all') {
+  if (params.contractType === 'permanent' || params.contractType === 'contract') {
     searchParams.set('contract_type', params.contractType);
   }
   if (params.sortBy === 'date') {

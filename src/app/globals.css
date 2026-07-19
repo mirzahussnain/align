@@ -278,6 +278,44 @@ textarea::placeholder {
   color: hsl(var(--text-tertiary));
 }
 
+/* Fields on always-dark surfaces (auth screens). This must stay unlayered like
+   the `input` rule above — Tailwind utilities live in @layer and would lose to
+   it regardless of specificity, so the override has to compete on that rule's
+   own terms and win on specificity. */
+.field-dark {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  padding: 12px 16px;
+  font-size: 14px;
+  color: #fff;
+}
+
+.field-dark::placeholder {
+  color: rgba(255, 255, 255, 0.35);
+}
+
+.field-dark:focus {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: hsl(var(--accent-cyan) / 0.6);
+  box-shadow: 0 0 0 3px hsl(var(--accent-cyan) / 0.2);
+  outline: none;
+}
+
+/* The <input> inside the Combobox. Its border/background/padding otherwise come
+   from the global unlayered `input` rule above, painting a second field inside
+   the picker's own bordered container. Kept unlayered so it wins on specificity
+   like `.field-dark`. The container supplies all of the field's visuals. */
+.combo-input,
+.combo-input:focus {
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  padding: 0;
+  box-shadow: none;
+  color: inherit;
+}
+
 /* ===== Visual Utilities ===== */
 /* Diagonal Chevron Perspective Polygon Clip for Hero Banner */
 .chevron-perspective-hero {

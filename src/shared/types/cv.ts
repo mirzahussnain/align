@@ -1,5 +1,6 @@
 // CV Analysis Types
 import type { AIJobMatchOutput } from './ai';
+import type { Industry } from '@/shared/constants/industry-keywords';
 
 export interface CVAnalysisResult {
   overallScore: number;
@@ -12,10 +13,18 @@ export interface CVAnalysisResult {
   rawText: string;
   pageCount: number;
   aiTargetRole?: string;
+  /** Industry the AI classified this CV into, i.e. which keyword dictionary scored it. */
+  aiDetectedIndustry?: Industry;
   aiHasTesting?: boolean;
   aiIsTechRole?: boolean;
   aiRiskFlags?: string[];
   aiClichés?: string[];
+  /**
+   * Set when the AI layer was deliberately skipped, so the report can say why
+   * it is thinner than usual instead of quietly omitting half its sections.
+   * Currently only `'quota'` — the user's monthly AI allowance is spent.
+   */
+  aiSkipped?: 'quota';
   
   // Job Matcher specific fields
   mode?: 'ats' | 'job_match';

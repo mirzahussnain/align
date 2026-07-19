@@ -1,6 +1,8 @@
 import { AI_CONFIG } from '@/shared/lib/config';
+import { THINKING_BUDGETS } from '@/shared/lib/config';
 import type { CVAnalysisResult } from '@/shared/types/cv';
 import type { AISemanticOutput, AIJobMatchOutput } from '@/shared/types/ai';
+import { INDUSTRY_IDS } from '@/shared/constants/industry-keywords';
 import { generateJSONFromAI } from './ai-orchestrator';
 
 export async function getSemanticCVFeedback(
@@ -12,6 +14,7 @@ Review this candidate's raw CV text and the base metrics from our local parser.
 
 Provide a detailed semantic evaluation covering:
 1. Target Role Title & Domain: Identify the desired tech role. Determine if this CV actually belongs to a Software Engineering / Tech discipline (set isTechRole to true) or if it belongs to a completely different industry like Marketing/Finance (set isTechRole to false).
+1b. Industry Classification: Classify this CV into exactly ONE of the following industry codes, which selects the UK keyword dictionary it will be scored against: ${INDUSTRY_IDS.join(', ')}. Choose the code matching the candidate's actual field, not the one they aspire to. Use "general" only when the CV spans no identifiable industry or none of the specific codes fit.
 2. Professional Summary: Evaluate length (30-60 words target), role alignment, metric inclusion, and buzzword count.
 3. Impact Statements: Check for quantified metrics using the STAR method (Action + Metric + Tech Stack).
 4. UK Tech Stack Relevance: Assess if they list essential UK tech capabilities, specifically checking for testing tools/frameworks (Jest, Cypress, Playwright, Vitest).
@@ -27,12 +30,13 @@ Base Parser Results:
 - Word Count: ${baseResult.rawText.split(/\s+/).filter(w => w.length > 0).length}
 - Page Count: ${baseResult.pageCount}
 - Detected Keywords: ${JSON.stringify(baseResult.keywords.present.map(k => k.keyword))}
-- Missing Keywords Checklist: ${JSON.stringify(baseResult.keywords.missing.map(k => k.keyword))}
+- Missing Keywords (sample): ${JSON.stringify(baseResult.keywords.missing.slice(0, 25).map(k => k.keyword))}
 
 Return ONLY a valid JSON object matching the schema below. Do not include markdown wraps (like \`\`\`json) or extra text outside the JSON block.
 
 Schema:
 {
+  "detectedIndustry": "one of: ${INDUSTRY_IDS.join(' | ')}",
   "summaryScore": number (1 to 10),
   "summaryFeedback": "string detailing summary validation",
   "impactScore": number (1 to 10),
@@ -55,7 +59,11 @@ Schema:
   "clichés": ["string listing detected buzzwords/clichés like 'passionate' or 'motivated'"]
 }`;
 
-  return generateJSONFromAI<AISemanticOutput>({ prompt, temperature: 0.1 });
+  return generateJSONFromAI<AISemanticOutput>({
+    prompt,
+    temperature: 0.1,
+    thinkingBudget: THINKING_BUDGETS.semanticFeedback,
+  });
 }
 
 export async function getJobMatchFeedback(
@@ -160,6 +168,8 @@ deductions.
 Produce the following JSON:
 
 {
+  "jobTitle": "string — the advertised role title, exactly as the JD names it (e.g. 'Senior Data Engineer'). Do NOT return a section heading such as 'About the job' or 'Job description'. If no role title is stated anywhere, return an empty string.",
+  "jobCompany": "string — the hiring organisation's name. Empty string if the JD does not name one (many agency listings do not).",
   "scoringBreakdown": [
     { 
       "item": "string — exact JD requirement", 
@@ -220,5 +230,9 @@ Produce the following JSON:
 
 Return ONLY valid JSON. No markdown. No preamble. No trailing text.`;
 
-  return generateJSONFromAI<AIJobMatchOutput>({ prompt, temperature: 0.1 });
+  return generateJSONFromAI<AIJobMatchOutput>({
+    prompt,
+    temperature: 0.1,
+    thinkingBudget: THINKING_BUDGETS.jobMatch,
+  });
 }

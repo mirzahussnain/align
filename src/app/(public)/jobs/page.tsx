@@ -249,6 +249,11 @@ export default function JobBoardsPage() {
           className="flex flex-wrap gap-2 mb-6"
         >
           <span className="text-xs text-text-tertiary self-center mr-1">Also search on:</span>
+          {/* 
+            SANCTIONED BRAND COLORS — Do not replace with design tokens.
+            These hex values are official brand colors for each external platform.
+            LinkedIn: #0A66C2 | Indeed: #2557a7 | GOV.UK: #00703C
+          */}
           <a
             href={`${EXTERNAL_LINKS.linkedin}${crossPlatformQuery}&location=United%20Kingdom`}
             target="_blank"

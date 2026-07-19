@@ -11,9 +11,15 @@ import { formatFileSize } from '@/shared/utils/file';
 interface CVUploaderProps {
   mode?: 'ats' | 'job_match';
   onAnalysisComplete: (result: unknown) => void;
+  /**
+   * Career track to file the result under. Omitted on the public analyser,
+   * where there is no profile switcher — the server then falls back to the
+   * user's default profile.
+   */
+  profileId?: string;
 }
 
-export default function CVUploader({ mode = 'ats', onAnalysisComplete }: CVUploaderProps) {
+export default function CVUploader({ mode = 'ats', onAnalysisComplete, profileId }: CVUploaderProps) {
   const [file, setFile] = useState<File | null>(null);
   const [jobDescription, setJobDescription] = useState('');
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -50,6 +56,7 @@ export default function CVUploader({ mode = 'ats', onAnalysisComplete }: CVUploa
       const formData = new FormData();
       formData.append('file', file);
       formData.append('mode', mode);
+      if (profileId) formData.append('profileId', profileId);
       if (mode === 'job_match') {
         if (!jobDescription.trim()) {
           throw new Error('Please provide a Job Description to match against.');

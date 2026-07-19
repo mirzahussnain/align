@@ -7,6 +7,7 @@ import WorkflowSection from '@/features/landing-page/sections/WorkflowSection';
 import CalculatorSection from '@/features/landing-page/sections/CalculatorSection';
 import QuoteSection from '@/features/landing-page/sections/QuoteSection';
 import HubsSection from '@/features/landing-page/sections/HubsSection';
+import PricingSection from '@/features/landing-page/sections/PricingSection';
 import CtaSection from '@/features/landing-page/sections/CtaSection';
 
 export default function HomePage() {
@@ -18,6 +19,7 @@ export default function HomePage() {
       <CalculatorSection />
       <QuoteSection />
       <HubsSection />
+      <PricingSection />
       <CtaSection />
     </main>
   );

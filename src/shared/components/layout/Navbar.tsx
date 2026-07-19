@@ -5,12 +5,20 @@ import { usePathname } from 'next/navigation';
 import { FileSearch, Menu, X, ArrowRight } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { cn } from '@/shared/utils/cn';
-import { NAV_LINKS } from '@/shared/constants/navigation';
+import { MARKETING_NAV_LINKS } from '@/shared/constants/navigation';
+import { authClient } from '@/shared/lib/auth-client';
 
 export default function Navbar() {
   const pathname = usePathname();
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
+  const { data: session, isPending: sessionPending } = authClient.useSession();
+  const isAuthed = Boolean(session);
+
+  // In-page anchors never take the active pill — `pathname` is `/` for all of
+  // them, so a prefix match would light up every one of them at once.
+  const isLinkActive = (href: string) =>
+    !href.includes('#') && (pathname === href || pathname.startsWith(href));
 
   useEffect(() => {
     if (pathname !== '/') {
@@ -65,8 +73,8 @@ export default function Navbar() {
             "hidden md:flex items-center backdrop-blur-md rounded-full p-1 select-none transition-all duration-300",
             isScrolled ? "bg-neutral-950/5 border border-neutral-950/10" : "bg-white/10 border border-white/15"
           )}>
-            {NAV_LINKS.map((item) => {
-              const isActive = pathname === item.href || pathname.startsWith(item.href);
+            {MARKETING_NAV_LINKS.map((item) => {
+              const isActive = isLinkActive(item.href);
 
               return (
                 <Link
@@ -93,32 +101,54 @@ export default function Navbar() {
 
           {/* Desktop Actions */}
           <div className="hidden md:flex items-center gap-4">
-            <Link
-              href="/analyze"
-              className={cn(
-                "text-xs font-semibold transition-all duration-300 py-2 px-3",
-                isScrolled ? "text-neutral-600 hover:text-neutral-900" : "text-white/90 hover:text-white"
-              )}
-            >
-              Log In
-            </Link>
-            <Link
-              href="/analyze"
-              className={cn(
-                "rounded-full pl-5 pr-1.5 py-1.5 text-xs font-semibold flex items-center gap-2.5 transition-all duration-300 shadow-xl group border",
-                isScrolled 
-                  ? "bg-neutral-950 hover:bg-neutral-900 text-white border-neutral-950" 
-                  : "bg-white hover:bg-neutral-100 text-neutral-950 border-white"
-              )}
-            >
-              <span>Get Started</span>
-              <span className={cn(
-                "w-6 h-6 rounded-full flex items-center justify-center font-bold text-xs group-hover:translate-x-0.5 transition-transform",
-                isScrolled ? "bg-white text-neutral-950" : "bg-neutral-950 text-white"
-              )}>
-                →
-              </span>
-            </Link>
+            {sessionPending ? null : isAuthed ? (
+              <Link
+                href="/dashboard"
+                className={cn(
+                  "rounded-full pl-5 pr-1.5 py-1.5 text-xs font-semibold flex items-center gap-2.5 transition-all duration-300 shadow-xl group border",
+                  isScrolled
+                    ? "bg-neutral-950 hover:bg-neutral-900 text-white border-neutral-950"
+                    : "bg-white hover:bg-neutral-100 text-neutral-950 border-white"
+                )}
+              >
+                <span>Dashboard</span>
+                <span className={cn(
+                  "w-6 h-6 rounded-full flex items-center justify-center font-bold text-xs group-hover:translate-x-0.5 transition-transform",
+                  isScrolled ? "bg-white text-neutral-950" : "bg-neutral-950 text-white"
+                )}>
+                  →
+                </span>
+              </Link>
+            ) : (
+              <>
+                <Link
+                  href="/login"
+                  className={cn(
+                    "text-xs font-semibold transition-all duration-300 py-2 px-3",
+                    isScrolled ? "text-neutral-600 hover:text-neutral-900" : "text-white/90 hover:text-white"
+                  )}
+                >
+                  Log In
+                </Link>
+                <Link
+                  href="/signup"
+                  className={cn(
+                    "rounded-full pl-5 pr-1.5 py-1.5 text-xs font-semibold flex items-center gap-2.5 transition-all duration-300 shadow-xl group border",
+                    isScrolled
+                      ? "bg-neutral-950 hover:bg-neutral-900 text-white border-neutral-950"
+                      : "bg-white hover:bg-neutral-100 text-neutral-950 border-white"
+                  )}
+                >
+                  <span>Get Started</span>
+                  <span className={cn(
+                    "w-6 h-6 rounded-full flex items-center justify-center font-bold text-xs group-hover:translate-x-0.5 transition-transform",
+                    isScrolled ? "bg-white text-neutral-950" : "bg-neutral-950 text-white"
+                  )}>
+                    →
+                  </span>
+                </Link>
+              </>
+            )}
           </div>
 
           {/* Mobile Menu Button */}
@@ -146,8 +176,8 @@ export default function Navbar() {
             : "bg-neutral-950/95 border-white/10 text-white"
         )}>
           <div className="px-4 py-4 space-y-1">
-            {NAV_LINKS.map((item) => {
-              const isActive = pathname === item.href || pathname.startsWith(item.href);
+            {MARKETING_NAV_LINKS.map((item) => {
+              const isActive = isLinkActive(item.href);
 
               return (
                 <Link
@@ -175,26 +205,41 @@ export default function Navbar() {
               "pt-4 mt-2 border-t flex flex-col gap-2",
               isScrolled ? "border-neutral-950/5" : "border-white/5"
             )}>
-              <Link
-                href="/analyze"
-                onClick={() => setIsMobileOpen(false)}
-                className={cn(
-                  "text-center py-2 text-sm",
-                  isScrolled ? "text-neutral-600 hover:text-neutral-900" : "text-white/70 hover:text-white"
-                )}
-              >
-                Log In
-              </Link>
-              <Link
-                href="/analyze"
-                onClick={() => setIsMobileOpen(false)}
-                className={cn(
-                  "rounded-full py-2.5 text-center text-sm font-bold flex items-center justify-center gap-2",
-                  isScrolled ? "bg-neutral-950 text-white" : "bg-white text-neutral-950"
-                )}
-              >
-                Get Started <ArrowRight size={16} />
-              </Link>
+              {isAuthed ? (
+                <Link
+                  href="/dashboard"
+                  onClick={() => setIsMobileOpen(false)}
+                  className={cn(
+                    "rounded-full py-2.5 text-center text-sm font-bold flex items-center justify-center gap-2",
+                    isScrolled ? "bg-neutral-950 text-white" : "bg-white text-neutral-950"
+                  )}
+                >
+                  Dashboard <ArrowRight size={16} />
+                </Link>
+              ) : (
+                <>
+                  <Link
+                    href="/login"
+                    onClick={() => setIsMobileOpen(false)}
+                    className={cn(
+                      "text-center py-2 text-sm",
+                      isScrolled ? "text-neutral-600 hover:text-neutral-900" : "text-white/70 hover:text-white"
+                    )}
+                  >
+                    Log In
+                  </Link>
+                  <Link
+                    href="/signup"
+                    onClick={() => setIsMobileOpen(false)}
+                    className={cn(
+                      "rounded-full py-2.5 text-center text-sm font-bold flex items-center justify-center gap-2",
+                      isScrolled ? "bg-neutral-950 text-white" : "bg-white text-neutral-950"
+                    )}
+                  >
+                    Get Started <ArrowRight size={16} />
+                  </Link>
+                </>
+              )}
             </div>
           </div>
         </div>
