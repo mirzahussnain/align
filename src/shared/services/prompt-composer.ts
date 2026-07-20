@@ -5,6 +5,7 @@
 // reviewed in the repo; no AI ever invents evaluation rules at request time.
 
 import { SECTOR_LABELS } from '@/shared/constants/sector-labels';
+import { applicableCredentials } from '@/shared/occupations/credentials';
 import type { OccupationProfile } from '@/shared/occupations/types';
 import type { Classification } from '@/shared/types/classification';
 import type { CVAnalysisResult } from '@/shared/types/cv';
@@ -26,9 +27,16 @@ function prohibitionsBlock(profile: OccupationProfile): string {
   return `STRICT PROHIBITIONS — violating any of these makes the evaluation wrong:\n${lines.map(l => `- ${l}`).join('\n')}`;
 }
 
-function evaluationProfileBlock(profile: OccupationProfile): string {
-  const credentialList = profile.credentials.length
-    ? profile.credentials.map(c => `${c.label} (${c.class.replace('_', '-')})`).join('; ')
+function evaluationProfileBlock(
+  profile: OccupationProfile,
+  classification: Classification
+): string {
+  // Gated by appliesWhen, exactly as the deterministic scorer gates it — the
+  // prompt must never name a credential the candidate's classification does
+  // not actually call for.
+  const applicable = applicableCredentials(profile, classification);
+  const credentialList = applicable.length
+    ? applicable.map(c => `${c.label} (${c.class.replace('_', '-')})`).join('; ')
     : 'none expected for this occupation';
 
   return `Evaluation profile for ${profile.label}:
@@ -48,7 +56,7 @@ export function composeSemanticPrompt(
 
 ${contextBlock(profile, classification)}
 
-${evaluationProfileBlock(profile)}
+${evaluationProfileBlock(profile, classification)}
 
 ${prohibitionsBlock(profile)}
 
@@ -128,7 +136,7 @@ reflect that arithmetically, not as a gestalt impression.
 
 ${contextBlock(profile, classification)}
 
-${evaluationProfileBlock(profile)}
+${evaluationProfileBlock(profile, classification)}
 
 ${prohibitionsBlock(profile)}
 

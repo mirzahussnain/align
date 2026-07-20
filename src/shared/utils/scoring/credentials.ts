@@ -6,6 +6,7 @@
 // or no rule applies after appliesWhen gating, the dimension scores FULL marks.
 // A software engineer must never lose 15% for having no certificates.
 
+import { applicableCredentials } from '@/shared/occupations/credentials';
 import type { OccupationProfile } from '@/shared/occupations/types';
 import type { Classification } from '@/shared/types/classification';
 import type { CredentialAnalysis, CredentialFinding } from '@/shared/types/cv';
@@ -15,9 +16,7 @@ export function analyzeCredentials(
   profile: OccupationProfile,
   classification: Classification
 ): CredentialAnalysis {
-  const applicable = profile.credentials.filter(
-    rule => !rule.appliesWhen || rule.appliesWhen(classification)
-  );
+  const applicable = applicableCredentials(profile, classification);
 
   if (profile.credentialRelevance === 'not_material' || applicable.length === 0) {
     return { score: 10, findings: [], notMaterial: true };
