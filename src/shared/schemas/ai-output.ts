@@ -34,9 +34,11 @@ const rewriteSuggestion = z.looseObject({
   rationale: z.string().catch(''),
 });
 
-/** Matches the current AISemanticOutput shape (reshaped in phase 4). */
+/**
+ * Semantic evaluation output (scoring v2): classification happens before this
+ * call, so there are no industry/tech-detection fields.
+ */
 export const AISemanticOutputSchema = z.looseObject({
-  detectedIndustry: sectorField.catch('general'),
   summaryScore: score0to10,
   summaryFeedback: z.string().catch(''),
   impactScore: score0to10,
@@ -51,17 +53,27 @@ export const AISemanticOutputSchema = z.looseObject({
     )
     .catch([]),
   rewrites: z.array(rewriteSuggestion).catch([]),
-  ukTechAlignment: z.string().catch(''),
+  alignmentNote: z.string().catch(''),
   detectedRole: z.string().catch(''),
-  hasTesting: z.boolean().catch(false),
-  isTechRole: z.boolean().catch(false),
+  credentialObservations: stringArray,
   riskFlags: stringArray,
   clichés: stringArray,
+});
+
+const selectionCriterion = z.looseObject({
+  id: z.string(),
+  text: z.string(),
+  type: z.enum(['essential', 'desirable', 'unknown']).catch('unknown'),
+  category: z
+    .enum(['qualification', 'experience', 'skill', 'knowledge', 'value', 'credential', 'availability', 'other'])
+    .catch('other'),
+  evidenceRequired: z.boolean().catch(false),
 });
 
 export const AIJobMatchOutputSchema = z.looseObject({
   jobTitle: z.string().optional(),
   jobCompany: z.string().optional(),
+  selectionCriteria: z.array(selectionCriterion).catch([]),
   mandatorySkills: z.looseObject({
     present: stringArray,
     missing: stringArray,

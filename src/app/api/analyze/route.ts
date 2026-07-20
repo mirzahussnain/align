@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { analyzeCV, computeOverallScore } from '@/shared/utils/scoring-engine';
-import { analyzeKeywords } from '@/shared/utils/scoring/keywords';
-import { getIndustryDictionary, isKnownIndustry } from '@/shared/constants/sector-keywords';
+import { analyzeCV, computeOverallScore, evidenceCoverageScore } from '@/shared/utils/scoring-engine';
+import { classifyCV } from '@/shared/services/classifier';
+import { getOccupationProfile } from '@/shared/occupations/registry';
+import { getIndustryDictionary } from '@/shared/constants/sector-keywords';
 import { extractTextFromPDF } from '@/shared/utils/pdf-parser';
 import { getSemanticCVFeedback, getJobMatchFeedback } from '@/shared/services/ai-analyser';
 import { statusFor } from '@/shared/constants/scoring-config';
@@ -160,10 +161,33 @@ export async function POST(request: NextRequest) {
       throw new APIError('Could not extract text from PDF. The file may be image-based or corrupted.', 400);
     }
 
-    // 2. Local rule-based analysis
-    const result = analyzeCV(text, pageCount);
+    // 2. Classification BEFORE scoring — the deterministic pass runs against
+    // the right occupation profile and sector dictionary from the start.
+    // The user's career-track label doubles as a target role title until the
+    // structured targetOccupation field lands.
+    const trackProfile = scopedProfileId
+      ? await prisma.profile.findUnique({
+          where: { id: scopedProfileId },
+          select: { label: true, targetIndustry: true },
+        })
+      : null;
 
-    // 3. AI semantic analysis as a hybrid layer
+    const classification = await classifyCV({
+      cvText: text,
+      jobDescription: mode === 'job_match' && jobDescription.trim() ? jobDescription : undefined,
+      profileTarget: trackProfile
+        ? { roleTitle: trackProfile.label, industry: trackProfile.targetIndustry }
+        : undefined,
+      aiAllowed,
+    });
+    const occupationProfile = getOccupationProfile(classification.occupation);
+
+    // 3. Local rule-based analysis, occupation-aware from the first pass.
+    const result = analyzeCV(text, pageCount, { classification, profile: occupationProfile });
+    result.aiDetectedIndustry = classification.sector;
+    result.outOfDomain = classification.confidence < 0.5 || classification.source === 'fallback';
+
+    // 4. AI semantic analysis as a hybrid layer
     result.mode = mode as 'ats' | 'job_match';
 
     try {
@@ -171,7 +195,7 @@ export async function POST(request: NextRequest) {
         // Out of AI quota, ATS mode. The local scores above stand as the result.
         result.aiSkipped = 'quota';
       } else if (mode === 'job_match' && jobDescription.trim().length > 0) {
-        const jobMatchFeedback = await getJobMatchFeedback(text, jobDescription);
+        const jobMatchFeedback = await getJobMatchFeedback(text, jobDescription, occupationProfile, classification);
         if (jobMatchFeedback) {
           // Counted on return rather than before the call, so a provider outage
           // doesn't bill the user for an analysis they never received.
@@ -184,20 +208,10 @@ export async function POST(request: NextRequest) {
           result.overallScore = jobMatchFeedback.matchScore;
         }
       } else {
-        const aiFeedback = await getSemanticCVFeedback(text, result);
+        const aiFeedback = await getSemanticCVFeedback(text, result, occupationProfile, classification);
 
         if (aiFeedback) {
           await recordUsage(session.user.id, 'aiAnalyses');
-
-          // The local pass ran before anything knew what field this CV belongs
-          // to, so it scored against the default tech dictionary. Now that the
-          // AI has classified the CV, run the keyword pass again against the
-          // right dictionary and let it replace that guess.
-          const detectedIndustry = isKnownIndustry(aiFeedback.detectedIndustry)
-            ? aiFeedback.detectedIndustry
-            : 'general';
-          result.keywords = analyzeKeywords(text, { industry: detectedIndustry });
-          result.aiDetectedIndustry = detectedIndustry;
 
           const summaryCat = result.categories.find(c => c.id === 'professionalSummary');
           if (summaryCat) {
@@ -223,11 +237,11 @@ export async function POST(request: NextRequest) {
             });
           }
 
-          if (aiFeedback.isTechRole) {
+          if (aiFeedback.alignmentNote) {
             result.recommendations.push({
               priority: 'medium',
-              title: 'UK Tech Market Alignment Feedback',
-              description: aiFeedback.ukTechAlignment,
+              title: 'Role Alignment Feedback',
+              description: aiFeedback.alignmentNote,
               timeEstimate: '5 min',
               kind: 'alignment',
             });
@@ -246,45 +260,34 @@ export async function POST(request: NextRequest) {
             }
           }
 
-          // Recompute Keyword Coverage against the industry dictionary the AI
-          // selected, plus whatever extra keywords it surfaced from the CV itself.
-          const keywordDensityCat = result.categories.find(c => c.id === 'evidenceCoverage');
-          if (keywordDensityCat) {
+          // Recompute Evidence Coverage now the AI has surfaced extra
+          // role-relevant keywords the parser's dictionary pass missed.
+          const coverageCat = result.categories.find(c => c.id === 'evidenceCoverage');
+          if (coverageCat) {
             const { present, missing } = result.keywords;
             const total = present.length + missing.length;
-            const industryLabel = getIndustryDictionary(detectedIndustry)?.label ?? 'this role';
+            const sectorLabel = getIndustryDictionary(classification.sector)?.label ?? 'this role';
 
-            if (total === 0) {
-              // No dictionary produced terms for this CV, so there is no
-              // denominator to divide by — dividing here is what previously
-              // yielded NaN and poisoned the overall score. Fall back to scoring
-              // purely off the keywords the AI itself found.
-              keywordDensityCat.score = Math.min(10, Math.round((present.length / 8) * 10));
-            } else {
-              keywordDensityCat.score = Math.round((present.length / total) * 10);
-            }
+            coverageCat.score =
+              total === 0
+                ? // No dictionary terms for this CV — score off the keywords the
+                  // AI itself found rather than dividing by zero.
+                  Math.min(10, Math.round((present.length / 8) * 10))
+                : evidenceCoverageScore(result.keywords);
 
-            keywordDensityCat.status = statusFor(keywordDensityCat.score, keywordDensityCat.maxScore);
-            const percentage = Math.round((keywordDensityCat.score / keywordDensityCat.maxScore) * 100);
-            keywordDensityCat.details =
+            coverageCat.status = statusFor(coverageCat.score, coverageCat.maxScore);
+            const percentage = Math.round((coverageCat.score / coverageCat.maxScore) * 100);
+            coverageCat.details =
               total === 0
                 ? `${percentage}% coverage of role-relevant keywords detected by AI for this CV's domain`
-                : `${percentage}% of key UK ${industryLabel} keywords present`;
+                : `${percentage}% of key UK ${sectorLabel} keywords present`;
           }
 
           // Map extended AI fields
           result.aiTargetRole = aiFeedback.detectedRole;
-          result.aiHasTesting = aiFeedback.hasTesting;
-          result.aiIsTechRole = aiFeedback.isTechRole;
+          result.aiAlignmentNote = aiFeedback.alignmentNote;
           result.aiRiskFlags = aiFeedback.riskFlags;
           result.aiClichés = aiFeedback.clichés;
-
-          // Clean up false positives for non-tech roles
-          if (!aiFeedback.isTechRole) {
-            result.recommendations = result.recommendations.filter(
-              r => !r.title.toLowerCase().includes('testing') && !r.title.toLowerCase().includes('cloud')
-            );
-          }
 
           result.overallScore = computeOverallScore(result.categories);
         }

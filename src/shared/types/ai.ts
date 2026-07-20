@@ -1,22 +1,22 @@
-import type { Industry } from '@/shared/constants/sector-keywords';
+import type { SelectionCriterion } from './criteria';
 
+/**
+ * Semantic evaluation output (scoring v2). Classification happens BEFORE this
+ * call, so the schema carries no industry/tech-detection fields — the
+ * evaluator judges against an injected occupation profile and nothing else.
+ */
 export interface AISemanticOutput {
-  /**
-   * Which keyword dictionary this CV should actually be scored against. The
-   * local parser can only guess (it defaults to tech), so the AI's read of the
-   * candidate's field is what selects the dictionary for the real keyword pass.
-   */
-  detectedIndustry: Industry;
   summaryScore: number;
   summaryFeedback: string;
   impactScore: number;
   impactFeedback: string;
   additionalKeywords: { keyword: string; category: string; count: number }[];
   rewrites: RewriteSuggestion[];
-  ukTechAlignment: string;
+  /** Occupation-framed alignment note (replaces ukTechAlignment). */
+  alignmentNote: string;
   detectedRole: string;
-  hasTesting: boolean;
-  isTechRole: boolean;
+  /** Observations against the profile's credential checklist. */
+  credentialObservations: string[];
   riskFlags: string[];
   clichés: string[];
 }
@@ -42,6 +42,12 @@ export interface AIJobMatchOutput {
    */
   jobTitle?: string;
   jobCompany?: string;
+  /**
+   * Person-specification criteria when the JD contains an explicit
+   * essential/desirable list (NHS/council-style adverts). Empty otherwise.
+   * Optional because pre-rebuild stored results lack it.
+   */
+  selectionCriteria?: SelectionCriterion[];
   mandatorySkills: {
     present: string[];
     missing: string[];

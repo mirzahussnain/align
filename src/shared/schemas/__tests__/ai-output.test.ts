@@ -2,17 +2,15 @@ import { describe, it, expect } from 'vitest';
 import { AISemanticOutputSchema, AIJobMatchOutputSchema, AIClassificationSchema } from '../ai-output';
 
 const goodSemantic = {
-  detectedIndustry: 'warehouse_logistics',
   summaryScore: 7,
   summaryFeedback: 'Good',
   impactScore: 6,
   impactFeedback: 'Fine',
   additionalKeywords: [{ keyword: 'RF scanner', category: 'Equipment', count: 2 }],
   rewrites: [{ original: 'a', suggested: 'b', rationale: 'c' }],
-  ukTechAlignment: '',
+  alignmentNote: 'Well aligned to warehouse operative expectations.',
   detectedRole: 'Warehouse Operative',
-  hasTesting: false,
-  isTechRole: false,
+  credentialObservations: ['FLT licence clearly dated'],
   riskFlags: [],
   clichés: ['passionate'],
 };
@@ -34,9 +32,11 @@ describe('AISemanticOutputSchema', () => {
     expect(parsed.summaryScore).toBe(8);
   });
 
-  it('guards the industry against invented values', () => {
-    const parsed = AISemanticOutputSchema.parse({ ...goodSemantic, detectedIndustry: 'crypto_futures' });
-    expect(parsed.detectedIndustry).toBe('general');
+  it('carries no classification or tech-detection fields', () => {
+    const parsed = AISemanticOutputSchema.parse(goodSemantic) as Record<string, unknown>;
+    expect(parsed.detectedIndustry).toBeUndefined();
+    expect(parsed.isTechRole).toBeUndefined();
+    expect(parsed.hasTesting).toBeUndefined();
   });
 
   it('passes unknown extra fields through instead of failing', () => {
