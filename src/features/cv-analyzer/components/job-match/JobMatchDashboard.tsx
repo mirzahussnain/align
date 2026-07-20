@@ -12,6 +12,7 @@ import { JOB_MATCH_NAVIGATION } from '../../constants/dashboard-navigation';
 // Extracted Panels
 import MatchSummaryPanel from './panels/MatchSummaryPanel';
 import SkillAlignmentPanel from './panels/SkillAlignmentPanel';
+import CriterionMappingPanel from './panels/CriterionMappingPanel';
 import DomainFitPanel from './panels/DomainFitPanel';
 import ScoringBreakdownPanel from './panels/ScoringBreakdownPanel';
 import TailoredRewritesPanel from './panels/TailoredRewritesPanel';
@@ -23,12 +24,23 @@ interface JobMatchDashboardProps {
   result: CVAnalysisResult;
 }
 
-type TabKey = 'summary' | 'skills' | 'domain' | 'scoring' | 'rewrites' | 'strategy';
+type TabKey = 'summary' | 'criteria' | 'skills' | 'domain' | 'scoring' | 'rewrites' | 'strategy';
 
 export default function JobMatchDashboard({ result }: JobMatchDashboardProps) {
   const [activeTab, setActiveTab] = useState<TabKey>('summary');
   const [isWizardOpen, setIsWizardOpen] = useState(false);
   const data = result.jobMatchData;
+
+  // Person-spec criteria only exist when the JD contained an explicit
+  // essential/desirable list (NHS/council-style adverts).
+  const hasCriteria = (data?.selectionCriteria?.length ?? 0) > 0;
+  const navigation = hasCriteria
+    ? [
+        ...JOB_MATCH_NAVIGATION.slice(0, 1),
+        { id: 'criteria', label: 'Person Specification', iconName: 'ClipboardList' },
+        ...JOB_MATCH_NAVIGATION.slice(1),
+      ]
+    : [...JOB_MATCH_NAVIGATION];
 
   if (!data) {
     return (
@@ -43,8 +55,8 @@ export default function JobMatchDashboard({ result }: JobMatchDashboardProps) {
   // Animation variants
   const contentVariants = {
     hidden: { opacity: 0, y: 15 },
-    visible: { opacity: 1, y: 0, transition: { duration: 0.3, ease: 'easeOut' } },
-    exit: { opacity: 0, y: -10, transition: { duration: 0.2, ease: 'easeIn' } }
+    visible: { opacity: 1, y: 0, transition: { duration: 0.3, ease: 'easeOut' as const } },
+    exit: { opacity: 0, y: -10, transition: { duration: 0.2, ease: 'easeIn' as const } }
   };
 
   type NavItemStatus = 'success' | 'error' | 'warning' | 'info' | 'premium';
@@ -56,6 +68,12 @@ export default function JobMatchDashboard({ result }: JobMatchDashboardProps) {
           status: data.matchScore >= 80 ? 'success' : data.matchScore >= 60 ? 'warning' : 'error' as const,
           badgeText: `${data.matchScore}/100`,
           icon: <Target size={12} />
+        };
+      case 'criteria':
+        return {
+          status: 'info' as const,
+          badgeText: `${data.selectionCriteria?.length ?? 0} Criteria`,
+          icon: <ShieldAlert size={12} />
         };
       case 'skills':
         return {
@@ -95,7 +113,7 @@ export default function JobMatchDashboard({ result }: JobMatchDashboardProps) {
   const renderSidebarItems = () => {
     return (
       <>
-        {JOB_MATCH_NAVIGATION.map((item) => {
+        {navigation.map((item) => {
           const props = getNavItemProps(item.id, data);
           return (
             <SidebarNavItem
@@ -133,6 +151,8 @@ export default function JobMatchDashboard({ result }: JobMatchDashboardProps) {
     switch (activeTab) {
       case 'summary':
         return <MatchSummaryPanel data={data} contentVariants={contentVariants} />;
+      case 'criteria':
+        return <CriterionMappingPanel data={data} contentVariants={contentVariants} />;
       case 'skills':
         return <SkillAlignmentPanel data={data} contentVariants={contentVariants} />;
       case 'domain':
@@ -158,7 +178,7 @@ export default function JobMatchDashboard({ result }: JobMatchDashboardProps) {
         {/* Mobile Horizontal Navigation (Visible only on small screens) */}
         <div className="lg:hidden overflow-x-auto pb-2 scrollbar-hide -mx-4 px-4">
           <div className="flex flex-row gap-2 min-w-max">
-            {JOB_MATCH_NAVIGATION.map((item) => {
+            {navigation.map((item) => {
               const props = getNavItemProps(item.id, data);
               const widthClass = item.id === 'domain' ? 'w-56' : 'w-48';
               return (

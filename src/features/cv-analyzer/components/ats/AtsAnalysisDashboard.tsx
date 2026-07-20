@@ -23,6 +23,8 @@ import {
 } from 'lucide-react';
 import { DASHBOARD_NAVIGATION_GROUPS } from '../../constants/dashboard-navigation';
 import { useAnalysisDashboard } from '../../hooks/useAnalysisDashboard';
+import { routeWorkflow } from '@/shared/services/workflow-router';
+import ScreeningReadinessStrip from './ScreeningReadinessStrip';
 import { getParentGroupId } from '@/shared/utils/navigation';
 import SectionGroup from './SectionGroup';
 
@@ -102,6 +104,10 @@ export default function AtsAnalysisDashboard({ result }: { result: CVAnalysisRes
   // Scroll spy active group
   const activeGroupId = getParentGroupId(DASHBOARD_NAVIGATION_GROUPS, activeItem, 'content');
 
+  // How this occupation actually screens candidates; cv_led renders the
+  // standard dashboard with no additions.
+  const workflow = routeWorkflow(result.classification);
+
   // Scroll mobile nav to keep active item in view
   useEffect(() => {
     if (isMobileDetailView && mobileNavRef.current) {
@@ -153,6 +159,16 @@ export default function AtsAnalysisDashboard({ result }: { result: CVAnalysisRes
           your profile — or include your target role title prominently on the CV — and re-analyse
           for a calibrated report.
         </AlertBanner>
+      )}
+
+      {workflow.framing && (
+        <AlertBanner title="How this role is usually screened" type="info">
+          {workflow.framing}
+        </AlertBanner>
+      )}
+
+      {workflow.emphasis.includes('screening_readiness') && (
+        <ScreeningReadinessStrip result={result} />
       )}
 
       {/* --- MOBILE SUMMARY VIEW --- */}
