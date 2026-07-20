@@ -12,7 +12,13 @@
 export const EMPLOYMENT_TYPES = [
   { value: 'FULL_TIME', label: 'Full-time' },
   { value: 'PART_TIME', label: 'Part-time' },
+  { value: 'FIXED_TERM', label: 'Fixed-term / contract' },
+  { value: 'TEMPORARY_AGENCY', label: 'Temporary / agency' },
   { value: 'INTERNSHIP', label: 'Internship' },
+  { value: 'PLACEMENT', label: 'Placement' },
+  { value: 'APPRENTICESHIP', label: 'Apprenticeship' },
+  { value: 'FREELANCE', label: 'Freelance / self-employed' },
+  { value: 'VOLUNTEER', label: 'Volunteer' },
 ] as const;
 
 export type EmploymentTypeValue = (typeof EMPLOYMENT_TYPES)[number]['value'];

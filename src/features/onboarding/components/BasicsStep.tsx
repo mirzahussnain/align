@@ -30,15 +30,28 @@ export function basicsAreValid(form: PersonalInfoInput): boolean {
   return true;
 }
 
+/**
+ * What the wizard needs from this step to do its own job: whether it can
+ * advance, and the three fields that feed the shared completeness calculation.
+ * `targetOccupation` additionally decides which later steps are shown at all,
+ * so it has to leave this component rather than staying in local form state.
+ */
+export interface BasicsState {
+  valid: boolean;
+  fullName: string;
+  professionalSummary: string;
+  targetOccupation: string;
+}
+
 interface BasicsStepProps {
   initial: ProfileData['personal'];
   /** Fallbacks from the auth user record, so name/email aren't blank on a fresh account. */
   fallback: { name: string; email: string };
-  onValidityChange: (valid: boolean) => void;
+  onBasicsChange: (state: BasicsState) => void;
 }
 
 const BasicsStep = forwardRef<ProfileStepHandle, BasicsStepProps>(function BasicsStep(
-  { initial, fallback, onValidityChange },
+  { initial, fallback, onBasicsChange },
   ref
 ) {
   const [form, setForm] = useState<PersonalInfoInput>({
@@ -59,8 +72,13 @@ const BasicsStep = forwardRef<ProfileStepHandle, BasicsStepProps>(function Basic
   useImperativeHandle(ref, () => ({ save: () => savePersonalInfo(form).then(() => undefined) }), [form]);
 
   useEffect(() => {
-    onValidityChange(basicsAreValid(form));
-  }, [form, onValidityChange]);
+    onBasicsChange({
+      valid: basicsAreValid(form),
+      fullName: form.fullName,
+      professionalSummary: form.professionalSummary,
+      targetOccupation: form.targetOccupation,
+    });
+  }, [form, onBasicsChange]);
 
   useEffect(() => {
     if (labelTouched.current) return;

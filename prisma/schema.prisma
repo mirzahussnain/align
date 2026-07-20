@@ -141,11 +141,24 @@ model Profile {
  * consistent label and a job match can reason about it — "FT", "full time" and
  * "Full-Time" were all previously storable and none of them compare equal.
  * Display labels live in src/shared/constants/employment-type.ts.
+ *
+ * Nothing scores this field — it exists so the CV renders the arrangement
+ * honestly. A volunteer role, a clinical placement or an agency shift printed
+ * as ordinary employment misrepresents the candidate, which is why the list
+ * covers unpaid and temporary work. It stops short of distinctions users
+ * cannot make reliably: "contract" is FIXED_TERM and "self-employed" is
+ * FREELANCE, because no consumer would tell them apart anyway.
  */
 enum EmploymentType {
   FULL_TIME
   PART_TIME
+  FIXED_TERM
+  TEMPORARY_AGENCY
   INTERNSHIP
+  PLACEMENT
+  APPRENTICESHIP
+  FREELANCE
+  VOLUNTEER
 }
 
 model Experience {

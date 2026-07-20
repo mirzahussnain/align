@@ -85,7 +85,7 @@ export interface ProfileData {
 // Completeness helpers live in a Prisma-free module so client components can
 // import them without pulling the `pg` adapter into the browser bundle.
 export { profileCompleteness, isProfileComplete } from './profile-completeness';
-import { projectsExpectedFor } from './profile-completeness';
+import { evaluateProfileCompleteness } from './profile-completeness';
 
 /**
  * Resolve which profile to read for a user. An explicit `profileId` is only
@@ -247,25 +247,25 @@ export async function listProfiles(userId: string): Promise<ProfileSummary[]> {
   ]);
 
   return profiles.map((p) => {
-    // Mirrors profileCompleteness()'s checks — fullName is shared identity,
-    // the summary/target are per-profile, and the content sections are counted.
-    // Projects only count where the occupation expects them.
-    const checks = [
-      Boolean(identity?.fullName),
-      Boolean(p.professionalSummary),
-      Boolean(p.targetOccupation),
-      p._count.experience > 0,
-      p._count.education > 0,
-      p._count.skillGroups > 0,
-      ...(projectsExpectedFor(p.targetOccupation ?? '') ? [p._count.projects > 0] : []),
-    ];
+    // Answered from `_count` aggregates rather than loaded rows — the switcher
+    // shows every track, and loading each one's full content to count it would
+    // be gratuitous. fullName is shared identity; the rest is per-profile.
+    const { percentage } = evaluateProfileCompleteness({
+      targetOccupation: p.targetOccupation ?? '',
+      fullName: Boolean(identity?.fullName),
+      professionalSummary: Boolean(p.professionalSummary),
+      experience: p._count.experience,
+      education: p._count.education,
+      skills: p._count.skillGroups,
+      projects: p._count.projects,
+    });
 
     return {
       id: p.id,
       label: p.label,
       isDefault: p.isDefault,
       targetIndustry: p.targetIndustry,
-      completeness: Math.round((checks.filter(Boolean).length / checks.length) * 100),
+      completeness: percentage,
     };
   });
 }
