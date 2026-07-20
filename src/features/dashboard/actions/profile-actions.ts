@@ -7,6 +7,9 @@ import { prisma } from '@/shared/lib/prisma';
 import { VisaStatus, type EmploymentType } from '../../../generated/prisma/client';
 import { isVisaStatus, visaRequiresExpiry } from '@/shared/constants/visa-status';
 import { EMPLOYMENT_TYPES } from '@/shared/constants/employment-type';
+import { isKnownIndustry } from '@/shared/constants/sector-keywords';
+import { isKnownOccupation } from '@/shared/occupations/registry';
+import { isSeniorityValue } from '@/shared/constants/occupation-options';
 import { entitlementsFor } from '@/shared/lib/entitlements';
 
 async function requireUserId(): Promise<string> {
@@ -19,6 +22,12 @@ export interface PersonalInfoInput {
   fullName: string;
   tagline: string;
   professionalSummary: string;
+  /** OccupationId, or '' for unset. Validated server-side against the registry. */
+  targetOccupation: string;
+  /** The user's own words for their target role, e.g. "Warehouse Administrator". */
+  targetRoleTitle: string;
+  /** entry | mid | senior | lead, or '' for unset. */
+  targetSeniority: string;
   email: string;
   phoneDialCode: string;
   phoneNumber: string;
@@ -68,6 +77,11 @@ export async function savePersonalInfo(input: PersonalInfoInput, profileId?: str
   const trackData = {
     tagline: input.tagline.trim() || null,
     professionalSummary: input.professionalSummary.trim() || null,
+    // Server actions are public endpoints: the ontology fields only persist
+    // when they name something the engine actually has, everything else nulls.
+    targetOccupation: isKnownOccupation(input.targetOccupation) ? input.targetOccupation : null,
+    targetRoleTitle: input.targetRoleTitle.trim() || null,
+    targetSeniority: isSeniorityValue(input.targetSeniority) ? input.targetSeniority : null,
   };
 
   const resolvedProfileId = await resolveOwnedProfileId(userId, profileId);
@@ -336,7 +350,7 @@ async function requireUser(): Promise<{ id: string; subscriptionTier: string | n
  * Add a career track. The tier cap is enforced server-side rather than by
  * hiding the button, so the limit holds even if the client is bypassed.
  */
-export async function createProfile(label: string, targetIndustry?: string) {
+export async function createProfile(label: string, targetIndustry?: string, targetOccupation?: string) {
   const user = await requireUser();
   const { maxProfiles } = entitlementsFor(user.subscriptionTier);
 
@@ -363,7 +377,8 @@ export async function createProfile(label: string, targetIndustry?: string) {
     data: {
       userId: user.id,
       label: trimmed,
-      targetIndustry: targetIndustry?.trim() || null,
+      targetIndustry: isKnownIndustry(targetIndustry?.trim()) ? targetIndustry!.trim() : null,
+      targetOccupation: isKnownOccupation(targetOccupation) ? targetOccupation : null,
       // First profile a user ever creates becomes their default.
       isDefault: existing === 0,
     },

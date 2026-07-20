@@ -4,6 +4,7 @@ import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { Loader2, Check } from 'lucide-react';
 import { Label, TextField, TextArea } from './Field';
+import TargetRolePicker from './TargetRolePicker';
 import LocationPicker from './LocationPicker';
 import PhonePicker from './PhonePicker';
 import VisaStatusPicker from './VisaStatusPicker';
@@ -78,6 +79,8 @@ export default function PersonalInfoForm({
           <Label htmlFor="email">Email</Label>
           <TextField id="email" type="email" value={form.email} onChange={(e) => set('email', e.target.value)} placeholder="you@example.com" />
         </div>
+
+        <TargetRolePicker value={form} onChange={patch} />
 
         <PhonePicker value={form} onChange={patch} />
 

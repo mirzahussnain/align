@@ -19,6 +19,11 @@ export interface ProfileData {
     fullName: string;
     tagline: string;
     professionalSummary: string;
+    /** OccupationId or '' — which evaluation profile scores this track. */
+    targetOccupation: string;
+    targetRoleTitle: string;
+    /** entry | mid | senior | lead, or ''. */
+    targetSeniority: string;
     email: string;
     phoneDialCode: string;
     phoneNumber: string;
@@ -156,6 +161,9 @@ export async function loadProfileData(userId: string, profileId?: string): Promi
       fullName: identity?.fullName ?? '',
       tagline: profile?.tagline ?? '',
       professionalSummary: profile?.professionalSummary ?? '',
+      targetOccupation: profile?.targetOccupation ?? '',
+      targetRoleTitle: profile?.targetRoleTitle ?? '',
+      targetSeniority: profile?.targetSeniority ?? '',
       email: identity?.email ?? '',
       phoneDialCode: identity?.phoneDialCode ?? '',
       phoneNumber: identity?.phoneNumber ?? '',
@@ -222,6 +230,7 @@ export async function listProfiles(userId: string): Promise<ProfileSummary[]> {
         label: true,
         isDefault: true,
         targetIndustry: true,
+        targetOccupation: true,
         professionalSummary: true,
         _count: {
           select: { experience: true, projects: true, education: true, skillGroups: true },
@@ -231,11 +240,12 @@ export async function listProfiles(userId: string): Promise<ProfileSummary[]> {
   ]);
 
   return profiles.map((p) => {
-    // Mirrors profileCompleteness()'s six checks — fullName is shared identity,
-    // the summary is per-profile, and the four content sections are counted.
+    // Mirrors profileCompleteness()'s checks — fullName is shared identity,
+    // the summary/target are per-profile, and the content sections are counted.
     const checks = [
       Boolean(identity?.fullName),
       Boolean(p.professionalSummary),
+      Boolean(p.targetOccupation),
       p._count.experience > 0,
       p._count.projects > 0,
       p._count.education > 0,

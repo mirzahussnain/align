@@ -2,6 +2,7 @@
 
 import { forwardRef, useEffect, useImperativeHandle, useState } from 'react';
 import { Label, TextField, TextArea } from '@/features/dashboard/components/profile/Field';
+import TargetRolePicker from '@/features/dashboard/components/profile/TargetRolePicker';
 import LocationPicker from '@/features/dashboard/components/profile/LocationPicker';
 import PhonePicker from '@/features/dashboard/components/profile/PhonePicker';
 import VisaStatusPicker from '@/features/dashboard/components/profile/VisaStatusPicker';
@@ -12,7 +13,16 @@ import { visaRequiresExpiry } from '@/shared/constants/visa-status';
 
 /** Are all non-skippable basics filled in (incl. an expiry for temporary visas)? */
 export function basicsAreValid(form: PersonalInfoInput): boolean {
-  const required: (keyof PersonalInfoInput)[] = ['fullName', 'email', 'city', 'country', 'professionalSummary'];
+  const required: (keyof PersonalInfoInput)[] = [
+    'fullName',
+    'email',
+    'city',
+    'country',
+    'professionalSummary',
+    // The occupation selects which evaluation profile scores this user's
+    // analyses — without it everything falls back to generic rules.
+    'targetOccupation',
+  ];
   if (!required.every((k) => form[k].trim().length > 0)) return false;
   if (!form.visaStatus) return false;
   if (visaRequiresExpiry(form.visaStatus) && !form.visaExpiry.trim()) return false;
@@ -67,6 +77,8 @@ const BasicsStep = forwardRef<ProfileStepHandle, BasicsStepProps>(function Basic
         </Label>
         <TextField id="email" type="email" value={form.email} onChange={(e) => set('email', e.target.value)} placeholder="you@example.com" />
       </div>
+
+      <TargetRolePicker value={form} onChange={patch} required />
 
       <PhonePicker value={form} onChange={patch} />
 

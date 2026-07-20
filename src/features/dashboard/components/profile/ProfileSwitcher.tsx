@@ -11,6 +11,7 @@ import {
 } from '@/features/dashboard/actions/profile-actions';
 import { INDUSTRY_IDS } from '@/shared/constants/sector-keywords';
 import { SECTOR_LABELS } from '@/shared/constants/sector-labels';
+import { OCCUPATION_OPTIONS } from '@/shared/constants/occupation-options';
 import type { ProfileSummary } from '@/features/dashboard/data/load-profile';
 
 const INDUSTRY_LABELS: Record<string, string> = SECTOR_LABELS;
@@ -31,6 +32,7 @@ export default function ProfileSwitcher({
   const [creating, setCreating] = useState(false);
   const [label, setLabel] = useState('');
   const [industry, setIndustry] = useState('');
+  const [occupation, setOccupation] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
@@ -47,7 +49,7 @@ export default function ProfileSwitcher({
   function handleCreate() {
     setError(null);
     startTransition(async () => {
-      const result = await createProfile(label, industry || undefined);
+      const result = await createProfile(label, industry || undefined, occupation || undefined);
       if (!result.ok) {
         setError(result.error);
         return;
@@ -55,6 +57,7 @@ export default function ProfileSwitcher({
       setCreating(false);
       setLabel('');
       setIndustry('');
+      setOccupation('');
       router.push(`/dashboard?profile=${result.profileId}`);
     });
   }
@@ -187,6 +190,18 @@ export default function ProfileSwitcher({
                     placeholder="e.g. Warehouse Operative"
                     className="rounded-lg border border-neutral-200 px-2.5 py-1.5 text-sm outline-none focus:border-accent-purple"
                   />
+                  <select
+                    value={occupation}
+                    onChange={(e) => setOccupation(e.target.value)}
+                    className="rounded-lg border border-neutral-200 px-2.5 py-1.5 text-xs text-neutral-600 outline-none focus:border-accent-purple"
+                  >
+                    <option value="">Target occupation (recommended)</option>
+                    {OCCUPATION_OPTIONS.map((o) => (
+                      <option key={o.value} value={o.value}>
+                        {o.label}
+                      </option>
+                    ))}
+                  </select>
                   <select
                     value={industry}
                     onChange={(e) => setIndustry(e.target.value)}
