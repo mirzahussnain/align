@@ -6,8 +6,12 @@ export default function ImpactPanel({ result }: { result: CVAnalysisResult }) {
   const summaryCat = result.categories.find(c => c.id === 'professionalSummary');
   const impactCat = result.categories.find(c => c.id === 'impactStatements');
   
-  const aiRewrites = result.recommendations.filter(r => r.title.startsWith('Rewrite bullet:'));
-  const aiFeedback = result.recommendations.find(r => r.title === 'UK Tech Market Alignment Feedback');
+  const aiRewrites = result.recommendations.filter(
+    r => r.kind === 'rewrite' || (!r.kind && r.title.startsWith('Rewrite bullet:'))
+  );
+  const aiFeedback = result.recommendations.find(
+    r => r.kind === 'alignment' || (!r.kind && r.title === 'UK Tech Market Alignment Feedback')
+  );
 
   return (
     <div className="space-y-6">
@@ -29,7 +33,7 @@ export default function ImpactPanel({ result }: { result: CVAnalysisResult }) {
         
         <GlassCard className="p-5" hover={false}>
           <div className="flex justify-between items-start mb-2">
-            <h3 className="font-semibold text-text-primary">Impact Statements (STAR)</h3>
+            <h3 className="font-semibold text-text-primary">Impact Statements</h3>
             <span className={`text-sm font-bold ${impactCat?.status === 'excellent' ? 'text-success' : 'text-warning'}`}>
               {impactCat?.score}/{impactCat?.maxScore}
             </span>
@@ -41,7 +45,7 @@ export default function ImpactPanel({ result }: { result: CVAnalysisResult }) {
       {aiFeedback && (
         <GlassCard className="p-5 border-accent-cyan/20 bg-accent-cyan/5" hover={false}>
           <h3 className="font-semibold text-accent-cyan flex items-center gap-2 mb-2">
-            <Target size={16} /> UK Tech Market Alignment
+            <Target size={16} /> Role Alignment
           </h3>
           <p className="text-sm text-text-secondary">{aiFeedback.description}</p>
         </GlassCard>

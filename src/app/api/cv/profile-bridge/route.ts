@@ -8,7 +8,7 @@ import { entitlementsFor } from '@/shared/lib/entitlements';
 import { loadProfileData } from '@/features/dashboard/data/load-profile';
 import { reconcileProfileWithCv } from '@/shared/services/profile-reconciler';
 import { checkQuota, recordUsage } from '@/shared/services/usage-meter';
-import type { CVAnalysisResult } from '@/shared/types/cv';
+import { parseStoredAnalysisResult } from '@/shared/schemas/analysis-result';
 import type { AIJobMatchOutput } from '@/shared/types/ai';
 
 const ProfileBridgeSchema = z.object({
@@ -80,9 +80,15 @@ export async function POST(request: Request) {
       throw new APIError('Profile reasoning only applies to job-match analyses.', 400);
     }
 
-    const rawResult = analysis.rawResult as unknown as CVAnalysisResult;
-    const cvText = rawResult?.rawText ?? '';
-    const jobDescription = analysis.jobDescription ?? rawResult?.jobDescription ?? '';
+    // Validated, not cast — an unparseable stored blob fails with a clear
+    // message instead of feeding the reconciler undefined fields.
+    const storedResult = parseStoredAnalysisResult(analysis.rawResult);
+    if (!storedResult) {
+      throw new APIError('This analysis is missing the data needed to compare your profile.', 400);
+    }
+    const rawResult = storedResult.result;
+    const cvText = rawResult.rawText ?? '';
+    const jobDescription = analysis.jobDescription ?? rawResult.jobDescription ?? '';
 
     if (cvText.trim().length < 50 || jobDescription.trim().length < 10) {
       throw new APIError('This analysis is missing the data needed to compare your profile.', 400);

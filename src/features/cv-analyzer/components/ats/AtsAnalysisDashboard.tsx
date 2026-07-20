@@ -60,6 +60,7 @@ import LinkedinMatchCard from './cards/hr-red-flags/LinkedinMatchCard';
 
 // Discrimination Group
 import RelevanceCard from './cards/discrimination/RelevanceCard';
+import CredentialsCard from './cards/discrimination/CredentialsCard';
 
 // Seniority Group
 import RoleTargetCard from './cards/seniority/RoleTargetCard';
@@ -88,7 +89,8 @@ export default function AtsAnalysisDashboard({ result }: { result: CVAnalysisRes
     repeatedWords,
     clichésList,
     targetRoleTitle,
-    hasTestingKeywords,
+    occupationLabel,
+    roleAligned,
     hasRiskFactor,
     risksList,
     getCategoryScorePercent,
@@ -144,9 +146,12 @@ export default function AtsAnalysisDashboard({ result }: { result: CVAnalysisRes
         </AlertBanner>
       )}
 
-      {result.aiIsTechRole === false && (
-        <AlertBanner title="Out-of-Domain CV Detected" type="warning">
-          Align is specifically calibrated for Software Engineering and Tech roles. We detected that this is a non-technical CV. Your keyword and impact scores may be artificially low because our engine is looking for strict technical requirements (like Cloud platforms and Testing frameworks).
+      {result.outOfDomain && (
+        <AlertBanner title="We couldn't confidently match your CV to a supported occupation" type="warning">
+          This report was scored against general UK CV standards rather than occupation-specific
+          expectations, so some scores may read lower than they should. Set a target occupation on
+          your profile — or include your target role title prominently on the CV — and re-analyse
+          for a calibrated report.
         </AlertBanner>
       )}
 
@@ -265,7 +270,7 @@ export default function AtsAnalysisDashboard({ result }: { result: CVAnalysisRes
           <FileFormatSizeCard
             pageCount={result.pageCount}
             estimatedReadTime={result.formatting.estimatedReadTime}
-            details={result.categories.find(c => c.id === 'pageCount')?.details}
+            details={result.categories.find(c => c.id === 'pageCount' || c.id === 'formatting')?.details}
           />
 
           {/* Section 12: Design */}
@@ -309,8 +314,11 @@ export default function AtsAnalysisDashboard({ result }: { result: CVAnalysisRes
             <CompliancePanel result={result} />
           </div>
 
-          {/* Section 22: UK Tech Relevance */}
-          <RelevanceCard hasTestingKeywords={hasTestingKeywords} presentKeywords={result.keywords.present} />
+          {/* Section 22: Credentials & Licences */}
+          <CredentialsCard credentials={result.credentials} occupationLabel={occupationLabel} />
+
+          {/* Section 23: Role Relevance */}
+          <RelevanceCard roleAligned={roleAligned} occupationLabel={occupationLabel} presentKeywords={result.keywords.present} />
         </SectionGroup>
 
         {/* ==================== SENIORITY GROUP ==================== */}

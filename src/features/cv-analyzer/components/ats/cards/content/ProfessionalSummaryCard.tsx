@@ -40,7 +40,7 @@ export default function ProfessionalSummaryCard({
             </h4>
             <ul className="text-xs font-medium text-green-800/90 space-y-1.5 list-disc pl-4">
               <li>Limit length strictly between 30 and 60 words.</li>
-              <li>Include at least one quantified technical metric.</li>
+              <li>Include at least one concrete, evidenced achievement relevant to your field.</li>
               <li>Remove empty buzzwords (e.g. 'passionate team player').</li>
               <li>Ensure target job role is mentioned clearly.</li>
             </ul>

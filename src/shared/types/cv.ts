@@ -28,10 +28,8 @@ export interface CVAnalysisResult {
   outOfDomain?: boolean;
 
   aiTargetRole?: string;
-  /** Industry the AI classified this CV into, i.e. which keyword dictionary scored it. */
+  /** Sector whose keyword dictionary scored this CV (kept for stored-row compat). */
   aiDetectedIndustry?: Industry;
-  aiHasTesting?: boolean;
-  aiIsTechRole?: boolean;
   aiRiskFlags?: string[];
   aiClichés?: string[];
   /**

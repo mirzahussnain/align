@@ -9,8 +9,8 @@ import Image from 'next/image';
 const MODULES = [
   {
     icon: FileSearch,
-    title: 'ATS Alignment Engine',
-    description: 'Score your CV against UK tech market ATS standards with 8-dimension parsing and keyword mapping.',
+    title: 'CV Readiness Engine',
+    description: 'Score your CV against UK hiring standards for your occupation — 8-dimension parsing, evidence coverage, and credential checks.',
     href: '/analyze',
     color: 'from-[hsl(250,90%,65%)] to-[hsl(280,85%,55%)]',
     actionText: 'Analyze CV',

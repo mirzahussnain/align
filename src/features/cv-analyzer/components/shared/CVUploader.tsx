@@ -123,7 +123,7 @@ export default function CVUploader({ mode = 'ats', onAnalysisComplete, profileId
                   <textarea
                     value={jobDescription}
                     onChange={(e) => setJobDescription(e.target.value)}
-                    placeholder="e.g. We are looking for a Senior Frontend Engineer with React and TypeScript experience..."
+                    placeholder="Paste the full job advert — e.g. 'We are looking for a Warehouse Operative with an FLT licence…' or 'Senior Frontend Engineer with React experience…'"
                     className="flex-1 w-full p-4 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-700 focus:outline-none focus:border-accent-purple/50 focus:ring-2 focus:ring-accent-purple/20 resize-none"
                   />
                 </div>
@@ -216,7 +216,7 @@ export default function CVUploader({ mode = 'ats', onAnalysisComplete, profileId
                   <p className="text-xs text-slate-500 text-center mt-4">
                     {mode === 'job_match' 
                       ? 'Your CV will be explicitly scored against the requirements in the provided Job Description.'
-                      : 'Your CV will be analyzed against UK tech market ATS standards, keyword coverage, and formatting rules.'}
+                      : "Your CV is scored against Align's UK CV readiness framework for your occupation: formatting, structure, evidence coverage, credentials, and compliance."}
                   </p>
                 </div>
               )}

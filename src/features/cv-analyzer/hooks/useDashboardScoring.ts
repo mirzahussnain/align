@@ -10,13 +10,22 @@ export function useDashboardScoring(
     bulletConsistency: { endingWithoutPeriod: number };
     isEssentialSectionsPassed: boolean;
     isCompliancePassed: boolean;
-    hasTestingKeywords: boolean;
+    roleAligned: boolean;
     hasRiskFactor: boolean;
     targetRoleTitle: string;
   }
 ) {
+  // Scoring v2 renamed three category ids; stored v1 rows rehydrate into this
+  // same dashboard, so lookups accept the legacy id as a fallback.
+  const findCategory = (...ids: string[]) =>
+    result.categories.find(c => ids.includes(c.id));
+
   const getCategoryScorePercent = (id: string) => {
-    const cat = result.categories.find(c => c.id === id);
+    const legacy: Record<string, string> = {
+      evidenceCoverage: 'keywordDensity',
+      sectionCompleteness: 'sectionOrder',
+    };
+    const cat = findCategory(id, legacy[id] ?? id);
     if (!cat) return 80;
     return Math.round((cat.score / cat.maxScore) * 100);
   };
@@ -29,13 +38,14 @@ export function useDashboardScoring(
         const parseRate = getCategoryScorePercent('atsReadability');
         const impact = getCategoryScorePercent('impactStatements');
         const summary = getCategoryScorePercent('professionalSummary');
-        const keywords = getCategoryScorePercent('keywordDensity');
+        const keywords = getCategoryScorePercent('evidenceCoverage');
         return Math.round((parseRate + impact + summary + keywords) / 4);
       }
       case 'sections':
-        return getCategoryScorePercent('sectionOrder');
+        return getCategoryScorePercent('sectionCompleteness');
       case 'ats-essentials': {
-        const size = getCategoryScorePercent('pageCount');
+        // pageCount folded into formatting in scoring v2; derive size locally.
+        const size = result.pageCount <= 2 ? 100 : 60;
         const design = getCategoryScorePercent('formatting');
         const parse = getCategoryScorePercent('atsReadability');
         return Math.round((size + design + parse) / 3);
@@ -43,10 +53,14 @@ export function useDashboardScoring(
       case 'hr-red-flags':
         return result.overallScore >= 75 ? 85 : 70;
       case 'discrimination':
-        return Math.round(getCategoryScorePercent('compliance'));
+        return Math.round((getCategoryScorePercent('compliance') + getCategoryScorePercent('credentials')) / 2);
       case 'seniority': {
-        const isMatched = result.rawText.toLowerCase().includes('engineer') || result.rawText.toLowerCase().includes('developer');
-        return isMatched ? 90 : 70;
+        // Seniority comes from classification, not from grepping the CV for
+        // "engineer" — a warehouse supervisor has seniority too.
+        const known = result.classification
+          ? result.classification.seniority !== 'unknown'
+          : Boolean(data.targetRoleTitle);
+        return known ? 90 : 70;
       }
       default:
         return 80;
@@ -68,9 +82,11 @@ export function useDashboardScoring(
         return { isPassed, badgeText: isPassed ? 'No issues' : '1 issue' };
       }
       case 'impactStatements': {
-        const cat = result.categories.find(c => c.id === 'impactStatements');
+        const cat = findCategory('impactStatements');
         const isPassed = cat ? (cat.status === 'excellent' || cat.status === 'good') : true;
-        const rewritesCount = result.recommendations.filter(r => r.title.startsWith('Rewrite bullet:')).length;
+        const rewritesCount = result.recommendations.filter(
+          r => r.kind === 'rewrite' || (!r.kind && r.title.startsWith('Rewrite bullet:'))
+        ).length;
         return { isPassed, badgeText: isPassed ? 'No issues' : `${rewritesCount || 1} issues` };
       }
       case 'repetition': {
@@ -78,12 +94,12 @@ export function useDashboardScoring(
         return { isPassed, badgeText: isPassed ? 'Good variety' : `${data.repeatedWords.length} repeats` };
       }
       case 'professionalSummary': {
-        const cat = result.categories.find(c => c.id === 'professionalSummary');
+        const cat = findCategory('professionalSummary');
         const isPassed = cat ? (cat.status === 'excellent' || cat.status === 'good') : true;
         return { isPassed, badgeText: isPassed ? 'No issues' : '1 issue' };
       }
       case 'keywordDensity': {
-        const cat = result.categories.find(c => c.id === 'keywordDensity');
+        const cat = findCategory('evidenceCoverage', 'keywordDensity');
         const isPassed = cat ? (cat.status === 'excellent' || cat.status === 'good') : true;
         const missingCount = result.keywords.missing.length;
         return { isPassed, badgeText: isPassed ? 'No issues' : `${missingCount} missing` };
@@ -141,8 +157,18 @@ export function useDashboardScoring(
       }
       case 'compliance':
         return { isPassed: data.isCompliancePassed, badgeText: data.isCompliancePassed ? 'Compliant' : 'Non-compliant' };
+      case 'credentials': {
+        const cat = findCategory('credentials');
+        const isPassed = cat ? (cat.status === 'excellent' || cat.status === 'good') : true;
+        const missingMandatory =
+          result.credentials?.findings.filter(f => f.class === 'mandatory' && !f.found).length ?? 0;
+        return {
+          isPassed,
+          badgeText: isPassed ? 'No issues' : missingMandatory > 0 ? 'Missing required' : 'Review',
+        };
+      }
       case 'relevance':
-        return { isPassed: data.hasTestingKeywords, badgeText: data.hasTestingKeywords ? 'UK Aligned' : 'Fix standard' };
+        return { isPassed: data.roleAligned, badgeText: data.roleAligned ? 'Aligned' : 'Review evidence' };
       case 'roleTarget': {
         const isPassed = !!data.targetRoleTitle;
         return { isPassed, badgeText: isPassed ? 'Target set' : 'Add role title' };

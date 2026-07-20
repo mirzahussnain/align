@@ -47,7 +47,7 @@ export default function CredibilityCard({ clichésList }: CredibilityCardProps) 
           <div>
             <h4 className="text-xs font-bold text-emerald-800">Vague Clichés Clean</h4>
             <p className="text-[11px] text-emerald-700 leading-relaxed mt-0.5">
-              Your resume uses direct, technical, and objective language without empty descriptors like "extremely motivated".
+              Your resume uses direct, specific, and objective language without empty descriptors like "extremely motivated".
             </p>
           </div>
         </div>

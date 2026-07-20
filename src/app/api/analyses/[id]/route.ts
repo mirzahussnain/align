@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { withErrorHandler, APIError } from '@/shared/utils/api-error';
 import { auth } from '@/shared/lib/auth';
 import { prisma } from '@/shared/lib/prisma';
+import { parseStoredAnalysisResult } from '@/shared/schemas/analysis-result';
 
 /**
  * Fetch a single stored analysis in full. The complete CVAnalysisResult lives in
@@ -35,13 +36,19 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
       throw new APIError('Analysis not found.', 404);
     }
 
+    // Stored blobs are validated, not trusted: a row written by an older
+    // engine version that no longer parses gets an explicit signal the client
+    // renders as "re-analyse for a current report" instead of a crash.
+    const parsed = parseStoredAnalysisResult(analysis.rawResult);
+
     return NextResponse.json({
       id: analysis.id,
       mode: analysis.mode,
       overallScore: analysis.overallScore,
       sourceFileName: analysis.sourceFileName,
       createdAt: analysis.createdAt.toISOString(),
-      result: analysis.rawResult,
+      result: parsed?.result ?? null,
+      legacy: parsed?.legacy ?? true,
     });
   });
 }

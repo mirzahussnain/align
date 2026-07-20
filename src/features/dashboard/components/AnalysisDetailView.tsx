@@ -14,7 +14,8 @@ interface StoredAnalysis {
   overallScore: number;
   sourceFileName: string | null;
   createdAt: string;
-  result: CVAnalysisResult;
+  /** Null when the stored blob no longer parses (written by an old engine). */
+  result: CVAnalysisResult | null;
 }
 
 /**
@@ -91,7 +92,17 @@ export default function AnalysisDetailView({ analysisId }: { analysisId: string 
           </div>
         )}
 
-        {currentData && (
+        {currentData && !currentData.result && (
+          <div className="flex h-64 flex-col items-center justify-center gap-3 rounded-2xl border border-amber-200 bg-amber-50 text-amber-700">
+            <AlertTriangle className="h-6 w-6" />
+            <p className="text-sm font-medium">
+              This report was created by an older version of the analysis engine and can no longer
+              be displayed. Re-analyse the CV to get a current report.
+            </p>
+          </div>
+        )}
+
+        {currentData?.result && (
           <div className="rounded-2xl border border-neutral-200 bg-white p-4 sm:p-6">
             {currentData.result.mode === 'job_match' ? (
               <JobMatchDashboard result={currentData.result} />

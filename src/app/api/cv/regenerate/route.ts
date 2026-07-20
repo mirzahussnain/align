@@ -14,7 +14,7 @@ import {
   persistAndArchiveCv,
   DOCX_CONTENT_TYPE,
 } from '@/shared/services/cv-generation';
-import type { CVAnalysisResult } from '@/shared/types/cv';
+import { parseStoredAnalysisResult } from '@/shared/schemas/analysis-result';
 
 const RegenerateSchema = z.object({
   analysisId: z.string().min(1, 'analysisId is required'),
@@ -99,9 +99,15 @@ export async function POST(request: Request) {
       throw new APIError('Only job-match analyses can be rebuilt into a CV.', 400);
     }
 
-    const rawResult = analysis.rawResult as unknown as CVAnalysisResult;
-    const cvText = rawResult?.rawText ?? '';
-    const jobDescription = analysis.jobDescription ?? rawResult?.jobDescription ?? '';
+    // Validated, not cast: stored blobs from older engine versions must fail
+    // loudly here rather than feed a rewrite undefined fields.
+    const storedResult = parseStoredAnalysisResult(analysis.rawResult);
+    if (!storedResult) {
+      throw new APIError('This analysis is missing the data needed to rebuild a CV.', 400);
+    }
+    const rawResult = storedResult.result;
+    const cvText = rawResult.rawText ?? '';
+    const jobDescription = analysis.jobDescription ?? rawResult.jobDescription ?? '';
 
     if (cvText.trim().length < 50 || jobDescription.trim().length < 10) {
       throw new APIError('This analysis is missing the data needed to rebuild a CV.', 400);

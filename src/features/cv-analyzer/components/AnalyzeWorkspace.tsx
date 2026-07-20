@@ -54,12 +54,12 @@ export default function AnalyzeWorkspace({
           {!compact && (
             <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-accent-purple/10 border border-accent-purple/20 mb-6">
               <Sparkles size={14} className="text-accent-purple" />
-              <span className="text-xs font-medium text-accent-purple">ATS Calibration Tool</span>
+              <span className="text-xs font-medium text-accent-purple">CV Readiness Tool</span>
             </div>
           )}
 
           <h1 className={compact ? 'text-2xl font-bold mb-3 text-text-primary' : 'text-4xl sm:text-5xl font-bold mb-4 leading-tight text-text-primary'}>
-            {mode === 'ats' ? 'ATS Alignment Engine' : 'Job Matcher AI'}
+            {mode === 'ats' ? 'CV Readiness Check' : 'Job Matcher AI'}
           </h1>
 
           <p className="text-base text-text-secondary max-w-xl mx-auto mb-8">
@@ -95,7 +95,7 @@ export default function AnalyzeWorkspace({
                 <ShieldCheck className="text-accent-purple" />
                 CV Analysis Report
               </h1>
-              <p className="text-xs text-text-tertiary mt-1">Checked against 2026 UK Tech hiring practices</p>
+              <p className="text-xs text-text-tertiary mt-1">Checked against 2026 UK hiring practices for your occupation</p>
             </div>
             <button
               onClick={reset}

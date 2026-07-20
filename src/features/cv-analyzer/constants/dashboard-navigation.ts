@@ -28,7 +28,7 @@ export const DASHBOARD_NAVIGATION_GROUPS: readonly NavigationGroup[] = [
       { id: 'impactStatements', label: 'Quantifying Impact', type: 'standard', mappedCategoryId: 'impactStatements' },
       { id: 'repetition', label: 'Repetition', type: 'standard', isMock: true },
       { id: 'professionalSummary', label: 'Spelling & Grammar', type: 'standard', mappedCategoryId: 'professionalSummary' },
-      { id: 'keywordDensity', label: 'ATS Keywords', type: 'standard', mappedCategoryId: 'keywordDensity' },
+      { id: 'keywordDensity', label: 'Role Keywords', type: 'standard', mappedCategoryId: 'evidenceCoverage' },
       { id: 'bulletsConsistency', label: 'Bullets Consistency', type: 'standard', isMock: true }
     ]
   },
@@ -36,16 +36,16 @@ export const DASHBOARD_NAVIGATION_GROUPS: readonly NavigationGroup[] = [
     id: 'sections',
     label: 'SECTIONS',
     items: [
-      { id: 'essentialSections', label: 'Essential Sections', type: 'standard', mappedCategoryId: 'sectionOrder' },
+      { id: 'essentialSections', label: 'Essential Sections', type: 'standard', mappedCategoryId: 'sectionCompleteness' },
       { id: 'contactInfo', label: 'Contact Information', type: 'standard', isMock: true },
-      { id: 'sectionOrder', label: 'Sections Order', type: 'standard', mappedCategoryId: 'sectionOrder' }
+      { id: 'sectionOrder', label: 'Sections Order', type: 'standard', mappedCategoryId: 'sectionCompleteness' }
     ]
   },
   {
     id: 'ats-essentials',
     label: 'ATS ESSENTIALS',
     items: [
-      { id: 'fileFormatSize', label: 'File Format & Size', type: 'standard', mappedCategoryId: 'pageCount' },
+      { id: 'fileFormatSize', label: 'File Format & Size', type: 'standard', mappedCategoryId: 'formatting' },
       { id: 'formatting', label: 'Design', type: 'standard', mappedCategoryId: 'formatting' },
       { id: 'emailAddress', label: 'Email Address', type: 'standard', isMock: true },
       { id: 'headerLinks', label: 'Header Links', type: 'standard', isMock: true },
@@ -68,7 +68,8 @@ export const DASHBOARD_NAVIGATION_GROUPS: readonly NavigationGroup[] = [
     label: 'DISCRIMINATION',
     items: [
       { id: 'compliance', label: 'UK Compliance', type: 'standard', mappedCategoryId: 'compliance' },
-      { id: 'relevance', label: 'UK Tech Relevance', type: 'standard', isMock: true }
+      { id: 'credentials', label: 'Credentials & Licences', type: 'standard', mappedCategoryId: 'credentials' },
+      { id: 'relevance', label: 'Role Relevance', type: 'standard', isMock: true }
     ]
   },
   {
