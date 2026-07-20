@@ -11,7 +11,11 @@ import { authClient } from '@/shared/lib/auth-client';
 export default function Navbar() {
   const pathname = usePathname();
   const [isMobileOpen, setIsMobileOpen] = useState(false);
-  const [isScrolled, setIsScrolled] = useState(false);
+  // Initialised lazily so no effect needs to set state on mount; off-home
+  // pages force the solid style by derivation rather than by setState.
+  const [scrolledPastTop, setScrolledPastTop] = useState(
+    () => typeof window !== 'undefined' && window.scrollY > 20
+  );
   const { data: session, isPending: sessionPending } = authClient.useSession();
   const isAuthed = Boolean(session);
 
@@ -20,18 +24,18 @@ export default function Navbar() {
   const isLinkActive = (href: string) =>
     !href.includes('#') && (pathname === href || pathname.startsWith(href));
 
+  // The navbar is always solid off the home page; only the home page needs to
+  // track scroll position for the transparent-at-top treatment.
+  const isScrolled = pathname !== '/' || scrolledPastTop;
+
   useEffect(() => {
-    if (pathname !== '/') {
-      setIsScrolled(true);
-      return;
-    }
+    if (pathname !== '/') return;
 
     const handleScroll = () => {
-      setIsScrolled(window.scrollY > 20);
+      setScrolledPastTop(window.scrollY > 20);
     };
 
     window.addEventListener('scroll', handleScroll);
-    handleScroll(); // Initial check
     return () => window.removeEventListener('scroll', handleScroll);
   }, [pathname]);
 

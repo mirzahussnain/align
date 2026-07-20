@@ -76,7 +76,7 @@ export async function getSponsors(): Promise<Sponsor[]> {
   }
 
   fetchPromise = (async () => {
-    let csvUrl = process.env.GOVUK_SPONSOR_CSV_URL;
+    const csvUrl = process.env.GOVUK_SPONSOR_CSV_URL;
     let response: Response | null = null;
 
     if (csvUrl && isValidSponsorUrl(csvUrl)) {
@@ -117,7 +117,7 @@ export async function getSponsors(): Promise<Sponsor[]> {
           skipEmptyLines: true,
           complete: (results) => {
             try {
-              const sponsors = results.data.map((row: any) => {
+              const sponsors = (results.data as Record<string, string>[]).map((row) => {
                 const name = row['Organisation Name'] || '';
                 return {
                   organisationName: name,
@@ -145,7 +145,7 @@ export async function getSponsors(): Promise<Sponsor[]> {
                reject(new Error("Error mapping sponsor data"));
             }
           },
-          error: (error: any) => {
+          error: (error: Error) => {
             reject(error);
           },
         });

@@ -1,10 +1,16 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import type { Job } from '@/shared/types/job';
 
 export function useJobs() {
-  const [query, setQuery] = useState('');
+  // Seeded from the URL so a shared /jobs?query=... link searches on load
+  // without an effect having to set state after mount.
+  const [query, setQuery] = useState(() =>
+    typeof window !== 'undefined'
+      ? new URLSearchParams(window.location.search).get('query') ?? ''
+      : ''
+  );
   const [location, setLocation] = useState('');
   const [source, setSource] = useState('all');
   const [contractType, setContractType] = useState('all');
@@ -22,31 +28,7 @@ export function useJobs() {
   const [error, setError] = useState<string | null>(null);
   const isFirstMount = useRef(true);
 
-  // Auto-search when filters change
-  useEffect(() => {
-    if (isFirstMount.current) {
-      isFirstMount.current = false;
-      return;
-    }
-    if (hasSearched) {
-      const timer = setTimeout(() => {
-        searchJobs(1);
-      }, 300);
-      return () => clearTimeout(timer);
-    }
-  }, [source, contractType, techFilter, salaryMin, sponsorshipFilter, experienceLevel, sortBy]);
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const params = new URLSearchParams(window.location.search);
-      const initialQuery = params.get('query');
-      if (initialQuery) {
-        setQuery(initialQuery);
-        searchJobs(1, initialQuery);
-      }
-    }
-  }, []);
-
-  const searchJobs = async (pageNumber: number = 1, overrideQuery?: string) => {
+  const searchJobs = useCallback(async (pageNumber: number = 1, overrideQuery?: string) => {
     const activeQuery = overrideQuery !== undefined ? overrideQuery : query;
     if (!activeQuery.trim()) return;
 
@@ -112,7 +94,32 @@ export function useJobs() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [query, location, source, contractType, techFilter, salaryMin, sponsorshipFilter, experienceLevel, sortBy]);
+
+  // Auto-search when filters change (debounced); skipped on first mount so
+  // landing on the page never fires an empty search.
+  useEffect(() => {
+    if (isFirstMount.current) {
+      isFirstMount.current = false;
+      return;
+    }
+    if (hasSearched) {
+      const timer = setTimeout(() => {
+        searchJobs(1);
+      }, 300);
+      return () => clearTimeout(timer);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- deliberately excludes `query`: typing must not auto-search
+  }, [source, contractType, techFilter, salaryMin, sponsorshipFilter, experienceLevel, sortBy]);
+
+  // A URL-seeded query searches immediately on load. Deferred a tick so the
+  // search's own state updates never run synchronously inside the effect.
+  useEffect(() => {
+    if (!query.trim()) return;
+    const timer = setTimeout(() => searchJobs(1, query), 0);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- mount-only by design
+  }, []);
 
   return {
     query,

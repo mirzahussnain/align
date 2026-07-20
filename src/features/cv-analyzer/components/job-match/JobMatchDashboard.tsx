@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Target, CheckCircle2, AlertCircle, FileEdit, Briefcase, Zap, BarChart2, ShieldAlert } from 'lucide-react';
 import type { CVAnalysisResult } from '@/shared/types/cv';
+import type { AIJobMatchOutput } from '@/shared/types/ai';
 import ScoreDial from '@/shared/components/ui/CircularProgress';
 import { cn } from '@/shared/utils/cn';
 import { SidebarNavItem } from '../shared/SidebarNavItem';
@@ -61,7 +62,7 @@ export default function JobMatchDashboard({ result }: JobMatchDashboardProps) {
 
   type NavItemStatus = 'success' | 'error' | 'warning' | 'info' | 'premium';
 
-  const getNavItemProps = (id: string, data: any): { status: NavItemStatus; badgeText: string; icon: React.ReactNode } => {
+  const getNavItemProps = (id: string, data: AIJobMatchOutput): { status: NavItemStatus; badgeText: string; icon: React.ReactNode } => {
     switch (id) {
       case 'summary':
         return {

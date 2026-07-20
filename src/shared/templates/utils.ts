@@ -13,7 +13,7 @@ export function formatLinkLabel(url: string, type: 'mail' | 'github' | 'linkedin
     const user = url.replace('mailto:', '').split('@')[0];
     return `mail/${user}`;
   }
-  let cleanUrl = url.replace(/https?:\/\/(www\.)?/, '').replace(/\/$/, '');
+  const cleanUrl = url.replace(/https?:\/\/(www\.)?/, '').replace(/\/$/, '');
   if (type === 'github') {
     const parts = cleanUrl.split('github.com/');
     return parts.length > 1 ? `github/${parts[1]}` : cleanUrl;
@@ -61,7 +61,7 @@ export function buildLinkArray(
   separatorColor?: string
 ) {
   const validLinks = links.filter(l => Boolean(l.url)) as Array<{ url: string, type: 'mail' | 'github' | 'linkedin' | 'portfolio' }>;
-  const children: any[] = [];
+  const children: (ExternalHyperlink | TextRun)[] = [];
   
   for (let i = 0; i < validLinks.length; i++) {
     children.push(createContactHyperlink(validLinks[i].url, validLinks[i].type, font, size, color));

@@ -11,8 +11,54 @@ import {
   LineChart as RechartsLineChart, Line, CartesianGrid, Cell
 } from 'recharts';
 
+interface TrendsData {
+  stackDominance: { name: string; value: number }[];
+  salaryTrends: { role: string; london: number; regional: number }[];
+  keywordTrends: { name: string; ai: number; cloud: number; testing: number }[];
+  regionalDemand: { city: string; jobs: number; type: string }[];
+  isFallback?: boolean;
+  message?: string;
+}
+
+interface TooltipEntry {
+  name: string;
+  value: number;
+  color?: string;
+}
+
+// Defined at module scope: recreating a component type inside the page's
+// render remounts every tooltip on each state change.
+const CustomTooltip = ({
+  active,
+  payload,
+  label,
+}: {
+  active?: boolean;
+  payload?: TooltipEntry[];
+  label?: string;
+}) => {
+  if (active && payload && payload.length) {
+    return (
+      <div className="bg-bg-elevated border border-border-subtle p-3 rounded-lg shadow-xl">
+        <p className="text-text-primary font-bold mb-2">{label}</p>
+        {payload.map((entry, index) => (
+          <p key={index} className="text-sm flex items-center justify-between gap-4">
+            <span style={{ color: entry.color }}>{entry.name}:</span>
+            <span className="font-mono text-text-primary">
+              {entry.name.includes('London') || entry.name.includes('Regional') || entry.name.toLowerCase().includes('salary')
+                ? `£${(entry.value / 1000).toFixed(0)}k`
+                : entry.value}
+            </span>
+          </p>
+        ))}
+      </div>
+    );
+  }
+  return null;
+};
+
 export default function TrendsPage() {
-  const [trends, setTrends] = useState<any>(null);
+  const [trends, setTrends] = useState<TrendsData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [showToast, setShowToast] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
@@ -40,27 +86,6 @@ export default function TrendsPage() {
 
     fetchTrends();
   }, []);
-
-  const CustomTooltip = ({ active, payload, label }: any) => {
-    if (active && payload && payload.length) {
-      return (
-        <div className="bg-bg-elevated border border-border-subtle p-3 rounded-lg shadow-xl">
-          <p className="text-text-primary font-bold mb-2">{label}</p>
-          {payload.map((entry: any, index: number) => (
-            <p key={index} className="text-sm flex items-center justify-between gap-4">
-              <span style={{ color: entry.color }}>{entry.name}:</span>
-              <span className="font-mono text-text-primary">
-                {entry.name.includes('London') || entry.name.includes('Regional') || entry.name.toLowerCase().includes('salary')
-                  ? `£${(entry.value / 1000).toFixed(0)}k` 
-                  : entry.value}
-              </span>
-            </p>
-          ))}
-        </div>
-      );
-    }
-    return null;
-  };
 
   return (
     <main className="min-h-screen bg-hero-gradient">
@@ -118,7 +143,7 @@ export default function TrendsPage() {
                       />
                       <Tooltip cursor={{ fill: 'var(--color-border-subtle)' }} content={<CustomTooltip />} />
                       <Bar dataKey="value" radius={[0, 4, 4, 0]} barSize={24}>
-                        {trends.stackDominance.map((entry: any, index: number) => {
+                        {trends.stackDominance.map((entry, index) => {
                           const opacities = [1, 0.8, 0.6, 0.4, 0.2];
                           return <Cell key={`cell-${index}`} fill={`hsla(250, 90%, 65%, ${opacities[index % opacities.length]})`} />
                         })}
@@ -205,7 +230,7 @@ export default function TrendsPage() {
                   <h2 className="text-lg font-bold text-text-primary">Tech Hub Distribution</h2>
                 </div>
                 <div className="flex-1 overflow-y-auto pr-2 space-y-4">
-                  {trends.regionalDemand.map((region: any, i: number) => (
+                  {trends.regionalDemand.map((region, i) => (
                     <div key={region.city} className="flex flex-col gap-1.5 p-3 rounded-xl bg-bg-tertiary/50 border border-border-subtle hover:border-accent-cyan/30 transition-colors">
                       <div className="flex justify-between items-center">
                         <span className="font-bold text-text-primary">{region.city}</span>

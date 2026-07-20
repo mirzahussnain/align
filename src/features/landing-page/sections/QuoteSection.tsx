@@ -56,7 +56,7 @@ export default function QuoteSection() {
           className="max-w-4xl mx-auto relative z-10"
         >
           <h3 className="text-xl sm:text-2xl md:text-[1.75rem] font-medium leading-[1.4] tracking-[-0.01em] text-[#0f172a] italic">
-            "{QUOTE_DATA.text}"
+            &quot;{QUOTE_DATA.text}&quot;
           </h3>
           <p className="text-[11px] md:text-[12px] font-semibold tracking-wider text-slate-500 uppercase mt-6">
             {QUOTE_DATA.subtext}

@@ -1,10 +1,10 @@
-import { motion } from 'framer-motion';
+import { motion, type Variants } from 'framer-motion';
 import { BarChart2, CheckCircle2, Briefcase } from 'lucide-react';
 import type { AIJobMatchOutput as JobMatchData } from '@/shared/types/ai';
 
 interface ScoringBreakdownPanelProps {
   data: JobMatchData;
-  contentVariants: any;
+  contentVariants: Variants;
 }
 
 export default function ScoringBreakdownPanel({ data, contentVariants }: ScoringBreakdownPanelProps) {

@@ -1,6 +1,6 @@
 // CV Analysis Types
 import type { AIJobMatchOutput } from './ai';
-import type { Industry } from '@/shared/constants/sector-keywords';
+import type { Sector } from '@/shared/constants/sector-keywords';
 import type { Classification } from './classification';
 
 export interface CVAnalysisResult {
@@ -29,7 +29,7 @@ export interface CVAnalysisResult {
 
   aiTargetRole?: string;
   /** Sector whose keyword dictionary scored this CV (kept for stored-row compat). */
-  aiDetectedIndustry?: Industry;
+  aiDetectedIndustry?: Sector;
   aiRiskFlags?: string[];
   aiClichés?: string[];
   /**

@@ -16,8 +16,7 @@ import { UK_TECH_KEYWORDS, KEYWORD_CATEGORY_LABELS } from './ats-keywords';
 // A sector describes the employment environment a CV's vocabulary comes from —
 // never the candidate's occupation. An NHS data analyst and a registered nurse
 // share the `healthcare_nhs` sector but are evaluated as different occupations
-// (see src/shared/occupations/). `Industry` is the legacy name for the same
-// union, kept as an alias until the sweep completes.
+// (see src/shared/occupations/).
 export type Sector =
   | 'tech'
   | 'healthcare_nhs'
@@ -27,9 +26,6 @@ export type Sector =
   | 'law'
   | 'engineering'
   | 'general';
-
-/** @deprecated Use {@link Sector} — same union, clearer name. */
-export type Industry = Sector;
 
 /** Career tier, for industries where terms don't apply to every seniority. */
 export type CareerTrack = 'fee_earner' | 'support' | 'chartered' | 'technician';
@@ -51,7 +47,7 @@ export interface KeywordCategoryDef {
 }
 
 export interface IndustryDictionary {
-  industry: Industry;
+  industry: Sector;
   label: string;
   categories: Record<string, KeywordCategoryDef>;
 }
@@ -550,7 +546,7 @@ const GENERAL: IndustryDictionary = {
  * through one interface.
  */
 function fromFlatDictionary(
-  industry: Industry,
+  industry: Sector,
   label: string,
   groups: Record<string, readonly string[]>,
   labels: Record<string, string>
@@ -570,11 +566,11 @@ function fromFlatDictionary(
 const TECH = fromFlatDictionary('tech', 'Technology', UK_TECH_KEYWORDS, KEYWORD_CATEGORY_LABELS);
 
 /**
- * Every `Industry` has a dictionary. The lookup still returns `null` for an
+ * Every `Sector` has a dictionary. The lookup still returns `null` for an
  * unrecognised key so callers handle the miss explicitly rather than silently
  * scoring a CV against the wrong industry's keywords.
  */
-export const INDUSTRY_KEYWORDS: Partial<Record<Industry, IndustryDictionary>> = {
+export const INDUSTRY_KEYWORDS: Partial<Record<Sector, IndustryDictionary>> = {
   tech: TECH,
   healthcare_nhs: HEALTHCARE_NHS,
   warehouse_logistics: WAREHOUSE_LOGISTICS,
@@ -585,22 +581,22 @@ export const INDUSTRY_KEYWORDS: Partial<Record<Industry, IndustryDictionary>> = 
   general: GENERAL,
 };
 
-export function getIndustryDictionary(industry: Industry): IndustryDictionary | null {
+export function getIndustryDictionary(industry: Sector): IndustryDictionary | null {
   return INDUSTRY_KEYWORDS[industry] ?? null;
 }
 
-export function hasIndustryDictionary(industry: Industry): boolean {
+export function hasIndustryDictionary(industry: Sector): boolean {
   return industry in INDUSTRY_KEYWORDS;
 }
 
 /** Every industry the AI is allowed to return, for prompt construction. */
-export const INDUSTRY_IDS = Object.keys(INDUSTRY_KEYWORDS) as Industry[];
+export const INDUSTRY_IDS = Object.keys(INDUSTRY_KEYWORDS) as Sector[];
 
 /**
  * Narrows an untrusted string — an LLM's `detectedIndustry` — to a known
- * `Industry`. An unrecognised value must fall back to the caller's default
+ * `Sector`. An unrecognised value must fall back to the caller's default
  * rather than being scored against a dictionary that doesn't exist.
  */
-export function isKnownIndustry(value: unknown): value is Industry {
+export function isKnownIndustry(value: unknown): value is Sector {
   return typeof value === 'string' && value in INDUSTRY_KEYWORDS;
 }

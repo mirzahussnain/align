@@ -1,10 +1,10 @@
-import { motion } from 'framer-motion';
+import { motion, type Variants } from 'framer-motion';
 import { FileEdit, Zap, AlertCircle } from 'lucide-react';
 import type { AIJobMatchOutput as JobMatchData } from '@/shared/types/ai';
 
 interface TailoredRewritesPanelProps {
   data: JobMatchData;
-  contentVariants: any;
+  contentVariants: Variants;
 }
 
 export default function TailoredRewritesPanel({ data, contentVariants }: TailoredRewritesPanelProps) {

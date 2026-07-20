@@ -1,7 +1,7 @@
 import {
   getIndustryDictionary,
   type CareerTrack,
-  type Industry,
+  type Sector,
   type KeywordTerm,
 } from '@/shared/constants/sector-keywords';
 import type { KeywordAnalysis, KeywordMatch, CategoryKeywordBreakdown } from '@/shared/types/cv';
@@ -36,7 +36,7 @@ function countOccurrences(term: KeywordTerm, text: string): number {
 
 export interface AnalyzeKeywordsOptions {
   /** Defaults to `tech` to preserve the original single-dictionary behaviour. */
-  industry?: Industry;
+  industry?: Sector;
   /**
    * When set, terms tagged for a different career tier are skipped entirely —
    * a paralegal shouldn't be marked down for lacking an SRA Practising Certificate.

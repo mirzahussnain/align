@@ -59,7 +59,7 @@ export default function RewriteLoadingStep() {
           {MESSAGES[index].text}
         </motion.h3>
         <p className="text-slate-500 text-sm max-w-sm mx-auto">
-          Our AI is completely rewriting your experience to perfectly align with this role's requirements. This usually takes 10-20 seconds.
+          Our AI is completely rewriting your experience to perfectly align with this role&apos;s requirements. This usually takes 10-20 seconds.
         </p>
       </div>
     </div>

@@ -38,7 +38,8 @@ Skills to Deprioritise: ${cv_build_spec.skills_to_deprioritise?.join(', ') ?? 'N
 Visa Note Required: ${cv_build_spec.visa_note_required ?? false}
 
 Bullets to Rewrite (use these exact labels and rewrite the body):
-${cv_build_spec.bullets_to_rewrite?.map((b: any, i: number) =>
+${cv_build_spec.bullets_to_rewrite?.map(
+  (b: { project_or_role: string; original_label: string; new_label: string; new_body: string }, i: number) =>
   `${i + 1}. Project/Role: ${b.project_or_role}
      Original Label: ${b.original_label}
      New Label: ${b.new_label}

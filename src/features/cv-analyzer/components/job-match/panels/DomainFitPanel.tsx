@@ -1,11 +1,11 @@
-import { motion } from 'framer-motion';
+import { motion, type Variants } from 'framer-motion';
 import { Briefcase, ShieldAlert, AlertCircle } from 'lucide-react';
 import { cn } from '@/shared/utils/cn';
 import type { AIJobMatchOutput as JobMatchData } from '@/shared/types/ai';
 
 interface DomainFitPanelProps {
   data: JobMatchData;
-  contentVariants: any;
+  contentVariants: Variants;
 }
 
 export default function DomainFitPanel({ data, contentVariants }: DomainFitPanelProps) {
@@ -56,7 +56,7 @@ export default function DomainFitPanel({ data, contentVariants }: DomainFitPanel
           )}
           
           <p className="text-sm text-slate-600 italic font-medium bg-white/40 p-4 rounded-xl border border-white/60">
-            "{data.domainFit.detail}"
+            &quot;{data.domainFit.detail}&quot;
           </p>
         </div>
       </div>

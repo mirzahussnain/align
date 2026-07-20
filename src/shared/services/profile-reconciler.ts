@@ -112,7 +112,7 @@ export async function reconcileProfileWithCv(
     .map((c) => `[${c.id}] (${c.kind}) ${c.label}${c.detail ? ` — ${c.detail}` : ''}`)
     .join('\n');
 
-  const prompt = `You are a UK Staff-Level Technical Recruiter preparing a candidate's CV for a specific role.
+  const prompt = `You are a UK recruiter preparing a candidate's CV for a specific role. Work only with the evidence supplied — do not assume the role is technical.
 
 The candidate has TWO sources of truth:
 1. The CV they actually submitted (a snapshot, possibly out of date or aimed at a different role).
@@ -122,9 +122,9 @@ Your job is to find items in the PROFILE that would serve this Job Description
 BETTER than what the CV currently presents, so the candidate can swap them in.
 
 Look for:
-- A profile project that matches the JD's domain or stack more closely than a project on the CV.
+- A profile project or piece of work that matches the JD's domain, duties, or tools more closely than what the CV presents.
 - A profile skill that is named in the JD but absent or buried in the CV.
-- A profile role, degree or certification that evidences a JD requirement the CV does not.
+- A profile role, degree, certification, or licence that evidences a JD requirement the CV does not.
 
 Rules you MUST follow:
 - ONLY reference profile items by the exact bracketed id from the inventory below.

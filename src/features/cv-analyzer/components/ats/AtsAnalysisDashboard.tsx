@@ -216,7 +216,7 @@ export default function AtsAnalysisDashboard({ result }: { result: CVAnalysisRes
         {/* ==================== RESUME PREVIEW GROUP ==================== */}
         <SectionGroup id="overview" title="Live Analysis Preview" icon={<Sparkles size={24} />} score={result.overallScore}>
           <ResumePreviewPanel
-            formattedCVLines={formattedCVLines as any}
+            formattedCVLines={formattedCVLines}
             cvViewMode={cvViewMode}
             setCvViewMode={setCvViewMode}
             activeRewriteIndex={activeRewriteIndex}

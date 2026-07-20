@@ -1,10 +1,10 @@
-import { motion } from 'framer-motion';
+import { motion, type Variants } from 'framer-motion';
 import { Target } from 'lucide-react';
 import type { AIJobMatchOutput as JobMatchData } from '@/shared/types/ai';
 
 interface SkillAlignmentPanelProps {
   data: JobMatchData;
-  contentVariants: any;
+  contentVariants: Variants;
 }
 
 export default function SkillAlignmentPanel({ data, contentVariants }: SkillAlignmentPanelProps) {

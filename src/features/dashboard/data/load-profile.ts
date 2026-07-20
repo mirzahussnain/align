@@ -81,6 +81,7 @@ export interface ProfileData {
 // Completeness helpers live in a Prisma-free module so client components can
 // import them without pulling the `pg` adapter into the browser bundle.
 export { profileCompleteness, isProfileComplete } from './profile-completeness';
+import { projectsExpectedFor } from './profile-completeness';
 
 /**
  * Resolve which profile to read for a user. An explicit `profileId` is only
@@ -242,14 +243,15 @@ export async function listProfiles(userId: string): Promise<ProfileSummary[]> {
   return profiles.map((p) => {
     // Mirrors profileCompleteness()'s checks — fullName is shared identity,
     // the summary/target are per-profile, and the content sections are counted.
+    // Projects only count where the occupation expects them.
     const checks = [
       Boolean(identity?.fullName),
       Boolean(p.professionalSummary),
       Boolean(p.targetOccupation),
       p._count.experience > 0,
-      p._count.projects > 0,
       p._count.education > 0,
       p._count.skillGroups > 0,
+      ...(projectsExpectedFor(p.targetOccupation ?? '') ? [p._count.projects > 0] : []),
     ];
 
     return {

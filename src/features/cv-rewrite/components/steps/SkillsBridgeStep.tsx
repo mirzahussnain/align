@@ -50,7 +50,7 @@ export default function SkillsBridgeStep({ missingSkills, contextData, onChange 
             <h3 className="text-lg font-semibold text-slate-800">Fill in the Gaps</h3>
             <p className="text-sm text-slate-500 mt-1 leading-relaxed">
               The AI noticed these mandatory skills are missing from your CV. 
-              If you actually have experience with them, select them below and tell us where you used them. We'll seamlessly weave it into your rewritten CV.
+              If you actually have experience with them, select them below and tell us where you used them. We&apos;ll seamlessly weave it into your rewritten CV.
             </p>
           </div>
         </div>

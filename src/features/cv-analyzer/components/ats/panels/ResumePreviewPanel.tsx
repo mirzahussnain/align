@@ -1,17 +1,10 @@
 import { BookOpen, Sparkles } from 'lucide-react';
 import { cn } from '@/shared/utils/cn';
 import Tabs from '@/shared/components/ui/Tabs';
-
-interface FormattedLine {
-  type: 'heading' | 'empty' | 'text';
-  content: string;
-  isSummaryLine?: boolean;
-  htmlContent?: string;
-  rewriteMatch?: { index: number };
-}
+import type { FormattedCVLine } from '@/features/cv-analyzer/types/cv-preview';
 
 interface ResumePreviewPanelProps {
-  formattedCVLines: FormattedLine[];
+  formattedCVLines: FormattedCVLine[];
   cvViewMode: 'original' | 'annotated';
   setCvViewMode: (mode: 'original' | 'annotated') => void;
   activeRewriteIndex: number | null;

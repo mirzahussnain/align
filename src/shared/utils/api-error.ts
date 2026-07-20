@@ -22,8 +22,8 @@ export async function withErrorHandler(
 ): Promise<NextResponse> {
   try {
     return await handler();
-  } catch (error: any) {
-    console.error('[API Error]:', error.message || error);
+  } catch (error: unknown) {
+    console.error('[API Error]:', error instanceof Error ? error.message : error);
     
     // If it's a known APIError, we can return its specific status code and message
     if (error instanceof APIError) {

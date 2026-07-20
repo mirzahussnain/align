@@ -55,7 +55,7 @@ export default function FormatSelectionStep({ selected, onSelect }: Props) {
           </div>
 
           <h4 className="font-bold text-slate-800 mb-1">PDF Document (.pdf)</h4>
-          <p className="text-xs text-slate-500 leading-relaxed mb-3">Coming soon. Currently, please download the DOCX and "Save as PDF" via Word.</p>
+          <p className="text-xs text-slate-500 leading-relaxed mb-3">Coming soon. Currently, please download the DOCX and &quot;Save as PDF&quot; via Word.</p>
         </div>
       </div>
     </div>

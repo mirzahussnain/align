@@ -1,7 +1,7 @@
 'use client';
 
-import { motion } from 'framer-motion';
-import { 
+import { motion, type Variants } from 'framer-motion';
+import {
   FileSignature, 
   LayoutList, 
   Star, 
@@ -15,7 +15,7 @@ import type { AIJobMatchOutput } from '@/shared/types/ai';
 
 interface RewriteStrategyPanelProps {
   data: AIJobMatchOutput;
-  contentVariants: any;
+  contentVariants: Variants;
 }
 
 export default function RewriteStrategyPanel({ data, contentVariants }: RewriteStrategyPanelProps) {

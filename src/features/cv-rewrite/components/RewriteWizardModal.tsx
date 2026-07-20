@@ -12,14 +12,21 @@ import SkillsBridgeStep from './steps/SkillsBridgeStep';
 import FormatSelectionStep from './steps/FormatSelectionStep';
 import RewriteLoadingStep from './steps/RewriteLoadingStep';
 import SuccessStep from './steps/SuccessStep';
+import type { AIJobMatchOutput } from '@/shared/types/ai';
+import type { CategoryScore, KeywordAnalysis, Recommendation } from '@/shared/types/cv';
 
 interface RewriteWizardModalProps {
   isOpen: boolean;
   onClose: () => void;
   cvText: string;
   jobDescription: string;
-  jobMatchFeedback: any;
-  atsData?: any;
+  jobMatchFeedback: AIJobMatchOutput;
+  atsData?: {
+    categories: CategoryScore[];
+    recommendations: Recommendation[];
+    keywords: KeywordAnalysis;
+    aiClichés?: string[];
+  };
 }
 
 export type RewriteStep = 'template' | 'ats_opt_in' | 'skills_bridge' | 'format' | 'loading' | 'success';
@@ -97,9 +104,9 @@ export default function RewriteWizardModal({
       document.body.removeChild(a);
 
       setCurrentStep('success');
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err);
-      setError(err.message || 'An unexpected error occurred.');
+      setError(err instanceof Error ? err.message : 'An unexpected error occurred.');
       setCurrentStep('template'); // Push back to start on error
     }
   };

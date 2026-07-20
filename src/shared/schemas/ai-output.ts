@@ -8,7 +8,7 @@
 // not a reason to throw the analysis away.
 
 import { z } from 'zod';
-import { isKnownIndustry, type Industry } from '@/shared/constants/sector-keywords';
+import { isKnownIndustry, type Sector } from '@/shared/constants/sector-keywords';
 import { isKnownOccupation } from '@/shared/occupations/registry';
 import type { OccupationId, Seniority } from '@/shared/types/classification';
 
@@ -19,7 +19,7 @@ const confidence01 = z.coerce.number().transform(n => Math.min(1, Math.max(0, n)
 /** Untrusted string → known sector id, defaulting to `general`. */
 const sectorField = z
   .string()
-  .transform((value): Industry => (isKnownIndustry(value) ? value : 'general'));
+  .transform((value): Sector => (isKnownIndustry(value) ? value : 'general'));
 
 /** Untrusted string → known occupation id, defaulting to `generic`. */
 const occupationField = z
