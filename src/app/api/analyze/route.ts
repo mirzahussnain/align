@@ -58,6 +58,17 @@ async function persistAnalysis(
           deriveJobTitleFromJd(result.jobDescription),
         jobCompany: cleanJobCompany(result.jobMatchData?.jobCompany),
         sourceFileName,
+        // Version stamps and promoted classification columns (scoring v2) —
+        // how stored scores are interpreted without guessing which formula
+        // produced them.
+        scoringVersion: result.scoringVersion ?? null,
+        profileVersion: result.profileVersion ?? null,
+        dictionaryVersion: result.dictionaryVersion ?? null,
+        occupation: result.classification?.occupation ?? null,
+        applicationWorkflow: result.classification?.applicationWorkflow ?? null,
+        classification: result.classification
+          ? JSON.parse(JSON.stringify(result.classification))
+          : undefined,
       },
     });
 
@@ -163,12 +174,18 @@ export async function POST(request: NextRequest) {
 
     // 2. Classification BEFORE scoring — the deterministic pass runs against
     // the right occupation profile and sector dictionary from the start.
-    // The user's career-track label doubles as a target role title until the
-    // structured targetOccupation field lands.
+    // The structured targetOccupation wins; the free-text role title (or the
+    // career-track label as a stand-in) still resolves deterministically.
     const trackProfile = scopedProfileId
       ? await prisma.profile.findUnique({
           where: { id: scopedProfileId },
-          select: { label: true, targetIndustry: true },
+          select: {
+            label: true,
+            targetIndustry: true,
+            targetOccupation: true,
+            targetRoleTitle: true,
+            targetSeniority: true,
+          },
         })
       : null;
 
@@ -176,7 +193,12 @@ export async function POST(request: NextRequest) {
       cvText: text,
       jobDescription: mode === 'job_match' && jobDescription.trim() ? jobDescription : undefined,
       profileTarget: trackProfile
-        ? { roleTitle: trackProfile.label, industry: trackProfile.targetIndustry }
+        ? {
+            occupation: trackProfile.targetOccupation,
+            roleTitle: trackProfile.targetRoleTitle ?? trackProfile.label,
+            industry: trackProfile.targetIndustry,
+            seniority: trackProfile.targetSeniority,
+          }
         : undefined,
       aiAllowed,
     });

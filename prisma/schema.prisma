@@ -99,11 +99,25 @@ model Profile {
    */
   isDefault           Boolean  @default(false)
   /**
-   * Which `Industry` (src/shared/constants/industry-keywords.ts) this track
+   * Which `Sector` (src/shared/constants/sector-keywords.ts) this track
    * targets. Lets a job match auto-select the right profile from its own
-   * detected industry instead of asking the user.
+   * detected sector instead of asking the user.
    */
   targetIndustry      String?
+  /**
+   * Structured target occupation (an `OccupationId` from
+   * src/shared/occupations/registry.ts). Validated at the API layer, not the
+   * DB — the ontology is code. This is precedence tier 2 for classification.
+   */
+  targetOccupation    String?
+  /**
+   * The user's own words for their target role, e.g. "Warehouse
+   * Administrator". Feeds classification, prompt context, and summary
+   * guidance — users are never limited to the ontology label.
+   */
+  targetRoleTitle     String?
+  /** entry | mid | senior | lead */
+  targetSeniority     String?
   tagline             String?
   professionalSummary String?
   createdAt           DateTime @default(now())
@@ -247,6 +261,22 @@ model Analysis {
   rawResult       Json
   jobDescription  String?
   jobMatchData    Json?
+  /**
+   * Version stamps for interpreting stored results. Null on rows written
+   * before the occupation-aware rebuild (scoring v2) — readers treat those as
+   * legacy shape.
+   */
+  scoringVersion    Int?
+  profileVersion    String?
+  dictionaryVersion String?
+  /**
+   * Promoted classification columns for querying/filtering history without
+   * deserialising rawResult; `classification` holds the full object including
+   * confidence, source, alternatives, and reason codes.
+   */
+  occupation          String?
+  applicationWorkflow String?
+  classification      Json?
   /**
    * Role title and hiring company extracted from the job description by the
    * matcher itself (see ai-analyser.ts). Stored as columns rather than dug out
