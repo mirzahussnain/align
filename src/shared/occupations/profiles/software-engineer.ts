@@ -72,7 +72,9 @@ export const softwareEngineerProfile: OccupationProfile = {
     /\d+x\b/i,
     /£[\d,]+/,
     /\$[\d,]+/,
-    /\d[\d,]*\+?\s*(?:users?|customers?|requests?|deployments?|stars?)/i,
+    // Allow up to three words between the number and its noun —
+    // "2,000+ monthly active users", "120+ GitHub stars".
+    /\d[\d,]*\+?\s*(?:\w+\s+){0,3}(?:users?|customers?|requests?|deployments?|stars?|venues?|contributors?)/i,
     /(?:reduced|increased|improved|cut|saved)\s+(?:\w+\s+){0,3}(?:by\s+)?\d/i,
     /\d+\s*(?:ms|seconds?)\b/i,
     /\d+%?\s*(?:coverage|uptime)/i,

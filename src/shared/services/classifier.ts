@@ -170,12 +170,21 @@ export function scoreOccupationEvidence(cvText: string): EvidenceResult {
   type Scored = { profile: OccupationProfile; score: number; codes: Set<ReasonCode> };
   const scored: Scored[] = [];
 
+  // Title evidence must come from title-like lines (headlines, role headers),
+  // never prose — an HCA's bullet "escalating concerns to the registered
+  // nurse" is not a nurse title.
+  const titleText = cvText
+    .split('\n')
+    .map(l => l.trim())
+    .filter(l => l.length >= 3 && l.length <= 80)
+    .join('\n');
+
   for (const profile of nonGenericProfiles()) {
     const codes = new Set<ReasonCode>();
     let score = 0;
 
     // Role titles — the strongest signal by design.
-    const titleHits = profile.detection.titlePatterns.filter(p => p.test(cvText)).length;
+    const titleHits = profile.detection.titlePatterns.filter(p => p.test(titleText)).length;
     if (titleHits > 0) {
       score += 0.5 + Math.min(titleHits - 1, 2) * 0.1;
       codes.add('JOB_TITLE_EXACT_MATCH');

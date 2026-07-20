@@ -52,7 +52,7 @@ export const genericProfile: OccupationProfile = {
   impactPatterns: [
     /\d+(?:\.\d+)?%/,
     /£[\d,]+/,
-    /\d[\d,]*\+?\s*(?:customers?|clients?|orders?|staff|people|calls?|projects?|sites?|stores?|patients?|students?|cases?|records?|units?)\b/i,
+    /\d[\d,]*\+?\s*(?:\w+\s+){0,2}(?:customers?|clients?|orders?|staff|people|calls?|projects?|sites?|stores?|patients?|residents?|students?|cases?|records?|units?)\b/i,
     /\b(?:met|exceeded|achieved|delivered)\b.*\b(?:targets?|deadlines?|KPIs?|SLAs?|goals?)\b/i,
     /\b(?:reduced|increased|improved|saved|cut)\b.*\d/i,
     /\b(?:daily|weekly|monthly)\b.*\d/i,

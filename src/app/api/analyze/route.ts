@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { analyzeCV } from '@/shared/utils/scoring-engine';
+import { analyzeCV, computeOverallScore } from '@/shared/utils/scoring-engine';
 import { analyzeKeywords } from '@/shared/utils/scoring/keywords';
 import { getIndustryDictionary, isKnownIndustry } from '@/shared/constants/sector-keywords';
 import { extractTextFromPDF } from '@/shared/utils/pdf-parser';
 import { getSemanticCVFeedback, getJobMatchFeedback } from '@/shared/services/ai-analyser';
-import { SCORING_WEIGHTS } from '@/shared/constants/scoring-config';
+import { statusFor } from '@/shared/constants/scoring-config';
 import { withErrorHandler, APIError } from '@/shared/utils/api-error';
 import { AnalyzeRequestSchema } from './schema';
 import { applyRateLimit, analysisLimiter } from '@/shared/lib/rate-limit';
@@ -203,14 +203,14 @@ export async function POST(request: NextRequest) {
           if (summaryCat) {
             summaryCat.score = aiFeedback.summaryScore;
             summaryCat.details = aiFeedback.summaryFeedback;
-            summaryCat.status = getStatus(aiFeedback.summaryScore, summaryCat.maxScore);
+            summaryCat.status = statusFor(aiFeedback.summaryScore, summaryCat.maxScore);
           }
 
           const impactCat = result.categories.find(c => c.id === 'impactStatements');
           if (impactCat) {
             impactCat.score = aiFeedback.impactScore;
             impactCat.details = aiFeedback.impactFeedback;
-            impactCat.status = getStatus(aiFeedback.impactScore, impactCat.maxScore);
+            impactCat.status = statusFor(aiFeedback.impactScore, impactCat.maxScore);
           }
 
           for (const rewrite of aiFeedback.rewrites) {
@@ -219,6 +219,7 @@ export async function POST(request: NextRequest) {
               title: `Rewrite bullet: "${rewrite.original.slice(0, 45)}..."`,
               description: `Suggested rewrite: "${rewrite.suggested}"\n\nRationale: ${rewrite.rationale}`,
               timeEstimate: '10 min',
+              kind: 'rewrite',
             });
           }
 
@@ -228,6 +229,7 @@ export async function POST(request: NextRequest) {
               title: 'UK Tech Market Alignment Feedback',
               description: aiFeedback.ukTechAlignment,
               timeEstimate: '5 min',
+              kind: 'alignment',
             });
           }
 
@@ -246,7 +248,7 @@ export async function POST(request: NextRequest) {
 
           // Recompute Keyword Coverage against the industry dictionary the AI
           // selected, plus whatever extra keywords it surfaced from the CV itself.
-          const keywordDensityCat = result.categories.find(c => c.id === 'keywordDensity');
+          const keywordDensityCat = result.categories.find(c => c.id === 'evidenceCoverage');
           if (keywordDensityCat) {
             const { present, missing } = result.keywords;
             const total = present.length + missing.length;
@@ -262,7 +264,7 @@ export async function POST(request: NextRequest) {
               keywordDensityCat.score = Math.round((present.length / total) * 10);
             }
 
-            keywordDensityCat.status = getStatus(keywordDensityCat.score, keywordDensityCat.maxScore);
+            keywordDensityCat.status = statusFor(keywordDensityCat.score, keywordDensityCat.maxScore);
             const percentage = Math.round((keywordDensityCat.score / keywordDensityCat.maxScore) * 100);
             keywordDensityCat.details =
               total === 0
@@ -284,13 +286,7 @@ export async function POST(request: NextRequest) {
             );
           }
 
-          const overallScore = Math.round(
-            result.categories.reduce((sum, cat) => {
-              const weight = SCORING_WEIGHTS[cat.id as keyof typeof SCORING_WEIGHTS] || 0.1;
-              return sum + (cat.score / cat.maxScore) * weight * 100;
-            }, 0)
-          );
-          result.overallScore = overallScore;
+          result.overallScore = computeOverallScore(result.categories);
         }
       }
     } catch (aiError) {
@@ -310,12 +306,4 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(result);
   });
-}
-
-function getStatus(score: number, maxScore: number): 'excellent' | 'good' | 'needs-improvement' | 'critical' {
-  const percentage = (score / maxScore) * 100;
-  if (percentage >= 85) return 'excellent';
-  if (percentage >= 70) return 'good';
-  if (percentage >= 50) return 'needs-improvement';
-  return 'critical';
 }

@@ -1,6 +1,7 @@
 // CV Analysis Types
 import type { AIJobMatchOutput } from './ai';
 import type { Industry } from '@/shared/constants/sector-keywords';
+import type { Classification } from './classification';
 
 export interface CVAnalysisResult {
   overallScore: number;
@@ -12,6 +13,20 @@ export interface CVAnalysisResult {
   recommendations: Recommendation[];
   rawText: string;
   pageCount: number;
+
+  /** How this CV was classified before scoring (scoring v2+). */
+  classification?: Classification;
+  /** Credential/licence findings for the classified occupation (scoring v2+). */
+  credentials?: CredentialAnalysis;
+  /** Version stamps — absent on pre-rebuild results. */
+  scoringVersion?: number;
+  profileVersion?: string;
+  dictionaryVersion?: string;
+  /** AI's occupation-framed alignment note (replaces ukTechAlignment). */
+  aiAlignmentNote?: string;
+  /** True when classification confidence was too low to trust occupation-specific scoring. */
+  outOfDomain?: boolean;
+
   aiTargetRole?: string;
   /** Industry the AI classified this CV into, i.e. which keyword dictionary scored it. */
   aiDetectedIndustry?: Industry;
@@ -66,6 +81,26 @@ export interface SectionOrderAnalysis {
   recommendedOrder: string[];
   isOptimal: boolean;
   suggestions: string[];
+  /** Required-by-profile sections the CV lacks (scoring v2+). */
+  missingRequired?: string[];
+}
+
+/** One credential rule's outcome against the CV text. */
+export interface CredentialFinding {
+  id: string;
+  label: string;
+  class: 'mandatory' | 'desirable' | 'role_dependent';
+  found: boolean;
+  /** Present only when the credential is absent and the rule applies. */
+  message?: string;
+}
+
+export interface CredentialAnalysis {
+  /** 0-10 — full marks when no credential rules apply to this occupation. */
+  score: number;
+  findings: CredentialFinding[];
+  /** True when the occupation has no material credential expectations. */
+  notMaterial: boolean;
 }
 
 export interface FormattingAnalysis {
@@ -95,4 +130,9 @@ export interface Recommendation {
   title: string;
   description: string;
   timeEstimate: string;
+  /**
+   * Typed origin so consumers select recommendations structurally instead of
+   * parsing titles. Optional because pre-rebuild stored results lack it.
+   */
+  kind?: 'formatting' | 'section' | 'compliance' | 'credential' | 'keyword' | 'rewrite' | 'alignment';
 }

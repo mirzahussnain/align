@@ -1,13 +1,20 @@
 // ATS Scoring weights and configuration
 
+/**
+ * Scoring v2 (see SCORING_VERSION): occupation-aware weights. Page count is
+ * folded into formatting; exact section ordering gave way to completeness plus
+ * relative constraints; credentials are a first-class dimension because a
+ * missing NMC PIN or FLT licence is a hard eligibility filter, not a keyword.
+ * Must sum to 1.0 — asserted by test.
+ */
 export const SCORING_WEIGHTS = {
   formatting: 0.15,
   compliance: 0.10,
-  pageCount: 0.10,
-  sectionOrder: 0.15,
-  keywordDensity: 0.20,
-  impactStatements: 0.10,
   atsReadability: 0.10,
+  sectionCompleteness: 0.10,
+  evidenceCoverage: 0.20,
+  credentials: 0.15,
+  impactStatements: 0.10,
   professionalSummary: 0.10,
 } as const;
 
@@ -18,15 +25,14 @@ export const SCORE_THRESHOLDS = {
   critical: 0,
 } as const;
 
-export const OPTIMAL_SECTION_ORDER = [
-  'contact',
-  'professional-summary',
-  'core-skills',
-  'professional-experience',
-  'key-projects',
-  'education',
-  'certifications',
-] as const;
+/** Single source for score → status banding (route and engine both use this). */
+export function statusFor(score: number, maxScore: number): 'excellent' | 'good' | 'needs-improvement' | 'critical' {
+  const percentage = (score / maxScore) * 100;
+  if (percentage >= SCORE_THRESHOLDS.excellent) return 'excellent';
+  if (percentage >= SCORE_THRESHOLDS.good) return 'good';
+  if (percentage >= SCORE_THRESHOLDS.needsImprovement) return 'needs-improvement';
+  return 'critical';
+}
 
 export const SECTION_LABELS: Record<string, string> = {
   'contact': 'Contact Information',
@@ -47,10 +53,12 @@ export const SECTION_HEADINGS_MAP: Record<string, string[]> = {
   'core-skills': [
     'core skills', 'skills', 'technical skills', 'key skills',
     'competencies', 'technologies', 'tech stack',
+    'clinical skills', 'practice areas',
   ],
   'professional-experience': [
     'professional experience', 'experience', 'work experience',
     'employment history', 'career history', 'work history',
+    'clinical experience', 'legal experience',
   ],
   'key-projects': [
     'key projects', 'projects', 'personal projects', 'portfolio',
@@ -63,6 +71,9 @@ export const SECTION_HEADINGS_MAP: Record<string, string[]> = {
   'certifications': [
     'certifications', 'certificates', 'professional certifications',
     'courses', 'training', 'professional development',
+    'licences', 'licenses', 'licences and certificates',
+    'licences and entitlements', 'qualifications and training',
+    'registration', 'professional qualifications',
   ],
 };
 
@@ -151,17 +162,7 @@ export const UK_COMPLIANCE_RULES = [
   },
 ] as const;
 
-// Impact statement patterns (quantified achievements)
-export const IMPACT_PATTERNS = [
-  /\d+%/,           // Percentages
-  /\d+x/i,          // Multipliers
-  /£[\d,]+/,        // GBP amounts
-  /\$[\d,]+/,       // USD amounts
-  /\d+\+?\s*(?:users?|clients?|customers?|team|developers?|engineers?)/i,
-  /reduced?\s+(?:by\s+)?\d+/i,
-  /increased?\s+(?:by\s+)?\d+/i,
-  /improved?\s+(?:by\s+)?\d+/i,
-  /saved?\s+(?:by\s+)?\d+/i,
-  /delivered?\s+\d+/i,
-  /\d+\s*(?:million|thousand|billion)/i,
-];
+// Impact patterns now live on each occupation profile
+// (src/shared/occupations/profiles/) — there is no universal definition of a
+// quantified achievement. A warehouse CV proves impact through targets met and
+// safety records, not percentages.
