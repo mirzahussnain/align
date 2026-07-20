@@ -1,6 +1,6 @@
 'use client';
 
-import { forwardRef, useEffect, useImperativeHandle, useState } from 'react';
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import { Label, TextField, TextArea } from '@/features/dashboard/components/profile/Field';
 import TargetRolePicker from '@/features/dashboard/components/profile/TargetRolePicker';
 import LocationPicker from '@/features/dashboard/components/profile/LocationPicker';
@@ -10,6 +10,7 @@ import type { ProfileStepHandle } from '@/features/dashboard/components/profile/
 import { savePersonalInfo, type PersonalInfoInput } from '@/features/dashboard/actions/profile-actions';
 import type { ProfileData } from '@/features/dashboard/data/load-profile';
 import { visaRequiresExpiry } from '@/shared/constants/visa-status';
+import { suggestCareerTrackLabel } from '@/shared/occupations/track-label';
 
 /** Are all non-skippable basics filled in (incl. an expiry for temporary visas)? */
 export function basicsAreValid(form: PersonalInfoInput): boolean {
@@ -44,7 +45,16 @@ const BasicsStep = forwardRef<ProfileStepHandle, BasicsStepProps>(function Basic
     ...initial,
     fullName: initial.fullName || fallback.name,
     email: initial.email || fallback.email,
+    label: initial.label && initial.label !== 'Default' ? initial.label : suggestCareerTrackLabel({
+      occupation: initial.targetOccupation,
+      targetRoleTitle: initial.targetRoleTitle,
+      industry: initial.targetIndustry,
+    }),
   });
+
+  // Once the user edits the track name themselves, auto-suggestion stops —
+  // it should fill a blank field, never fight the user's own choice.
+  const labelTouched = useRef(Boolean(initial.label && initial.label !== 'Default'));
 
   useImperativeHandle(ref, () => ({ save: () => savePersonalInfo(form).then(() => undefined) }), [form]);
 
@@ -52,11 +62,25 @@ const BasicsStep = forwardRef<ProfileStepHandle, BasicsStepProps>(function Basic
     onValidityChange(basicsAreValid(form));
   }, [form, onValidityChange]);
 
+  useEffect(() => {
+    if (labelTouched.current) return;
+    const suggestion = suggestCareerTrackLabel({
+      occupation: form.targetOccupation,
+      targetRoleTitle: form.targetRoleTitle,
+      industry: form.targetIndustry,
+    });
+    setForm((f) => (f.label === suggestion ? f : { ...f, label: suggestion }));
+  }, [form.targetOccupation, form.targetRoleTitle, form.targetIndustry]);
+
   function set<K extends keyof PersonalInfoInput>(key: K, value: string) {
     setForm((f) => ({ ...f, [key]: value }));
   }
   function patch(p: Partial<PersonalInfoInput>) {
     setForm((f) => ({ ...f, ...p }));
+  }
+  function setLabel(value: string) {
+    labelTouched.current = true;
+    set('label', value);
   }
 
   return (
@@ -79,6 +103,20 @@ const BasicsStep = forwardRef<ProfileStepHandle, BasicsStepProps>(function Basic
       </div>
 
       <TargetRolePicker value={form} onChange={patch} required />
+
+      <div className="sm:col-span-2">
+        <Label htmlFor="trackLabel">Career track name</Label>
+        <TextField
+          id="trackLabel"
+          value={form.label}
+          onChange={(e) => setLabel(e.target.value)}
+          placeholder="e.g. Software Engineering"
+        />
+        <p className="mt-1 text-[10px] text-neutral-400">
+          Suggested from your target role — rename it if you&apos;d like something different. You can add more
+          tracks later for other kinds of roles.
+        </p>
+      </div>
 
       <PhonePicker value={form} onChange={patch} />
 

@@ -129,11 +129,18 @@ function classifyFromProfileTarget(input: ClassifyInput): Classification | null 
   const target = input.profileTarget;
   if (!target) return null;
 
+  // The user's declared industry is a stronger signal than the occupation
+  // profile's hardcoded default sector — an administrator who declared
+  // "Healthcare / NHS" should be scored against NHS vocabulary, not whatever
+  // sector the generic administrator profile happens to default to.
+  const sectorOverride = isKnownIndustry(target.industry) ? target.industry : undefined;
+
   if (isKnownOccupation(target.occupation) && target.occupation !== 'generic') {
     return build(target.occupation, 'profile_target', 0.9, {
       cvText: input.cvText,
       reasonCodes: ['PROFILE_TARGET_SET'],
       seniorityOverride: parseSeniority(target.seniority),
+      sectorOverride,
     });
   }
 
@@ -145,6 +152,7 @@ function classifyFromProfileTarget(input: ClassifyInput): Classification | null 
           cvText: input.cvText,
           reasonCodes: ['PROFILE_TARGET_SET', 'JOB_TITLE_EXACT_MATCH'],
           seniorityOverride: parseSeniority(target.seniority),
+          sectorOverride,
         });
       }
     }

@@ -2,11 +2,14 @@
 
 import { Label, TextField } from './Field';
 import { OCCUPATION_OPTIONS, SENIORITY_OPTIONS } from '@/shared/constants/occupation-options';
+import { INDUSTRY_IDS } from '@/shared/constants/sector-keywords';
+import { SECTOR_LABELS } from '@/shared/constants/sector-labels';
 
 export interface TargetRoleValue {
   targetOccupation: string;
   targetRoleTitle: string;
   targetSeniority: string;
+  targetIndustry: string;
 }
 
 /**
@@ -70,6 +73,25 @@ export default function TargetRolePicker({
             </option>
           ))}
         </select>
+      </div>
+      <div>
+        <Label htmlFor="targetIndustry">Target industry (optional)</Label>
+        <select
+          id="targetIndustry"
+          value={value.targetIndustry}
+          onChange={(e) => onChange({ targetIndustry: e.target.value })}
+          className="w-full rounded-lg border border-neutral-200 bg-white px-3 py-2 text-sm outline-none focus:border-accent-purple"
+        >
+          <option value="">Not sure</option>
+          {INDUSTRY_IDS.map((id) => (
+            <option key={id} value={id}>
+              {SECTOR_LABELS[id]}
+            </option>
+          ))}
+        </select>
+        <p className="mt-1 text-[10px] text-neutral-400">
+          Which sector you&apos;re targeting — sharpens keyword scoring beyond your occupation&apos;s default.
+        </p>
       </div>
     </>
   );

@@ -19,6 +19,8 @@ async function requireUserId(): Promise<string> {
 }
 
 export interface PersonalInfoInput {
+  /** This career track's own name, e.g. "Software Engineering" — never the account holder's name. */
+  label: string;
   fullName: string;
   tagline: string;
   professionalSummary: string;
@@ -28,6 +30,8 @@ export interface PersonalInfoInput {
   targetRoleTitle: string;
   /** entry | mid | senior | lead, or '' for unset. */
   targetSeniority: string;
+  /** Sector id, or '' for unset — feeds keyword vocabulary and the classifier's sector override. */
+  targetIndustry: string;
   email: string;
   phoneDialCode: string;
   phoneNumber: string;
@@ -74,7 +78,24 @@ export async function savePersonalInfo(input: PersonalInfoInput, profileId?: str
     visaExpiry,
   };
 
+  const resolvedProfileId = await resolveOwnedProfileId(userId, profileId);
+
+  // [userId, label] is unique. A collision is rare (it needs two of the same
+  // user's own tracks to end up with the same name) and shouldn't fail the
+  // whole save — the rename is just skipped, leaving the existing label in
+  // place, rather than the entire form erroring out over one field.
+  const trimmedLabel = input.label.trim();
+  const labelTaken = trimmedLabel
+    ? Boolean(
+        await prisma.profile.findFirst({
+          where: { userId, label: trimmedLabel, NOT: { id: resolvedProfileId } },
+          select: { id: true },
+        })
+      )
+    : false;
+
   const trackData = {
+    ...(trimmedLabel && !labelTaken ? { label: trimmedLabel } : {}),
     tagline: input.tagline.trim() || null,
     professionalSummary: input.professionalSummary.trim() || null,
     // Server actions are public endpoints: the ontology fields only persist
@@ -82,9 +103,8 @@ export async function savePersonalInfo(input: PersonalInfoInput, profileId?: str
     targetOccupation: isKnownOccupation(input.targetOccupation) ? input.targetOccupation : null,
     targetRoleTitle: input.targetRoleTitle.trim() || null,
     targetSeniority: isSeniorityValue(input.targetSeniority) ? input.targetSeniority : null,
+    targetIndustry: isKnownIndustry(input.targetIndustry) ? input.targetIndustry : null,
   };
-
-  const resolvedProfileId = await resolveOwnedProfileId(userId, profileId);
 
   await prisma.$transaction([
     prisma.profileIdentity.upsert({

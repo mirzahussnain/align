@@ -80,6 +80,35 @@ describe('precedence: profile target beats CV evidence', () => {
     expect(c.source).toBe('dictionary_evidence');
     expect(c.occupation).toBe('registered_nurse');
   });
+
+  it('scores against the declared target industry, not the occupation profile default sector', async () => {
+    // An administrator's own occupation profile defaults to a generic office
+    // sector; a declared NHS target must override that so keyword scoring
+    // matches the vocabulary the user actually said they're applying into.
+    const c = await classifyCV(
+      {
+        cvText: loadFixtureCV('admin-office'),
+        profileTarget: { occupation: 'administrator', industry: 'healthcare_nhs' },
+        aiAllowed: true,
+      },
+      aiMustNotRun
+    );
+    expect(c.occupation).toBe('administrator');
+    expect(c.sector).toBe('healthcare_nhs');
+  });
+
+  it('ignores an unknown industry string and keeps the occupation profile default sector', async () => {
+    const c = await classifyCV(
+      {
+        cvText: loadFixtureCV('admin-office'),
+        profileTarget: { occupation: 'administrator', industry: 'not-a-real-sector' },
+        aiAllowed: true,
+      },
+      aiMustNotRun
+    );
+    expect(c.occupation).toBe('administrator');
+    expect(c.sector).not.toBe('not-a-real-sector');
+  });
 });
 
 describe('deterministic evidence tier on golden fixtures', () => {

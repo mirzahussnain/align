@@ -67,6 +67,18 @@ export default function PersonalInfoForm({
       </div>
 
       <div className="mt-6 grid grid-cols-1 gap-5 sm:grid-cols-2">
+        <div className="sm:col-span-2">
+          <Label htmlFor="trackLabel">Career track name</Label>
+          <TextField
+            id="trackLabel"
+            value={form.label}
+            onChange={(e) => set('label', e.target.value)}
+            placeholder="e.g. Software Engineering"
+          />
+          <p className="mt-1 text-[10px] text-neutral-400">
+            Shown in the career-track switcher and the dashboard — rename this track anytime.
+          </p>
+        </div>
         <div>
           <Label htmlFor="fullName">Full name</Label>
           <TextField id="fullName" value={form.fullName} onChange={(e) => set('fullName', e.target.value)} placeholder="Ada Lovelace" />

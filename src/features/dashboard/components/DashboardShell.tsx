@@ -24,6 +24,43 @@ export interface AnalysisRow {
   jobCompany: string | null;
 }
 
+/** `AnalysisRow` plus the occupation column, used only where the hero needs it. */
+export interface HeroAnalysisRow extends AnalysisRow {
+  occupation: string | null;
+}
+
+/**
+ * Real engine output for the hero's own analysis — never fabricated, always
+ * read from that row's stored result. Null fields mean the engine didn't
+ * produce that fact (e.g. legacy rows, a fully "excellent" report with no
+ * weakest category, or an ATS row with no mandatory/desirable mapping).
+ */
+export interface HeroInsight {
+  occupationLabel: string | null;
+  /** ATS-mode facts (also present on job-match rows, since the rule engine always scores the 8 base categories). */
+  weakestCategoryLabel: string | null;
+  strongestCategoryLabel: string | null;
+  credentialsStatus: 'ready' | 'attention' | null;
+  /** Job-match-mode facts, from the structured mandatory/desirable requirement mapping — never a raw keyword-miss count. */
+  mandatoryMatched: number | null;
+  mandatoryTotal: number | null;
+  primaryGap: string | null;
+  domainMismatch: boolean | null;
+}
+
+/**
+ * ATS and job-match scores answer different questions and must never be
+ * averaged together — this carries them as separate figures for the overview.
+ */
+export interface ReadinessSplit {
+  atsCount: number;
+  jobMatchCount: number;
+  avgAtsScore: number | null;
+  avgJobMatchScore: number | null;
+  latestAtsScore: number | null;
+  bestJobMatchScore: number | null;
+}
+
 export interface CvRow {
   id: string;
   createdAt: string;
@@ -47,7 +84,6 @@ export interface CvRow {
 
 export interface DashboardData {
   analyses: AnalysisRow[];
-  avgScore: number | null;
   totalAnalyses: number;
   cvs: CvRow[];
   /** Content of the currently selected career track. */
@@ -68,6 +104,15 @@ export interface DashboardData {
   profileComplete: boolean;
   /** Profile completeness as a 0–100 percentage, for the incomplete-profile banner. */
   profileCompleteness: number;
+  /** This tier's monthly AI-analysis cap; null when unmetered. Pairs with usage.aiAnalyses. */
+  aiAnalysesLimit: number | null;
+  /** Latest job-match analysis, or latest ATS analysis if no job match exists. Drives the hero card. */
+  heroAnalysis: HeroAnalysisRow | null;
+  /** Most recent analysis of the SAME mode as `heroAnalysis`, for an honest delta — never cross-mode. */
+  heroPrevious: HeroAnalysisRow | null;
+  /** Real engine output for `heroAnalysis`, read from its stored result. */
+  heroInsight: HeroInsight | null;
+  readinessSplit: ReadinessSplit;
 }
 
 interface DashboardShellProps {

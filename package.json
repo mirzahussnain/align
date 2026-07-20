@@ -12,7 +12,7 @@
     "typecheck": "tsc --noEmit",
     "check:env": "node --experimental-strip-types --no-warnings scripts/check-env.mts",
     "check:env:live": "node --experimental-strip-types --no-warnings scripts/check-env.mts --live",
-    "dev:up": "docker compose up -d --wait",
+    "dev:up": "docker compose up -d && docker compose up -d --wait db minio",
     "dev:down": "docker compose down",
     "dev:nuke": "docker compose down -v",
     "db:up": "docker compose up -d --wait db",

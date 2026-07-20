@@ -16,6 +16,8 @@ export interface ProfileData {
   label: string;
   targetIndustry: string;
   personal: {
+    /** This career track's own name — mirrors the top-level `label`, editable via the same form. */
+    label: string;
     fullName: string;
     tagline: string;
     professionalSummary: string;
@@ -24,6 +26,8 @@ export interface ProfileData {
     targetRoleTitle: string;
     /** entry | mid | senior | lead, or ''. */
     targetSeniority: string;
+    /** Sector id, or '' — feeds keyword vocabulary and the classifier's sector override. */
+    targetIndustry: string;
     email: string;
     phoneDialCode: string;
     phoneNumber: string;
@@ -159,12 +163,14 @@ export async function loadProfileData(userId: string, profileId?: string): Promi
     label: profile?.label ?? 'Default',
     targetIndustry: profile?.targetIndustry ?? '',
     personal: {
+      label: profile?.label ?? 'Default',
       fullName: identity?.fullName ?? '',
       tagline: profile?.tagline ?? '',
       professionalSummary: profile?.professionalSummary ?? '',
       targetOccupation: profile?.targetOccupation ?? '',
       targetRoleTitle: profile?.targetRoleTitle ?? '',
       targetSeniority: profile?.targetSeniority ?? '',
+      targetIndustry: profile?.targetIndustry ?? '',
       email: identity?.email ?? '',
       phoneDialCode: identity?.phoneDialCode ?? '',
       phoneNumber: identity?.phoneNumber ?? '',

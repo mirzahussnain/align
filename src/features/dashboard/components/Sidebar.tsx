@@ -85,7 +85,7 @@ export default function Sidebar({
           markup is shared with the mobile slide-over via SidebarContent. */}
       <aside
         className={cn(
-          'sticky top-0 hidden h-screen shrink-0 flex-col border-r border-neutral-200 bg-white p-3 transition-[width] duration-200 md:flex',
+          'sticky top-0 hidden h-screen shrink-0 flex-col border-r border-neutral-200 bg-neutral-50/60 p-3 transition-[width] duration-200 md:flex',
           collapsed ? 'w-[4.5rem]' : 'w-64'
         )}
       >
@@ -166,11 +166,11 @@ function SidebarContent({
   // Collapsed items get their label as a native tooltip, since the text is gone.
   const itemClasses = (isActive: boolean) =>
     cn(
-      'flex items-center rounded-lg py-2 text-sm font-medium transition-colors',
+      'relative flex items-center rounded-lg py-2 text-sm font-medium transition-colors',
       collapsed ? 'justify-center px-0' : 'gap-3 px-3',
       isActive
-        ? 'bg-accent-purple/10 text-accent-purple'
-        : 'text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900'
+        ? 'bg-accent-purple/10 font-semibold text-accent-purple before:absolute before:-left-3 before:top-1/2 before:h-4 before:w-1 before:-translate-y-1/2 before:rounded-r-full before:bg-accent-purple'
+        : 'text-neutral-600 hover:bg-white hover:text-neutral-900'
     );
 
   return (
