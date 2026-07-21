@@ -12,6 +12,7 @@ export type OccupationId =
   | 'warehouse_operative'
   | 'administrator'
   | 'registered_nurse'
+  | 'healthcare_support'
   | 'generic';
 
 /**
@@ -60,6 +61,9 @@ export type ClassificationSource =
  * Stable machine-readable reasons for a classification. Tests assert these
  * codes, never prose. `SECTOR_TERMS_ONLY` marks the anti-pattern where sector
  * vocabulary is the only signal — that is treated as ambiguous, not a match.
+ * `REGULATED_TARGET_UNCORROBORATED` records that a user-declared regulated
+ * occupation was declined because the CV carried no corroborating evidence, so
+ * the final (non-regulated) result explains why the target was ignored.
  */
 export type ReasonCode =
   | 'JOB_TITLE_EXACT_MATCH'
@@ -69,6 +73,7 @@ export type ReasonCode =
   | 'CREDENTIAL_EVIDENCE'
   | 'SECTOR_TERMS_ONLY'
   | 'AI_CLASSIFIED'
+  | 'REGULATED_TARGET_UNCORROBORATED'
   | 'FALLBACK';
 
 /** A runner-up occupation, kept when its score was close to the winner's. */

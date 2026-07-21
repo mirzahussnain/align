@@ -6,7 +6,12 @@ import { X, UserRound, FileSearch, Lock, ChevronRight, Loader2 } from 'lucide-re
 import Button from '@/shared/components/ui/Button';
 import { cn } from '@/shared/utils/cn';
 import type { AnalysisRow } from '@/features/dashboard/components/DashboardShell';
-import type { ProfileSwap } from '@/shared/types/profile-reasoning';
+import type {
+  ApprovedProfileEvidence,
+  ProfileEvidenceRequirement,
+  ProfileEvidenceSuggestion,
+} from '@/shared/types/profile-reasoning';
+import { requirementEvidencePairKey } from '@/shared/types/profile-reasoning';
 import { describeAnalysis } from '@/shared/utils/job-title';
 
 // Reuse the existing rewrite wizard steps so both entry points share one UI.
@@ -18,6 +23,8 @@ import ProfileBridgeStep from './steps/ProfileBridgeStep';
 import FormatSelectionStep from './steps/FormatSelectionStep';
 import RewriteLoadingStep from './steps/RewriteLoadingStep';
 import SuccessStep from './steps/SuccessStep';
+import { triggerBrowserDownload } from '../utils/download';
+import { DEFAULT_TEMPLATE_ID, type TemplateId } from '@/shared/constants/templates';
 import type { ExportFormat } from './RewriteWizardModal';
 
 type Source = 'profile' | 'analysis';
@@ -82,7 +89,7 @@ export default function GenerateCvWizardModal({
   const [missingSkills, setMissingSkills] = useState<string[]>([]);
   const [loadingAnalysis, setLoadingAnalysis] = useState(false);
 
-  const [selectedTemplate, setSelectedTemplate] = useState('architect');
+  const [selectedTemplate, setSelectedTemplate] = useState<TemplateId>(DEFAULT_TEMPLATE_ID);
   const [selectedFormat, setSelectedFormat] = useState<ExportFormat>('docx');
   const [hitlContext, setHitlContext] = useState<Record<string, string>>({});
   const [includeAts, setIncludeAts] = useState(true);
@@ -90,8 +97,9 @@ export default function GenerateCvWizardModal({
   // seconds, and previously ran invisibly with no way to decline it.
   const [includeReasoning, setIncludeReasoning] = useState(true);
 
-  const [swaps, setSwaps] = useState<ProfileSwap[]>([]);
-  const [approvedSwapIds, setApprovedSwapIds] = useState<string[]>([]);
+  const [evidenceSuggestions, setEvidenceSuggestions] = useState<ProfileEvidenceSuggestion[]>([]);
+  const [evidenceRequirements, setEvidenceRequirements] = useState<ProfileEvidenceRequirement[]>([]);
+  const [approvedProfileEvidence, setApprovedProfileEvidence] = useState<ApprovedProfileEvidence[]>([]);
   const [bridgeLoading, setBridgeLoading] = useState(false);
   const [bridgeError, setBridgeError] = useState<string | null>(null);
   const [bridgeProfileLabel, setBridgeProfileLabel] = useState('your');
@@ -111,8 +119,9 @@ export default function GenerateCvWizardModal({
     setSelectedTemplate('architect');
     setSelectedFormat('docx');
     setHitlContext({});
-    setSwaps([]);
-    setApprovedSwapIds([]);
+    setEvidenceSuggestions([]);
+    setEvidenceRequirements([]);
+    setApprovedProfileEvidence([]);
     setBridgeError(null);
     setBridgeProfileLabel('your');
     setIncludeAts(true);
@@ -138,14 +147,27 @@ export default function GenerateCvWizardModal({
 
   async function selectAnalysis(id: string) {
     setSelectedAnalysisId(id);
+    setEvidenceSuggestions([]);
+    setEvidenceRequirements([]);
+    setApprovedProfileEvidence([]);
     setLoadingAnalysis(true);
     try {
       // Pull the stored job-match spec so the skills-bridge step can offer the
       // exact mandatory skills the analysis flagged as missing.
       const res = await fetch(`/api/analyses/${id}`);
       const json = await res.json();
-      const missing = json?.result?.jobMatchData?.mandatorySkills?.missing;
-      setMissingSkills(Array.isArray(missing) ? missing : []);
+      const requirements = json?.result?.jobMatchData?.requirements;
+      const missing = Array.isArray(requirements)
+        ? requirements
+            .filter(
+              (requirement: { importance?: unknown; status?: unknown }) =>
+                requirement.importance === 'mandatory' &&
+                ['not_met', 'contradicted', 'unclear'].includes(String(requirement.status))
+            )
+            .map((requirement: { text?: unknown }) => requirement.text)
+            .filter((text: unknown): text is string => typeof text === 'string')
+        : [];
+      setMissingSkills(missing);
     } catch {
       setMissingSkills([]);
     } finally {
@@ -184,11 +206,17 @@ export default function GenerateCvWizardModal({
 
   async function nextFromReasoningOptIn() {
     if (!includeReasoning) {
+      setEvidenceSuggestions([]);
+      setEvidenceRequirements([]);
+      setApprovedProfileEvidence([]);
       afterBridge();
       return;
     }
 
     setStep('profile_bridge');
+    setEvidenceSuggestions([]);
+    setEvidenceRequirements([]);
+    setApprovedProfileEvidence([]);
     setBridgeLoading(true);
     setBridgeError(null);
     try {
@@ -200,24 +228,45 @@ export default function GenerateCvWizardModal({
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || 'Failed to compare your profile.');
 
-      const found: ProfileSwap[] = Array.isArray(json.swaps) ? json.swaps : [];
-      setSwaps(found);
+      const found: ProfileEvidenceSuggestion[] = Array.isArray(json.suggestions)
+        ? json.suggestions
+        : [];
+      setEvidenceSuggestions(found);
+      setEvidenceRequirements(Array.isArray(json.requirements) ? json.requirements : []);
       setBridgeProfileLabel(json.profileLabel || 'your');
-      // Pre-tick the strong matches; the user can untick any of them.
-      setApprovedSwapIds(found.filter((s) => s.confidence === 'high').map((s) => s.id));
+      // Approval is always an explicit click; confidence is display-only.
+      setApprovedProfileEvidence([]);
     } catch (err) {
       // A reasoning failure must never block the CV the user came here for.
       setBridgeError(err instanceof Error ? err.message : 'Something went wrong.');
-      setSwaps([]);
+      setEvidenceSuggestions([]);
+      setEvidenceRequirements([]);
+      setApprovedProfileEvidence([]);
     } finally {
       setBridgeLoading(false);
     }
   }
 
-  function toggleSwap(id: string) {
-    setApprovedSwapIds((prev) =>
-      prev.includes(id) ? prev.filter((s) => s !== id) : [...prev, id]
-    );
+  function toggleEvidence(suggestion: ProfileEvidenceSuggestion) {
+    const key = requirementEvidencePairKey(suggestion.requirementId, suggestion.evidenceRef);
+    setApprovedProfileEvidence((previous) => {
+      const exists = previous.some(
+        (approval) =>
+          requirementEvidencePairKey(approval.requirementId, approval.evidenceRef) === key
+      );
+      return exists
+        ? previous.filter(
+            (approval) =>
+              requirementEvidencePairKey(approval.requirementId, approval.evidenceRef) !== key
+          )
+        : [
+            ...previous,
+            {
+              requirementId: suggestion.requirementId,
+              evidenceRef: suggestion.evidenceRef,
+            },
+          ];
+    });
   }
 
   async function handleSubmit() {
@@ -242,7 +291,17 @@ export default function GenerateCvWizardModal({
                 templateId: selectedTemplate,
                 hitlContext,
                 includeAtsOptimization: includeAts,
-                approvedProfileItemIds: approvedSwapIds,
+                approvedProfileEvidence: approvedProfileEvidence.map((approval) => {
+                  const key = requirementEvidencePairKey(
+                    approval.requirementId,
+                    approval.evidenceRef
+                  );
+                  const suggestion = evidenceSuggestions.find(
+                    (item) =>
+                      requirementEvidencePairKey(item.requirementId, item.evidenceRef) === key
+                  );
+                  return { ...approval, rationale: suggestion?.rationale };
+                }),
                 profileId: activeProfileId,
               }),
             });
@@ -253,16 +312,9 @@ export default function GenerateCvWizardModal({
       }
 
       const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      setDownloadUrl(url);
-
       const fileName = source === 'profile' ? 'Profile_CV.docx' : 'Tailored_CV.docx';
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = fileName;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
+      const url = triggerBrowserDownload(blob, fileName);
+      setDownloadUrl(url);
 
       setStep('success');
       onGenerated?.();
@@ -398,9 +450,10 @@ export default function GenerateCvWizardModal({
               <motion.div key="profile_bridge" initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }}>
                 <ProfileBridgeStep
                   loading={bridgeLoading}
-                  swaps={swaps}
-                  approved={approvedSwapIds}
-                  onToggle={toggleSwap}
+                  suggestions={evidenceSuggestions}
+                  requirements={evidenceRequirements}
+                  approved={approvedProfileEvidence}
+                  onToggle={toggleEvidence}
                   profileLabel={bridgeProfileLabel}
                   error={bridgeError}
                 />
@@ -453,11 +506,11 @@ export default function GenerateCvWizardModal({
             )}
             {step === 'profile_bridge' && (
               <div className="flex gap-3">
-                {swaps.length > 0 && (
+                {evidenceSuggestions.length > 0 && (
                   <Button
                     variant="outline"
                     onClick={() => {
-                      setApprovedSwapIds([]);
+                      setApprovedProfileEvidence([]);
                       afterBridge();
                     }}
                   >
@@ -465,8 +518,8 @@ export default function GenerateCvWizardModal({
                   </Button>
                 )}
                 <Button onClick={afterBridge} disabled={bridgeLoading}>
-                  {swaps.length > 0 && approvedSwapIds.length > 0
-                    ? `Use ${approvedSwapIds.length} item${approvedSwapIds.length === 1 ? '' : 's'}`
+                  {evidenceSuggestions.length > 0 && approvedProfileEvidence.length > 0
+                    ? `Use ${approvedProfileEvidence.length} item${approvedProfileEvidence.length === 1 ? '' : 's'}`
                     : 'Next Step'}
                 </Button>
               </div>

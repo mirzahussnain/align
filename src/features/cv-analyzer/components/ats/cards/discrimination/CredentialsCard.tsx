@@ -26,6 +26,7 @@ export default function CredentialsCard({ credentials, occupationLabel }: Creden
   return (
     <AuditCard
       id="credentials"
+      source="rule"
       title="Credentials & Licences"
       subtitle={`Registrations, licences, and training expected for ${occupationLabel} roles`}
       score={

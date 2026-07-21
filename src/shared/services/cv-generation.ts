@@ -16,11 +16,9 @@ import type { Entitlements } from '@/shared/lib/entitlements';
 export const DOCX_CONTENT_TYPE =
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
 
-export type TemplateId =
-  | 'architect'
-  | 'editorial_refined'
-  | 'technical_precision'
-  | 'academic_latex';
+// Re-exported so existing importers of `TemplateId` from this module keep
+// working; the canonical definition now lives in shared/constants/templates.
+export type { TemplateId } from '@/shared/constants/templates';
 
 /**
  * Single source of truth for turning structured CV data into a rendered DOCX.
@@ -76,14 +74,25 @@ export async function persistAndArchiveCv(args: {
   analysisId?: string | null;
   /** Career track this CV was built from, when it came from a profile path. */
   profileId?: string | null;
+  /** Optional generation-time source/approval snapshot, separate from CV data. */
+  provenance?: Record<string, unknown>;
   /**
    * Tier limits. When given, generated CVs beyond the cap are pruned
    * oldest-first after this one is saved.
    */
   entitlements?: Entitlements;
 }): Promise<string> {
-  const { userId, data, templateId, fileName, docxBuffer, analysisId, profileId, entitlements } =
-    args;
+  const {
+    userId,
+    data,
+    templateId,
+    fileName,
+    docxBuffer,
+    analysisId,
+    profileId,
+    provenance,
+    entitlements,
+  } = args;
 
   const generatedCV = await prisma.generatedCV.create({
     data: {
@@ -91,6 +100,7 @@ export async function persistAndArchiveCv(args: {
       template: templateId,
       title: cvTitleFrom(data),
       data: JSON.parse(JSON.stringify(data)),
+      provenance: provenance ? JSON.parse(JSON.stringify(provenance)) : undefined,
       analysisId: analysisId ?? null,
       profileId: profileId ?? null,
     },

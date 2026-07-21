@@ -2,8 +2,8 @@ import type { OccupationProfile } from '../types';
 
 export const administratorProfile: OccupationProfile = {
   id: 'administrator',
-  version: '1.0.0',
-  label: 'Administrator',
+  version: '1.1.0',
+  label: 'Administration & Office Support',
   sector: 'admin_office',
   roleArchetype: 'administrative_support',
   applicationWorkflow: 'hybrid',

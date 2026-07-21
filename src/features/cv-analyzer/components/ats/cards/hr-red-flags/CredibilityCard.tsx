@@ -9,9 +9,10 @@ interface ClichéItem {
 
 interface CredibilityCardProps {
   clichésList: ClichéItem[];
+  source?: 'rule' | 'ai';
 }
 
-export default function CredibilityCard({ clichésList }: CredibilityCardProps) {
+export default function CredibilityCard({ clichésList, source = 'rule' }: CredibilityCardProps) {
   const isPassed = clichésList.length <= 2;
   return (
     <AuditCard
@@ -20,6 +21,7 @@ export default function CredibilityCard({ clichésList }: CredibilityCardProps) 
       subtitle="Filters overused buzzwords and vague claims"
       score={isPassed ? 'Credible' : 'Contains clichés'}
       scoreStatus={isPassed ? 'excellent' : 'good'}
+      source={source}
       details="Overusing vague corporate statements reduces recruiter interest. Focus on concrete metric accomplishments."
     >
       {clichésList.length > 0 ? (

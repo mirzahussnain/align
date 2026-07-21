@@ -14,6 +14,10 @@ export default function DatesLinksCard({ formattingIssues }: DatesLinksCardProps
     (i) => i.message.toLowerCase().includes('date') || i.message.toLowerCase().includes('link')
   );
 
+  const dateOrLinkIssues = formattingIssues.filter(
+    (i) => i.message.toLowerCase().includes('date') || i.message.toLowerCase().includes('link')
+  );
+
   return (
     <AuditCard
       id="datesLinks"
@@ -21,10 +25,25 @@ export default function DatesLinksCard({ formattingIssues }: DatesLinksCardProps
       subtitle="Validates chronological date styles and link targets"
       score={isPassed ? 'Passed' : 'Review format'}
       scoreStatus={isPassed ? 'excellent' : 'good'}
+      source="rule"
     >
-      <p className="text-xs text-slate-550 leading-relaxed">
-        All links are formatted correctly and date spans follow standard patterns without overlapping or broken formats.
-      </p>
+      {isPassed ? (
+        <p className="text-xs text-slate-550 leading-relaxed">
+          No date- or link-formatting issues were flagged — date spans follow standard patterns and
+          links parse cleanly.
+        </p>
+      ) : (
+        <div className="space-y-2">
+          {dateOrLinkIssues.map((issue, idx) => (
+            <p
+              key={idx}
+              className="text-[11px] text-slate-600 leading-relaxed p-3 bg-amber-50/40 border border-amber-100 rounded-xl"
+            >
+              {issue.message}
+            </p>
+          ))}
+        </div>
+      )}
     </AuditCard>
   );
 }

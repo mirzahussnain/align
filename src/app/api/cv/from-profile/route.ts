@@ -12,12 +12,10 @@ import {
   profileToRewrittenData,
   DOCX_CONTENT_TYPE,
 } from '@/shared/services/cv-generation';
+import { TemplateIdSchema } from '@/shared/constants/templates';
 
 const FromProfileSchema = z.object({
-  templateId: z
-    .enum(['architect', 'editorial_refined', 'technical_precision', 'academic_latex'])
-    .optional()
-    .default('architect'),
+  templateId: TemplateIdSchema,
   /** Career track to build from. Omitted builds from the user's default. */
   profileId: z.string().optional(),
 });

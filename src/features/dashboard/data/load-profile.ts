@@ -50,6 +50,8 @@ export interface ProfileData {
    * Present") happens at the point of use via shared/utils/date.ts.
    */
   experience: {
+    /** Stable database identity used only for server-validated evidence links. */
+    id: string;
     jobTitle: string;
     company: string;
     location: string;
@@ -61,6 +63,7 @@ export interface ProfileData {
     achievements: string[];
   }[];
   projects: {
+    id: string;
     name: string;
     stack: string;
     startDate: string;
@@ -68,6 +71,7 @@ export interface ProfileData {
     achievements: string[];
   }[];
   education: {
+    id: string;
     degree: string;
     university: string;
     startDate: string;
@@ -77,8 +81,18 @@ export interface ProfileData {
     description: string;
   }[];
   skills: {
+    id: string;
     category: string;
+    /** Form-compatible names, retained so profile editing is unchanged. */
     skills: string[];
+    /** Individual database rows used for evidence references. */
+    skillItems: { id: string; name: string }[];
+  }[];
+  certifications: {
+    id: string;
+    name: string;
+    issuer: string;
+    year: string;
   }[];
 }
 
@@ -98,7 +112,11 @@ async function resolveProfile(userId: string, profileId?: string) {
     experience: { orderBy: { sortOrder: 'asc' } },
     projects: { orderBy: { sortOrder: 'asc' } },
     education: { orderBy: { sortOrder: 'asc' } },
-    skillGroups: { orderBy: { sortOrder: 'asc' } },
+    skillGroups: {
+      orderBy: { sortOrder: 'asc' },
+      include: { skills: { orderBy: { sortOrder: 'asc' } } },
+    },
+    certifications: { orderBy: { name: 'asc' } },
   } as const;
 
   if (profileId) {
@@ -186,6 +204,7 @@ export async function loadProfileData(userId: string, profileId?: string): Promi
     },
     experience:
       profile?.experience.map((e) => ({
+        id: e.id,
         jobTitle: e.jobTitle,
         company: e.company,
         location: e.location ?? '',
@@ -197,6 +216,7 @@ export async function loadProfileData(userId: string, profileId?: string): Promi
       })) ?? [],
     projects:
       profile?.projects.map((p) => ({
+        id: p.id,
         name: p.name,
         stack: p.stack ?? '',
         startDate: p.startDate ?? '',
@@ -205,6 +225,7 @@ export async function loadProfileData(userId: string, profileId?: string): Promi
       })) ?? [],
     education:
       profile?.education.map((ed) => ({
+        id: ed.id,
         degree: ed.degree,
         university: ed.university,
         startDate: ed.startDate ?? '',
@@ -215,10 +236,41 @@ export async function loadProfileData(userId: string, profileId?: string): Promi
       })) ?? [],
     skills:
       profile?.skillGroups.map((s) => ({
+        id: s.id,
         category: s.category,
-        skills: s.skills,
+        skills: s.skills.map((skill) => skill.name),
+        skillItems: s.skills.map((skill) => ({ id: skill.id, name: skill.name })),
+      })) ?? [],
+    certifications:
+      profile?.certifications.map((certification) => ({
+        id: certification.id,
+        name: certification.name,
+        issuer: certification.issuer ?? '',
+        year: certification.year ?? '',
       })) ?? [],
   };
+}
+
+/**
+ * Strict evidence loader. Unlike the form-oriented loader's legacy fallback,
+ * an explicit unowned or deleted profile is rejected instead of silently
+ * substituting the user's default profile.
+ */
+export async function loadOwnedProfileData(
+  userId: string,
+  profileId?: string
+): Promise<ProfileData | null> {
+  if (profileId) {
+    const owned = await prisma.profile.findFirst({
+      where: { id: profileId, userId },
+      select: { id: true },
+    });
+    if (!owned) return null;
+  }
+
+  const profile = await loadProfileData(userId, profileId);
+  if (profileId && profile.profileId !== profileId) return null;
+  return profile.profileId ? profile : null;
 }
 
 /**

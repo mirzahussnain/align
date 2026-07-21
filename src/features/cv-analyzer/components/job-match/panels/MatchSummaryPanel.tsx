@@ -1,10 +1,10 @@
 import { motion, type Variants } from 'framer-motion';
 import { Target } from 'lucide-react';
 import ScoreDial from '@/shared/components/ui/CircularProgress';
-import type { AIJobMatchOutput as JobMatchData } from '@/shared/types/ai';
+import type { JobMatchDataV2 } from '@/shared/types/ai';
 
 interface MatchSummaryPanelProps {
-  data: JobMatchData;
+  data: JobMatchDataV2;
   contentVariants: Variants;
 }
 

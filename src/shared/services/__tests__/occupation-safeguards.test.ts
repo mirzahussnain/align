@@ -11,9 +11,11 @@
 // The AI never sees the occupation rules directly; it sees the composed
 // prompt. So the prompt is what we assert on.
 //
-// Fixtures deliberately include two occupations with NO maintained profile
-// (healthcare assistant, paralegal). They are the cases that tell us whether
-// the generic fallback is genuinely safe or merely untested.
+// The paralegal fixture has NO maintained profile — it is the case that tells
+// us whether the generic fallback is genuinely safe or merely untested. The
+// healthcare assistant now DOES have one (Healthcare Support), so it is asserted
+// separately: it must map to that non-regulated profile and still never be
+// DEMANDED a clinician registration.
 
 import { describe, it, expect } from 'vitest';
 import { classifyCV } from '../classifier';
@@ -71,10 +73,9 @@ const REGULATOR_TERMS = [
 
 describe('unmapped occupations fall back to generic, not to a neighbour', () => {
   // The dangerous failure is not "we have no profile" — it is "we picked the
-  // regulated profile next door". An HCA CV is dense with clinical vocabulary
-  // and shares task patterns with the nurse profile; a paralegal CV is dense
-  // with legal vocabulary. Neither may inherit a registration requirement.
-  const unmapped: FixtureCV[] = ['hca-no-nmc', 'paralegal-no-sra'];
+  // regulated profile next door". A paralegal CV is dense with legal vocabulary
+  // but must not inherit a registration requirement.
+  const unmapped: FixtureCV[] = ['paralegal-no-sra'];
 
   it.each(unmapped)('%s classifies as generic', async (fixture) => {
     const { classification } = await demandsFor(fixture);
@@ -98,13 +99,50 @@ describe('unmapped occupations fall back to generic, not to a neighbour', () => 
       }
     }
   });
+});
 
-  it('an HCA scores full credential marks rather than being penalised', async () => {
+describe('an HCA maps to Healthcare Support, never to the regulated nurse profile', () => {
+  // The HCA CV is dense with clinical vocabulary and shares task patterns with
+  // the nurse profile, but its own evidence (support-role titles, personal care,
+  // safeguarding, observations) now resolves it to the NON-regulated Healthcare
+  // Support profile. A clinician registration must still never be DEMANDED.
+  const checklistDemandsRegulator = (checklist: string) =>
+    REGULATOR_TERMS.some(([, pattern]) => pattern.test(checklist));
+
+  it('classifies as healthcare_support and is not regulated', async () => {
+    const { classification } = await demandsFor('hca-no-nmc');
+    expect(classification.occupation).toBe('healthcare_support');
+    expect(classification.regulated).toBe(false);
+  });
+
+  it('is DEMANDED no clinician registration on the credential checklist', async () => {
+    const { credentialChecklist } = await demandsFor('hca-no-nmc');
+    // The checklist is where a credential is demanded — only care credentials.
+    expect(checklistDemandsRegulator(credentialChecklist)).toBe(false);
+    expect(credentialChecklist).toMatch(/Care Certificate/);
+  });
+
+  it('names the regulators only to PROHIBIT them, as a safety instruction', async () => {
+    const { prompts } = await demandsFor('hca-no-nmc');
+    for (const prompt of prompts) {
+      const instructions = prompt.split('"""')[0];
+      const prohibitions = instructions.slice(instructions.indexOf('STRICT PROHIBITIONS'));
+      // Regulators appear, but ONLY inside the prohibitions block.
+      expect(prohibitions).toMatch(/NMC/);
+      const beforeProhibitions = instructions.slice(0, instructions.indexOf('STRICT PROHIBITIONS'));
+      for (const [name, pattern] of REGULATOR_TERMS) {
+        expect(beforeProhibitions, `HCA demand region names ${name}`).not.toMatch(pattern);
+      }
+    }
+  });
+
+  it('scores care credentials fairly — never floored for a missing registration', async () => {
     const { classification } = await demandsFor('hca-no-nmc');
     const profile = getOccupationProfile(classification.occupation);
     const result = analyzeCredentials(loadFixtureCV('hca-no-nmc'), profile, classification);
-    expect(result.notMaterial).toBe(true);
-    expect(result.score).toBe(10);
+    // No mandatory credential exists, so the score is never floored to ~3.
+    expect(result.findings.some((f) => f.class === 'mandatory')).toBe(false);
+    expect(result.score).toBeGreaterThanOrEqual(8);
   });
 });
 
@@ -241,16 +279,16 @@ describe('occupations are not asked for each others evidence', () => {
   });
 });
 
-describe('the AI classification tier can promote into a regulated occupation', () => {
-  // DOCUMENTED RISK, not an endorsement. The deterministic tier correctly
-  // leaves an HCA on generic at 0.3 confidence — which is below the ambiguity
-  // threshold, so in production the AI tier runs and its answer is accepted at
-  // up to 0.9. One AI misfire therefore converts "no credentials expected"
-  // into "NMC registration (mandatory)" plus a nursing-recruiter persona.
-  //
-  // This test pins the current behaviour so the day it is fixed, it fails
-  // loudly and deliberately rather than drifting.
-  it('an AI misfire hands an HCA a mandatory NMC demand', async () => {
+describe('the AI classification tier is subject to the regulated activation guard', () => {
+  // Previously a DOCUMENTED RISK: the deterministic tier correctly leaves an
+  // HCA on generic below the ambiguity threshold, so the AI tier runs and its
+  // answer used to be accepted at up to 0.9 — one AI misfire converting "no
+  // credentials expected" into "NMC registration (mandatory)". The regulated
+  // activation guard now governs the AI tier too: an AI suggestion of a
+  // regulated occupation is only activated when the CV corroborates it via a
+  // matching title or the mandatory credential. This test proves the misfire is
+  // now absorbed rather than promoted.
+  it('an AI misfire does NOT hand an HCA a mandatory NMC demand', async () => {
     const cvText = loadFixtureCV('hca-no-nmc');
     const aiSaysNurse = async () => ({
       occupation: 'registered_nurse',
@@ -263,8 +301,11 @@ describe('the AI classification tier can promote into a regulated occupation', (
       { cvText, aiAllowed: true },
       aiSaysNurse as never
     );
-    expect(classification.occupation).toBe('registered_nurse');
-    expect(classification.regulated).toBe(true);
+    // The HCA's own evidence resolves it to Healthcare Support at the
+    // deterministic tier, so the AI's nurse suggestion never even runs — and
+    // even if it did, the regulated activation guard would reject it.
+    expect(classification.occupation).toBe('healthcare_support');
+    expect(classification.regulated).toBe(false);
 
     const profile = getOccupationProfile(classification.occupation);
     const prompt = composeSemanticPrompt(
@@ -273,17 +314,20 @@ describe('the AI classification tier can promote into a regulated occupation', (
       profile,
       classification
     );
-    expect(prompt).toMatch(/Credential checklist: NMC registration \(mandatory\)/);
+    // The checklist (where a credential is demanded) never names a regulator.
+    const checklistLine = prompt.split('\n').find((l) => l.startsWith('- Credential checklist:')) ?? '';
+    expect(checklistLine).not.toMatch(/NMC/);
   });
 
-  it('the deterministic tier alone leaves the HCA safe', async () => {
+  it('the deterministic tier alone resolves the HCA to Healthcare Support', async () => {
     // The same CV, with the AI tier unavailable — the safeguard that is
-    // actually load-bearing today.
+    // actually load-bearing today. It confidently reaches the non-regulated
+    // Healthcare Support profile rather than a clinician profile.
     const classification = await classifyCV(
       { cvText: loadFixtureCV('hca-no-nmc'), aiAllowed: false },
       aiMustNotRun
     );
-    expect(classification.occupation).toBe('generic');
-    expect(classification.confidence).toBeLessThan(0.8);
+    expect(classification.occupation).toBe('healthcare_support');
+    expect(classification.regulated).toBe(false);
   });
 });

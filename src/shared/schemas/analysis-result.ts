@@ -77,10 +77,16 @@ export function parseStoredAnalysisResult(raw: unknown): ParsedStoredAnalysis | 
   const parsed = StoredAnalysisResultSchema.safeParse(raw);
   if (!parsed.success) return null;
 
+  // rawResult is the general ATS/CV document only. Older rows may contain a
+  // nested jobMatchData field because the schema is deliberately loose; remove
+  // it at the trust boundary so no reader can accidentally revive that copy.
+  const result = { ...parsed.data } as unknown as CVAnalysisResult;
+  delete result.jobMatchData;
+
   return {
-    // The loose schema keeps unknown fields (classification, credentials,
-    // jobMatchData, ai* extras) intact on the object it returns.
-    result: parsed.data as unknown as CVAnalysisResult,
+    // The loose schema keeps current optional fields (classification,
+    // credentials, ai* extras) intact on the object it returns.
+    result,
     legacy: parsed.data.scoringVersion === undefined,
   };
 }

@@ -42,18 +42,19 @@ function makeProfile(overrides: {
       visaExpiry: '',
     },
     experience: [
-      { jobTitle: 'Op', company: 'Co', location: '', type: '', startDate: '2021-01', endDate: '', current: true, achievements: [] },
+      { id: 'experience-1', jobTitle: 'Op', company: 'Co', location: '', type: '', startDate: '2021-01', endDate: '', current: true, achievements: [] },
     ],
     projects: overrides.projects ?? [],
     education: [
-      { degree: 'GCSEs', university: 'School', startDate: '2016-09', endDate: '2018-06', current: false, grade: '', description: '' },
+      { id: 'education-1', degree: 'GCSEs', university: 'School', startDate: '2016-09', endDate: '2018-06', current: false, grade: '', description: '' },
     ],
-    skills: [{ category: 'Core', skills: ['Picking'] }],
+    skills: [{ id: 'group-1', category: 'Core', skills: ['Picking'], skillItems: [{ id: 'skill-1', name: 'Picking' }] }],
+    certifications: [],
   };
 }
 
 const A_PROJECT: ProfileData['projects'] = [
-  { name: 'CourtBook', stack: 'Next.js', startDate: '', endDate: '', achievements: [] },
+  { id: 'project-1', name: 'CourtBook', stack: 'Next.js', startDate: '', endDate: '', achievements: [] },
 ];
 
 describe('projectsExpectedFor', () => {
@@ -61,6 +62,7 @@ describe('projectsExpectedFor', () => {
     expect(projectsExpectedFor('software_engineer')).toBe(true);
     expect(projectsExpectedFor('warehouse_operative')).toBe(false);
     expect(projectsExpectedFor('registered_nurse')).toBe(false);
+    expect(projectsExpectedFor('healthcare_support')).toBe(false);
     expect(projectsExpectedFor('administrator')).toBe(false);
     expect(projectsExpectedFor('generic')).toBe(false);
     expect(projectsExpectedFor('')).toBe(false);
@@ -73,6 +75,7 @@ describe('projectsPresenceFor', () => {
     expect(projectsPresenceFor('generic')).toBe('optional');
     expect(projectsPresenceFor('warehouse_operative')).toBe('irrelevant');
     expect(projectsPresenceFor('registered_nurse')).toBe('irrelevant');
+    expect(projectsPresenceFor('healthcare_support')).toBe('irrelevant');
     expect(projectsPresenceFor('administrator')).toBe('irrelevant');
   });
 
@@ -133,11 +136,15 @@ describe('occupation-aware completeness', () => {
     expect(isProfileComplete(profile)).toBe(true);
   });
 
-  it('an unset occupation costs exactly the target-occupation check', () => {
+  it('an unset occupation is no longer a completeness cost — 100% without one', () => {
+    // The CV evaluation type is optional; a profile with everything else filled
+    // in reaches 100% with no occupation selected. It resolves through the
+    // classifier and the Generic fallback at analysis time.
     const profile = makeProfile({ targetOccupation: '' });
     const result = evaluateProfileCompleteness(toCompletenessInput(profile));
-    expect(result.missingChecks).toEqual(['target-occupation']);
-    expect(result.percentage).toBe(83);
+    expect(result.missingChecks).toEqual([]);
+    expect(result.relevantChecks).not.toContain('target-occupation' as never);
+    expect(result.percentage).toBe(100);
   });
 });
 
@@ -151,7 +158,7 @@ describe('relevant checks', () => {
   });
 
   it('omits projects for occupations that do not expect them', () => {
-    for (const occupation of ['registered_nurse', 'warehouse_operative', 'administrator', 'generic']) {
+    for (const occupation of ['registered_nurse', 'healthcare_support', 'warehouse_operative', 'administrator', 'generic']) {
       const result = evaluateProfileCompleteness(
         toCompletenessInput(makeProfile({ targetOccupation: occupation }))
       );
@@ -167,12 +174,13 @@ describe('relevant checks', () => {
       toCompletenessInput(makeProfile({ targetOccupation: 'software_engineer' }))
     );
 
-    expect(asNurse.relevantChecks).toHaveLength(6);
-    expect(asEngineer.relevantChecks).toHaveLength(7);
+    // Five base checks (no target-occupation check); software adds projects.
+    expect(asNurse.relevantChecks).toHaveLength(5);
+    expect(asEngineer.relevantChecks).toHaveLength(6);
     // Same underlying content, different verdict — purely because the
     // occupation changed which evidence is expected.
     expect(asNurse.percentage).toBe(100);
-    expect(asEngineer.percentage).toBe(86);
+    expect(asEngineer.percentage).toBe(83);
   });
 
   it('partitions relevant checks into completed and missing with no overlap', () => {
@@ -207,6 +215,7 @@ describe('wizard and dashboard agree', () => {
       'software_engineer',
       'warehouse_operative',
       'registered_nurse',
+      'healthcare_support',
       'administrator',
       'generic',
       '',

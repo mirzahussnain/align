@@ -1,262 +1,334 @@
 import type { ProfileData } from '@/features/dashboard/data/load-profile';
+import type { JobMatchDataV2, JobRequirementLedgerEntry } from '@/shared/types/ai';
 import type {
+  ApprovedProfileEvidence,
+  ApprovedProfileEvidenceOverlay,
   ProfileCandidate,
-  ProfileSwap,
-  RawProfileSwap,
+  ProfileEvidenceRef,
+  ProfileEvidenceRequirement,
+  ProfileEvidenceSuggestion,
   ProfileReconciliation,
+  RawProfileEvidenceSuggestion,
+} from '@/shared/types/profile-reasoning';
+import {
+  ProfileEvidenceValidationError,
+  profileEvidenceRefKey,
+  requirementEvidencePairKey,
 } from '@/shared/types/profile-reasoning';
 import { generateJSONFromAI } from './ai-orchestrator';
-// Dates and employment type are described to the model in human form: "Jan 2022
-// – Present" is what it can reason about, where "2022-01" and "FULL_TIME" are
-// noise it has to decode first.
-import { employmentTypeLabel } from '@/shared/constants/employment-type';
-import { formatDateRange } from '@/shared/utils/date';
 import { THINKING_BUDGETS } from '@/shared/lib/config';
 
+const SUGGESTIBLE_STATUSES = new Set(['partial', 'not_met', 'contradicted', 'unclear']);
+
 /**
- * Flatten a profile into addressable items. Ids are structural (`project:2`,
- * `skill:1:4`) so they are stable for a given profile snapshot and can be
- * resolved back without a database round-trip.
+ * Flatten complete profile data into database-addressed evidence records.
+ * Array order is deliberately irrelevant: identity comes only from row ids.
  */
 export function buildProfileCandidates(profile: ProfileData): ProfileCandidate[] {
   const candidates: ProfileCandidate[] = [];
 
-  profile.projects.forEach((p, i) => {
+  for (const experience of profile.experience) {
     candidates.push({
-      id: `project:${i}`,
-      kind: 'project',
-      label: p.name,
-      detail: [
-        p.stack && `Stack: ${p.stack}`,
-        formatDateRange(p.startDate, p.endDate),
-        ...p.achievements,
-      ]
+      evidenceRef: { type: 'experience', id: experience.id },
+      evidenceText:
+        experience.achievements.length > 0
+          ? experience.achievements.join('\n')
+          : `${experience.jobTitle} at ${experience.company}`,
+      evidenceLocation: `${experience.jobTitle} at ${experience.company} — Work experience`,
+    });
+  }
+
+  for (const project of profile.projects) {
+    candidates.push({
+      evidenceRef: { type: 'project', id: project.id },
+      evidenceText:
+        project.achievements.length > 0
+          ? project.achievements.join('\n')
+          : [project.name, project.stack].filter(Boolean).join(' — '),
+      evidenceLocation: `${project.name} — Project`,
+    });
+  }
+
+  for (const education of profile.education) {
+    candidates.push({
+      evidenceRef: { type: 'education', id: education.id },
+      evidenceText: [education.degree, education.grade, education.description]
         .filter(Boolean)
         .join('. '),
+      evidenceLocation: `${education.university} — Education`,
     });
-  });
+  }
 
-  profile.experience.forEach((e, i) => {
-    candidates.push({
-      id: `experience:${i}`,
-      kind: 'experience',
-      label: `${e.jobTitle} at ${e.company}`,
-      detail: [
-        e.location,
-        employmentTypeLabel(e.type),
-        formatDateRange(e.startDate, e.endDate, e.current),
-        ...e.achievements,
-      ]
-        .filter(Boolean)
-        .join('. '),
-    });
-  });
-
-  profile.education.forEach((ed, i) => {
-    candidates.push({
-      id: `education:${i}`,
-      kind: 'education',
-      label: `${ed.degree}, ${ed.university}`,
-      detail: [ed.grade, formatDateRange(ed.startDate, ed.endDate, ed.current), ed.description]
-        .filter(Boolean)
-        .join('. '),
-    });
-  });
-
-  // Each skill is addressable on its own — a swap usually concerns one skill,
-  // not a whole category.
-  profile.skills.forEach((group, gi) => {
-    group.skills.forEach((skill, si) => {
+  for (const group of profile.skills) {
+    for (const skill of group.skillItems) {
       candidates.push({
-        id: `skill:${gi}:${si}`,
-        kind: 'skill',
-        label: skill,
-        detail: `${group.category} skill listed on the profile`,
+        evidenceRef: { type: 'skill', id: skill.id },
+        evidenceText: skill.name,
+        evidenceLocation: `${group.category} — Skills`,
       });
+    }
+  }
+
+  for (const certification of profile.certifications) {
+    candidates.push({
+      evidenceRef: { type: 'certification', id: certification.id },
+      evidenceText: [certification.name, certification.issuer, certification.year]
+        .filter(Boolean)
+        .join(' — '),
+      evidenceLocation: `${certification.name} — Certification or licence`,
     });
-  });
+  }
 
   return candidates;
 }
 
-/** Everything the reconciler needs to judge relevance. */
-export interface ReconcileInput {
-  profile: ProfileData;
-  /** Raw text of the CV that was analysed. */
-  cvText: string;
-  jobDescription: string;
-  /** `mandatorySkills` from the stored job-match result, when available. */
-  mandatoryMissing: string[];
-  mandatoryPartial: string[];
+function requirementView(requirement: JobRequirementLedgerEntry): ProfileEvidenceRequirement {
+  return {
+    id: requirement.id,
+    text: requirement.text,
+    importance: requirement.importance,
+    status: requirement.status,
+  };
+}
+
+function parseEvidenceRef(value: unknown): ProfileEvidenceRef {
+  if (!value || typeof value !== 'object') {
+    throw new ProfileEvidenceValidationError('Suggestion has an unsupported evidence reference.');
+  }
+
+  const ref = value as { type?: unknown; id?: unknown };
+  if (typeof ref.id !== 'string' || ref.id.trim().length === 0) {
+    throw new ProfileEvidenceValidationError('Suggestion has an invalid evidence database id.');
+  }
+
+  if (
+    ref.type !== 'experience' &&
+    ref.type !== 'project' &&
+    ref.type !== 'education' &&
+    ref.type !== 'skill' &&
+    ref.type !== 'certification'
+  ) {
+    throw new ProfileEvidenceValidationError('Suggestion has an unsupported evidence type.');
+  }
+
+  return { type: ref.type, id: ref.id.trim() } as ProfileEvidenceRef;
 }
 
 /**
- * Ask the model which profile items would serve this JD better than what the CV
- * currently shows.
- *
- * The model receives a numbered inventory and may only answer with those ids.
- * Anything it returns is validated against the inventory before it leaves this
- * function, so a hallucinated id or invented credential is dropped rather than
- * shown to the user as something they can put on a CV.
+ * Validate model relationships and replace all model-supplied source wording
+ * with canonical text and location resolved from the current profile snapshot.
  */
+export function validateProfileEvidenceSuggestions(
+  raw: unknown,
+  candidates: ProfileCandidate[],
+  requirements: JobRequirementLedgerEntry[]
+): ProfileEvidenceSuggestion[] {
+  if (!Array.isArray(raw)) {
+    throw new ProfileEvidenceValidationError('Profile comparison returned an invalid suggestion list.');
+  }
+
+  const candidatesByKey = new Map(
+    candidates.map((candidate) => [profileEvidenceRefKey(candidate.evidenceRef), candidate])
+  );
+  const requirementsById = new Map(requirements.map((requirement) => [requirement.id, requirement]));
+  const seen = new Set<string>();
+
+  return (raw as RawProfileEvidenceSuggestion[]).map((entry) => {
+    if (!entry || typeof entry !== 'object') {
+      throw new ProfileEvidenceValidationError('Profile comparison returned a malformed suggestion.');
+    }
+
+    const requirementId =
+      typeof entry.requirementId === 'string' ? entry.requirementId.trim() : '';
+    const requirement = requirementsById.get(requirementId);
+    if (!requirement) {
+      throw new ProfileEvidenceValidationError(`Unknown requirement id: ${requirementId || '(missing)'}.`);
+    }
+    if (!SUGGESTIBLE_STATUSES.has(requirement.status)) {
+      throw new ProfileEvidenceValidationError(
+        `Requirement ${requirementId} is already met and cannot receive a profile suggestion.`
+      );
+    }
+
+    const evidenceRef = parseEvidenceRef(entry.evidenceRef);
+    const candidate = candidatesByKey.get(profileEvidenceRefKey(evidenceRef));
+    if (!candidate) {
+      throw new ProfileEvidenceValidationError(
+        `Profile evidence ${profileEvidenceRefKey(evidenceRef)} no longer exists in this profile.`
+      );
+    }
+
+    const pairKey = requirementEvidencePairKey(requirementId, evidenceRef);
+    if (seen.has(pairKey)) {
+      throw new ProfileEvidenceValidationError(
+        `Duplicate requirement and evidence pair: ${pairKey}.`
+      );
+    }
+    seen.add(pairKey);
+
+    const confidence = Number(entry.confidence);
+    if (!Number.isFinite(confidence) || confidence < 0 || confidence > 1) {
+      throw new ProfileEvidenceValidationError(`Suggestion ${pairKey} has invalid confidence.`);
+    }
+
+    return {
+      requirementId,
+      evidenceRef,
+      evidenceText: candidate.evidenceText,
+      evidenceLocation: candidate.evidenceLocation,
+      rationale: typeof entry.rationale === 'string' ? entry.rationale.trim() : '',
+      confidence,
+    };
+  });
+}
+
+export interface ReconcileInput {
+  profile: ProfileData;
+  cvText: string;
+  jobDescription: string;
+  jobMatch: JobMatchDataV2;
+}
+
 export async function reconcileProfileWithCv(
   input: ReconcileInput
 ): Promise<ProfileReconciliation> {
   const candidates = buildProfileCandidates(input.profile);
+  const requirements = input.jobMatch.requirements.filter((requirement) =>
+    SUGGESTIBLE_STATUSES.has(requirement.status)
+  );
+  const requirementViews = requirements.map(requirementView);
 
-  // Nothing in the profile to offer — skip the AI call entirely, and say so, so
-  // the caller doesn't bill a monthly allowance for a call that never happened.
-  if (candidates.length === 0) return { swaps: [], checked: true, usedAI: false };
+  if (candidates.length === 0 || requirements.length === 0) {
+    return { suggestions: [], requirements: requirementViews, checked: true, usedAI: false };
+  }
 
   const inventory = candidates
-    .map((c) => `[${c.id}] (${c.kind}) ${c.label}${c.detail ? ` — ${c.detail}` : ''}`)
+    .map(
+      (candidate) =>
+        `${JSON.stringify(candidate.evidenceRef)} | ${candidate.evidenceLocation} | ${candidate.evidenceText}`
+    )
+    .join('\n');
+  const requirementInventory = requirements
+    .map(
+      (requirement) =>
+        `[${requirement.id}] ${requirement.importance} | ${requirement.status} | ${requirement.text}`
+    )
     .join('\n');
 
-  const prompt = `You are a UK recruiter preparing a candidate's CV for a specific role. Work only with the evidence supplied — do not assume the role is technical.
+  const prompt = `You are a UK recruiter linking a candidate's stored profile evidence to exact job requirements.
 
-The candidate has TWO sources of truth:
-1. The CV they actually submitted (a snapshot, possibly out of date or aimed at a different role).
-2. Their full Align profile (the complete record of everything they have done).
+Only suggest a relationship when the stored evidence genuinely supports a requirement. An empty list is correct when nothing qualifies.
 
-Your job is to find items in the PROFILE that would serve this Job Description
-BETTER than what the CV currently presents, so the candidate can swap them in.
+Rules:
+- Use only exact requirement ids and exact evidence reference objects from the inventories.
+- Suggest evidence only for the listed partial or unmet requirements.
+- Never invent evidence, credentials, wording, ids, or requirements.
+- Treat each skill as individual evidence; never use a whole skill category.
+- Do not assume every certification is relevant. Link one only when it supports that specific credential or qualification.
+- Confidence is supporting information from 0 to 1. It never implies user approval.
+- Return no more than 8 suggestions.
 
-Look for:
-- A profile project or piece of work that matches the JD's domain, duties, or tools more closely than what the CV presents.
-- A profile skill that is named in the JD but absent or buried in the CV.
-- A profile role, degree, certification, or licence that evidences a JD requirement the CV does not.
+REQUIREMENTS
+${requirementInventory}
 
-Rules you MUST follow:
-- ONLY reference profile items by the exact bracketed id from the inventory below.
-- NEVER invent an item, a skill, or a qualification. If the profile does not contain
-  something the JD wants, say nothing about it — a missing skill is not a swap.
-- Only propose a swap when the profile item is GENUINELY a better fit. Returning an
-  empty list is the correct answer when the CV already presents the best evidence.
-- Set "cvItem" to the exact text from the CV that the profile item should replace or
-  demote. If nothing in the CV is being replaced and this is a pure addition, use null.
-- "confidence" is "high" only when the JD names the requirement explicitly and the
-  profile item clearly evidences it. Otherwise "medium".
-- Propose at most 6 swaps, strongest first.
-
-═══ PROFILE INVENTORY (the only items you may reference) ═══
+STORED PROFILE EVIDENCE
 ${inventory}
 
-═══ JOB DESCRIPTION ═══
-"""
+JOB DESCRIPTION
 ${input.jobDescription}
-"""
 
-═══ THE CV AS SUBMITTED ═══
-"""
+CV SNAPSHOT
 ${input.cvText}
-"""
 
-═══ REQUIREMENTS THE MATCH FLAGGED AS MISSING ═══
-${input.mandatoryMissing.length ? input.mandatoryMissing.join(', ') : 'None recorded'}
-
-═══ REQUIREMENTS THE MATCH FLAGGED AS PARTIAL ═══
-${input.mandatoryPartial.length ? input.mandatoryPartial.join(', ') : 'None recorded'}
-
-Return ONLY valid JSON. No markdown, no preamble.
-
-Schema:
+Return only JSON in this shape:
 {
-  "swaps": [
+  "suggestions": [
     {
-      "id": "string — exact id from the inventory, e.g. project:2",
-      "cvItem": "string — exact CV text this replaces, or null for a pure addition",
-      "jdRequirement": "string — the JD requirement this satisfies",
-      "rationale": "string — one or two sentences on why the profile item is the stronger evidence",
-      "confidence": "high | medium"
+      "requirementId": "exact requirement id",
+      "evidenceRef": { "type": "experience | project | education | skill | certification", "id": "exact database id" },
+      "evidenceText": "optional wording; the server will discard it",
+      "evidenceLocation": "optional wording; the server will discard it",
+      "rationale": "why this stored evidence supports this exact requirement",
+      "confidence": 0.0
     }
   ]
 }`;
 
-  const raw = await generateJSONFromAI<{ swaps?: RawProfileSwap[] }>({
+  const raw = await generateJSONFromAI<{ suggestions?: RawProfileEvidenceSuggestion[] }>({
     prompt,
     temperature: 0.15,
     thinkingBudget: THINKING_BUDGETS.profileReconcile,
   });
-  // A provider failure still counts as `usedAI: false` — the user should not pay
-  // an allowance for a comparison they never received.
-  if (!raw) return { swaps: [], checked: false, usedAI: false };
 
-  return { swaps: validateSwaps(raw.swaps, candidates), checked: true, usedAI: true };
-}
-
-/**
- * Keep only swaps that point at a real profile item, and rebuild the item's text
- * from the profile rather than from the model's output.
- *
- * This is the safety boundary of the whole feature: the model chooses WHICH item
- * is relevant, but never gets to say WHAT the item is. A hallucinated id, or a
- * real id with invented wording, cannot reach the CV.
- */
-export function validateSwaps(
-  raw: unknown,
-  candidates: ProfileCandidate[]
-): ProfileSwap[] {
-  if (!Array.isArray(raw)) return [];
-
-  const byId = new Map(candidates.map((c) => [c.id, c]));
-  const seen = new Set<string>();
-  const swaps: ProfileSwap[] = [];
-
-  for (const entry of raw as RawProfileSwap[]) {
-    if (!entry || typeof entry !== 'object') continue;
-
-    // The inventory is rendered as "[project:2] …", and the model sometimes
-    // echoes an id back with the brackets still attached. Normalising here means
-    // a formatting quirk doesn't silently discard every otherwise-valid swap.
-    const id = typeof entry.id === 'string' ? entry.id.trim().replace(/^\[|\]$/g, '').trim() : '';
-    const candidate = byId.get(id);
-    if (!candidate) {
-      if (id) {
-        console.warn(`[profile-reconciler] Dropped swap for unknown profile item "${id}".`);
-      }
-      continue;
-    }
-
-    // One suggestion per profile item; a repeat is model noise.
-    if (seen.has(id)) continue;
-    seen.add(id);
-
-    const cvItem =
-      typeof entry.cvItem === 'string' && entry.cvItem.trim().length > 0
-        ? entry.cvItem.trim()
-        : null;
-
-    swaps.push({
-      id: candidate.id,
-      kind: candidate.kind,
-      // Straight from the profile — the model's own label is discarded.
-      profileItem: candidate.label,
-      profileDetail: candidate.detail,
-      cvItem,
-      jdRequirement: typeof entry.jdRequirement === 'string' ? entry.jdRequirement.trim() : '',
-      rationale: typeof entry.rationale === 'string' ? entry.rationale.trim() : '',
-      confidence: entry.confidence === 'high' ? 'high' : 'medium',
-    });
-
-    if (swaps.length >= 6) break;
+  if (!raw) {
+    return { suggestions: [], requirements: requirementViews, checked: false, usedAI: false };
   }
 
-  return swaps;
+  return {
+    suggestions: validateProfileEvidenceSuggestions(raw.suggestions, candidates, input.jobMatch.requirements),
+    requirements: requirementViews,
+    checked: true,
+    usedAI: true,
+  };
 }
 
 /**
- * Re-resolve approved swap ids against the profile, for the rewrite prompt.
- *
- * The client sends back only ids. Rebuilding the content here means a tampered
- * request can at worst re-order the user's own profile items — it can never
- * inject text claiming experience the profile does not contain.
+ * Re-resolve every approved pair against the current profile and immutable
+ * ledger snapshot. Any stale, cross-profile, duplicate, or mistyped reference
+ * rejects the generation request rather than being silently dropped.
  */
-export function resolveApprovedSwaps(
+export function resolveApprovedProfileEvidence(
   profile: ProfileData,
-  approvedIds: string[]
-): ProfileCandidate[] {
-  const byId = new Map(buildProfileCandidates(profile).map((c) => [c.id, c]));
-  return approvedIds
-    .map((id) => byId.get(id))
-    .filter((c): c is ProfileCandidate => Boolean(c));
+  approved: Array<ApprovedProfileEvidence & { rationale?: string }>,
+  requirements: JobRequirementLedgerEntry[]
+): ApprovedProfileEvidenceOverlay[] {
+  const candidatesByKey = new Map(
+    buildProfileCandidates(profile).map((candidate) => [
+      profileEvidenceRefKey(candidate.evidenceRef),
+      candidate,
+    ])
+  );
+  const requirementsById = new Map(requirements.map((requirement) => [requirement.id, requirement]));
+  const seen = new Set<string>();
+
+  return approved.map((approval) => {
+    const requirement = requirementsById.get(approval.requirementId);
+    if (!requirement) {
+      throw new ProfileEvidenceValidationError(
+        `Unknown requirement id: ${approval.requirementId}.`
+      );
+    }
+    if (!SUGGESTIBLE_STATUSES.has(requirement.status)) {
+      throw new ProfileEvidenceValidationError(
+        `Requirement ${approval.requirementId} is already met and cannot receive approved profile evidence.`
+      );
+    }
+
+    const pairKey = requirementEvidencePairKey(approval.requirementId, approval.evidenceRef);
+    if (seen.has(pairKey)) {
+      throw new ProfileEvidenceValidationError(
+        `Duplicate requirement and evidence pair: ${pairKey}.`
+      );
+    }
+    seen.add(pairKey);
+
+    const candidate = candidatesByKey.get(profileEvidenceRefKey(approval.evidenceRef));
+    if (!candidate) {
+      throw new ProfileEvidenceValidationError(
+        `Profile evidence ${profileEvidenceRefKey(approval.evidenceRef)} no longer exists in this profile.`
+      );
+    }
+
+    const rationale = approval.rationale?.trim();
+    return {
+      requirementId: approval.requirementId,
+      evidenceRef: candidate.evidenceRef,
+      requirementText: requirement.text,
+      sourceProfileId: profile.profileId,
+      resolvedEvidenceText: candidate.evidenceText,
+      evidenceLocation: candidate.evidenceLocation,
+      userApproved: true,
+      ...(rationale ? { rationale } : {}),
+    };
+  });
 }

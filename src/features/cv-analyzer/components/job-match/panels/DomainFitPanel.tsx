@@ -1,14 +1,24 @@
 import { motion, type Variants } from 'framer-motion';
 import { Briefcase, ShieldAlert, AlertCircle } from 'lucide-react';
 import { cn } from '@/shared/utils/cn';
-import type { AIJobMatchOutput as JobMatchData } from '@/shared/types/ai';
+import type { JobMatchDataV2 } from '@/shared/types/ai';
+import { getDomainFitDisplay, getEligibilityRequirements } from '@/shared/utils/job-match-view';
 
 interface DomainFitPanelProps {
-  data: JobMatchData;
+  data: JobMatchDataV2;
   contentVariants: Variants;
 }
 
 export default function DomainFitPanel({ data, contentVariants }: DomainFitPanelProps) {
+  const domain = getDomainFitDisplay(data);
+  const eligibility = getEligibilityRequirements(data);
+  const domainTone =
+    domain.status === 'mismatch'
+      ? 'bg-rose-50 border-rose-100'
+      : domain.status === 'partial'
+        ? 'bg-amber-50 border-amber-100'
+        : 'bg-emerald-50 border-emerald-100';
+
   return (
     <motion.div variants={contentVariants} initial="hidden" animate="visible" exit="exit" className="bg-bg-panel rounded-[32px] border border-slate-200/60 shadow-sm p-6 sm:p-8 space-y-8">
       {/* Domain Fit Section */}
@@ -23,11 +33,13 @@ export default function DomainFitPanel({ data, contentVariants }: DomainFitPanel
           </div>
         </div>
 
-        <div className={cn("p-6 rounded-2xl border", data.domainFit.mismatch ? "bg-rose-50 border-rose-100" : "bg-emerald-50 border-emerald-100")}>
+        <div className={cn("p-6 rounded-2xl border", domainTone)}>
           <div className="flex justify-between items-center mb-4">
             <h4 className="text-sm font-bold text-slate-800">Domain Match Status</h4>
-            {data.domainFit.mismatch ? (
+            {domain.status === 'mismatch' ? (
               <span className="text-[11px] font-black text-rose-600 bg-rose-200/50 px-3 py-1 rounded-full uppercase">Mismatch</span>
+            ) : domain.status === 'partial' ? (
+              <span className="text-[11px] font-black text-amber-700 bg-amber-200/50 px-3 py-1 rounded-full uppercase">Partial overlap</span>
             ) : (
               <span className="text-[11px] font-black text-emerald-600 bg-emerald-200/50 px-3 py-1 rounded-full uppercase">Aligned</span>
             )}
@@ -36,19 +48,19 @@ export default function DomainFitPanel({ data, contentVariants }: DomainFitPanel
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-5">
             <div className="bg-white/60 p-4 rounded-xl border border-white">
               <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider block mb-1">Role Domain</span>
-              <p className="text-sm text-slate-700 font-semibold">{data.domainFit.roleDomain}</p>
+              <p className="text-sm text-slate-700 font-semibold">{domain.roleDomain}</p>
             </div>
             <div className="bg-white/60 p-4 rounded-xl border border-white">
               <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider block mb-1">Candidate Domain</span>
-              <p className="text-sm text-slate-700 font-semibold">{data.domainFit.candidateDomain}</p>
+              <p className="text-sm text-slate-700 font-semibold">{domain.candidateDomain}</p>
             </div>
           </div>
 
-          {data.domainFit.overlapAreas && data.domainFit.overlapAreas.length > 0 && (
+          {domain.overlapAreas.length > 0 && (
             <div className="mb-5 bg-white/60 p-4 rounded-xl border border-white">
               <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider block mb-2">Transferable Overlap</span>
               <ul className="list-disc pl-5 text-sm text-slate-700 font-medium space-y-1">
-                {data.domainFit.overlapAreas.map((area, idx) => (
+                {domain.overlapAreas.map((area, idx) => (
                   <li key={idx}>{area}</li>
                 ))}
               </ul>
@@ -56,38 +68,44 @@ export default function DomainFitPanel({ data, contentVariants }: DomainFitPanel
           )}
           
           <p className="text-sm text-slate-600 italic font-medium bg-white/40 p-4 rounded-xl border border-white/60">
-            &quot;{data.domainFit.detail}&quot;
+            &quot;{domain.detail}&quot;
           </p>
         </div>
       </div>
 
-      {/* Eligibility Flags */}
-      {data.eligibilityFlags.length > 0 && (
+      {/* Eligibility requirements */}
+      {eligibility.length > 0 && (
         <div className="pt-8 border-t border-slate-100">
           <div className="flex items-center gap-4 mb-6">
             <div className="w-12 h-12 rounded-2xl bg-amber-50 flex items-center justify-center text-amber-600">
               <ShieldAlert size={24} />
             </div>
             <div>
-              <h2 className="text-xl font-black text-slate-800 tracking-tight">Eligibility Flags</h2>
+              <h2 className="text-xl font-black text-slate-800 tracking-tight">Eligibility Requirements</h2>
               <p className="text-sm text-slate-500 font-medium mt-0.5">Visas, Right-to-Work, and Contract Dates</p>
             </div>
           </div>
 
           <div className="space-y-3">
-            {data.eligibilityFlags.map((flagObj, idx) => (
-              <div key={idx} className="bg-amber-50 border border-amber-100 rounded-2xl p-5 flex items-start gap-3">
+            {eligibility.map((requirement) => (
+              <div key={requirement.id} className="bg-amber-50 border border-amber-100 rounded-2xl p-5 flex items-start gap-3">
                 <AlertCircle className="text-amber-500 flex-shrink-0 mt-0.5" size={18} />
-                <div>
-                  <h4 className="text-sm font-bold text-amber-900 mb-1">{flagObj.flag}</h4>
-                  <p className="text-sm text-amber-800/80 mb-2">{flagObj.detail}</p>
-                  {flagObj.datesInvolved && (
-                    <div className="inline-block px-2.5 py-1 bg-amber-100/50 rounded-md">
-                      <span className="text-[10px] text-amber-700 font-black uppercase tracking-wider">
-                        Dates: {flagObj.datesInvolved}
-                      </span>
-                    </div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-start justify-between gap-2">
+                    <h4 className="text-sm font-bold text-amber-900">{requirement.text}</h4>
+                    <span className="text-[10px] font-black uppercase tracking-wider text-amber-700">
+                      {requirement.status.replace('_', ' ')}
+                    </span>
+                  </div>
+                  {requirement.deduction.reason && (
+                    <p className="mt-1 text-sm text-amber-800/80">{requirement.deduction.reason}</p>
                   )}
+                  {requirement.evidence.map((evidence, index) => (
+                    <p key={`${requirement.id}-evidence-${index}`} className="mt-2 text-xs text-amber-800">
+                      <span className="font-bold uppercase">{evidence.source}</span>
+                      {evidence.location ? ` · ${evidence.location}` : ''}: {evidence.text}
+                    </p>
+                  ))}
                 </div>
               </div>
             ))}

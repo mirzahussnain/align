@@ -2,8 +2,8 @@ import type { OccupationProfile } from '../types';
 
 export const softwareEngineerProfile: OccupationProfile = {
   id: 'software_engineer',
-  version: '1.0.0',
-  label: 'Software Engineer',
+  version: '1.1.0',
+  label: 'Software Engineering',
   sector: 'tech',
   roleArchetype: 'technical_specialist',
   applicationWorkflow: 'cv_led',

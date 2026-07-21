@@ -202,17 +202,22 @@ export default function OverviewView({
   const heroFacts =
     heroKind === 'job_match'
       ? [
-          heroInsight?.occupationLabel ? { label: 'Occupation', value: heroInsight.occupationLabel } : null,
-          heroInsight?.mandatoryTotal
-            ? { label: 'Mandatory requirements', value: `${heroInsight.mandatoryMatched} of ${heroInsight.mandatoryTotal}` }
+          heroInsight?.occupationLabel ? { label: 'Evaluation type', value: heroInsight.occupationLabel } : null,
+          heroInsight?.essentialTotal
+            ? { label: 'Essential requirements', value: `${heroInsight.essentialMatched} of ${heroInsight.essentialTotal}` }
             : null,
           heroInsight?.primaryGap ? { label: 'Primary gap', value: heroInsight.primaryGap } : null,
-          heroInsight?.domainMismatch ? { label: 'Domain fit', value: 'Mismatch flagged' } : null,
+          heroInsight?.domainStatus && heroInsight.domainStatus !== 'aligned'
+            ? {
+                label: 'Domain fit',
+                value: heroInsight.domainStatus === 'partial' ? 'Partial overlap' : 'Mismatch flagged',
+              }
+            : null,
         ]
           .filter((f): f is { label: string; value: string } => f !== null)
           .slice(0, 3)
       : [
-          heroInsight?.occupationLabel ? { label: 'Occupation', value: heroInsight.occupationLabel } : null,
+          heroInsight?.occupationLabel ? { label: 'Evaluation type', value: heroInsight.occupationLabel } : null,
           heroInsight?.weakestCategoryLabel ? { label: 'Top weak area', value: heroInsight.weakestCategoryLabel } : null,
           heroInsight?.credentialsStatus
             ? { label: 'Credentials', value: heroInsight.credentialsStatus === 'ready' ? 'Ready' : 'Needs attention' }

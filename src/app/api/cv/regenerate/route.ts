@@ -5,8 +5,12 @@ import { applyRateLimit, rewriteLimiter } from '@/shared/lib/rate-limit';
 import { auth } from '@/shared/lib/auth';
 import { prisma } from '@/shared/lib/prisma';
 import { rewriteCV } from '@/shared/services/cv-rewriter';
-import { resolveApprovedSwaps } from '@/shared/services/profile-reconciler';
-import { loadProfileData, resolveProfileId } from '@/features/dashboard/data/load-profile';
+import { resolveApprovedProfileEvidence } from '@/shared/services/profile-reconciler';
+import { loadOwnedProfileData, resolveProfileId } from '@/features/dashboard/data/load-profile';
+import {
+  ProfileEvidenceValidationError,
+  type ApprovedProfileEvidenceOverlay,
+} from '@/shared/types/profile-reasoning';
 import { checkQuota, recordUsage } from '@/shared/services/usage-meter';
 import { entitlementsFor } from '@/shared/lib/entitlements';
 import {
@@ -15,13 +19,21 @@ import {
   DOCX_CONTENT_TYPE,
 } from '@/shared/services/cv-generation';
 import { parseStoredAnalysisResult } from '@/shared/schemas/analysis-result';
+import { TemplateIdSchema } from '@/shared/constants/templates';
+import { parseStoredJobMatchData } from '@/shared/schemas/ai-output';
+import { toLegacyCvRewriteInput } from '@/shared/services/job-match-rewrite-adapter';
+
+const ProfileEvidenceRefSchema = z.discriminatedUnion('type', [
+  z.object({ type: z.literal('experience'), id: z.string().min(1) }),
+  z.object({ type: z.literal('project'), id: z.string().min(1) }),
+  z.object({ type: z.literal('education'), id: z.string().min(1) }),
+  z.object({ type: z.literal('skill'), id: z.string().min(1) }),
+  z.object({ type: z.literal('certification'), id: z.string().min(1) }),
+]);
 
 const RegenerateSchema = z.object({
   analysisId: z.string().min(1, 'analysisId is required'),
-  templateId: z
-    .enum(['architect', 'editorial_refined', 'technical_precision', 'academic_latex'])
-    .optional()
-    .default('architect'),
+  templateId: TemplateIdSchema,
   hitlContext: z.record(z.string(), z.string()).optional().default({}),
   includeAtsOptimization: z.boolean().optional().default(true),
   /**
@@ -29,7 +41,16 @@ const RegenerateSchema = z.object({
    * the wire — the server re-resolves them against the stored profile, so a
    * tampered request cannot inject invented experience into the rewrite.
    */
-  approvedProfileItemIds: z.array(z.string()).optional().default([]),
+  approvedProfileEvidence: z
+    .array(
+      z.object({
+        requirementId: z.string().min(1),
+        evidenceRef: ProfileEvidenceRefSchema,
+        rationale: z.string().max(2000).optional(),
+      })
+    )
+    .optional()
+    .default([]),
   /** Career track the approved ids belong to. Omitted uses the default. */
   profileId: z.string().optional(),
 });
@@ -76,7 +97,7 @@ export async function POST(request: Request) {
       templateId,
       hitlContext,
       includeAtsOptimization,
-      approvedProfileItemIds,
+      approvedProfileEvidence,
       profileId,
     } = parsed.data;
 
@@ -95,7 +116,7 @@ export async function POST(request: Request) {
       throw new APIError('Analysis not found.', 404);
     }
 
-    if (analysis.mode !== 'job_match' || !analysis.jobMatchData) {
+    if (analysis.mode !== 'job_match') {
       throw new APIError('Only job-match analyses can be rebuilt into a CV.', 400);
     }
 
@@ -113,7 +134,15 @@ export async function POST(request: Request) {
       throw new APIError('This analysis is missing the data needed to rebuild a CV.', 400);
     }
 
-    const jobMatchFeedbackStr = JSON.stringify(analysis.jobMatchData);
+    // The current rewriter remains on its legacy input contract during Phase 1.
+    // Adapt at this boundary without persisting parallel arrays in jobMatchData.
+    const storedJobMatch = parseStoredJobMatchData(analysis.jobMatchData);
+    if (!storedJobMatch) {
+      throw new APIError(
+        'Stored job-match data failed integrity validation: schemaVersion 2 is required.',
+        409
+      );
+    }
     const atsOptimizationData = includeAtsOptimization
       ? JSON.stringify({
           categories: rawResult.categories,
@@ -131,15 +160,33 @@ export async function POST(request: Request) {
     // filed under the active profile whether or not any profile items were
     // swapped in, otherwise a track's CV list would only ever show the CVs that
     // happened to use the reasoning step.
-    const scopedProfileId = await resolveProfileId(session.user.id, profileId);
+    let scopedProfileId = await resolveProfileId(session.user.id, profileId);
 
-    // Re-resolve approved swaps from the stored profile. An id that no longer
-    // matches anything (profile edited since the suggestions were shown) is
-    // silently dropped rather than failing the generation.
-    const approvedProfileItems =
-      approvedProfileItemIds.length > 0
-        ? resolveApprovedSwaps(await loadProfileData(session.user.id, profileId), approvedProfileItemIds)
-        : [];
+    let approvedEvidenceOverlay: ApprovedProfileEvidenceOverlay[] = [];
+    if (approvedProfileEvidence.length > 0) {
+      const profile = await loadOwnedProfileData(session.user.id, profileId);
+      if (!profile) {
+        throw new APIError('Profile not found.', 404);
+      }
+      scopedProfileId = profile.profileId;
+
+      try {
+        approvedEvidenceOverlay = resolveApprovedProfileEvidence(
+          profile,
+          approvedProfileEvidence,
+          storedJobMatch.requirements
+        );
+      } catch (error) {
+        if (error instanceof ProfileEvidenceValidationError) {
+          throw new APIError(error.message, 400);
+        }
+        throw error;
+      }
+    }
+
+    const jobMatchFeedbackStr = JSON.stringify(
+      toLegacyCvRewriteInput(storedJobMatch, approvedEvidenceOverlay)
+    );
 
     const rewrittenData = await rewriteCV(
       cvText,
@@ -147,8 +194,7 @@ export async function POST(request: Request) {
       jobMatchFeedbackStr,
       templateId,
       hitlContext,
-      atsOptimizationData,
-      approvedProfileItems
+      atsOptimizationData
     );
 
     if (!rewrittenData) {
@@ -170,6 +216,10 @@ export async function POST(request: Request) {
         docxBuffer,
         analysisId,
         profileId: scopedProfileId,
+        provenance:
+          approvedEvidenceOverlay.length > 0
+            ? { approvedProfileEvidence: approvedEvidenceOverlay }
+            : undefined,
         entitlements,
       });
     } catch (persistError) {

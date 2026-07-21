@@ -1,5 +1,5 @@
 // CV Analysis Types
-import type { AIJobMatchOutput } from './ai';
+import type { JobMatchDataV2 } from './ai';
 import type { Sector } from '@/shared/constants/sector-keywords';
 import type { Classification } from './classification';
 
@@ -13,6 +13,16 @@ export interface CVAnalysisResult {
   recommendations: Recommendation[];
   rawText: string;
   pageCount: number;
+
+  /** Original uploaded filename, so the File Name check runs on the real name. */
+  fileName?: string;
+  /**
+   * True when the AI semantic layer actually ran and its output was applied
+   * (summary/impact feedback, rewrites, clichés, risk flags). Lets the report
+   * label which cards are AI-derived vs purely rule-based. Absent/false means
+   * the whole report is deterministic.
+   */
+  aiApplied?: boolean;
 
   /** How this CV was classified before scoring (scoring v2+). */
   classification?: Classification;
@@ -41,8 +51,17 @@ export interface CVAnalysisResult {
   
   // Job Matcher specific fields
   mode?: 'ats' | 'job_match';
-  jobMatchData?: AIJobMatchOutput;
+  jobMatchData?: JobMatchDataV2;
   jobDescription?: string;
+
+  /**
+   * Id of the persisted `Analysis` row this result was saved as. Attached to the
+   * API response after the row is created — never stored inside the row's own
+   * `rawResult` blob. Lets the results screen rebuild a tailored CV from the
+   * stored analysis (via /api/cv/regenerate) without re-uploading anything.
+   * Absent only when persistence failed (best-effort) or on pre-existing blobs.
+   */
+  analysisId?: string;
 }
 
 export interface CategoryScore {

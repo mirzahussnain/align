@@ -66,14 +66,18 @@ export async function classifyCV(
 
   // Tier 2 — user-declared target on the profile.
   const fromProfile = classifyFromProfileTarget(input);
-  if (fromProfile) return fromProfile;
+  if (fromProfile.classification) return fromProfile.classification;
+  // A regulated target the CV did not corroborate is declined here; carry the
+  // reason into whatever tier below actually decides, so the final result still
+  // explains that the user's choice was seen and rejected.
+  const declined: ReasonCode[] = fromProfile.declined ? [fromProfile.declined] : [];
 
   // Tier 3 — deterministic evidence in the CV itself.
   const evidence = scoreOccupationEvidence(input.cvText);
   if (evidence.confidence >= AMBIGUITY_THRESHOLD) {
     return build(evidence.occupation, 'dictionary_evidence', evidence.confidence, {
       cvText: input.cvText,
-      reasonCodes: evidence.reasonCodes,
+      reasonCodes: [...declined, ...evidence.reasonCodes],
       alternatives: evidence.alternatives,
     });
   }
@@ -82,20 +86,26 @@ export async function classifyCV(
   if (input.aiAllowed) {
     const ai = await aiClassifier(excerptForClassification(input.cvText), input.profileTarget?.roleTitle ?? undefined);
     if (ai && isKnownOccupation(ai.occupation) && ai.occupation !== 'generic') {
-      return build(ai.occupation, 'ai', Math.min(ai.confidence, 0.9), {
-        cvText: input.cvText,
-        reasonCodes: [...evidence.reasonCodes, 'AI_CLASSIFIED'],
-        alternatives: evidence.alternatives,
-        sectorOverride: isKnownIndustry(ai.sector) ? ai.sector : undefined,
-        seniorityOverride: ai.seniority !== 'unknown' ? ai.seniority : undefined,
-      });
+      const aiProfile = getOccupationProfile(ai.occupation);
+      // Same corroboration principle as the profile-target tier: the AI may
+      // suggest a regulated occupation, but it is only activated when the CV
+      // corroborates it. Otherwise ignore the suggestion and fall through.
+      if (!aiProfile.regulated || hasRegulatedCorroboration(input.cvText, aiProfile)) {
+        return build(ai.occupation, 'ai', Math.min(ai.confidence, 0.9), {
+          cvText: input.cvText,
+          reasonCodes: [...declined, ...evidence.reasonCodes, 'AI_CLASSIFIED'],
+          alternatives: evidence.alternatives,
+          sectorOverride: isKnownIndustry(ai.sector) ? ai.sector : undefined,
+          seniorityOverride: ai.seniority !== 'unknown' ? ai.seniority : undefined,
+        });
+      }
     }
   }
 
   // Tier 5 — generic fallback; keep whatever weak evidence we saw for debugging.
   return build('generic', 'fallback', 0.3, {
     cvText: input.cvText,
-    reasonCodes: evidence.reasonCodes.length ? [...evidence.reasonCodes, 'FALLBACK'] : ['FALLBACK'],
+    reasonCodes: [...declined, ...evidence.reasonCodes, 'FALLBACK'],
     alternatives: evidence.alternatives,
     sectorOverride: evidence.sectorFromDictionaries,
   });
@@ -125,9 +135,20 @@ function classifyFromJobDescription(jobDescription: string, cvText: string): Cla
 // Tier 2: profile target
 // ---------------------------------------------------------------------------
 
-function classifyFromProfileTarget(input: ClassifyInput): Classification | null {
+/**
+ * Outcome of the profile-target tier. `classification` is set when the target
+ * was accepted; `declined` carries a provenance code when a regulated target
+ * was rejected for lack of corroboration, so the tiers below can record why the
+ * user's choice was ignored rather than dropping it silently.
+ */
+interface ProfileTargetOutcome {
+  classification: Classification | null;
+  declined?: ReasonCode;
+}
+
+function classifyFromProfileTarget(input: ClassifyInput): ProfileTargetOutcome {
   const target = input.profileTarget;
-  if (!target) return null;
+  if (!target) return { classification: null };
 
   // The user's declared industry is a stronger signal than the occupation
   // profile's hardcoded default sector — an administrator who declared
@@ -135,30 +156,44 @@ function classifyFromProfileTarget(input: ClassifyInput): Classification | null 
   // sector the generic administrator profile happens to default to.
   const sectorOverride = isKnownIndustry(target.industry) ? target.industry : undefined;
 
-  if (isKnownOccupation(target.occupation) && target.occupation !== 'generic') {
-    return build(target.occupation, 'profile_target', 0.9, {
-      cvText: input.cvText,
-      reasonCodes: ['PROFILE_TARGET_SET'],
-      seniorityOverride: parseSeniority(target.seniority),
-      sectorOverride,
-    });
-  }
+  // Resolve which occupation the target names — either the structured value or
+  // a free-text role title that matches a profile's own title patterns.
+  let candidate: OccupationId | null = null;
+  const reasonCodes: ReasonCode[] = ['PROFILE_TARGET_SET'];
 
-  // A free-text role title can still resolve deterministically.
-  if (target.roleTitle) {
+  if (isKnownOccupation(target.occupation) && target.occupation !== 'generic') {
+    candidate = target.occupation;
+  } else if (target.roleTitle) {
     for (const profile of nonGenericProfiles()) {
       if (profile.detection.titlePatterns.some(p => p.test(target.roleTitle!))) {
-        return build(profile.id, 'profile_target', 0.9, {
-          cvText: input.cvText,
-          reasonCodes: ['PROFILE_TARGET_SET', 'JOB_TITLE_EXACT_MATCH'],
-          seniorityOverride: parseSeniority(target.seniority),
-          sectorOverride,
-        });
+        candidate = profile.id;
+        reasonCodes.push('JOB_TITLE_EXACT_MATCH');
+        break;
       }
     }
   }
 
-  return null;
+  if (!candidate) return { classification: null };
+
+  // Regulated activation guard. A user may declare any target, but a regulated
+  // occupation (nurse today, any future regulated profile) is only activated
+  // when the CV itself corroborates it. Otherwise the declaration alone would
+  // hand an unregistered candidate a mandatory-registration expectation they
+  // cannot meet, floor their credential score, and demand the registration in
+  // the AI prompt. Decline and fall through to the evidence tiers instead.
+  const profile = getOccupationProfile(candidate);
+  if (profile.regulated && !hasRegulatedCorroboration(input.cvText, profile)) {
+    return { classification: null, declined: 'REGULATED_TARGET_UNCORROBORATED' };
+  }
+
+  return {
+    classification: build(candidate, 'profile_target', 0.9, {
+      cvText: input.cvText,
+      reasonCodes,
+      seniorityOverride: parseSeniority(target.seniority),
+      sectorOverride,
+    }),
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -174,18 +209,42 @@ interface EvidenceResult {
   sectorFromDictionaries?: Sector;
 }
 
-export function scoreOccupationEvidence(cvText: string): EvidenceResult {
-  type Scored = { profile: OccupationProfile; score: number; codes: Set<ReasonCode> };
-  const scored: Scored[] = [];
-
-  // Title evidence must come from title-like lines (headlines, role headers),
-  // never prose — an HCA's bullet "escalating concerns to the registered
-  // nurse" is not a nurse title.
-  const titleText = cvText
+/**
+ * Title-like lines only (headlines, role headers), never prose — an HCA's
+ * bullet "escalating concerns to the registered nurse" is not a nurse title,
+ * and it sits on a line far longer than any real title header.
+ */
+function titleLinesOf(cvText: string): string {
+  return cvText
     .split('\n')
     .map(l => l.trim())
     .filter(l => l.length >= 3 && l.length <= 80)
     .join('\n');
+}
+
+/**
+ * Whether the CV independently corroborates a REGULATED occupation the user
+ * declared as their target. Corroboration is deliberately narrow: only a
+ * matching regulated job title (in a title-like line) or evidence of the
+ * occupation's own MANDATORY professional credential counts. Task-pattern
+ * overlap, sector vocabulary, and general domain experience are excluded by
+ * construction — they are exactly what makes an HCA CV look nurse-adjacent
+ * without the person being a nurse. Reuses the profile's existing detection
+ * and credential patterns; no second regulator taxonomy is introduced.
+ */
+function hasRegulatedCorroboration(cvText: string, profile: OccupationProfile): boolean {
+  const titleMatch = profile.detection.titlePatterns.some(p => p.test(titleLinesOf(cvText)));
+  if (titleMatch) return true;
+
+  const mandatoryCredentials = profile.credentials.filter(c => c.class === 'mandatory');
+  return mandatoryCredentials.some(c => c.patterns.some(p => p.test(cvText)));
+}
+
+export function scoreOccupationEvidence(cvText: string): EvidenceResult {
+  type Scored = { profile: OccupationProfile; score: number; codes: Set<ReasonCode> };
+  const scored: Scored[] = [];
+
+  const titleText = titleLinesOf(cvText);
 
   for (const profile of nonGenericProfiles()) {
     const codes = new Set<ReasonCode>();

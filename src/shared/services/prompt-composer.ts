@@ -152,31 +152,36 @@ ${cvText}
 
 Complete these reasoning steps strictly before producing output:
 
-STEP 1 — JD INVENTORY
-Extract every named skill, tool, duty, methodology, certification, licence,
-and eligibility requirement from the JD into a complete inventory. Include
-every item regardless of how minor. Classify each as MANDATORY or DESIRABLE
-based on the JD language. Do not skip any item.
-The inventory must include: named skills and tools, qualifications and
-licences, soft skills explicitly named, role duties that imply specific
-experience, logistical requirements (location, hours, shifts), and
-eligibility requirements (right to work, visa, registrations, start date).
-If the JD states a duty, treat the implied experience as a requirement and
-check it against the CV.
+STEP 1 — COMPLETE JD INVENTORY
+Extract every requirement from the JD into ONE canonical requirements array.
+Each requirement must appear exactly once. Include every named skill, tool,
+experience requirement, duty, methodology, qualification, certification,
+licence, eligibility condition, availability condition, location constraint,
+shift or work-pattern requirement, and explicitly named soft skill.
 
-STEP 1b — SELECTION CRITERIA
-If the JD contains an explicit person specification or an essential/desirable
-criteria list (common in NHS, council, university, and civil-service adverts),
-extract each criterion into the selectionCriteria output field. Otherwise
-return an empty array for it.
+Classify each requirement internally as MANDATORY or DESIRABLE from the JD's
+own wording. If the JD states a duty, treat the implied experience as a
+requirement and check it against the CV.
+
+STEP 1b — SOURCE SECTION
+Set sourceSection to person_specification only when the item comes from an
+explicit person specification or Essential/Desirable criteria list (common in
+NHS, council, university, and civil-service adverts). Use job_description
+for every other requirement. Do not return a second criteria list.
 
 STEP 2 — REQUIREMENT MATCHING (item-level, not category-level)
-For each item in the inventory, check the CV individually.
+For every requirement in the inventory, check the CV individually.
 - Match only at the specific skill, duty, or credential level. A broad claim
   is NOT a match for a specific named requirement unless the specific thing
   is named or clearly evidenced in the CV.
-- State the exact JD term and the exact CV term side by side.
-- If they differ in specificity, classify as partial and explain the gap.
+- Put exact, verbatim supporting CV text in the evidence array. Never rewrite
+  evidence and never invent a source location.
+- Use status met, partial, not_met, contradicted, or unclear.
+- contradicted means the CV explicitly conflicts with the requirement;
+  absence alone is not_met or unclear.
+- If JD and CV differ in specificity, classify as partial and explain the gap
+  in deduction.reason.
+- Use an empty evidence array when no supporting evidence exists.
 - Do not skip any inventory item.
 
 STEP 3 — DEPTH ASSESSMENT (apply before classifying partials)
@@ -201,8 +206,9 @@ candidate's experience. Assess overlap at the duty and discipline level, not
 just the industry level. Reserve MISMATCH for cases where the core discipline
 differs, not where only the application setting differs.
 
-STEP 6 — SCORE CALCULATION
-Start at 100 and apply deductions using this rubric:
+STEP 6 — DEDUCTION LEDGER
+Assign one non-negative integer deduction to every requirement. Use zero with
+rubric met when no deduction applies. Apply this rubric:
 - Missing MANDATORY requirement (core to role function): -10 to -12 points
 - Missing MANDATORY requirement (supporting): -6 to -8 points
 - Confirmed domain mismatch (different discipline): -12 to -15 points
@@ -212,62 +218,55 @@ Start at 100 and apply deductions using this rubric:
 - Missing DESIRABLE requirement: -2 points
 
 Internal consistency rules — enforce before finalising:
-- If domainFit.mismatch is TRUE, the domain deduction must be 12-15 points
-- If domainFit.mismatch is FALSE (partial overlap), deduction must be 4-6 points
-- If an item is in mandatorySkills.missing, its deduction must be 6-12 points
-- If an item is in mandatorySkills.partial, its deduction must be 3-5 points
-- Labels and numbers must agree. If they conflict, revise before outputting.
-
-State every deduction applied and the exact reasoning before producing
-the final score. The final score must equal 100 minus the sum of all
-deductions.
+- An aligned domain has a zero-point domain deduction
+- A partial domain match has a 4-6 point domain deduction
+- A domain mismatch has a 12-15 point domain deduction
+- A met requirement has a zero-point deduction
+- Every deduction must explain the exact evidence or absence behind it
+- Do NOT calculate or return matchScore. The server owns the final arithmetic.
+- Do NOT generate requirement ids. The server assigns them after validation.
 
 Produce the following JSON:
 
 {
   "jobTitle": "string — the advertised role title, exactly as the JD names it (e.g. 'Senior Data Engineer'). Do NOT return a section heading such as 'About the job' or 'Job description'. If no role title is stated anywhere, return an empty string.",
   "jobCompany": "string — the hiring organisation's name. Empty string if the JD does not name one (many agency listings do not).",
-  "selectionCriteria": [
+  "schemaVersion": 2,
+  "requirements": [
     {
-      "id": "string — e.g. 'essential-1'",
-      "text": "string — the criterion as the spec states it",
-      "type": "essential | desirable | unknown",
-      "category": "qualification | experience | skill | knowledge | value | credential | availability | other",
-      "evidenceRequired": boolean
+      "text": "string — exact JD requirement, included once",
+      "importance": "mandatory | desirable",
+      "category": "qualification | experience | skill | tool | methodology | duty | knowledge | value | credential | eligibility | availability | other",
+      "sourceSection": "job_description | person_specification",
+      "evidenceRequired": boolean,
+      "status": "met | partial | not_met | contradicted | unclear",
+      "evidence": [
+        {
+          "source": "cv",
+          "text": "string — exact verbatim CV evidence",
+          "location": "string — CV section or role/project name, only when explicit"
+        }
+      ],
+      "confidence": "number from 0 to 1",
+      "deduction": {
+        "points": "non-negative integer",
+        "reason": "string — exact reason grounded in the JD and CV",
+        "rubric": "met | mandatory_core_missing | mandatory_supporting_missing | partial_match | desirable_missing | eligibility | other"
+      }
     }
   ],
-  "scoringBreakdown": [
-    {
-      "item": "string — exact JD requirement",
-      "classification": "missing | partial | eligibility | desirable | domain",
-      "deduction": number,
-      "reason": "string — cite specific CV evidence or lack thereof"
-    }
-  ],
-  "mandatorySkills": {
-    "present": ["string — format: JD term → CV evidence"],
-    "missing": ["string — JD term only"],
-    "partial": ["string — format: JD term → CV term: specific gap explanation"]
-  },
-  "desirableSkills": {
-    "present": ["string"],
-    "missing": ["string"]
-  },
   "domainFit": {
     "roleDomain": "string — specific discipline, not just industry",
     "candidateDomain": "string — specific discipline, not just industry",
-    "mismatch": boolean,
+    "status": "aligned | partial | mismatch",
     "overlapAreas": ["string — specific transferable duties or disciplines"],
-    "detail": "string — precise explanation of alignment or gap"
-  },
-  "eligibilityFlags": [
-    {
-      "flag": "string",
-      "detail": "string",
-      "datesInvolved": "string — exact dates and month gap if applicable"
+    "detail": "string — precise explanation of alignment or gap",
+    "confidence": "number from 0 to 1",
+    "deduction": {
+      "points": "non-negative integer",
+      "reason": "string"
     }
-  ],
-  "matchScore": number,
+  },
   "matchFeedback": "string — honest 2-3 sentences, cite the strongest evidence for and against, do not soften",
   "experienceGap": "string — specific, not generic",
   "tailoredRewrites": [

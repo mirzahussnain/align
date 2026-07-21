@@ -1,5 +1,5 @@
 import type { RewrittenCVData } from '../templates/types';
-import type { ProfileCandidate } from '@/shared/types/profile-reasoning';
+import type { ApprovedProfileEvidenceOverlay } from '@/shared/types/profile-reasoning';
 import { generateJSONFromAI } from './ai-orchestrator';
 import { THINKING_BUDGETS } from '@/shared/lib/config';
 
@@ -9,12 +9,7 @@ export async function rewriteCV(
   jobMatchFeedbackStr: string,
   templateId: string,
   hitlContext: Record<string, string> = {},
-  atsOptimizationData?: string | null,
-  /**
-   * Profile items the user approved bringing into this CV. Already re-resolved
-   * from the stored profile by the caller, so every entry is real.
-   */
-  approvedProfileItems: ProfileCandidate[] = []
+  atsOptimizationData?: string | null
 ): Promise<RewrittenCVData | null> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let feedbackData: Record<string, any> = {};
@@ -26,6 +21,11 @@ export async function rewriteCV(
 
   const cv_build_spec = feedbackData?.cv_build_spec ?? null;
   const mandatorySkills = feedbackData?.mandatorySkills ?? { missing: [], partial: [] };
+  const approvedProfileEvidence: ApprovedProfileEvidenceOverlay[] = Array.isArray(
+    feedbackData?.approvedProfileEvidence
+  )
+    ? feedbackData.approvedProfileEvidence
+    : [];
 
   const buildSpecSection = cv_build_spec ? `
 ═══ CV BUILD SPECIFICATION (follow these instructions exactly) ═══
@@ -100,14 +100,17 @@ ${hitlEntries}
   // Approved profile items. Their text comes from the user's own stored profile,
   // so unlike the free-text HITL context this is verified content — but the
   // model must still not embellish it into claims the profile does not make.
-  const profileBridgeSection = approvedProfileItems.length > 0 ? `
+  const profileBridgeSection = approvedProfileEvidence.length > 0 ? `
 ═══ APPROVED PROFILE ITEMS (CRITICAL — must appear in the CV) ═══
 The candidate reviewed their full profile against this job and approved bringing
 the following items into this CV. Each one is verified profile data, not a claim
 to be checked. You MUST include every one of them:
 
-${approvedProfileItems
-  .map((item, i) => `${i + 1}. [${item.kind}] ${item.label}\n   Detail: ${item.detail || '(none recorded)'}`)
+${approvedProfileEvidence
+  .map(
+    (item, i) =>
+      `${i + 1}. Requirement: ${item.requirementText}\n   Source: [${item.evidenceRef.type}] ${item.evidenceLocation}\n   Evidence: ${item.resolvedEvidenceText}`
+  )
   .join('\n')}
 
 Rules:

@@ -3,13 +3,18 @@
 import { CVAnalysisResult } from '@/shared/types/cv';
 import KeywordBadge from '@/features/cv-analyzer/components/ats/KeywordBadge';
 import { BarChart3, Globe } from 'lucide-react';
+import SourceBadge from '../SourceBadge';
 
 export default function KeywordsPanel({ result }: { result: CVAnalysisResult }) {
+  // Keywords start from a deterministic dictionary pass; the AI layer, when it
+  // runs, adds role-relevant terms it found — so the source is a genuine blend.
+  const source = result.aiApplied ? 'hybrid' : 'rule';
   return (
     <div className="space-y-6">
       <div className="mb-6">
         <h2 className="text-2xl font-bold text-slate-800 dark:text-slate-100">ATS Keyword Analysis</h2>
         <p className="text-slate-400 dark:text-slate-500 text-sm mt-1">Checklist of essential industry terms</p>
+        <SourceBadge source={source} className="mt-2" />
       </div>
 
       <div className="grid grid-cols-1 gap-6">

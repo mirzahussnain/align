@@ -17,9 +17,16 @@ describe('occupation registry', () => {
     }
   });
 
-  it('includes the four archetypes plus generic', () => {
+  it('includes the maintained evaluation profiles plus generic', () => {
     expect(OCCUPATION_IDS.sort()).toEqual(
-      ['administrator', 'generic', 'registered_nurse', 'software_engineer', 'warehouse_operative'].sort()
+      [
+        'administrator',
+        'generic',
+        'healthcare_support',
+        'registered_nurse',
+        'software_engineer',
+        'warehouse_operative',
+      ].sort()
     );
     const archetypes = Object.values(OCCUPATION_PROFILES).map(p => p.roleArchetype);
     expect(archetypes).toContain('technical_specialist');
@@ -72,6 +79,21 @@ describe('anti-contamination guarantees', () => {
     }
   });
 
+  it('healthcare support is non-regulated with no mandatory credential', () => {
+    const hs = OCCUPATION_PROFILES.healthcare_support;
+    expect(hs.regulated).toBe(false);
+    expect(hs.credentials.some(c => c.class === 'mandatory')).toBe(false);
+    // Never asks for a clinician registration.
+    expect(hs.credentials.some(c => /nmc|gmc|gphc|hcpc/i.test(c.label))).toBe(false);
+    // Names every regulator in the prohibitions as an explicit safety instruction.
+    const prohibitions = hs.prohibitedExpectations.join(' ');
+    for (const regulator of ['NMC', 'GMC', 'GPhC', 'HCPC']) {
+      expect(prohibitions).toContain(regulator);
+    }
+    // Projects are irrelevant for care support.
+    expect(hs.sections.rules.find(r => r.section === 'key-projects')?.presence).toBe('irrelevant');
+  });
+
   it('warehouse profile marks projects irrelevant and detects FLT evidence', () => {
     const wh = OCCUPATION_PROFILES.warehouse_operative;
     expect(wh.sections.rules.find(r => r.section === 'key-projects')?.presence).toBe('irrelevant');
@@ -98,6 +120,10 @@ describe('detection patterns', () => {
     ['administrator', 'Administrative Assistant'],
     ['registered_nurse', 'Staff Nurse'],
     ['registered_nurse', 'Registered Nurse'],
+    ['healthcare_support', 'Healthcare Assistant'],
+    ['healthcare_support', 'Care Worker'],
+    ['healthcare_support', 'Support Worker'],
+    ['healthcare_support', 'Senior Care Assistant'],
   ];
 
   it.each(cases)('%s title patterns match "%s"', (id, title) => {

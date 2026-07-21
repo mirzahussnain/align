@@ -1,9 +1,9 @@
 import { motion, type Variants } from 'framer-motion';
 import { FileEdit, Zap, AlertCircle } from 'lucide-react';
-import type { AIJobMatchOutput as JobMatchData } from '@/shared/types/ai';
+import type { JobMatchDataV2 } from '@/shared/types/ai';
 
 interface TailoredRewritesPanelProps {
-  data: JobMatchData;
+  data: JobMatchDataV2;
   contentVariants: Variants;
 }
 

@@ -5,7 +5,7 @@
 import type { ZodType } from 'zod';
 import { THINKING_BUDGETS } from '@/shared/lib/config';
 import type { CVAnalysisResult } from '@/shared/types/cv';
-import type { AISemanticOutput, AIJobMatchOutput } from '@/shared/types/ai';
+import type { AISemanticOutput, JobMatchDataV2, JobMatchDataV2Draft } from '@/shared/types/ai';
 import type { Classification } from '@/shared/types/classification';
 import type { OccupationProfile } from '@/shared/occupations/types';
 import { INDUSTRY_IDS } from '@/shared/constants/sector-keywords';
@@ -13,11 +13,12 @@ import { OCCUPATION_IDS } from '@/shared/occupations/registry';
 import {
   AIClassificationSchema,
   AISemanticOutputSchema,
-  AIJobMatchOutputSchema,
+  AIJobMatchV2RawSchema,
   type AIClassificationOutput,
 } from '@/shared/schemas/ai-output';
 import { composeSemanticPrompt, composeJobMatchPrompt } from './prompt-composer';
 import { generateJSONFromAI } from './ai-orchestrator';
+import { normalizeJobMatchDataV2 } from './job-match-ledger';
 
 /**
  * Lightweight occupation classification for CVs the deterministic tiers could
@@ -80,12 +81,14 @@ export async function getJobMatchFeedback(
   jobDescription: string,
   profile: OccupationProfile,
   classification: Classification
-): Promise<AIJobMatchOutput | null> {
-  return generateJSONFromAI<AIJobMatchOutput>({
+): Promise<JobMatchDataV2 | null> {
+  const draft = await generateJSONFromAI<JobMatchDataV2Draft>({
     prompt: composeJobMatchPrompt(cvText, jobDescription, profile, classification),
     temperature: 0.1,
     thinkingBudget: THINKING_BUDGETS.jobMatch,
-    schema: AIJobMatchOutputSchema as unknown as ZodType<AIJobMatchOutput>,
+    schema: AIJobMatchV2RawSchema as unknown as ZodType<JobMatchDataV2Draft>,
   });
+
+  return draft ? normalizeJobMatchDataV2(draft) : null;
 }
 

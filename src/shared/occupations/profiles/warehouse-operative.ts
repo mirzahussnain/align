@@ -2,8 +2,8 @@ import type { OccupationProfile } from '../types';
 
 export const warehouseOperativeProfile: OccupationProfile = {
   id: 'warehouse_operative',
-  version: '1.0.0',
-  label: 'Warehouse Operative',
+  version: '1.1.0',
+  label: 'Frontline Operations',
   sector: 'warehouse_logistics',
   roleArchetype: 'frontline_operative',
   applicationWorkflow: 'application_form_led',

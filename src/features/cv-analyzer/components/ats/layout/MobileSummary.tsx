@@ -7,9 +7,11 @@ interface MobileSummaryProps {
   totalIssues: number;
   isMobileDetailView: boolean;
   setIsMobileDetailView: (val: boolean) => void;
+  /** Reset to the uploader. Omitted for stored reports, where there's nothing to reset to. */
+  onNewUpload?: () => void;
 }
 
-export default function MobileSummary({ overallScore, totalIssues, isMobileDetailView, setIsMobileDetailView }: MobileSummaryProps) {
+export default function MobileSummary({ overallScore, totalIssues, isMobileDetailView, setIsMobileDetailView, onNewUpload }: MobileSummaryProps) {
   return (
     <div className={cn("flex flex-col lg:hidden w-full", isMobileDetailView ? "hidden" : "block")}>
       <div className="bg-white rounded-[24px] border border-slate-200 shadow-sm p-6 flex flex-col items-center max-w-sm mx-auto w-full relative overflow-hidden">
@@ -32,15 +34,22 @@ export default function MobileSummary({ overallScore, totalIssues, isMobileDetai
           View Detailed Analysis <ArrowRight size={18} />
         </button>
 
-        <div className="w-full flex items-center gap-3 mb-6">
-          <div className="flex-1 h-px bg-slate-200"></div>
-          <span className="text-xs text-slate-400 font-medium">Or upload a new Resume</span>
-          <div className="flex-1 h-px bg-slate-200"></div>
-        </div>
+        {onNewUpload && (
+          <>
+            <div className="w-full flex items-center gap-3 mb-6">
+              <div className="flex-1 h-px bg-slate-200"></div>
+              <span className="text-xs text-slate-400 font-medium">Or upload a new Resume</span>
+              <div className="flex-1 h-px bg-slate-200"></div>
+            </div>
 
-        <button className="w-full bg-white hover:bg-slate-50 text-slate-700 border-2 border-slate-200 font-bold py-3 px-4 rounded-xl transition-colors">
-          New Upload
-        </button>
+            <button
+              onClick={onNewUpload}
+              className="w-full bg-white hover:bg-slate-50 text-slate-700 border-2 border-slate-200 font-bold py-3 px-4 rounded-xl transition-colors"
+            >
+              New Upload
+            </button>
+          </>
+        )}
       </div>
     </div>
   );

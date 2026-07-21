@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import { CVAnalysisResult } from '@/shared/types/cv';
+import { checkFileName } from '@/shared/utils/filename-check';
 
 export function useDashboardScoring(
   result: CVAnalysisResult,
@@ -50,8 +51,16 @@ export function useDashboardScoring(
         const parse = getCategoryScorePercent('atsReadability');
         return Math.round((size + design + parse) / 3);
       }
-      case 'hr-red-flags':
-        return result.overallScore >= 75 ? 85 : 70;
+      case 'hr-red-flags': {
+        // Derived from the three cards actually in this group (credibility,
+        // interview risks, LinkedIn presence) rather than a number pulled off
+        // the overall score, so the badge agrees with what's shown below it.
+        const credibilityOk = data.clichésList.length <= 2;
+        const riskOk = !data.hasRiskFactor;
+        const linkedinOk = !!data.contactInfo.linkedin;
+        const passed = [credibilityOk, riskOk, linkedinOk].filter(Boolean).length;
+        return Math.round((passed / 3) * 100);
+      }
       case 'discrimination':
         return Math.round((getCategoryScorePercent('compliance') + getCategoryScorePercent('credentials')) / 2);
       case 'seniority': {
@@ -135,8 +144,10 @@ export function useDashboardScoring(
         const isPassed = !!data.contactInfo.linkedin;
         return { isPassed, badgeText: isPassed ? 'Links found' : 'No links' };
       }
-      case 'fileName':
-        return { isPassed: true, badgeText: 'Valid name' };
+      case 'fileName': {
+        const check = checkFileName(result.fileName);
+        return { isPassed: check.isPassed, badgeText: check.scoreLabel };
+      }
       case 'datesLinks': {
         const isPassed = !result.formatting.issues.some(i => i.message.toLowerCase().includes('date') || i.message.toLowerCase().includes('link'));
         return { isPassed, badgeText: isPassed ? 'Consistent' : 'Inconsistent' };
@@ -147,10 +158,6 @@ export function useDashboardScoring(
       }
       case 'interviewRisks':
         return { isPassed: !data.hasRiskFactor, badgeText: !data.hasRiskFactor ? 'Low risk' : 'Review flags' };
-      case 'peerBenchmarking': {
-        const isPassed = result.overallScore >= 70;
-        return { isPassed, badgeText: result.overallScore >= 80 ? 'Top 10%' : result.overallScore >= 70 ? 'Top 25%' : 'Average' };
-      }
       case 'linkedinMatch': {
         const isPassed = !!data.contactInfo.linkedin;
         return { isPassed, badgeText: isPassed ? 'Linked' : 'No link' };

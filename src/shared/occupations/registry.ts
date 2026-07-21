@@ -4,6 +4,7 @@ import { softwareEngineerProfile } from './profiles/software-engineer';
 import { warehouseOperativeProfile } from './profiles/warehouse-operative';
 import { administratorProfile } from './profiles/administrator';
 import { registeredNurseProfile } from './profiles/registered-nurse';
+import { healthcareSupportProfile } from './profiles/healthcare-support';
 import { genericProfile } from './profiles/generic';
 
 export const OCCUPATION_PROFILES: Record<OccupationId, OccupationProfile> = {
@@ -11,6 +12,7 @@ export const OCCUPATION_PROFILES: Record<OccupationId, OccupationProfile> = {
   warehouse_operative: warehouseOperativeProfile,
   administrator: administratorProfile,
   registered_nurse: registeredNurseProfile,
+  healthcare_support: healthcareSupportProfile,
   generic: genericProfile,
 };
 

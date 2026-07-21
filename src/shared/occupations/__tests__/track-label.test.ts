@@ -9,7 +9,7 @@ describe('suggestCareerTrackLabel', () => {
 
   it('appends the declared industry when it adds information', () => {
     expect(suggestCareerTrackLabel({ occupation: 'administrator', industry: 'healthcare_nhs' })).toBe(
-      'Administration · Healthcare / NHS'
+      'Administration & Office Support · Healthcare / NHS'
     );
   });
 
@@ -24,11 +24,11 @@ describe('suggestCareerTrackLabel', () => {
   });
 
   it('falls back to a generic name with nothing to go on', () => {
-    expect(suggestCareerTrackLabel({})).toBe('My Career Track');
+    expect(suggestCareerTrackLabel({})).toBe('My Career Profile');
   });
 
   it('ignores an unknown occupation or industry string', () => {
-    expect(suggestCareerTrackLabel({ occupation: 'astronaut', industry: 'space' })).toBe('My Career Track');
+    expect(suggestCareerTrackLabel({ occupation: 'astronaut', industry: 'space' })).toBe('My Career Profile');
   });
 
   it('treats the generic occupation as unset, not a named track', () => {

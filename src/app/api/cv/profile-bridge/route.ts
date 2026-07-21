@@ -5,11 +5,12 @@ import { applyRateLimit, rewriteLimiter } from '@/shared/lib/rate-limit';
 import { auth } from '@/shared/lib/auth';
 import { prisma } from '@/shared/lib/prisma';
 import { entitlementsFor } from '@/shared/lib/entitlements';
-import { loadProfileData } from '@/features/dashboard/data/load-profile';
+import { loadOwnedProfileData } from '@/features/dashboard/data/load-profile';
 import { reconcileProfileWithCv } from '@/shared/services/profile-reconciler';
+import { ProfileEvidenceValidationError } from '@/shared/types/profile-reasoning';
 import { checkQuota, recordUsage } from '@/shared/services/usage-meter';
 import { parseStoredAnalysisResult } from '@/shared/schemas/analysis-result';
-import type { AIJobMatchOutput } from '@/shared/types/ai';
+import { parseStoredJobMatchData } from '@/shared/schemas/ai-output';
 
 const ProfileBridgeSchema = z.object({
   analysisId: z.string().min(1, 'analysisId is required'),
@@ -22,7 +23,7 @@ const ProfileBridgeSchema = z.object({
  * run on, and return the profile items that would serve the JD better.
  *
  * Read-only and idempotent — it changes nothing and only produces suggestions.
- * The user approves them in the wizard; the approved ids are then sent to
+ * The user approves them in the wizard; the approved requirement/evidence pairs are sent to
  * /api/cv/regenerate, which re-resolves them against the profile before they
  * reach the rewrite.
  */
@@ -76,7 +77,7 @@ export async function POST(request: Request) {
     if (!analysis || analysis.userId !== session.user.id) {
       throw new APIError('Analysis not found.', 404);
     }
-    if (analysis.mode !== 'job_match' || !analysis.jobMatchData) {
+    if (analysis.mode !== 'job_match') {
       throw new APIError('Profile reasoning only applies to job-match analyses.', 400);
     }
 
@@ -94,17 +95,31 @@ export async function POST(request: Request) {
       throw new APIError('This analysis is missing the data needed to compare your profile.', 400);
     }
 
-    // loadProfileData verifies profileId ownership before honouring it.
-    const profile = await loadProfileData(session.user.id, profileId);
-    const jobMatch = analysis.jobMatchData as unknown as AIJobMatchOutput;
-
-    const reconciliation = await reconcileProfileWithCv({
-      profile,
-      cvText,
-      jobDescription,
-      mandatoryMissing: jobMatch?.mandatorySkills?.missing ?? [],
-      mandatoryPartial: jobMatch?.mandatorySkills?.partial ?? [],
-    });
+    const profile = await loadOwnedProfileData(session.user.id, profileId);
+    if (!profile) {
+      throw new APIError('Profile not found.', 404);
+    }
+    const jobMatch = parseStoredJobMatchData(analysis.jobMatchData);
+    if (!jobMatch) {
+      throw new APIError(
+        'Stored job-match data failed integrity validation: schemaVersion 2 is required.',
+        409
+      );
+    }
+    let reconciliation: Awaited<ReturnType<typeof reconcileProfileWithCv>>;
+    try {
+      reconciliation = await reconcileProfileWithCv({
+        profile,
+        cvText,
+        jobDescription,
+        jobMatch,
+      });
+    } catch (error) {
+      if (error instanceof ProfileEvidenceValidationError) {
+        throw new APIError('The profile comparison returned an invalid evidence reference.', 502);
+      }
+      throw error;
+    }
 
     // Only a run that actually reached a provider consumes the allowance.
     if (reconciliation.usedAI) {

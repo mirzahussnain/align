@@ -12,6 +12,7 @@ interface ImpactStatementsCardProps {
   aiFeedback?: Recommendation;
   activeRewriteIndex: number;
   setActiveRewriteIndex: (idx: number) => void;
+  source?: 'rule' | 'ai';
 }
 
 export default function ImpactStatementsCard({
@@ -21,7 +22,8 @@ export default function ImpactStatementsCard({
   aiRewrites,
   aiFeedback,
   activeRewriteIndex,
-  setActiveRewriteIndex
+  setActiveRewriteIndex,
+  source = 'rule'
 }: ImpactStatementsCardProps) {
   return (
     <AuditCard
@@ -30,6 +32,7 @@ export default function ImpactStatementsCard({
       subtitle="STAR Method measurements validation"
       score={score}
       scoreStatus={scoreStatus}
+      source={source}
       details={details}
     >
       {aiRewrites.length > 0 && (

@@ -108,10 +108,6 @@ export default function DesktopSidebar({
           );
         })}
       </nav>
-
-      <button className="w-full bg-emerald-500 hover:bg-emerald-600 text-white font-extrabold py-3 px-4 rounded-xl flex items-center justify-center gap-2 cursor-pointer shadow-sm transition-colors mt-2 text-xs uppercase tracking-wider flex-shrink-0">
-        Unlock Full Report 🚀
-      </button>
     </div>
   );
 }

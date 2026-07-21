@@ -342,8 +342,13 @@ export async function saveSkills(rows: SkillGroupInput[], targetProfileId?: stri
           data: {
             profileId,
             category: r.category.trim(),
-            skills: r.skills.map((s) => s.trim()).filter(Boolean),
             sortOrder: i,
+            skills: {
+              create: r.skills
+                .map((s) => s.trim())
+                .filter(Boolean)
+                .map((name, sortOrder) => ({ name, sortOrder })),
+            },
           },
         })
       ),

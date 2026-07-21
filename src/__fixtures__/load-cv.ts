@@ -5,6 +5,7 @@ export type FixtureCV =
   | 'warehouse-flt-no-projects'
   | 'junior-dev-with-projects'
   | 'hca-no-nmc'
+  | 'care-worker-domiciliary'
   | 'registered-nurse-no-nmc'
   | 'paralegal-no-sra'
   | 'admin-office';

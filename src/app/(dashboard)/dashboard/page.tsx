@@ -15,7 +15,8 @@ import { getStorageUsage } from '@/shared/services/storage-quota';
 import { getUsage } from '@/shared/services/usage-meter';
 import { parseStoredAnalysisResult } from '@/shared/schemas/analysis-result';
 import { getOccupationProfile, isKnownOccupation } from '@/shared/occupations/registry';
-import { AIJobMatchOutputSchema } from '@/shared/schemas/ai-output';
+import { parseStoredJobMatchData } from '@/shared/schemas/ai-output';
+import { getRequirementSummary } from '@/shared/utils/job-match-view';
 import type { CategoryScore } from '@/shared/types/cv';
 
 /** Best-scoring non-excellent-only pick — direction flips which end of the sort wins. */
@@ -150,7 +151,7 @@ export default async function DashboardPage({
   // One extra, targeted read of the hero's own stored result — cheap (single
   // row) and lets the hero surface real engine output instead of decorating
   // the score with nothing. Job-match facts come from the structured
-  // mandatory/desirable requirement mapping (AIJobMatchOutput), never from a
+  // canonical requirement ledger, never from a
   // raw dictionary miss count — that number conflates "not in our keyword
   // list" with "actually required for this role" and reads as alarming
   // (hundreds of "missing" terms) without being actionable.
@@ -159,10 +160,10 @@ export default async function DashboardPage({
     weakestCategoryLabel: string | null;
     strongestCategoryLabel: string | null;
     credentialsStatus: 'ready' | 'attention' | null;
-    mandatoryMatched: number | null;
-    mandatoryTotal: number | null;
+    essentialMatched: number | null;
+    essentialTotal: number | null;
     primaryGap: string | null;
-    domainMismatch: boolean | null;
+    domainStatus: 'aligned' | 'partial' | 'mismatch' | null;
   } | null = null;
 
   if (heroAnalysis) {
@@ -179,19 +180,19 @@ export default async function DashboardPage({
     const strongest = parsed && !parsed.legacy ? pickCategory(categories, 'strongest') : null;
     const credentials = categories.find((c) => c.id === 'credentials') ?? null;
 
-    let mandatoryMatched: number | null = null;
-    let mandatoryTotal: number | null = null;
+    let essentialMatched: number | null = null;
+    let essentialTotal: number | null = null;
     let primaryGap: string | null = null;
-    let domainMismatch: boolean | null = null;
+    let domainStatus: 'aligned' | 'partial' | 'mismatch' | null = null;
 
-    if (heroAnalysis.mode === 'job_match' && heroRow?.jobMatchData) {
-      const jm = AIJobMatchOutputSchema.safeParse(heroRow.jobMatchData);
-      if (jm.success) {
-        const { mandatorySkills, desirableSkills, domainFit } = jm.data;
-        mandatoryMatched = mandatorySkills.present.length;
-        mandatoryTotal = mandatorySkills.present.length + mandatorySkills.missing.length + mandatorySkills.partial.length;
-        primaryGap = mandatorySkills.missing[0] ?? mandatorySkills.partial[0] ?? desirableSkills.missing[0] ?? null;
-        domainMismatch = domainFit.mismatch;
+    if (heroAnalysis.mode === 'job_match' && heroRow) {
+      const jobMatch = parseStoredJobMatchData(heroRow.jobMatchData);
+      if (jobMatch) {
+        const summary = getRequirementSummary(jobMatch);
+        essentialMatched = summary.essentialMatched;
+        essentialTotal = summary.essentialTotal;
+        primaryGap = summary.primaryGap;
+        domainStatus = summary.domainStatus;
       }
     }
 
@@ -202,10 +203,10 @@ export default async function DashboardPage({
       weakestCategoryLabel: weakest?.label || null,
       strongestCategoryLabel: strongest?.label || null,
       credentialsStatus: credentials ? (credentials.status === 'excellent' || credentials.status === 'good' ? 'ready' : 'attention') : null,
-      mandatoryMatched,
-      mandatoryTotal,
+      essentialMatched,
+      essentialTotal,
       primaryGap,
-      domainMismatch,
+      domainStatus,
     };
   }
 

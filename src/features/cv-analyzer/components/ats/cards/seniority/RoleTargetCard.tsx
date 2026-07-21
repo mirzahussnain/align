@@ -3,9 +3,10 @@ import AuditCard from '../../AuditCard';
 
 interface RoleTargetCardProps {
   targetRoleTitle?: string;
+  source?: 'rule' | 'ai';
 }
 
-export default function RoleTargetCard({ targetRoleTitle }: RoleTargetCardProps) {
+export default function RoleTargetCard({ targetRoleTitle, source = 'rule' }: RoleTargetCardProps) {
   return (
     <AuditCard
       id="roleTarget"
@@ -13,6 +14,7 @@ export default function RoleTargetCard({ targetRoleTitle }: RoleTargetCardProps)
       subtitle="Validates presence of desired job title in header/summary"
       score={targetRoleTitle ? "Target set" : "Add role title"}
       scoreStatus={targetRoleTitle ? "excellent" : "critical"}
+      source={source}
     >
       <div className="space-y-3">
         <p className="text-xs text-slate-500 leading-relaxed">

@@ -1,13 +1,16 @@
 import { motion, type Variants } from 'framer-motion';
 import { BarChart2, CheckCircle2, Briefcase } from 'lucide-react';
-import type { AIJobMatchOutput as JobMatchData } from '@/shared/types/ai';
+import type { JobMatchDataV2 } from '@/shared/types/ai';
+import { getScoringRows } from '@/shared/utils/job-match-view';
 
 interface ScoringBreakdownPanelProps {
-  data: JobMatchData;
+  data: JobMatchDataV2;
   contentVariants: Variants;
 }
 
 export default function ScoringBreakdownPanel({ data, contentVariants }: ScoringBreakdownPanelProps) {
+  const scoringRows = getScoringRows(data);
+
   return (
     <motion.div variants={contentVariants} initial="hidden" animate="visible" exit="exit" className="space-y-6">
       <div className="bg-bg-panel rounded-[32px] border border-slate-200/60 shadow-sm p-6 sm:p-8">
@@ -22,9 +25,9 @@ export default function ScoringBreakdownPanel({ data, contentVariants }: Scoring
         </div>
         
         <div className="space-y-4">
-          {data.scoringBreakdown.length > 0 ? (
-            data.scoringBreakdown.map((item, idx) => (
-              <div key={idx} className="bg-slate-50 border border-slate-100 rounded-2xl p-5 flex flex-col md:flex-row md:items-center justify-between gap-4">
+          {scoringRows.length > 0 ? (
+            scoringRows.map((item) => (
+              <div key={item.id} className="bg-slate-50 border border-slate-100 rounded-2xl p-5 flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div className="flex-1">
                   <div className="flex items-center gap-2 mb-1.5">
                     {item.classification && (
@@ -38,7 +41,7 @@ export default function ScoringBreakdownPanel({ data, contentVariants }: Scoring
                 </div>
                 <div className="flex-shrink-0 flex items-center justify-center">
                   <span className="text-lg font-black text-rose-600 bg-rose-50 px-4 py-2 rounded-xl border border-rose-100 shadow-sm">
-                    {item.deduction < 0 ? item.deduction : `-${item.deduction}`} pts
+                    -{item.deduction} pts
                   </span>
                 </div>
               </div>

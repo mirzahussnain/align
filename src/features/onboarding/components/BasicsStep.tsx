@@ -20,9 +20,10 @@ export function basicsAreValid(form: PersonalInfoInput): boolean {
     'city',
     'country',
     'professionalSummary',
-    // The occupation selects which evaluation profile scores this user's
-    // analyses — without it everything falls back to generic rules.
-    'targetOccupation',
+    // The CV evaluation type (targetOccupation) is intentionally NOT required.
+    // It is an optional broad lens; a missing one resolves safely through the
+    // classifier and the Generic fallback. The target role stays the primary
+    // career-direction field.
   ];
   if (!required.every((k) => form[k].trim().length > 0)) return false;
   if (!form.visaStatus) return false;
@@ -120,7 +121,7 @@ const BasicsStep = forwardRef<ProfileStepHandle, BasicsStepProps>(function Basic
         <TextField id="email" type="email" value={form.email} onChange={(e) => set('email', e.target.value)} placeholder="you@example.com" />
       </div>
 
-      <TargetRolePicker value={form} onChange={patch} required />
+      <TargetRolePicker value={form} onChange={patch} />
 
       <div className="sm:col-span-2">
         <Label htmlFor="trackLabel">Career track name</Label>

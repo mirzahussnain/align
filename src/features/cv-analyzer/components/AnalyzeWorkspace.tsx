@@ -109,7 +109,7 @@ export default function AnalyzeWorkspace({
             {result.mode === 'job_match' ? (
               <JobMatchDashboard result={result} />
             ) : (
-              <AtsAnalysisDashboard result={result} />
+              <AtsAnalysisDashboard result={result} onNewUpload={reset} />
             )}
           </motion.div>
         </motion.div>

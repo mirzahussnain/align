@@ -18,12 +18,17 @@ import { checkQuota, recordUsage } from '@/shared/services/usage-meter';
 import { cleanJobTitle, cleanJobCompany, deriveJobTitleFromJd } from '@/shared/utils/job-title';
 import { resolveProfileId } from '@/features/dashboard/data/load-profile';
 import type { CVAnalysisResult } from '@/shared/types/cv';
+import { JobMatchDataV2Schema } from '@/shared/schemas/ai-output';
 
 /**
  * Persist a completed analysis and archive the original upload to object storage.
  * Best-effort: a DB or storage failure must never break the response the user
  * already paid an AI call for. The raw file is uploaded under the analysis id
  * so it can be re-analysed or re-downloaded later without a re-upload.
+ *
+ * Returns the new analysis id so the caller can hand it back to the client — the
+ * results screen needs it to rebuild a tailored CV from this exact analysis.
+ * Returns null when the DB write itself failed (there is then no id to expose).
  */
 async function persistAnalysis(
   userId: string,
@@ -33,8 +38,12 @@ async function persistAnalysis(
   sourceFileName: string,
   sourceFile: Buffer,
   sourceContentType: string
-): Promise<void> {
+): Promise<string | null> {
   try {
+    // Analysis.jobMatchData is the canonical job-match payload. New writes do
+    // not embed a second copy in rawResult, preventing the two JSON blobs from
+    // drifting when readers evolve independently.
+    const { jobMatchData: canonicalJobMatchData, ...rawResultWithoutJobMatch } = result;
     const analysis = await prisma.analysis.create({
       data: {
         userId,
@@ -43,9 +52,11 @@ async function persistAnalysis(
         profileId,
         mode: result.mode ?? 'ats',
         overallScore: result.overallScore,
-        rawResult: JSON.parse(JSON.stringify(result)),
+        rawResult: JSON.parse(JSON.stringify(rawResultWithoutJobMatch)),
         jobDescription: result.jobDescription ?? null,
-        jobMatchData: result.jobMatchData ? JSON.parse(JSON.stringify(result.jobMatchData)) : undefined,
+        jobMatchData: canonicalJobMatchData
+          ? JSON.parse(JSON.stringify(canonicalJobMatchData))
+          : undefined,
         // Promoted out of the match blob into columns so a history row can say
         // "Senior Data Engineer at FinCore" without deserialising the whole
         // payload. Sanitised, because the model is asked not to return a section
@@ -94,8 +105,11 @@ async function persistAnalysis(
     // throw, so a pruning failure can't cost the user the analysis itself.
     await pruneAnalyses(userId, entitlements);
     await sweepExpiredSources(userId);
+
+    return analysis.id;
   } catch (error) {
     console.warn('[analyze] Failed to persist analysis:', error instanceof Error ? error.message : error);
+    return null;
   }
 }
 
@@ -206,6 +220,9 @@ export async function POST(request: NextRequest) {
 
     // 3. Local rule-based analysis, occupation-aware from the first pass.
     const result = analyzeCV(text, pageCount, { classification, profile: occupationProfile });
+    // The real uploaded filename, so the File Name check audits it rather than a
+    // hardcoded placeholder.
+    result.fileName = file.name || undefined;
     result.aiDetectedIndustry = classification.sector;
     result.outOfDomain = classification.confidence < 0.5 || classification.source === 'fallback';
 
@@ -222,6 +239,7 @@ export async function POST(request: NextRequest) {
           // Counted on return rather than before the call, so a provider outage
           // doesn't bill the user for an analysis they never received.
           await recordUsage(session.user.id, 'aiAnalyses');
+          result.aiApplied = true;
           result.jobMatchData = jobMatchFeedback;
           result.jobDescription = jobDescription;
           // In job-match mode the headline score IS the match score, so the saved
@@ -234,6 +252,7 @@ export async function POST(request: NextRequest) {
 
         if (aiFeedback) {
           await recordUsage(session.user.id, 'aiAnalyses');
+          result.aiApplied = true;
 
           const summaryCat = result.categories.find(c => c.id === 'professionalSummary');
           if (summaryCat) {
@@ -318,8 +337,19 @@ export async function POST(request: NextRequest) {
       console.warn('AI semantic processing failed, falling back to local analysis results:', aiError instanceof Error ? aiError.message : aiError);
     }
 
+    // A job-match response without a valid v2 ledger is not a degraded match.
+    // Refuse it before persistence so every new job-match row satisfies the
+    // canonical storage contract.
+    if (mode === 'job_match') {
+      const canonicalJobMatch = JobMatchDataV2Schema.safeParse(result.jobMatchData);
+      if (!canonicalJobMatch.success) {
+        throw new APIError('Job-match analysis failed integrity validation. Please try again.', 502);
+      }
+      result.jobMatchData = canonicalJobMatch.data;
+    }
+
     const sourceBuffer = Buffer.from(await file.arrayBuffer());
-    await persistAnalysis(
+    const analysisId = await persistAnalysis(
       session.user.id,
       scopedProfileId,
       entitlements,
@@ -328,6 +358,11 @@ export async function POST(request: NextRequest) {
       sourceBuffer,
       file.type || 'application/pdf'
     );
+
+    // Exposed only on the response, never persisted into the row's own blob.
+    // The results screen threads this into the rewrite wizard so a fresh
+    // analysis can be rebuilt into a CV without re-uploading the source.
+    if (analysisId) result.analysisId = analysisId;
 
     return NextResponse.json(result);
   });

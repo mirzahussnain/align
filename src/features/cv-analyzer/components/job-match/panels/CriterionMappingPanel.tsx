@@ -3,71 +3,60 @@
 import { motion, type Variants } from 'framer-motion';
 import { ClipboardList, CheckCircle2, AlertCircle, HelpCircle } from 'lucide-react';
 import GlassCard from '@/shared/components/ui/GlassCard';
-import type { AIJobMatchOutput } from '@/shared/types/ai';
-import type { SelectionCriterion } from '@/shared/types/criteria';
+import type { JobMatchDataV2, RequirementStatus } from '@/shared/types/ai';
+import {
+  getPersonSpecificationRequirements,
+  type RequirementDisplayRow,
+} from '@/shared/utils/job-match-view';
 
 /**
  * Person-specification mapping for supporting-statement-led applications
- * (NHS, councils, universities). Lists each extracted criterion with a rough
- * evidence signal from the skill matching, so the candidate can plan a
+ * (NHS, councils, universities). Lists each extracted criterion with its
+ * canonical ledger assessment, so the candidate can plan a
  * statement that addresses every essential criterion explicitly.
  */
 export default function CriterionMappingPanel({
   data,
   contentVariants,
 }: {
-  data: AIJobMatchOutput;
+  data: JobMatchDataV2;
   contentVariants: Variants;
 }) {
-  const criteria = data.selectionCriteria ?? [];
-  const essential = criteria.filter(c => c.type === 'essential');
-  const other = criteria.filter(c => c.type !== 'essential');
+  const criteria = getPersonSpecificationRequirements(data);
+  const essential = criteria.filter((criterion) => criterion.importance === 'mandatory');
+  const desirable = criteria.filter((criterion) => criterion.importance === 'desirable');
 
-  // Rough evidence signal: does any matched-skill entry share meaningful words
-  // with the criterion? Indicative only — the statement still needs to make
-  // the case explicitly.
-  const evidenceFor = (criterion: SelectionCriterion): 'evidenced' | 'missing' | 'unclear' => {
-    const words = criterion.text
-      .toLowerCase()
-      .split(/\W+/)
-      .filter(w => w.length > 4);
-    if (words.length === 0) return 'unclear';
-
-    const matches = (entries: string[]) =>
-      entries.some(entry => {
-        const lower = entry.toLowerCase();
-        return words.filter(w => lower.includes(w)).length >= Math.min(2, words.length);
-      });
-
-    if (matches(data.mandatorySkills.present) || matches(data.desirableSkills.present)) return 'evidenced';
-    if (matches(data.mandatorySkills.missing) || matches(data.desirableSkills.missing)) return 'missing';
-    return 'unclear';
-  };
-
-  const badge = (state: 'evidenced' | 'missing' | 'unclear') => {
+  const badge = (state: RequirementStatus) => {
     switch (state) {
-      case 'evidenced':
+      case 'met':
         return (
           <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700">
             <CheckCircle2 size={12} /> Evidence found
           </span>
         );
-      case 'missing':
+      case 'not_met':
+      case 'contradicted':
         return (
           <span className="inline-flex items-center gap-1 text-[11px] font-bold text-rose-700">
-            <AlertCircle size={12} /> Not evidenced
+            <AlertCircle size={12} /> {state === 'contradicted' ? 'Contradicted' : 'Not evidenced'}
+          </span>
+        );
+      case 'partial':
+        return (
+          <span className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-700">
+            <AlertCircle size={12} /> Partial evidence
           </span>
         );
       default:
         return (
           <span className="inline-flex items-center gap-1 text-[11px] font-bold text-slate-500">
-            <HelpCircle size={12} /> Check manually
+            <HelpCircle size={12} /> Unclear
           </span>
         );
     }
   };
 
-  const renderGroup = (title: string, items: SelectionCriterion[]) =>
+  const renderGroup = (title: string, items: RequirementDisplayRow[]) =>
     items.length > 0 && (
       <div className="space-y-2">
         <h3 className="text-sm font-bold text-text-primary">{title}</h3>
@@ -79,8 +68,18 @@ export default function CriterionMappingPanel({
                 {criterion.category}
                 {criterion.evidenceRequired ? ' · evidence expected' : ''}
               </p>
+              {criterion.evidence.length > 0 && (
+                <div className="mt-2 space-y-1">
+                  {criterion.evidence.map((evidence, index) => (
+                    <p key={`${criterion.id}-evidence-${index}`} className="text-[11px] leading-relaxed text-slate-600">
+                      <span className="font-bold uppercase text-slate-400">{evidence.source}</span>
+                      {evidence.location ? ` · ${evidence.location}` : ''}: {evidence.text}
+                    </p>
+                  ))}
+                </div>
+              )}
             </div>
-            <div className="shrink-0">{badge(evidenceFor(criterion))}</div>
+            <div className="shrink-0">{badge(criterion.status)}</div>
           </div>
         ))}
       </div>
@@ -107,7 +106,7 @@ export default function CriterionMappingPanel({
       </GlassCard>
 
       {renderGroup('Essential criteria', essential)}
-      {renderGroup('Desirable criteria', other)}
+      {renderGroup('Desirable criteria', desirable)}
     </motion.div>
   );
 }

@@ -2,14 +2,15 @@
 
 import { CheckCircle2 } from 'lucide-react';
 import { cn } from '@/shared/utils/cn';
+import type { TemplateId } from '@/shared/constants/templates';
 
 interface Props {
   selected: string;
-  onSelect: (id: string) => void;
+  onSelect: (id: TemplateId) => void;
 }
 
 interface Template {
-  id: string;
+  id: TemplateId;
   name: string;
   description: string;
   atsSafe: boolean;

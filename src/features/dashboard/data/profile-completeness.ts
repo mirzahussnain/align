@@ -12,7 +12,6 @@ import type { SectionPresence } from '@/shared/occupations/types';
 export type CompletenessCheckId =
   | 'full-name'
   | 'professional-summary'
-  | 'target-occupation'
   | 'experience'
   | 'education'
   | 'skills'
@@ -114,9 +113,11 @@ export function evaluateProfileCompleteness(
   const checks: [CompletenessCheckId, boolean][] = [
     ['full-name', input.fullName],
     ['professional-summary', input.professionalSummary],
-    // The target occupation selects which evaluation profile scores this
-    // track — without it every analysis falls back to generic rules.
-    ['target-occupation', Boolean(input.targetOccupation)],
+    // The CV evaluation type (targetOccupation) is NOT a completeness check.
+    // It is optional: a missing one resolves safely through the classifier and
+    // the Generic fallback, and the target ROLE remains the required
+    // career-direction field. It still gates the projects check below, since it
+    // decides whether a projects section is even expected.
     ['experience', input.experience > 0],
     ['education', input.education > 0],
     ['skills', input.skills > 0],

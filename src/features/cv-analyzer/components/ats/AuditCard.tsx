@@ -2,6 +2,8 @@
 
 import React from 'react';
 import { cn } from '@/shared/utils/cn';
+import SourceBadge from './SourceBadge';
+import type { AnalysisSource } from './SourceBadge';
 
 interface AuditCardProps {
   id: string;
@@ -10,6 +12,12 @@ interface AuditCardProps {
   score?: string | number;
   scoreStatus?: 'excellent' | 'good' | 'needs-improvement' | 'critical' | 'neutral';
   details?: string;
+  /**
+   * Whether this card's finding is produced deterministically ('rule'), by the
+   * AI layer ('ai'), or a blend ('hybrid'). Drives the honesty badge in the
+   * header so users know what to trust as fact vs. as a model's judgement.
+   */
+  source?: AnalysisSource;
   children?: React.ReactNode;
 }
 
@@ -20,6 +28,7 @@ export default function AuditCard({
   score,
   scoreStatus = 'neutral',
   details,
+  source,
   children
 }: AuditCardProps) {
   const getStatusClasses = () => {
@@ -46,6 +55,7 @@ export default function AuditCard({
         <div>
           <h3 className="font-extrabold text-slate-800 text-base">{title}</h3>
           <p className="text-xs text-slate-400 mt-1">{subtitle}</p>
+          {source && <SourceBadge source={source} className="mt-2" />}
         </div>
         {score !== undefined && (
           <span className={cn('text-sm font-extrabold px-3 py-1 rounded-full border whitespace-nowrap flex-shrink-0 text-center', getStatusClasses())}>

@@ -3,6 +3,7 @@ import { withErrorHandler, APIError } from '@/shared/utils/api-error';
 import { auth } from '@/shared/lib/auth';
 import { prisma } from '@/shared/lib/prisma';
 import { parseStoredAnalysisResult } from '@/shared/schemas/analysis-result';
+import { parseStoredJobMatchData } from '@/shared/schemas/ai-output';
 
 /**
  * Fetch a single stored analysis in full. The complete CVAnalysisResult lives in
@@ -27,6 +28,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
         mode: true,
         overallScore: true,
         rawResult: true,
+        jobMatchData: true,
         sourceFileName: true,
         createdAt: true,
       },
@@ -41,13 +43,33 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     // renders as "re-analyse for a current report" instead of a crash.
     const parsed = parseStoredAnalysisResult(analysis.rawResult);
 
+    // Stamp the row id onto the result so the stored-report rewrite flow has the
+    // same `result.analysisId` the fresh flow gets from /api/analyze — the
+    // regenerate endpoint keys off it. The id is never written into the blob,
+    // so it can only be attached here at read time.
+    const canonicalJobMatch =
+      analysis.mode === 'job_match' ? parseStoredJobMatchData(analysis.jobMatchData) : null;
+    if (analysis.mode === 'job_match' && !canonicalJobMatch) {
+      throw new APIError(
+        'Stored job-match data failed integrity validation: schemaVersion 2 is required.',
+        409
+      );
+    }
+    const result = parsed?.result
+      ? {
+          ...parsed.result,
+          ...(canonicalJobMatch ? { jobMatchData: canonicalJobMatch } : {}),
+          analysisId: analysis.id,
+        }
+      : null;
+
     return NextResponse.json({
       id: analysis.id,
       mode: analysis.mode,
       overallScore: analysis.overallScore,
       sourceFileName: analysis.sourceFileName,
       createdAt: analysis.createdAt.toISOString(),
-      result: parsed?.result ?? null,
+      result,
       legacy: parsed?.legacy ?? true,
     });
   });

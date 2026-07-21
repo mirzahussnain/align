@@ -7,13 +7,15 @@ interface ProfessionalSummaryCardProps {
   scoreStatus?: 'excellent' | 'good' | 'needs-improvement' | 'critical' | 'neutral';
   details?: string;
   originalSummary?: string;
+  source?: 'rule' | 'ai';
 }
 
 export default function ProfessionalSummaryCard({
   score,
   scoreStatus,
   details,
-  originalSummary
+  originalSummary,
+  source = 'rule'
 }: ProfessionalSummaryCardProps) {
   return (
     <AuditCard
@@ -22,6 +24,7 @@ export default function ProfessionalSummaryCard({
       subtitle="Checks professional summary length and guidelines"
       score={score}
       scoreStatus={scoreStatus}
+      source={source}
       details={details}
     >
       {originalSummary && (

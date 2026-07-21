@@ -1,63 +1,95 @@
-// Profile-vs-CV reconciliation.
-//
-// A candidate's uploaded CV is a snapshot; their Align profile is the full
-// record. When a job match runs, the profile often holds a project, skill or
-// qualification that fits the JD *better* than what the CV actually shows.
-// This reconciliation surfaces those, with a reason, so the user can approve
-// swapping them into the tailored rewrite.
+import type {
+  RequirementImportance,
+  RequirementStatus,
+} from '@/shared/types/ai';
 
-export type SwapKind = 'project' | 'experience' | 'skill' | 'education' | 'certification';
+export type ProfileEvidenceType =
+  | 'experience'
+  | 'project'
+  | 'education'
+  | 'skill'
+  | 'certification';
 
-/**
- * One addressable item from the profile, handed to the AI with a stable `id`.
- * The AI may only refer to items by these ids — it is never asked to invent or
- * describe profile content, which is what keeps it from fabricating credentials.
- */
+/** Stable database identity for one stored profile record. */
+export type ProfileEvidenceRef =
+  | { type: 'experience'; id: string }
+  | { type: 'project'; id: string }
+  | { type: 'education'; id: string }
+  | { type: 'skill'; id: string }
+  | { type: 'certification'; id: string };
+
+/** Canonical inventory entry supplied to the model and re-resolved by servers. */
 export interface ProfileCandidate {
-  /** Stable, structural id, e.g. `project:2` or `skill:1:4`. */
-  id: string;
-  kind: SwapKind;
-  /** Short display name. */
-  label: string;
-  /** Fuller text given to the model for relevance judgement. */
-  detail: string;
+  evidenceRef: ProfileEvidenceRef;
+  evidenceText: string;
+  evidenceLocation: string;
 }
 
-/** A suggested change, after server-side validation against the real profile. */
-export interface ProfileSwap {
-  /** Id of the profile item to bring in. Guaranteed to resolve. */
-  id: string;
-  kind: SwapKind;
-  /** Resolved from the profile, never from the model's own words. */
-  profileItem: string;
-  /** Fuller profile detail, for display under the suggestion. */
-  profileDetail: string;
-  /** What it should replace or demote in the CV; null means a pure addition. */
-  cvItem: string | null;
-  /** The JD requirement this satisfies. */
-  jdRequirement: string;
-  /** Why the profile item is the better fit. */
+/** One model-proposed relationship after canonical server-side resolution. */
+export interface ProfileEvidenceSuggestion {
+  requirementId: string;
+  evidenceRef: ProfileEvidenceRef;
+  evidenceText: string;
+  evidenceLocation: string;
   rationale: string;
-  confidence: 'high' | 'medium';
+  confidence: number;
 }
 
-/** Raw shape the model returns, before validation. */
-export interface RawProfileSwap {
-  id?: unknown;
-  cvItem?: unknown;
-  jdRequirement?: unknown;
+/** Explicit generation-time choice. No confidence threshold can create this. */
+export interface ApprovedProfileEvidence {
+  requirementId: string;
+  evidenceRef: ProfileEvidenceRef;
+}
+
+/** Small requirement view returned beside suggestions for plain-language UI. */
+export interface ProfileEvidenceRequirement {
+  id: string;
+  text: string;
+  importance: RequirementImportance;
+  status: RequirementStatus;
+}
+
+/** Resolved, generation-time overlay passed through the temporary adapter. */
+export interface ApprovedProfileEvidenceOverlay extends ApprovedProfileEvidence {
+  requirementText: string;
+  sourceProfileId: string;
+  resolvedEvidenceText: string;
+  evidenceLocation: string;
+  userApproved: true;
+  rationale?: string;
+}
+
+/** Untrusted shape returned by the model. Evidence wording is ignored. */
+export interface RawProfileEvidenceSuggestion {
+  requirementId?: unknown;
+  evidenceRef?: unknown;
+  evidenceText?: unknown;
+  evidenceLocation?: unknown;
   rationale?: unknown;
   confidence?: unknown;
 }
 
 export interface ProfileReconciliation {
-  swaps: ProfileSwap[];
-  /** Set when the pass ran but found nothing worth swapping. */
+  suggestions: ProfileEvidenceSuggestion[];
+  requirements: ProfileEvidenceRequirement[];
   checked: boolean;
-  /**
-   * Whether a model was actually invoked. False when the profile held nothing to
-   * compare and the pass short-circuited. Metering reads this: a run that never
-   * reached a provider must not consume the user's monthly allowance.
-   */
   usedAI: boolean;
+}
+
+export class ProfileEvidenceValidationError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'ProfileEvidenceValidationError';
+  }
+}
+
+export function profileEvidenceRefKey(ref: ProfileEvidenceRef): string {
+  return `${ref.type}:${ref.id}`;
+}
+
+export function requirementEvidencePairKey(
+  requirementId: string,
+  evidenceRef: ProfileEvidenceRef
+): string {
+  return `${requirementId}:${profileEvidenceRefKey(evidenceRef)}`;
 }

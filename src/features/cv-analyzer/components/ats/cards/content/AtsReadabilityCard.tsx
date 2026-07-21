@@ -18,6 +18,7 @@ export default function AtsReadabilityCard({ rawText, score, scoreStatus, detail
   return (
     <AuditCard
       id="atsReadability"
+      source="rule"
       title="ATS Parse Rate"
       subtitle="Rule-based layout parsing check"
       score={score}

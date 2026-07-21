@@ -6,6 +6,7 @@ import { FileText, FileStack, Plus, Download, Target, FileUp, UserRound } from '
 import { cn } from '@/shared/utils/cn';
 import DashboardTopBar from '../DashboardTopBar';
 import GenerateCvWizardModal from '@/features/cv-rewrite/components/GenerateCvWizardModal';
+import { cvProvenance } from '@/features/cv-rewrite/utils/provenance';
 import type { CvRow, AnalysisRow } from '../DashboardShell';
 
 /** Provenance chip on a CV card. Truncates so a long filename can't break the grid. */
@@ -108,7 +109,7 @@ export default function CvsView({
                 <div className="mt-3 flex flex-wrap gap-1.5">
                   <Pill className="bg-neutral-100 text-neutral-600 capitalize">{cv.template}</Pill>
 
-                  {cv.analysisId ? (
+                  {cvProvenance(cv) === 'analysis' ? (
                     <>
                       {cv.jobTitle && (
                         <Pill className="bg-purple-50 text-accent-purple">

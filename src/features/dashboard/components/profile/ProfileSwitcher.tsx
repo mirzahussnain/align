@@ -187,7 +187,7 @@ export default function ProfileSwitcher({
                     value={label}
                     onChange={(e) => setLabel(e.target.value)}
                     onKeyDown={(e) => e.key === 'Enter' && handleCreate()}
-                    placeholder="e.g. Warehouse Operative"
+                    placeholder="e.g. Warehouse Applications"
                     className="rounded-lg border border-neutral-200 px-2.5 py-1.5 text-sm outline-none focus:border-accent-purple"
                   />
                   <select
@@ -195,7 +195,7 @@ export default function ProfileSwitcher({
                     onChange={(e) => setOccupation(e.target.value)}
                     className="rounded-lg border border-neutral-200 px-2.5 py-1.5 text-xs text-neutral-600 outline-none focus:border-accent-purple"
                   >
-                    <option value="">Target occupation (recommended)</option>
+                    <option value="">CV evaluation type (recommended)</option>
                     {OCCUPATION_OPTIONS.map((o) => (
                       <option key={o.value} value={o.value}>
                         {o.label}

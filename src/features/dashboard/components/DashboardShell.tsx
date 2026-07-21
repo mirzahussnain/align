@@ -42,10 +42,10 @@ export interface HeroInsight {
   strongestCategoryLabel: string | null;
   credentialsStatus: 'ready' | 'attention' | null;
   /** Job-match-mode facts, from the structured mandatory/desirable requirement mapping — never a raw keyword-miss count. */
-  mandatoryMatched: number | null;
-  mandatoryTotal: number | null;
+  essentialMatched: number | null;
+  essentialTotal: number | null;
   primaryGap: string | null;
-  domainMismatch: boolean | null;
+  domainStatus: 'aligned' | 'partial' | 'mismatch' | null;
 }
 
 /**

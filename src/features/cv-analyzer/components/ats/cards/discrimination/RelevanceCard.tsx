@@ -21,6 +21,7 @@ export default function RelevanceCard({ roleAligned, occupationLabel, presentKey
   return (
     <AuditCard
       id="relevance"
+      source="rule"
       title="Role Relevance"
       subtitle={`Validates alignment with UK ${occupationLabel} expectations`}
       score={roleAligned ? 'Aligned' : 'Review evidence'}

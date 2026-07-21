@@ -11,10 +11,10 @@ import {
   Globe2, 
   FileText 
 } from 'lucide-react';
-import type { AIJobMatchOutput } from '@/shared/types/ai';
+import type { JobMatchDataV2 } from '@/shared/types/ai';
 
 interface RewriteStrategyPanelProps {
-  data: AIJobMatchOutput;
+  data: JobMatchDataV2;
   contentVariants: Variants;
 }
 

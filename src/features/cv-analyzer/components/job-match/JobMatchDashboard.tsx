@@ -1,12 +1,10 @@
 'use client';
 
 import { useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { Target, CheckCircle2, AlertCircle, FileEdit, Briefcase, Zap, BarChart2, ShieldAlert } from 'lucide-react';
+import { AnimatePresence } from 'framer-motion';
+import { Target, AlertCircle, FileEdit, Briefcase, BarChart2, ShieldAlert } from 'lucide-react';
 import type { CVAnalysisResult } from '@/shared/types/cv';
-import type { AIJobMatchOutput } from '@/shared/types/ai';
-import ScoreDial from '@/shared/components/ui/CircularProgress';
-import { cn } from '@/shared/utils/cn';
+import type { JobMatchDataV2 } from '@/shared/types/ai';
 import { SidebarNavItem } from '../shared/SidebarNavItem';
 import { JOB_MATCH_NAVIGATION } from '../../constants/dashboard-navigation';
 
@@ -20,6 +18,13 @@ import TailoredRewritesPanel from './panels/TailoredRewritesPanel';
 import RewriteStrategyPanel from './panels/RewriteStrategyPanel';
 import RewriteWizardModal from '@/features/cv-rewrite/components/RewriteWizardModal';
 import { Sparkles, LayoutList } from 'lucide-react';
+import {
+  getEligibilityRequirements,
+  getPersonSpecificationRequirements,
+  getMandatoryRequirementGaps,
+  getRequirementSummary,
+  getScoringRows,
+} from '@/shared/utils/job-match-view';
 
 interface JobMatchDashboardProps {
   result: CVAnalysisResult;
@@ -34,7 +39,7 @@ export default function JobMatchDashboard({ result }: JobMatchDashboardProps) {
 
   // Person-spec criteria only exist when the JD contained an explicit
   // essential/desirable list (NHS/council-style adverts).
-  const hasCriteria = (data?.selectionCriteria?.length ?? 0) > 0;
+  const hasCriteria = data ? getPersonSpecificationRequirements(data).length > 0 : false;
   const navigation = hasCriteria
     ? [
         ...JOB_MATCH_NAVIGATION.slice(0, 1),
@@ -62,7 +67,10 @@ export default function JobMatchDashboard({ result }: JobMatchDashboardProps) {
 
   type NavItemStatus = 'success' | 'error' | 'warning' | 'info' | 'premium';
 
-  const getNavItemProps = (id: string, data: AIJobMatchOutput): { status: NavItemStatus; badgeText: string; icon: React.ReactNode } => {
+  const getNavItemProps = (id: string, data: JobMatchDataV2): { status: NavItemStatus; badgeText: string; icon: React.ReactNode } => {
+    const summary = getRequirementSummary(data);
+    const criteria = getPersonSpecificationRequirements(data);
+    const eligibility = getEligibilityRequirements(data);
     switch (id) {
       case 'summary':
         return {
@@ -73,25 +81,35 @@ export default function JobMatchDashboard({ result }: JobMatchDashboardProps) {
       case 'criteria':
         return {
           status: 'info' as const,
-          badgeText: `${data.selectionCriteria?.length ?? 0} Criteria`,
+          badgeText: `${criteria.length} Criteria`,
           icon: <ShieldAlert size={12} />
         };
       case 'skills':
         return {
-          status: data.mandatorySkills.missing.length > 0 ? 'error' : 'success' as const,
-          badgeText: `${data.mandatorySkills.present.length} Matches`,
+          status: summary.essentialMatched === summary.essentialTotal ? 'success' : 'error' as const,
+          badgeText: `${summary.essentialMatched}/${summary.essentialTotal} Essential`,
           icon: <Target size={12} />
         };
       case 'domain':
         return {
-          status: data.domainFit.mismatch ? 'error' : data.eligibilityFlags.length > 0 ? 'warning' : 'success' as const,
-          badgeText: data.domainFit.mismatch ? 'Mismatch' : 'Aligned',
+          status:
+            summary.domainStatus === 'mismatch'
+              ? 'error'
+              : summary.domainStatus === 'partial' || eligibility.some((item) => item.status !== 'met')
+                ? 'warning'
+                : 'success' as const,
+          badgeText:
+            summary.domainStatus === 'mismatch'
+              ? 'Mismatch'
+              : summary.domainStatus === 'partial'
+                ? 'Partial'
+                : 'Aligned',
           icon: <Briefcase size={12} />
         };
       case 'scoring':
         return {
           status: 'info' as const,
-          badgeText: `${data.scoringBreakdown.length} Items`,
+          badgeText: `${getScoringRows(data).length} Items`,
           icon: <BarChart2 size={12} />
         };
       case 'rewrites':
@@ -226,15 +244,8 @@ export default function JobMatchDashboard({ result }: JobMatchDashboardProps) {
       <RewriteWizardModal
         isOpen={isWizardOpen}
         onClose={() => setIsWizardOpen(false)}
-        cvText={result.rawText}
-        jobDescription={result.jobDescription || ''}
-        jobMatchFeedback={data}
-        atsData={{
-          categories: result.categories,
-          recommendations: result.recommendations,
-          keywords: result.keywords,
-          aiClichés: result.aiClichés,
-        }}
+        analysisId={result.analysisId}
+        missingSkills={getMandatoryRequirementGaps(data).missing}
       />
     </div>
   );

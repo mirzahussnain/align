@@ -16,6 +16,7 @@ export default function RepetitionCard({ repeatedWords }: RepetitionCardProps) {
   return (
     <AuditCard
       id="repetition"
+      source="rule"
       title="Vocabulary Repetition"
       subtitle="Buzzword audit and phrase repetition checks"
       score={isPassed ? "Passed" : "Review"}

@@ -116,7 +116,9 @@ model Profile {
    * guidance — users are never limited to the ontology label.
    */
   targetRoleTitle     String?
-  /** entry | mid | senior | lead */
+  /**
+   * entry | mid | senior | lead
+   */
   targetSeniority     String?
   tagline             String?
   professionalSummary String?
@@ -141,7 +143,6 @@ model Profile {
  * consistent label and a job match can reason about it — "FT", "full time" and
  * "Full-Time" were all previously storable and none of them compare equal.
  * Display labels live in src/shared/constants/employment-type.ts.
- *
  * Nothing scores this field — it exists so the CV renders the arrangement
  * honestly. A volunteer role, a clinical placement or an agency shift printed
  * as ordinary employment misrepresents the candidate, which is why the list
@@ -162,42 +163,43 @@ enum EmploymentType {
 }
 
 model Experience {
-  id        String          @id @default(cuid())
-  profileId String
-  profile   Profile         @relation(fields: [profileId], references: [id], onDelete: Cascade)
-  jobTitle  String
-  company   String
-  location  String?
-  type      EmploymentType?
+  id           String          @id @default(cuid())
+  profileId    String
+  profile      Profile         @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  jobTitle     String
+  company      String
+  location     String?
+  type         EmploymentType?
   /**
    * Month precision, stored ISO as `YYYY-MM`.
-   *
    * Deliberately not DateTime: a CV never shows a day, and a DateTime would
    * force an arbitrary day-of-month that then has to be hidden everywhere. ISO
    * text sorts correctly as a string and formats to "Jan 2022" at render time,
    * which the old free-text column could not do — it stored whatever was typed.
    */
-  startDate String
-  /** Null while `current` is true — an ongoing role has no end date. */
-  endDate   String?
+  startDate    String
+  /**
+   * Null while `current` is true — an ongoing role has no end date.
+   */
+  endDate      String?
   /**
    * "I still work here". Kept as its own flag rather than a magic endDate value
    * so the CV can render "Present" and a date comparison never has to parse it.
    */
-  current      Boolean @default(false)
+  current      Boolean         @default(false)
   achievements Json[]
-  sortOrder    Int     @default(0)
+  sortOrder    Int             @default(0)
 
   @@index([profileId])
   @@map("experience")
 }
 
 model ProjectEntry {
-  id        String  @id @default(cuid())
-  profileId String
-  profile   Profile @relation(fields: [profileId], references: [id], onDelete: Cascade)
-  name      String
-  stack     String?
+  id           String  @id @default(cuid())
+  profileId    String
+  profile      Profile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  name         String
+  stack        String?
   /**
    * `YYYY-MM`, as on Experience — but optional on both ends. Plenty of side
    * projects have no meaningful start or finish, and forcing a date there
@@ -213,15 +215,19 @@ model ProjectEntry {
 }
 
 model Education {
-  id         String  @id @default(cuid())
-  profileId  String
-  profile    Profile @relation(fields: [profileId], references: [id], onDelete: Cascade)
-  degree     String
-  university String
-  /** `YYYY-MM`, as on Experience. Required — a degree with no dates reads as a gap. */
-  startDate  String
-  /** Null while `current` is true, i.e. still studying. */
-  endDate    String?
+  id          String  @id @default(cuid())
+  profileId   String
+  profile     Profile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  degree      String
+  university  String
+  /**
+   * `YYYY-MM`, as on Experience. Required — a degree with no dates reads as a gap.
+   */
+  startDate   String
+  /**
+   * Null while `current` is true, i.e. still studying.
+   */
+  endDate     String?
   current     Boolean @default(false)
   grade       String?
   description String?
@@ -232,15 +238,30 @@ model Education {
 }
 
 model SkillGroup {
-  id        String   @id @default(cuid())
+  id        String  @id @default(cuid())
   profileId String
-  profile   Profile  @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  profile   Profile @relation(fields: [profileId], references: [id], onDelete: Cascade)
   category  String
-  skills    String[]
-  sortOrder Int      @default(0)
+  sortOrder Int     @default(0)
+  skills    Skill[]
 
   @@index([profileId])
   @@map("skill_group")
+}
+
+/**
+ * One independently addressable stored skill. A skill must have its own row so
+ * profile-evidence references never depend on a group's array position.
+ */
+model Skill {
+  id           String     @id @default(cuid())
+  skillGroupId String
+  skillGroup   SkillGroup @relation(fields: [skillGroupId], references: [id], onDelete: Cascade)
+  name         String
+  sortOrder    Int        @default(0)
+
+  @@index([skillGroupId])
+  @@map("skill")
 }
 
 model Certification {
@@ -255,33 +276,38 @@ model Certification {
   @@map("certification")
 }
 
-// Persists a full CVAnalysisResult run (src/shared/types/cv.ts). The nested
-// AI-shaped result is stored as Json to avoid over-normalizing volatile
-// fields, while mode/overallScore stay queryable columns for history views.
+// Persists a full CVAnalysisResult run (src/shared/types/cv.ts). The general
+// ATS/CV result is stored as Json to avoid over-normalizing volatile fields,
+// while mode/overallScore stay queryable columns for history views.
 model Analysis {
-  id              String    @id @default(cuid())
-  userId          String
-  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id                  String    @id @default(cuid())
+  userId              String
+  user                User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   /**
    * Which career track this analysis belongs to, so the engineering profile's
    * history doesn't show warehouse matches. Nullable and SetNull: deleting a
    * profile must never destroy the user's scoring history, it just unfiles it.
    */
-  profileId       String?
-  profile         Profile?  @relation(fields: [profileId], references: [id], onDelete: SetNull)
-  mode            String
-  overallScore    Int
-  rawResult       Json
-  jobDescription  String?
-  jobMatchData    Json?
+  profileId           String?
+  profile             Profile?  @relation(fields: [profileId], references: [id], onDelete: SetNull)
+  mode                String
+  overallScore        Int
+  rawResult           Json
+  jobDescription      String?
+  /**
+   * Sole persisted job-match payload. Null for ATS-only analyses; job-match
+   * rows are validated in application code as JobMatchDataV2 with
+   * schemaVersion = 2. rawResult never contains a second copy.
+   */
+  jobMatchData        Json?
   /**
    * Version stamps for interpreting stored results. Null on rows written
    * before the occupation-aware rebuild (scoring v2) — readers treat those as
    * legacy shape.
    */
-  scoringVersion    Int?
-  profileVersion    String?
-  dictionaryVersion String?
+  scoringVersion      Int?
+  profileVersion      String?
+  dictionaryVersion   String?
   /**
    * Promoted classification columns for querying/filtering history without
    * deserialising rawResult; `classification` holds the full object including
@@ -296,21 +322,21 @@ model Analysis {
    * of `jobMatchData` so history lists can render "Senior Data Engineer at
    * FinCore" without deserialising the whole match blob for every row.
    */
-  jobTitle        String?
-  jobCompany      String?
-  sourceFileName  String?
-  sourceFileKey   String?
+  jobTitle            String?
+  jobCompany          String?
+  sourceFileName      String?
+  sourceFileKey       String?
   /**
    * Bytes of the archived source upload, so quota is computed without listing R2.
    */
-  sourceFileSize  Int?
+  sourceFileSize      Int?
   /**
    * When the archived source file becomes eligible for pruning, set from the
    * user's tier retention window at upload time. Null means keep indefinitely.
    * Only the R2 object expires — the Analysis row and its scores are retained.
    */
-  sourceExpiresAt DateTime?
-  createdAt       DateTime  @default(now())
+  sourceExpiresAt     DateTime?
+  createdAt           DateTime  @default(now())
 
   generatedCVs GeneratedCV[]
 
@@ -343,9 +369,13 @@ model UsageCounter {
    * are deliberately not counted.
    */
   aiAnalyses       Int      @default(0)
-  /** Completed CV rewrites. */
+  /**
+   * Completed CV rewrites.
+   */
   cvGenerations    Int      @default(0)
-  /** Profile-vs-CV reconciliation calls that reached a model. */
+  /**
+   * Profile-vs-CV reconciliation calls that reached a model.
+   */
   profileReasoning Int      @default(0)
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
@@ -378,6 +408,10 @@ model GeneratedCV {
    */
   title      String?
   data       Json
+  /**
+   * Generation-time source and approval metadata; never mixed into CV content.
+   */
+  provenance Json?
   fileKey    String?
   /**
    * Bytes of the archived DOCX, so quota is computed without listing R2.

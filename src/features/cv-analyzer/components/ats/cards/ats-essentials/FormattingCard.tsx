@@ -22,6 +22,7 @@ export default function FormattingCard({ formatting, details }: FormattingCardPr
   return (
     <AuditCard
       id="formatting"
+      source="rule"
       title="Design & Formatting Audit"
       subtitle="Rule-based layout compliance"
       score={isPassed ? "Passed" : "Needs review"}

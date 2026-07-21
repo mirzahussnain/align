@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import { AISemanticOutputSchema, AIJobMatchOutputSchema, AIClassificationSchema } from '../ai-output';
+import {
+  AISemanticOutputSchema,
+  AIClassificationSchema,
+  JobMatchDataV2Schema,
+  parseStoredJobMatchData,
+} from '../ai-output';
 
 const goodSemantic = {
   summaryScore: 7,
@@ -17,8 +22,7 @@ const goodSemantic = {
 
 describe('AISemanticOutputSchema', () => {
   it('accepts a well-formed output', () => {
-    const parsed = AISemanticOutputSchema.safeParse(goodSemantic);
-    expect(parsed.success).toBe(true);
+    expect(AISemanticOutputSchema.safeParse(goodSemantic).success).toBe(true);
   });
 
   it('clamps out-of-range scores instead of rejecting', () => {
@@ -28,8 +32,7 @@ describe('AISemanticOutputSchema', () => {
   });
 
   it('coerces numeric strings (a common model quirk)', () => {
-    const parsed = AISemanticOutputSchema.parse({ ...goodSemantic, summaryScore: '8' });
-    expect(parsed.summaryScore).toBe(8);
+    expect(AISemanticOutputSchema.parse({ ...goodSemantic, summaryScore: '8' }).summaryScore).toBe(8);
   });
 
   it('carries no classification or tech-detection fields', () => {
@@ -45,22 +48,40 @@ describe('AISemanticOutputSchema', () => {
   });
 
   it('rejects output missing the scores the route reads', () => {
-    const { summaryScore: _, ...truncated } = goodSemantic;
+    const truncated: Partial<typeof goodSemantic> = { ...goodSemantic };
+    delete truncated.summaryScore;
     expect(AISemanticOutputSchema.safeParse(truncated).success).toBe(false);
   });
 });
 
-const goodJobMatch = {
-  jobTitle: 'Senior Data Engineer',
-  jobCompany: 'Acme',
-  mandatorySkills: { present: ['SQL → 5 years'], missing: ['Spark'], partial: [] },
-  desirableSkills: { present: [], missing: ['Kafka'] },
-  domainFit: { roleDomain: 'data eng', candidateDomain: 'analytics', mismatch: false, overlapAreas: [], detail: '' },
-  eligibilityFlags: [],
-  scoringBreakdown: [{ item: 'Spark', classification: 'missing', deduction: 10, reason: 'not on CV' }],
-  matchScore: 72,
-  matchFeedback: 'Decent fit.',
-  experienceGap: 'Spark experience',
+const goodStoredJobMatch = {
+  schemaVersion: 2,
+  requirements: [
+    {
+      id: 'requirement-001',
+      text: 'SQL',
+      importance: 'mandatory',
+      category: 'skill',
+      sourceSection: 'job_description',
+      evidenceRequired: true,
+      status: 'met',
+      evidence: [{ source: 'cv', text: 'Five years of SQL' }],
+      confidence: 0.95,
+      deduction: { points: 0, reason: 'Evidenced', rubric: 'met' },
+    },
+  ],
+  domainFit: {
+    roleDomain: 'Data engineering',
+    candidateDomain: 'Data engineering',
+    status: 'aligned',
+    overlapAreas: ['SQL'],
+    detail: 'Aligned',
+    confidence: 0.9,
+    deduction: { points: 0, reason: 'Aligned' },
+  },
+  matchScore: 100,
+  matchFeedback: 'Strong fit',
+  experienceGap: '',
   tailoredRewrites: [],
   cv_build_spec: {
     recommended_template: 'sharp_minimal',
@@ -74,31 +95,18 @@ const goodJobMatch = {
     visa_note_required: false,
     cover_letter_angle: '',
   },
-};
+} as const;
 
-describe('AIJobMatchOutputSchema', () => {
-  it('accepts a well-formed output', () => {
-    expect(AIJobMatchOutputSchema.safeParse(goodJobMatch).success).toBe(true);
+describe('stored JobMatchDataV2', () => {
+  it('accepts schemaVersion 2 data', () => {
+    expect(JobMatchDataV2Schema.safeParse(goodStoredJobMatch).success).toBe(true);
+    expect(parseStoredJobMatchData(goodStoredJobMatch)?.schemaVersion).toBe(2);
   });
 
-  it('clamps matchScore into 0..100', () => {
-    expect(AIJobMatchOutputSchema.parse({ ...goodJobMatch, matchScore: 103 }).matchScore).toBe(100);
-  });
-
-  it('keeps cv_build_spec intact for the rewrite pipeline', () => {
-    const parsed = AIJobMatchOutputSchema.parse(goodJobMatch);
-    expect(parsed.cv_build_spec.section_order).toEqual(['Experience', 'Skills']);
-    expect(parsed.cv_build_spec.visa_note_required).toBe(false);
-  });
-
-  it('rejects output with no mandatorySkills block', () => {
-    const { mandatorySkills: _, ...truncated } = goodJobMatch;
-    expect(AIJobMatchOutputSchema.safeParse(truncated).success).toBe(false);
-  });
-
-  it('salvages malformed optional arrays instead of failing', () => {
-    const parsed = AIJobMatchOutputSchema.parse({ ...goodJobMatch, eligibilityFlags: 'none' });
-    expect(parsed.eligibilityFlags).toEqual([]);
+  it('rejects versionless job-match data instead of interpreting it as legacy', () => {
+    const versionless: { schemaVersion?: number } & Record<string, unknown> = { ...goodStoredJobMatch };
+    delete versionless.schemaVersion;
+    expect(parseStoredJobMatchData(versionless)).toBeNull();
   });
 });
 

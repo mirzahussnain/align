@@ -84,18 +84,25 @@ describe('job-match prompt composition', () => {
     }
   });
 
-  it('keeps the six-step deduction structure', async () => {
+  it('asks for one complete canonical inventory and server-owned scoring', async () => {
     const { jobMatch } = await compose('admin-office');
-    for (const step of ['STEP 1 —', 'STEP 1b —', 'STEP 2 —', 'STEP 3 —', 'STEP 4 —', 'STEP 5 —', 'STEP 6 —']) {
-      expect(jobMatch).toContain(step);
-    }
-    expect(jobMatch).toContain('must equal 100 minus the sum of all');
+    expect(jobMatch).toContain('COMPLETE JD INVENTORY');
+    expect(jobMatch).toContain('Each requirement must appear exactly once');
+    expect(jobMatch).toContain('location constraint');
+    expect(jobMatch).toContain('shift or work-pattern requirement');
+    expect(jobMatch).toContain('Do NOT calculate or return matchScore');
+    expect(jobMatch).toContain('Do NOT generate requirement ids');
   });
 
-  it('adds selection-criteria extraction', async () => {
+  it('uses the v2 requirement ledger instead of parallel legacy arrays', async () => {
     const { jobMatch } = await compose('registered-nurse-no-nmc');
-    expect(jobMatch).toContain('selectionCriteria');
+    expect(jobMatch).toContain('"schemaVersion": 2');
+    expect(jobMatch).toContain('"requirements"');
+    expect(jobMatch).toContain('"sourceSection"');
     expect(jobMatch).toContain('person specification');
+    expect(jobMatch).not.toContain('"selectionCriteria"');
+    expect(jobMatch).not.toContain('"mandatorySkills"');
+    expect(jobMatch).not.toContain('"matchScore"');
   });
 
   it('tech depth examples appear only for technical specialists', async () => {
