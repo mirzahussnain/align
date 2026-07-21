@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { AnimatePresence } from 'framer-motion';
 import { Target, AlertCircle, FileEdit, Briefcase, BarChart2, ShieldAlert } from 'lucide-react';
 import type { CVAnalysisResult } from '@/shared/types/cv';
@@ -25,6 +25,7 @@ import {
   getRequirementSummary,
   getScoringRows,
 } from '@/shared/utils/job-match-view';
+import { groundJobMatchForDisplay } from '@/shared/services/cv-recommendation-grounding';
 
 interface JobMatchDashboardProps {
   result: CVAnalysisResult;
@@ -35,7 +36,17 @@ type TabKey = 'summary' | 'criteria' | 'skills' | 'domain' | 'scoring' | 'rewrit
 export default function JobMatchDashboard({ result }: JobMatchDashboardProps) {
   const [activeTab, setActiveTab] = useState<TabKey>('summary');
   const [isWizardOpen, setIsWizardOpen] = useState(false);
-  const data = result.jobMatchData;
+  // Ground AI-authored recommendation text against verified evidence at read
+  // time, non-mutatingly. This makes every panel below safe — including
+  // historical analyses saved before recommendation grounding existed — without
+  // touching the stored `Analysis.jobMatchData` blob.
+  const data = useMemo(
+    () =>
+      result.jobMatchData
+        ? groundJobMatchForDisplay(result.jobMatchData, result.rawText)
+        : undefined,
+    [result.jobMatchData, result.rawText]
+  );
 
   // Person-spec criteria only exist when the JD contained an explicit
   // essential/desirable list (NHS/council-style adverts).
