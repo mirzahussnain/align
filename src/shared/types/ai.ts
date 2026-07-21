@@ -50,33 +50,6 @@ export interface CvBuildSpec {
   cover_letter_angle: string;
 }
 
-/**
- * Temporary input contract for the existing CV rewriter. This is never
- * persisted or rendered; JobMatchDataV2 is projected into it only at the
- * server-side regeneration boundary.
- */
-export interface LegacyCvRewriteJobMatchInput {
-  mandatorySkills: {
-    present: string[];
-    missing: string[];
-    partial: string[];
-  };
-  desirableSkills: {
-    present: string[];
-    missing: string[];
-  };
-  domainFit: {
-    roleDomain: string;
-    candidateDomain: string;
-    mismatch: boolean;
-    overlapAreas: string[];
-    detail: string;
-  };
-  eligibilityFlags: { flag: string; detail: string; datesInvolved: string }[];
-  experienceGap: string;
-  cv_build_spec: CvBuildSpec;
-}
-
 export type RequirementImportance = 'mandatory' | 'desirable';
 
 export type RequirementStatus =

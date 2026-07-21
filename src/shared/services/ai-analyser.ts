@@ -89,6 +89,6 @@ export async function getJobMatchFeedback(
     schema: AIJobMatchV2RawSchema as unknown as ZodType<JobMatchDataV2Draft>,
   });
 
-  return draft ? normalizeJobMatchDataV2(draft) : null;
+  return draft ? normalizeJobMatchDataV2(draft, cvText) : null;
 }
 

@@ -2,7 +2,9 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 
 // The route pulls in auth, prisma, the AI rewriter, storage and the usage meter.
 // Each is mocked so the test exercises the route's own control flow — quota
-// gating, usage accounting, and provenance — without a DB, a model, or a bucket.
+// gating, usage accounting, truthfulness validation, and provenance — without a
+// DB, a model, or a bucket. The ledger projection and the truthfulness validator
+// run for real: they are pure and are exactly what we want to exercise here.
 vi.mock('@/shared/lib/auth', () => ({
   auth: { api: { getSession: vi.fn() } },
 }));
@@ -60,6 +62,7 @@ import { persistAndArchiveCv } from '@/shared/services/cv-generation';
 import { resolveApprovedProfileEvidence } from '@/shared/services/profile-reconciler';
 import { loadOwnedProfileData } from '@/features/dashboard/data/load-profile';
 import { ProfileEvidenceValidationError } from '@/shared/types/profile-reasoning';
+import { TRUTHFULNESS_FAILURE_MESSAGE } from '@/shared/services/cv-rewrite-validation';
 
 const USER = { id: 'u1' };
 
@@ -158,13 +161,51 @@ describe('POST /api/cv/regenerate', () => {
     ).toBeLessThan(vi.mocked(recordUsage).mock.invocationCallOrder[0]);
   });
 
-  it('persists the generated CV linked to its analysis and career track', async () => {
+  it('feeds the rewriter a single ledger-native input object', async () => {
+    await POST(regenRequest({ analysisId: 'an-1', templateId: 'architect' }));
+
+    const calls = vi.mocked(rewriteCV).mock.calls[0];
+    expect(calls).toHaveLength(1);
+    const input = calls[0];
+    expect(input.template).toBe('architect');
+    expect(input.cvText.length).toBeGreaterThan(0);
+    expect(input.rewriteContext.requirements[0].id).toBe('requirement-001');
+  });
+
+  it('projects the canonical v2 ledger into a compact context with no scoring fields', async () => {
+    const res = await POST(regenRequest({ analysisId: 'an-1' }));
+    const input = vi.mocked(rewriteCV).mock.calls[0][0];
+
+    expect(res.status).toBe(200);
+    const req = input.rewriteContext.requirements[0];
+    expect(req.id).toBe('requirement-001');
+    expect(req.status).toBe('not_met');
+    expect(req).not.toHaveProperty('deduction');
+    expect(req).not.toHaveProperty('confidence');
+    expect(input.rewriteContext).not.toHaveProperty('matchScore');
+    expect(input.rewriteContext.cvBuildSpec).toEqual(cvBuildSpec);
+  });
+
+  it('persists the generated CV linked to its analysis and career track, with full provenance', async () => {
     await POST(regenRequest({ analysisId: 'an-1' }));
 
     expect(persistAndArchiveCv).toHaveBeenCalledTimes(1);
     const args = vi.mocked(persistAndArchiveCv).mock.calls[0][0];
     expect(args.analysisId).toBe('an-1');
     expect(args.profileId).toBe('profile-123');
+    expect(args.provenance).toEqual(
+      expect.objectContaining({
+        analysisId: 'an-1',
+        profileId: 'profile-123',
+        requirementSchemaVersion: 2,
+        requirementIds: ['requirement-001'],
+        userContext: [],
+        promptContextVersion: expect.any(Number),
+        truthfulnessValidationVersion: expect.any(Number),
+        truthfulnessValidationResult: 'passed',
+        estimatedPromptTokens: expect.any(Number),
+      })
+    );
   });
 
   it('re-resolves approved requirement/evidence pairs and persists their provenance', async () => {
@@ -196,17 +237,44 @@ describe('POST /api/cv/regenerate', () => {
 
     expect(response.status).toBe(200);
     expect(loadOwnedProfileData).toHaveBeenCalledWith(USER.id, 'profile-123');
-    expect(resolveApprovedProfileEvidence).toHaveBeenCalledWith(
-      { profileId: 'profile-123' },
-      [approval],
-      v2JobMatchData.requirements
+
+    const resolveCall = vi.mocked(resolveApprovedProfileEvidence).mock.calls[0];
+    expect(resolveCall[0]).toEqual({ profileId: 'profile-123' });
+    expect(resolveCall[1]).toEqual([approval]);
+    expect(resolveCall[2][0].id).toBe('requirement-001');
+
+    // The rewriter's input carries the verified overlay, tied to its requirement.
+    const input = vi.mocked(rewriteCV).mock.calls[0][0];
+    expect(input.approvedProfileEvidence).toEqual([overlay]);
+    expect(
+      input.rewriteContext.requirements.find((r) => r.id === 'requirement-001')?.approvedProfileEvidence
+    ).toEqual(['Kafka Fundamentals — Confluent — 2025']);
+
+    expect(vi.mocked(persistAndArchiveCv).mock.calls[0][0].provenance).toEqual(
+      expect.objectContaining({ approvedProfileEvidence: [overlay] })
     );
-    expect(JSON.parse(vi.mocked(rewriteCV).mock.calls[0][2] as string).approvedProfileEvidence)
-      .toEqual([overlay]);
-    expect(vi.mocked(persistAndArchiveCv).mock.calls[0][0].provenance).toEqual({
-      approvedProfileEvidence: [overlay],
-    });
+
+    // The stored ledger is never mutated by generation.
     expect(v2JobMatchData).toEqual(before);
+  });
+
+  it('persists user-provided context in provenance, kept separate from evidence', async () => {
+    await POST(
+      regenRequest({
+        analysisId: 'an-1',
+        hitlContext: { Kafka: 'I ran a Kafka cluster in a side project.', Blank: '   ' },
+      })
+    );
+
+    const input = vi.mocked(rewriteCV).mock.calls[0][0];
+    expect(input.userContext).toEqual([
+      { label: 'Kafka', text: 'I ran a Kafka cluster in a side project.' },
+    ]);
+    expect(vi.mocked(persistAndArchiveCv).mock.calls[0][0].provenance).toEqual(
+      expect.objectContaining({
+        userContext: [{ label: 'Kafka', text: 'I ran a Kafka cluster in a side project.' }],
+      })
+    );
   });
 
   it('rejects a stale or invalid approved evidence reference before rewriting', async () => {
@@ -230,20 +298,39 @@ describe('POST /api/cv/regenerate', () => {
     expect(response.status).toBe(400);
     expect(rewriteCV).not.toHaveBeenCalled();
     expect(persistAndArchiveCv).not.toHaveBeenCalled();
+    expect(recordUsage).not.toHaveBeenCalled();
   });
 
-  it('adapts a canonical v2 ledger to the unchanged legacy rewrite input', async () => {
-    vi.mocked(prisma.analysis.findUnique).mockResolvedValue(
-      storedJobMatchAnalysis({ jobMatchData: v2JobMatchData }) as never
-    );
+  it('does not consume a generation when the draft fails truthfulness validation', async () => {
+    vi.mocked(rewriteCV).mockResolvedValue({
+      fullName: 'A. Candidate',
+      tagline: 'Data Engineer',
+      contact: { email: '', phone: '', location: '' },
+      professionalSummary: '',
+      education: [],
+      projects: [],
+      experience: [
+        {
+          jobTitle: 'Engineer',
+          company: 'Globex Fabrications',
+          location: '',
+          type: '',
+          startDate: '',
+          endDate: '',
+          achievements: [],
+        },
+      ],
+      coreSkills: [],
+      certifications: [],
+    } as never);
 
     const res = await POST(regenRequest({ analysisId: 'an-1' }));
-    const rewriteInput = JSON.parse(vi.mocked(rewriteCV).mock.calls[0][2] as string);
 
-    expect(res.status).toBe(200);
-    expect(rewriteInput.mandatorySkills.missing).toEqual(['Kafka experience']);
-    expect(rewriteInput).not.toHaveProperty('matchScore');
-    expect(rewriteInput.cv_build_spec).toEqual(cvBuildSpec);
+    expect(res.status).toBe(422);
+    const body = await res.json();
+    expect(body.error).toBe(TRUTHFULNESS_FAILURE_MESSAGE);
+    expect(recordUsage).not.toHaveBeenCalled();
+    expect(persistAndArchiveCv).not.toHaveBeenCalled();
   });
 
   it('rejects versionless canonical data and never falls back to a nested rawResult copy', async () => {

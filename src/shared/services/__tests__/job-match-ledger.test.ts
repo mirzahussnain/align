@@ -144,3 +144,55 @@ describe('v2 requirement ledger normalization', () => {
     expect(AIJobMatchV2RawSchema.safeParse(input).success).toBe(false);
   });
 });
+
+describe('analysis-time build-spec grounding', () => {
+  function withBullet(newBody: string, newLabel = 'API scalability'): JobMatchDataV2Draft {
+    const input = draft();
+    input.cv_build_spec = {
+      ...cvBuildSpec,
+      bullets_to_rewrite: [
+        { project_or_role: 'Data Platform', original_label: 'Scale', new_label: newLabel, new_body: newBody },
+      ],
+    };
+    return input;
+  }
+
+  it('demotes a build-spec bullet whose metric the CV does not support, before persistence', () => {
+    const normalized = normalizeJobMatchDataV2(
+      withBullet('Improved API performance by 40%.'),
+      'Built SQL data pipelines for analytics.'
+    );
+
+    const bullet = normalized.cv_build_spec.bullets_to_rewrite[0];
+    expect(bullet.new_body).toBe(
+      'Rewrite this bullet to emphasise API scalability using only verified evidence from this role.'
+    );
+    // Structural fields kept.
+    expect(bullet.new_label).toBe('API scalability');
+    expect(bullet.project_or_role).toBe('Data Platform');
+    // Score and requirement ledger untouched by grounding.
+    expect(normalized.matchScore).toBe(93);
+    expect(normalized.requirements.map((r) => r.id)).toEqual(['requirement-001', 'requirement-002']);
+    expect(normalized.requirements.map((r) => r.status)).toEqual(['met', 'not_met']);
+  });
+
+  it('preserves a build-spec metric that the source CV supports', () => {
+    const normalized = normalizeJobMatchDataV2(
+      withBullet('Processed 2,500,000 events per day.', 'Throughput'),
+      'Processed 2,500,000 events per day across the pipeline.'
+    );
+    expect(normalized.cv_build_spec.bullets_to_rewrite[0].new_body).toBe(
+      'Processed 2,500,000 events per day.'
+    );
+  });
+
+  it('grounds against ledger CV evidence, not only the raw CV text', () => {
+    const input = withBullet('Cut latency by 35%.', 'Latency');
+    input.requirements[0].evidence = [
+      { source: 'cv', text: 'Cut pipeline latency by 35%', location: 'Experience' },
+    ];
+    // No raw CV text passed — the metric is carried by ledger CV evidence.
+    const normalized = normalizeJobMatchDataV2(input, '');
+    expect(normalized.cv_build_spec.bullets_to_rewrite[0].new_body).toBe('Cut latency by 35%.');
+  });
+});

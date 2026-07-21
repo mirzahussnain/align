@@ -5,14 +5,25 @@ import { applyRateLimit, rewriteLimiter } from '@/shared/lib/rate-limit';
 import { auth } from '@/shared/lib/auth';
 import { prisma } from '@/shared/lib/prisma';
 import { rewriteCV } from '@/shared/services/cv-rewriter';
+import { buildRewriteInput } from '@/shared/services/cv-rewrite-context';
+import {
+  validateRewrittenCv,
+  TRUTHFULNESS_FAILURE_MESSAGE,
+} from '@/shared/services/cv-rewrite-validation';
 import { resolveApprovedProfileEvidence } from '@/shared/services/profile-reconciler';
 import { loadOwnedProfileData, resolveProfileId } from '@/features/dashboard/data/load-profile';
 import {
   ProfileEvidenceValidationError,
   type ApprovedProfileEvidenceOverlay,
 } from '@/shared/types/profile-reasoning';
+import {
+  TRUTHFULNESS_VALIDATION_VERSION,
+  type AtsOptimizationData,
+  type UserProvidedContext,
+} from '@/shared/types/cv-rewrite';
 import { checkQuota, recordUsage } from '@/shared/services/usage-meter';
 import { entitlementsFor } from '@/shared/lib/entitlements';
+import { AI_CONFIG } from '@/shared/lib/config';
 import {
   renderCvDocx,
   persistAndArchiveCv,
@@ -21,7 +32,6 @@ import {
 import { parseStoredAnalysisResult } from '@/shared/schemas/analysis-result';
 import { TemplateIdSchema } from '@/shared/constants/templates';
 import { parseStoredJobMatchData } from '@/shared/schemas/ai-output';
-import { toLegacyCvRewriteInput } from '@/shared/services/job-match-rewrite-adapter';
 
 const ProfileEvidenceRefSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('experience'), id: z.string().min(1) }),
@@ -55,12 +65,20 @@ const RegenerateSchema = z.object({
   profileId: z.string().optional(),
 });
 
+/** hitlContext is a map of requirement label → the candidate's own free-text note. */
+function toUserContext(hitlContext: Record<string, string>): UserProvidedContext[] {
+  return Object.entries(hitlContext)
+    .map(([label, text]) => ({ label, text: text.trim() }))
+    .filter((note) => note.text.length > 0);
+}
+
 /**
  * Rebuild a tailored CV from a stored job-match analysis. Everything the rewrite
- * needs — the original CV text, the job description, and the AI job-match spec —
- * was persisted when the analysis first ran, so we re-run the rewrite without
- * asking the user to re-upload or paste anything. The new CV is linked back to
- * its source analysis via GeneratedCV.analysisId.
+ * needs — the original CV text, the job description, and the canonical
+ * JobMatchDataV2 ledger — was persisted when the analysis first ran, so we
+ * re-run the rewrite without asking the user to re-upload or paste anything. The
+ * ledger is projected into a compact, generation-specific context; the generated
+ * draft is validated for invented claims before it is charged or persisted.
  */
 export async function POST(request: Request) {
   return withErrorHandler(async () => {
@@ -134,8 +152,8 @@ export async function POST(request: Request) {
       throw new APIError('This analysis is missing the data needed to rebuild a CV.', 400);
     }
 
-    // The current rewriter remains on its legacy input contract during Phase 1.
-    // Adapt at this boundary without persisting parallel arrays in jobMatchData.
+    // The canonical ledger is the single source of truth for generation. It is
+    // never converted back into the old mandatory/desirable arrays.
     const storedJobMatch = parseStoredJobMatchData(analysis.jobMatchData);
     if (!storedJobMatch) {
       throw new APIError(
@@ -143,18 +161,22 @@ export async function POST(request: Request) {
         409
       );
     }
-    const atsOptimizationData = includeAtsOptimization
-      ? JSON.stringify({
-          categories: rawResult.categories,
-          recommendations: rawResult.recommendations,
-          // Only the keywords the CV actually HAS. The `missing` array is ~90
-          // dictionary terms the candidate does not have — around 1,300 tokens
-          // that a rewriter must not act on anyway, since writing them in would
-          // be fabrication.
-          presentKeywords: rawResult.keywords?.present?.map((k) => k.keyword),
-          aiClichés: rawResult.aiClichés,
-        })
-      : null;
+
+    const atsOptimizationData: AtsOptimizationData | undefined = includeAtsOptimization
+      ? {
+          // Only keywords the CV actually HAS. Surfacing them is emphasis;
+          // inventing the ~90 missing ones would be fabrication.
+          presentKeywords: (rawResult.keywords?.present ?? [])
+            .map((keyword) => keyword.keyword)
+            .filter(Boolean)
+            .slice(0, 40),
+          recommendations: (rawResult.recommendations ?? [])
+            .map((recommendation) => recommendation.title)
+            .filter(Boolean)
+            .slice(0, 6),
+          aiClichesToAvoid: (rawResult.aiClichés ?? []).slice(0, 20),
+        }
+      : undefined;
 
     // Which career track this CV belongs to. Resolved unconditionally: the CV is
     // filed under the active profile whether or not any profile items were
@@ -184,25 +206,39 @@ export async function POST(request: Request) {
       }
     }
 
-    const jobMatchFeedbackStr = JSON.stringify(
-      toLegacyCvRewriteInput(storedJobMatch, approvedEvidenceOverlay)
-    );
+    const userContext = toUserContext(hitlContext);
 
-    const rewrittenData = await rewriteCV(
+    // Compact, budgeted, ledger-native projection. Unrelated ledger metadata
+    // (confidence, deductions, UI fields) never reaches the prompt.
+    const { input, debug } = buildRewriteInput({
+      jobMatch: storedJobMatch,
+      approvedProfileEvidence: approvedEvidenceOverlay,
+      userContext,
       cvText,
       jobDescription,
-      jobMatchFeedbackStr,
-      templateId,
-      hitlContext,
-      atsOptimizationData
-    );
+      template: templateId,
+      atsOptimizationData,
+    });
 
+    const rewrittenData = await rewriteCV(input);
+
+    // Provider failure spends no quota.
     if (!rewrittenData) {
       throw new APIError('Failed to generate CV content from AI', 500);
     }
 
-    // Counted only once the rewrite actually came back, so a provider failure
-    // doesn't spend the user's allowance on a CV they never got.
+    // Conservative truthfulness check. A failure persists nothing, charges
+    // nothing, and returns a single retryable message.
+    const validation = validateRewrittenCv(rewrittenData, input);
+    if (!validation.ok) {
+      console.warn(
+        `[regenerate] Truthfulness validation rejected a draft for analysis ${analysisId}: ${validation.reasons.join(' ')}`
+      );
+      throw new APIError(TRUTHFULNESS_FAILURE_MESSAGE, 422);
+    }
+
+    // Counted only once the rewrite came back AND passed validation, so neither a
+    // provider failure nor a rejected draft spends the user's allowance.
     await recordUsage(session.user.id, 'cvGenerations');
 
     const docxBuffer = await renderCvDocx(templateId, rewrittenData);
@@ -216,10 +252,22 @@ export async function POST(request: Request) {
         docxBuffer,
         analysisId,
         profileId: scopedProfileId,
-        provenance:
-          approvedEvidenceOverlay.length > 0
-            ? { approvedProfileEvidence: approvedEvidenceOverlay }
-            : undefined,
+        // Full generation provenance — how this CV was made, kept separate from
+        // its content. Never duplicates the ledger; only the ids supplied.
+        provenance: {
+          analysisId,
+          profileId: scopedProfileId,
+          requirementSchemaVersion: storedJobMatch.schemaVersion,
+          requirementIds: input.rewriteContext.requirements.map((requirement) => requirement.id),
+          approvedProfileEvidence: approvedEvidenceOverlay,
+          userContext,
+          template: templateId,
+          model: AI_CONFIG.gemini.model,
+          promptContextVersion: debug.promptContextVersion,
+          estimatedPromptTokens: debug.estimatedPromptTokens,
+          truthfulnessValidationVersion: TRUTHFULNESS_VALIDATION_VERSION,
+          truthfulnessValidationResult: 'passed',
+        },
         entitlements,
       });
     } catch (persistError) {

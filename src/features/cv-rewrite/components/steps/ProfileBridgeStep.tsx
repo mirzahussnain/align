@@ -82,6 +82,14 @@ export default function ProfileBridgeStep({
     )
   );
 
+  // Requirements the analysis flagged as gaps for which nothing in the profile
+  // qualifies. Named explicitly so the user understands Align will not invent
+  // them rather than silently leaving them out.
+  const suggestedRequirementIds = new Set(suggestions.map((suggestion) => suggestion.requirementId));
+  const unsupportedRequirements = requirements.filter(
+    (requirement) => !suggestedRequirementIds.has(requirement.id)
+  );
+
   return (
     <div>
       <div className="mb-5 flex items-start gap-2.5 rounded-xl border border-accent-purple/20 bg-purple-50/50 p-3.5">
@@ -180,6 +188,23 @@ export default function ProfileBridgeStep({
           );
         })}
       </div>
+
+      {unsupportedRequirements.length > 0 && (
+        <div className="mt-5 rounded-xl border border-slate-200 bg-slate-50 p-4">
+          <p className="text-xs font-semibold text-slate-700">
+            Some requirements can&apos;t be backed up
+          </p>
+          <ul className="mt-2 space-y-1.5">
+            {unsupportedRequirements.map((requirement) => (
+              <li key={requirement.id} className="text-xs leading-relaxed text-slate-500">
+                <span className="font-medium text-slate-700">{requirement.text}</span> — this
+                requirement is not supported by your CV or approved profile evidence, so Align will
+                not add it.
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       <p className="mt-4 text-[11px] leading-relaxed text-slate-400">
         Approved evidence is rechecked against your saved profile when you generate the CV. The
