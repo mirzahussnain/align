@@ -10,7 +10,6 @@ import {
   profileCompleteness,
   resolveProfileId,
 } from '@/features/dashboard/data/load-profile';
-import { entitlementsFor } from '@/shared/lib/entitlements';
 import { getStorageUsage } from '@/shared/services/storage-quota';
 import { getUsage } from '@/shared/services/usage-meter';
 import { parseStoredAnalysisResult } from '@/shared/schemas/analysis-result';
@@ -18,6 +17,7 @@ import { getOccupationProfile, isKnownOccupation } from '@/shared/occupations/re
 import { parseStoredJobMatchData } from '@/shared/schemas/ai-output';
 import { getRequirementSummary } from '@/shared/utils/job-match-view';
 import type { CategoryScore } from '@/shared/types/cv';
+import { getEntitlementSnapshot } from '@/shared/entitlements/server';
 
 /** Best-scoring non-excellent-only pick — direction flips which end of the sort wins. */
 function pickCategory(categories: CategoryScore[], direction: 'weakest' | 'strongest') {
@@ -39,9 +39,6 @@ export default async function DashboardPage({
   if (!session) redirect('/login');
 
   const userId = session.user.id;
-  const sessionTier =
-    (session.user as typeof session.user & { subscriptionTier?: string | null }).subscriptionTier ??
-    'free';
 
   // Switching career track is a soft navigation to ?profile=<id>, so the
   // server reloads that profile's content while client tab state survives.
@@ -106,17 +103,20 @@ export default async function DashboardPage({
     listProfiles(userId),
   ]);
 
-  const entitlements = entitlementsFor(sessionTier);
+  const entitlementSnapshot = await getEntitlementSnapshot(userId);
   const [storage, usage] = await Promise.all([
-    getStorageUsage(userId, sessionTier),
+    getStorageUsage(userId, entitlementSnapshot.plan),
     getUsage(userId),
   ]);
 
   // Surfaced in the wizard so the reasoning opt-in can say how many runs are
   // left, rather than letting the user pick it and then fail at the API.
-  const reasoningCap = entitlements.monthlyLimits.profileReasoning;
-  const reasoningRemaining =
-    reasoningCap === null ? null : Math.max(0, reasoningCap - usage.profileReasoning);
+  const profileReconciliation = entitlementSnapshot.capabilities.profile_reconciliation;
+  const reasoningRemaining = profileReconciliation.mode === 'quota'
+    ? profileReconciliation.remaining ?? 0
+    : profileReconciliation.allowed
+      ? null
+      : 0;
 
   /**
    * A job-match score and an ATS score answer different questions — "will this
@@ -213,7 +213,8 @@ export default async function DashboardPage({
   return (
     <DashboardShell
       user={{ name: session.user.name, email: session.user.email, image: session.user.image }}
-      tier={sessionTier}
+      tier={entitlementSnapshot.plan.toLowerCase()}
+      entitlementSnapshot={entitlementSnapshot}
       data={{
         analyses: analyses.map((a) => ({ ...a, createdAt: a.createdAt.toISOString() })),
         totalAnalyses: scoreAgg._count._all,
@@ -228,13 +229,13 @@ export default async function DashboardPage({
         })),
         profile: profileData,
         profiles,
-        maxProfiles: entitlements.maxProfiles,
-        profileReasoning: entitlements.profileReasoning,
+        maxProfiles: entitlementSnapshot.capabilities.additional_career_profiles.limit ?? 1,
+        profileReasoning: profileReconciliation.allowed,
         reasoningRemaining,
         usage,
         profileComplete: isProfileComplete(profileData),
         profileCompleteness: profileCompleteness(profileData),
-        aiAnalysesLimit: entitlements.monthlyLimits.aiAnalyses,
+        aiAnalysesLimit: entitlementSnapshot.capabilities.ai_enhanced_ats_analysis.limit ?? null,
         storage,
         heroAnalysis: heroAnalysis
           ? { ...heroAnalysis, createdAt: heroAnalysis.createdAt.toISOString() }

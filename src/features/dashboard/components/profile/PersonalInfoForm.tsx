@@ -61,7 +61,7 @@ export default function PersonalInfoForm({
 
   return (
     <div>
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:justify-between">
         <h2 className="text-lg font-bold text-neutral-900">Personal information</h2>
         <SaveStatus isPending={isPending} saved={saved} />
       </div>
@@ -130,7 +130,7 @@ export default function PersonalInfoForm({
         </p>
       )}
 
-      <div className="mt-6 flex justify-end">
+      <div className="mt-6 flex">
         <SaveButton isPending={isPending} onClick={handleSave} />
       </div>
     </div>
@@ -161,7 +161,7 @@ export function SaveButton({ isPending, onClick }: { isPending: boolean; onClick
       type="button"
       onClick={onClick}
       disabled={isPending}
-      className="inline-flex items-center gap-2 rounded-full bg-accent-purple px-5 py-2.5 text-xs font-bold text-white transition-all hover:bg-accent-purple/90 disabled:cursor-not-allowed disabled:opacity-50"
+      className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-accent-purple px-5 py-2.5 text-xs font-bold text-white transition-all hover:bg-accent-purple/90 disabled:cursor-not-allowed disabled:opacity-50 sm:ml-auto sm:w-auto"
     >
       {isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
       Save changes

@@ -13,6 +13,7 @@ import { INDUSTRY_IDS } from '@/shared/constants/sector-keywords';
 import { SECTOR_LABELS } from '@/shared/constants/sector-labels';
 import { OCCUPATION_OPTIONS } from '@/shared/constants/occupation-options';
 import type { ProfileSummary } from '@/features/dashboard/data/load-profile';
+import { useEntitlements } from '@/shared/components/entitlements/EntitlementProvider';
 
 const INDUSTRY_LABELS: Record<string, string> = SECTOR_LABELS;
 
@@ -28,6 +29,7 @@ export default function ProfileSwitcher({
   maxProfiles,
 }: ProfileSwitcherProps) {
   const router = useRouter();
+  const { decisionFor, openUpgrade, refresh } = useEntitlements();
   const [open, setOpen] = useState(false);
   const [creating, setCreating] = useState(false);
   const [label, setLabel] = useState('');
@@ -51,6 +53,13 @@ export default function ProfileSwitcher({
     startTransition(async () => {
       const result = await createProfile(label, industry || undefined, occupation || undefined);
       if (!result.ok) {
+        if ('decision' in result && result.decision) {
+          openUpgrade({
+            capability: 'additional_career_profiles',
+            decision: result.decision,
+            source: 'profile',
+          });
+        }
         setError(result.error);
         return;
       }
@@ -58,6 +67,7 @@ export default function ProfileSwitcher({
       setLabel('');
       setIndustry('');
       setOccupation('');
+      await refresh();
       router.push(`/dashboard?profile=${result.profileId}`);
     });
   }
@@ -195,7 +205,7 @@ export default function ProfileSwitcher({
                     onChange={(e) => setOccupation(e.target.value)}
                     className="rounded-lg border border-neutral-200 px-2.5 py-1.5 text-xs text-neutral-600 outline-none focus:border-accent-purple"
                   >
-                    <option value="">CV evaluation type (recommended)</option>
+                    <option value="">Career area (recommended)</option>
                     {OCCUPATION_OPTIONS.map((o) => (
                       <option key={o.value} value={o.value}>
                         {o.label}
@@ -239,8 +249,17 @@ export default function ProfileSwitcher({
               ) : (
                 <button
                   type="button"
-                  onClick={() => setCreating(true)}
-                  disabled={atLimit}
+                  onClick={() => {
+                    if (atLimit) {
+                      openUpgrade({
+                        capability: 'additional_career_profiles',
+                        decision: decisionFor('additional_career_profiles'),
+                        source: 'profile',
+                      });
+                      return;
+                    }
+                    setCreating(true);
+                  }}
                   title={atLimit ? `Your plan allows ${maxProfiles} profiles` : undefined}
                   className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-neutral-600 transition-colors hover:bg-neutral-100 disabled:cursor-not-allowed disabled:text-neutral-300 disabled:hover:bg-transparent"
                 >

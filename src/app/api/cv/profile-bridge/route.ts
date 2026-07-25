@@ -4,11 +4,10 @@ import { withErrorHandler, APIError } from '@/shared/utils/api-error';
 import { applyRateLimit, rewriteLimiter } from '@/shared/lib/rate-limit';
 import { auth } from '@/shared/lib/auth';
 import { prisma } from '@/shared/lib/prisma';
-import { entitlementsFor } from '@/shared/lib/entitlements';
 import { loadOwnedProfileData } from '@/features/dashboard/data/load-profile';
 import { reconcileProfileWithCv } from '@/shared/services/profile-reconciler';
 import { ProfileEvidenceValidationError } from '@/shared/types/profile-reasoning';
-import { checkQuota, recordUsage } from '@/shared/services/usage-meter';
+import { assertCapability, consumeCapability } from '@/shared/entitlements/server';
 import { parseStoredAnalysisResult } from '@/shared/schemas/analysis-result';
 import { parseStoredJobMatchData } from '@/shared/schemas/ai-output';
 
@@ -39,23 +38,7 @@ export async function POST(request: Request) {
     const rateLimitResponse = await applyRateLimit(rewriteLimiter, session.user.id);
     if (rateLimitResponse) return rateLimitResponse;
 
-    const user = await prisma.user.findUnique({
-      where: { id: session.user.id },
-      select: { subscriptionTier: true },
-    });
-    const entitlements = entitlementsFor(user?.subscriptionTier ?? null);
-
-    if (!entitlements.profileReasoning) {
-      throw new APIError('Profile reasoning is available on the Pro plan.', 403);
-    }
-
-    const quota = await checkQuota(session.user.id, 'profileReasoning', entitlements);
-    if (!quota.allowed) {
-      throw new APIError(
-        `You've used all ${quota.limit} profile comparisons in your plan this month. Your CV will still be generated from the analysis — only the comparison is unavailable.`,
-        429
-      );
-    }
+    await assertCapability(session.user.id, 'profile_reconciliation');
 
     const parsed = ProfileBridgeSchema.safeParse(await request.json().catch(() => ({})));
     if (!parsed.success) {
@@ -123,7 +106,8 @@ export async function POST(request: Request) {
 
     // Only a run that actually reached a provider consumes the allowance.
     if (reconciliation.usedAI) {
-      await recordUsage(session.user.id, 'profileReasoning');
+      const operationId = request.headers.get('x-operation-id') ?? crypto.randomUUID();
+      await consumeCapability(session.user.id, 'profile_reconciliation', operationId);
     }
 
     return NextResponse.json({

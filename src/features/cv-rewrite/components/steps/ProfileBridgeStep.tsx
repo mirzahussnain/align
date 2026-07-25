@@ -17,6 +17,7 @@ interface Props {
   onToggle: (suggestion: ProfileEvidenceSuggestion) => void;
   profileLabel: string;
   error: string | null;
+  onCapture?: (requirement: ProfileEvidenceRequirement) => void;
 }
 
 const STATUS_LABELS: Record<ProfileEvidenceRequirement['status'], string> = {
@@ -35,6 +36,7 @@ export default function ProfileBridgeStep({
   onToggle,
   profileLabel,
   error,
+  onCapture,
 }: Props) {
   if (loading) {
     return (
@@ -151,6 +153,7 @@ export default function ProfileBridgeStep({
               <p className="mt-1.5 text-[11px] text-slate-400">
                 Suggested match confidence: {Math.round(suggestion.confidence * 100)}%
               </p>
+              {onCapture && <button type="button" className="mt-2 text-xs font-semibold text-accent-purple" onClick={() => onCapture(requirement)}>I have different relevant evidence</button>}
 
               <div className="mt-4 flex flex-wrap gap-2">
                 <button
@@ -203,6 +206,13 @@ export default function ProfileBridgeStep({
               </li>
             ))}
           </ul>
+        </div>
+      )}
+
+      {onCapture && requirements.length > 0 && (
+        <div className="mt-5 rounded-xl border border-purple-200 bg-purple-50/40 p-4">
+          <p className="text-xs font-semibold text-slate-700">Have evidence we did not find?</p>
+          <div className="mt-2 flex flex-wrap gap-2">{requirements.map((requirement) => <button key={requirement.id} type="button" className="rounded border border-purple-200 bg-white px-2 py-1 text-xs text-accent-purple" onClick={() => onCapture(requirement)}>I have relevant evidence: {requirement.text}</button>)}</div>
         </div>
       )}
 

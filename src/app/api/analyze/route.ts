@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { analyzeCV, computeOverallScore, evidenceCoverageScore } from '@/shared/utils/scoring-engine';
-import { classifyCV } from '@/shared/services/classifier';
+import { resolveAnalysisContext } from '@/shared/services/analysis-context';
 import { getOccupationProfile } from '@/shared/occupations/registry';
 import { getIndustryDictionary } from '@/shared/constants/sector-keywords';
 import { extractTextFromPDF } from '@/shared/utils/pdf-parser';
@@ -14,9 +14,16 @@ import { prisma } from '@/shared/lib/prisma';
 import { storage, keyFor } from '@/shared/lib/storage';
 import { entitlementsFor, sourceExpiryFrom, type Entitlements } from '@/shared/lib/entitlements';
 import { pruneAnalyses, sweepExpiredSources } from '@/shared/services/storage-quota';
-import { checkQuota, recordUsage } from '@/shared/services/usage-meter';
+import {
+  checkCapability,
+  consumeCapability,
+  EntitlementRequiredError,
+  assertCapability,
+} from '@/shared/entitlements/server';
+import { projectAnalysisReport } from '@/shared/entitlements/report-projection';
+import type { ProductCapability } from '@/shared/entitlements/registry';
 import { cleanJobTitle, cleanJobCompany, deriveJobTitleFromJd } from '@/shared/utils/job-title';
-import { resolveProfileId } from '@/features/dashboard/data/load-profile';
+import { loadProfileTarget, resolveProfileId } from '@/features/dashboard/data/load-profile';
 import type { CVAnalysisResult } from '@/shared/types/cv';
 import { JobMatchDataV2Schema } from '@/shared/schemas/ai-output';
 
@@ -137,13 +144,68 @@ export async function POST(request: NextRequest) {
       mode: formData.get('mode') || 'ats',
       jobDescription: formData.get('jobDescription') || '',
       profileId: formData.get('profileId') || undefined,
+      targetSelection: formData.get('targetSelection') || undefined,
+      savedProfileId: formData.get('savedProfileId') || undefined,
+      targetRole: formData.get('targetRole') || undefined,
+      targetOccupation: formData.get('targetOccupation') || undefined,
+      evidenceSource: formData.get('evidenceSource') || undefined,
+      confirmProfileTarget: formData.get('confirmProfileTarget') ?? undefined,
     });
 
     if (!parsed.success) {
       throw new APIError(parsed.error.message, 400);
     }
 
-    const { file, mode, jobDescription, profileId } = parsed.data;
+    const {
+      file,
+      mode,
+      jobDescription,
+      profileId,
+      targetSelection,
+      savedProfileId,
+      targetRole,
+      targetOccupation,
+      evidenceSource,
+      confirmProfileTarget,
+    } = parsed.data;
+
+    if (mode === 'ats') await assertCapability(session.user.id, 'ats_analysis');
+
+    if (mode === 'ats') await assertCapability(session.user.id, 'ats_analysis');
+
+    // Evidence-source feature gate. The contract knows about Profile-backed
+    // evidence, but only the CV-only scoring path exists today — anything else is
+    // rejected here rather than silently ignored, so the UI can never present a
+    // control that has no effect. Rejected before any quota check or model call.
+    if (evidenceSource !== 'cv_only') {
+      throw new APIError(
+        'Profile-backed evidence is not available yet — analyse against the uploaded CV.',
+        400
+      );
+    }
+
+    // The user's explicit "What is this CV intended for?" answer. Absent behaves
+    // as `detected` (the CV decides), which keeps the active-Profile leak closed.
+    // Legacy clients that only send targetRole/confirmProfileTarget are mapped to
+    // the equivalent selection. Job match ignores this entirely — its target is
+    // always the JD.
+    const effectiveTargetSelection =
+      targetSelection ??
+      (targetRole || targetOccupation
+        ? 'custom_role'
+        : confirmProfileTarget
+          ? 'active_profile'
+          : 'detected');
+
+    // A "choose another saved Profile target" selection is resolved and
+    // ownership-checked server-side; an unowned id is rejected, never trusted.
+    let savedProfileTarget: Awaited<ReturnType<typeof loadProfileTarget>> = null;
+    if (mode === 'ats' && effectiveTargetSelection === 'saved_profile' && savedProfileId) {
+      savedProfileTarget = await loadProfileTarget(session.user.id, savedProfileId);
+      if (!savedProfileTarget) {
+        throw new APIError('The selected profile target could not be found.', 403);
+      }
+    }
 
     // Which career track this run belongs to. Resolved before the AI call so an
     // analysis is never left unfiled after the expensive part has already run.
@@ -153,11 +215,15 @@ export async function POST(request: NextRequest) {
     // is free and uncapped; only the AI layer is metered, so a user out of AI
     // quota still gets their local score rather than an outright refusal.
     const usesAI = mode === 'job_match' ? jobDescription.trim().length > 0 : true;
+    const aiCapability: ProductCapability =
+      mode === 'job_match' ? 'job_match_analysis' : 'ai_enhanced_ats_analysis';
+    const operationId = request.headers.get('x-operation-id') ?? crypto.randomUUID();
 
     let aiAllowed = true;
+    let aiSucceeded = false;
     if (usesAI) {
-      const quota = await checkQuota(session.user.id, 'aiAnalyses', entitlements);
-      aiAllowed = quota.allowed;
+      const decision = await checkCapability(session.user.id, aiCapability);
+      aiAllowed = decision.allowed;
 
       if (!aiAllowed) {
         // A job match without the model isn't a degraded job match, it's an ATS
@@ -165,16 +231,13 @@ export async function POST(request: NextRequest) {
         // skill gaps, no eligibility check. Refuse outright rather than hand
         // back something that reads like a match and isn't one.
         if (mode === 'job_match') {
-          throw new APIError(
-            `You've used all ${quota.limit} AI analyses in your plan this month. Your allowance resets at the start of next month.`,
-            429
-          );
+          throw new EntitlementRequiredError(decision);
         }
         // An ATS check degrades honestly: the rule-based score is the bulk of
         // it, so serve that rather than nothing. `aiSkipped` tells the UI to say
         // so instead of quietly showing a thinner report.
         console.info(
-          `[analyze] AI quota exhausted for user ${session.user.id} (${quota.used}/${quota.limit}); serving rule-based result.`
+          `[analyze] AI quota exhausted for user ${session.user.id} (${decision.used}/${decision.limit}); serving rule-based result.`
         );
       }
     }
@@ -203,17 +266,58 @@ export async function POST(request: NextRequest) {
         })
       : null;
 
-    const classification = await classifyCV({
-      cvText: text,
-      jobDescription: mode === 'job_match' && jobDescription.trim() ? jobDescription : undefined,
-      profileTarget: trackProfile
+    // The active Profile's declared target, offered as a *candidate* only. It is
+    // handed to the resolver for the mismatch notice always, but it sets the
+    // scoring target only when the user confirmed it (active_profile) — otherwise
+    // a Warehouse CV uploaded under a Software profile is analysed as warehouse,
+    // from the CV's own evidence, not silently as software.
+    const activeProfileTarget =
+      trackProfile && scopedProfileId
         ? {
+            profileId: scopedProfileId,
             occupation: trackProfile.targetOccupation,
             roleTitle: trackProfile.targetRoleTitle ?? trackProfile.label,
             industry: trackProfile.targetIndustry,
             seniority: trackProfile.targetSeniority,
           }
+        : undefined;
+
+    // Map the explicit selection to resolver inputs. Every path that sets the
+    // target requires an explicit user choice; `detected` (the default) never
+    // lets the Profile decide. Job match ignores selection — the JD is the target.
+    const isAts = mode === 'ats';
+    const useCustomRole = isAts && effectiveTargetSelection === 'custom_role';
+    const useSavedProfile = isAts && effectiveTargetSelection === 'saved_profile';
+    const useActiveProfile = isAts && effectiveTargetSelection === 'active_profile';
+
+    const { context: analysisContext, classification } = await resolveAnalysisContext({
+      mode,
+      cvText: text,
+      jobDescription: mode === 'job_match' && jobDescription.trim() ? jobDescription : undefined,
+      explicitTarget: useCustomRole
+        ? { occupation: targetOccupation ?? null, roleTitle: targetRole ?? null }
         : undefined,
+      // A chosen saved Profile target overrides the active one as the confirmed
+      // target; otherwise the active Profile rides along for the mismatch notice.
+      activeProfileTarget:
+        useSavedProfile && savedProfileTarget
+          ? {
+              profileId: savedProfileTarget.profileId,
+              occupation: savedProfileTarget.targetOccupation,
+              roleTitle: savedProfileTarget.targetRoleTitle || savedProfileTarget.label,
+              industry: savedProfileTarget.targetIndustry,
+              seniority: savedProfileTarget.targetSeniority,
+            }
+          : activeProfileTarget,
+      confirmProfileTarget: useActiveProfile || useSavedProfile,
+      // Provenance only: which Profile the confirmed target belongs to, so
+      // history records `saved_profile_confirmed` vs `active_profile_confirmed`.
+      confirmedTargetKind: useSavedProfile ? 'saved' : 'active',
+      forceGeneric: isAts && effectiveTargetSelection === 'generic',
+      // Uploaded CVs are CV-evidence. Profile-as-evidence is a feature-gated,
+      // deferred scoring path; the request boundary above rejects any other
+      // evidence source, so this stays cv_only without ever changing the target.
+      evidenceSource: { type: 'cv_only' },
       aiAllowed,
     });
     const occupationProfile = getOccupationProfile(classification.occupation);
@@ -225,6 +329,10 @@ export async function POST(request: NextRequest) {
     result.fileName = file.name || undefined;
     result.aiDetectedIndustry = classification.sector;
     result.outOfDomain = classification.confidence < 0.5 || classification.source === 'fallback';
+    // The explicit context (evidence source, target source, resolved target,
+    // mismatch) rides inside rawResult — persisted with no migration and read
+    // back intact by the loose stored-result schema.
+    result.analysisContext = analysisContext;
 
     // 4. AI semantic analysis as a hybrid layer
     result.mode = mode as 'ats' | 'job_match';
@@ -238,7 +346,7 @@ export async function POST(request: NextRequest) {
         if (jobMatchFeedback) {
           // Counted on return rather than before the call, so a provider outage
           // doesn't bill the user for an analysis they never received.
-          await recordUsage(session.user.id, 'aiAnalyses');
+          aiSucceeded = true;
           result.aiApplied = true;
           result.jobMatchData = jobMatchFeedback;
           result.jobDescription = jobDescription;
@@ -251,7 +359,7 @@ export async function POST(request: NextRequest) {
         const aiFeedback = await getSemanticCVFeedback(text, result, occupationProfile, classification);
 
         if (aiFeedback) {
-          await recordUsage(session.user.id, 'aiAnalyses');
+          aiSucceeded = true;
           result.aiApplied = true;
 
           const summaryCat = result.categories.find(c => c.id === 'professionalSummary');
@@ -348,6 +456,11 @@ export async function POST(request: NextRequest) {
       result.jobMatchData = canonicalJobMatch.data;
     }
 
+    // The provider output has now passed every schema/integrity check.
+    if (aiSucceeded) {
+      await consumeCapability(session.user.id, aiCapability, operationId);
+    }
+
     const sourceBuffer = Buffer.from(await file.arrayBuffer());
     const analysisId = await persistAnalysis(
       session.user.id,
@@ -364,6 +477,22 @@ export async function POST(request: NextRequest) {
     // analysis can be rebuilt into a CV without re-uploading the source.
     if (analysisId) result.analysisId = analysisId;
 
-    return NextResponse.json(result);
+    const [report, requirementLedger, rewriteStrategy, eligibility] = await Promise.all([
+      checkCapability(
+        session.user.id,
+        mode === 'job_match' ? 'view_full_job_match_report' : 'view_full_ats_report'
+      ),
+      checkCapability(session.user.id, 'view_requirement_ledger'),
+      checkCapability(session.user.id, 'view_rewrite_strategy'),
+      checkCapability(session.user.id, 'view_eligibility_analysis'),
+    ]);
+    return NextResponse.json(
+      projectAnalysisReport(result, {
+        report,
+        requirementLedger,
+        rewriteStrategy,
+        eligibility,
+      })
+    );
   });
 }

@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { composeRewritePrompt } from '@/shared/services/cv-rewrite-prompt';
 import type { LedgerNativeRewriteInput } from '@/shared/types/cv-rewrite';
-import type { CvBuildSpec } from '@/shared/types/ai';
+import type { AiCvBuildGuidance } from '@/shared/types/ai';
 
-const SPEC: CvBuildSpec = {
+const SPEC: AiCvBuildGuidance = {
   recommended_template: 'architect',
   template_rationale: '',
   section_order: ['Experience'],
@@ -97,5 +97,41 @@ describe('composeRewritePrompt', () => {
     );
     expect(withEvidence).toContain('APPROVED PROFILE EVIDENCE');
     expect(withEvidence).toContain('Apache Kafka');
+  });
+  it('supplies only server-issued identifiers for claim provenance', () => {
+    const prompt = composeRewritePrompt(
+      makeInput({
+        applicationEvidence: [
+          {
+            id: 'context-1',
+            requirementId: 'r1',
+            context: { label: 'Kafka', text: 'Used Kafka in an application project.' },
+          },
+        ],
+        approvedProfileEvidence: [
+          {
+            requirementId: 'r1',
+            evidenceRef: { type: 'skill', id: 'skill-1' },
+            requirementText: 'Kafka experience',
+            sourceProfileId: 'p1',
+            resolvedEvidenceText: 'Kafka',
+            evidenceLocation: 'Skills',
+            userApproved: true,
+          },
+        ],
+      })
+    );
+    expect(prompt).toContain('[id:r1]');
+    expect(prompt).toContain('[type:skill] [id:skill-1]');
+    expect(prompt).toContain('[contextId:context-1] [requirementId:r1]');
+    expect(prompt).toContain('Never invent an id');
+  });
+
+  it('separates strategy from evidence and keeps regulated claims evidence-bound', () => {
+    const prompt = composeRewritePrompt(makeInput());
+    expect(prompt).toContain('Build guidance is strategy, never evidence');
+    expect(prompt).toContain('registration, licence, visa or eligibility, language proficiency');
+    expect(prompt).toContain('Do not recalculate requirement scores or statuses');
+    expect(prompt).toContain('unsupportedRequirementsNotAdded');
   });
 });

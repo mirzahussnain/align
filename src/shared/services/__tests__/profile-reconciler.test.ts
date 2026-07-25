@@ -68,7 +68,7 @@ function profile(overrides: Partial<ProfileData> = {}): ProfileData {
       {
         id: 'project-db-1',
         name: 'Reporting dashboard',
-        stack: 'Excel',
+        skills: [],
         startDate: '',
         endDate: '',
         achievements: ['Automated weekly reporting'],
@@ -105,6 +105,12 @@ function profile(overrides: Partial<ProfileData> = {}): ProfileData {
         year: '2024',
       },
     ],
+    trainings: [],
+    licences: [],
+    professionalRegistrations: [],
+    languages: [],
+    volunteering: [],
+    otherEvidence: [],
     ...overrides,
   };
 }
@@ -160,6 +166,40 @@ describe('stable profile evidence', () => {
     expect(reordered.sort()).toEqual(original.sort());
   });
 
+  it('formats sparse credential/language/volunteering candidates cleanly — no mojibake, no inferred fields, human labels', () => {
+    const candidates = buildProfileCandidates(
+      profile({
+        licences: [
+          { id: 'lic-1', officialName: 'Forklift licence', issuingBody: '', issueDate: '', expiryDate: '', credentialNumber: '', status: '', verificationUrl: '', verificationStatus: '' },
+        ],
+        languages: [
+          { id: 'lang-1', language: 'French', speaking: 'native_bilingual', reading: '', writing: '', professionalUseContext: '', formalTest: '' },
+        ],
+        volunteering: [
+          { id: 'vol-1', organisation: 'Shelter', role: 'Support volunteer', startDate: '', endDate: '', contribution: '', skillsTools: [], outcome: '' },
+        ],
+        otherEvidence: [
+          { id: 'oth-1', title: 'Community award', context: '', description: 'Recognised for local volunteering', period: '', outcome: '' },
+        ],
+      })
+    );
+    const byType = (type: string) => candidates.find((candidate) => candidate.evidenceRef.type === type)!;
+
+    for (const candidate of candidates) {
+      expect(candidate.evidenceText).not.toContain(' ? ');
+      expect(candidate.evidenceLocation).not.toContain(' ? ');
+    }
+    // Missing issuer: no dangling separator; verification never overstated.
+    expect(byType('licence').evidenceText).toBe('Forklift licence (user-confirmed, unverified)');
+    // Only the provided ability, rendered as a human label — never a raw code.
+    expect(byType('language').evidenceText).toBe('French — speaking: Native / Bilingual');
+    expect(byType('language').evidenceText).not.toContain('native_bilingual');
+    // Missing contribution: role/org still form a valid candidate, no trailing colon.
+    expect(byType('volunteering').evidenceText).toBe('Support volunteer at Shelter');
+    // Empty context: location falls back cleanly to the section name.
+    expect(byType('other').evidenceLocation).toBe('Other evidence');
+  });
+
   it('loads certifications as selective, independently addressable candidates', () => {
     const candidates = buildProfileCandidates(profile());
     const certification = candidates.find(
@@ -190,7 +230,7 @@ describe('stable profile evidence', () => {
     );
 
     expect(result[0].evidenceText).toBe(
-      'Created monthly reports using pivot tables and XLOOKUP'
+      'Created monthly reports using pivot tables and XLOOKUP — Jan 2023 – Present'
     );
     expect(result[0].evidenceLocation).toBe(
       'Finance Assistant at North Ltd — Work experience'
@@ -281,6 +321,33 @@ describe('stable profile evidence', () => {
     expect(overlay.every((entry) => entry.userApproved)).toBe(true);
   });
 
+  it('captures a self-contained skill approval snapshot that cannot change with later profile mutations', () => {
+    const approvedProfile = profile({
+      projects: [{ id: 'project-db-1', name: 'Original dashboard', skillIds: ['skill-db-1'], skills: [{ id: 'skill-db-1', name: 'Excel', level: 'advanced', category: 'Tools' }], liveUrl: 'https://example.com/live', repositoryUrl: 'https://github.com/example/dashboard', startDate: '2023', endDate: '2024-12', achievements: ['Original evidence line'] }],
+      skills: [{ id: 'skill-group-db-1', category: 'Tools', skills: ['Excel'], skillItems: [{ id: 'skill-db-1', name: 'Excel', taxonomy: { id: 'esco-excel', externalUri: 'https://data.europa.eu/esco/skill/excel', source: 'ESCO', sourceVersion: 'v1.2.0', preferredLabel: 'spreadsheet software' } }] }],
+    });
+    const [approval] = resolveApprovedProfileEvidence(approvedProfile, [{ requirementId: 'requirement-001', evidenceRef: { type: 'skill', id: 'skill-db-1' } }], [requirement()]);
+    const stored = structuredClone(approval.evidenceSnapshot);
+
+    // Mimic every editable live fact changing after approval: the saved JSON is
+    // the historical source of truth, not a reference to these in-memory rows.
+    const skill = approvedProfile.skills[0].skillItems[0];
+    skill.name = 'Renamed spreadsheet skill';
+    skill.taxonomy = null;
+    approvedProfile.skills[0].category = 'Changed group';
+    const project = approvedProfile.projects[0];
+    project.name = 'Renamed project'; project.achievements = ['Edited evidence']; project.skillIds = [];
+    project.startDate = '2025-01'; project.endDate = ''; project.liveUrl = ''; project.repositoryUrl = '';
+    approvedProfile.certifications = [];
+
+    expect(approval.evidenceSnapshot).toEqual(stored);
+    expect(JSON.stringify(approval.evidenceSnapshot)).toBe(JSON.stringify(stored));
+    expect(approval.evidenceSnapshot).toEqual({
+      kind: 'skill', id: 'skill-db-1', name: 'Excel', skillGroupLabel: 'Tools',
+      taxonomy: { id: 'esco-excel', externalUri: 'https://data.europa.eu/esco/skill/excel', source: 'ESCO', sourceVersion: 'v1.2.0', preferredLabel: 'spreadsheet software' },
+      linkedProjects: [{ id: 'project-db-1', name: 'Original dashboard', evidenceLines: ['Original evidence line'], startDate: '2023', endDate: '2024-12', liveUrl: 'https://example.com/live', repositoryUrl: 'https://github.com/example/dashboard' }],
+    });
+  });
   it('rejects duplicate approved requirement/evidence pairs', () => {
     const approval = {
       requirementId: 'requirement-001',

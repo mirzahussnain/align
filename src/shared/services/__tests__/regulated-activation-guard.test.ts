@@ -122,7 +122,10 @@ describe('AI promotion into a regulated profile follows the same principle', () 
       'Worked across a range of settings supporting day-to-day operations.',
       'Strong communicator, reliable, and organised.',
     ].join('\n');
-    const c = await classifyCV({ cvText, aiAllowed: true }, aiReturns('registered_nurse'));
+    const c = await classifyCV(
+      { cvText, aiAllowed: true, aiClassificationEnabled: true },
+      aiReturns('registered_nurse')
+    );
     expect(c.occupation).not.toBe('registered_nurse');
     expect(c.occupation).toBe('generic');
   });
@@ -136,7 +139,10 @@ describe('AI promotion into a regulated profile follows the same principle', () 
       'NMC PIN held and available on request.',
       'Experience supporting people in various settings.',
     ].join('\n');
-    const c = await classifyCV({ cvText, aiAllowed: true }, aiReturns('registered_nurse'));
+    const c = await classifyCV(
+      { cvText, aiAllowed: true, aiClassificationEnabled: true },
+      aiReturns('registered_nurse')
+    );
     expect(c.occupation).toBe('registered_nurse');
     expect(c.source).toBe('ai');
   });

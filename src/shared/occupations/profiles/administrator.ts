@@ -2,7 +2,7 @@ import type { OccupationProfile } from '../types';
 
 export const administratorProfile: OccupationProfile = {
   id: 'administrator',
-  version: '1.1.0',
+  version: '1.2.0',
   label: 'Administration & Office Support',
   sector: 'admin_office',
   roleArchetype: 'administrative_support',
@@ -89,14 +89,37 @@ export const administratorProfile: OccupationProfile = {
       /\b(?:admin|business support)\s+(?:assistant|officer)\b/i,
       /\breceptionist\b/i,
     ],
-    taskPatterns: [
-      /\bdiary management\b/i,
+    // Cat 2 — defining administrative duties. "Customer service" is deliberately
+    // NOT here: it is shared with retail/frontline and cannot decide admin alone.
+    dutyPatterns: [
+      /\bdiary (?:management|and meeting management)\b/i,
       /\b(?:process(?:ed|ing)?|match(?:ed|ing)?)\s+(?:supplier\s+)?invoices?\b/i,
-      /\bminute[- ]taking\b|\btook minutes\b/i,
+      /\bminute[- ]taking\b|\btook minutes\b|\bminute taking\b/i,
       /\bdata entry\b/i,
       /\b(?:filing|records management)\b/i,
-      /\bswitchboard\b|\bfront[- ]of[- ]house\b/i,
+      /\bswitchboard\b|\bfront[- ]of[- ]house\b|\breception(?:ist)?\b/i,
+      /\bpurchase orders?\b/i,
+    ],
+    // Cat 3 — distinctive administrative outputs.
+    outputPatterns: [
+      /\b(?:weekly|monthly)?\s*(?:production|management)\s+reports?\b/i,
+      /\bpersonnel records?\b/i,
+      /\bmeeting (?:minutes|rooms?)\b/i,
+    ],
+    // Cat 7 — office tools; shared, low weight.
+    toolPatterns: [
       /\bpivot tables?\b|\bVLOOKUP\b/i,
+      /\b(?:Sage|Xero|QuickBooks)\b/i,
+      /\b(?:Microsoft Office|Outlook|Excel|Word)\b/i,
+    ],
+    genericSkillPatterns: [
+      /\b(?:organised|organized|customer service|communication|reliab(?:le|ility)|attention to detail)\b/i,
+    ],
+    negativePatterns: [
+      /\bwarehouse\s+operative\b/i,
+      /\b(?:software|web)\s+(?:engineer|developer)\b/i,
+      /\b(?:staff|registered)\s+nurse\b/i,
+      /\bhealthcare\s+assistant\b/i,
     ],
     sectorHint: 'admin_office',
   },

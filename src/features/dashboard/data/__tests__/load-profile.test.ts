@@ -31,7 +31,7 @@ const storedProfile = {
     },
   ],
   certifications: [
-    { id: 'cert-1', name: 'Care Certificate', issuer: 'Skills for Care', year: '2025' },
+    { id: 'cert-1', name: 'Care Certificate', issuer: 'Skills for Care', year: '2025', issueDate: '2025', expiryDate: null, credentialNumber: null, status: 'active', verificationUrl: null, verificationStatus: 'user_confirmed_unverified' },
   ],
 };
 
@@ -51,11 +51,11 @@ describe('profile evidence loading', () => {
         id: 'group-1',
         category: 'Care',
         skills: ['Safeguarding'],
-        skillItems: [{ id: 'skill-1', name: 'Safeguarding' }],
+        skillItems: [{ id: 'skill-1', name: 'Safeguarding', level: '', contextType: '', activity: '', period: '', outcome: '', taxonomyTermId: '', taxonomy: null }],
       },
     ]);
     expect(loaded.certifications).toEqual([
-      { id: 'cert-1', name: 'Care Certificate', issuer: 'Skills for Care', year: '2025' },
+      { id: 'cert-1', name: 'Care Certificate', issuer: 'Skills for Care', year: '2025', issueDate: '2025', expiryDate: '', credentialNumber: '', status: 'active', verificationUrl: '', verificationStatus: 'user_confirmed_unverified' },
     ]);
     expect(prisma.profile.findFirst).toHaveBeenCalledWith(
       expect.objectContaining({

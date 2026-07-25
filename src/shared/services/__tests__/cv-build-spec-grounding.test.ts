@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { groundBuildSpec, neutralRewriteDirective } from '@/shared/services/cv-build-spec-grounding';
 import { buildEvidenceCorpus } from '@/shared/services/cv-evidence';
-import type { CvBuildSpec } from '@/shared/types/ai';
+import type { AiCvBuildGuidance } from '@/shared/types/ai';
 
-function spec(bullets: CvBuildSpec['bullets_to_rewrite']): CvBuildSpec {
+function spec(bullets: AiCvBuildGuidance['bullets_to_rewrite']): AiCvBuildGuidance {
   return {
     recommended_template: 'architect',
     template_rationale: '',

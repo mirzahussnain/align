@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { X, UserRound, FileSearch, Lock, ChevronRight, Loader2 } from 'lucide-react';
 import Button from '@/shared/components/ui/Button';
 import { cn } from '@/shared/utils/cn';
+import { approveProfileEvidenceSnapshot } from '@/features/cv-rewrite/actions/profile-evidence-approval-actions';
 import type { AnalysisRow } from '@/features/dashboard/components/DashboardShell';
 import type {
   ApprovedProfileEvidence,
@@ -13,6 +14,7 @@ import type {
 } from '@/shared/types/profile-reasoning';
 import { requirementEvidencePairKey } from '@/shared/types/profile-reasoning';
 import { describeAnalysis } from '@/shared/utils/job-title';
+import { useEntitlements } from '@/shared/components/entitlements/EntitlementProvider';
 
 // Reuse the existing rewrite wizard steps so both entry points share one UI.
 import TemplateSelectionStep from './steps/TemplateSelectionStep';
@@ -20,6 +22,7 @@ import AtsOptimizationStep from './steps/AtsOptimizationStep';
 import SkillsBridgeStep from './steps/SkillsBridgeStep';
 import ProfileReasoningOptInStep from './steps/ProfileReasoningOptInStep';
 import ProfileBridgeStep from './steps/ProfileBridgeStep';
+import RequirementEvidenceCapture from './RequirementEvidenceCapture';
 import FormatSelectionStep from './steps/FormatSelectionStep';
 import RewriteLoadingStep from './steps/RewriteLoadingStep';
 import SuccessStep from './steps/SuccessStep';
@@ -83,6 +86,7 @@ export default function GenerateCvWizardModal({
   activeProfileLabel = 'your',
   reasoningRemaining = null,
 }: Props) {
+  const { decisionFor, openUpgrade, refresh: refreshEntitlements } = useEntitlements();
   const [step, setStep] = useState<Step>('route');
   const [source, setSource] = useState<Source | null>(null);
   const [selectedAnalysisId, setSelectedAnalysisId] = useState<string | null>(null);
@@ -103,9 +107,12 @@ export default function GenerateCvWizardModal({
   const [bridgeLoading, setBridgeLoading] = useState(false);
   const [bridgeError, setBridgeError] = useState<string | null>(null);
   const [bridgeProfileLabel, setBridgeProfileLabel] = useState('your');
+  const [captureRequirement, setCaptureRequirement] = useState<ProfileEvidenceRequirement | null>(null);
+  const [applicationEvidenceContextIds, setApplicationEvidenceContextIds] = useState<string[]>([]);
 
   const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [operationId, setOperationId] = useState(() => crypto.randomUUID());
 
   if (!isOpen) return null;
 
@@ -124,10 +131,13 @@ export default function GenerateCvWizardModal({
     setApprovedProfileEvidence([]);
     setBridgeError(null);
     setBridgeProfileLabel('your');
+    setCaptureRequirement(null);
+    setApplicationEvidenceContextIds([]);
     setIncludeAts(true);
     setIncludeReasoning(true);
     setDownloadUrl(null);
     setError(null);
+    setOperationId(crypto.randomUUID());
     onClose();
   }
 
@@ -140,6 +150,11 @@ export default function GenerateCvWizardModal({
 
   function chooseAnalysis() {
     if (jobMatchAnalyses.length === 0) return;
+    const decision = decisionFor('cv_regeneration');
+    if (!decision.allowed) {
+      openUpgrade({ capability: 'cv_regeneration', decision, source: 'generation' });
+      return;
+    }
     setError(null);
     setSource('analysis');
     setStep('pick_analysis');
@@ -247,26 +262,15 @@ export default function GenerateCvWizardModal({
     }
   }
 
-  function toggleEvidence(suggestion: ProfileEvidenceSuggestion) {
+  async function toggleEvidence(suggestion: ProfileEvidenceSuggestion) {
     const key = requirementEvidencePairKey(suggestion.requirementId, suggestion.evidenceRef);
-    setApprovedProfileEvidence((previous) => {
-      const exists = previous.some(
-        (approval) =>
-          requirementEvidencePairKey(approval.requirementId, approval.evidenceRef) === key
-      );
-      return exists
-        ? previous.filter(
-            (approval) =>
-              requirementEvidencePairKey(approval.requirementId, approval.evidenceRef) !== key
-          )
-        : [
-            ...previous,
-            {
-              requirementId: suggestion.requirementId,
-              evidenceRef: suggestion.evidenceRef,
-            },
-          ];
-    });
+    const existing = approvedProfileEvidence.some((approval) => requirementEvidencePairKey(approval.requirementId, approval.evidenceRef) === key);
+    if (existing) { setApprovedProfileEvidence((items) => items.filter((approval) => requirementEvidencePairKey(approval.requirementId, approval.evidenceRef) !== key)); return; }
+    try {
+      if (!selectedAnalysisId || !activeProfileId) throw new Error('Choose an analysis and profile before approving evidence.');
+      const saved = await approveProfileEvidenceSnapshot({ analysisId: selectedAnalysisId, profileId: activeProfileId, requirementId: suggestion.requirementId, evidenceRef: suggestion.evidenceRef, rationale: suggestion.rationale });
+      setApprovedProfileEvidence((items) => [...items, { requirementId: suggestion.requirementId, evidenceRef: suggestion.evidenceRef, approvalId: saved.id }]);
+    } catch (error) { setError(error instanceof Error ? error.message : 'Could not approve profile evidence.'); }
   }
 
   async function handleSubmit() {
@@ -277,15 +281,16 @@ export default function GenerateCvWizardModal({
         source === 'profile'
           ? await fetch('/api/cv/from-profile', {
               method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
+              headers: { 'Content-Type': 'application/json', 'x-operation-id': operationId },
               body: JSON.stringify({
                 templateId: selectedTemplate,
                 profileId: activeProfileId,
+                applicationEvidenceContextIds,
               }),
             })
           : await fetch('/api/cv/regenerate', {
               method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
+              headers: { 'Content-Type': 'application/json', 'x-operation-id': operationId },
               body: JSON.stringify({
                 analysisId: selectedAnalysisId,
                 templateId: selectedTemplate,
@@ -303,11 +308,16 @@ export default function GenerateCvWizardModal({
                   return { ...approval, rationale: suggestion?.rationale };
                 }),
                 profileId: activeProfileId,
+                applicationEvidenceContextIds,
               }),
             });
 
       if (!response.ok) {
         const err = await response.json().catch(() => ({}));
+        if (err.code === 'ENTITLEMENT_REQUIRED' && typeof err.capability === 'string') {
+          const capability = err.capability as 'cv_regeneration';
+          openUpgrade({ capability, decision: decisionFor(capability), source: 'generation' });
+        }
         throw new Error(err.error || 'Failed to generate CV');
       }
 
@@ -317,6 +327,7 @@ export default function GenerateCvWizardModal({
       setDownloadUrl(url);
 
       setStep('success');
+      await refreshEntitlements();
       onGenerated?.();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An unexpected error occurred.');
@@ -456,7 +467,18 @@ export default function GenerateCvWizardModal({
                   onToggle={toggleEvidence}
                   profileLabel={bridgeProfileLabel}
                   error={bridgeError}
+                  onCapture={(requirement) => setCaptureRequirement(requirement)}
                 />
+                {captureRequirement && selectedAnalysisId && activeProfileId && (
+                  <RequirementEvidenceCapture
+                    analysisId={selectedAnalysisId}
+                    profileId={activeProfileId}
+                    requirement={captureRequirement}
+                    onClose={() => setCaptureRequirement(null)}
+                    onApproveRef={(evidenceRef) => setApprovedProfileEvidence((current) => current.some((item) => requirementEvidencePairKey(item.requirementId, item.evidenceRef) === requirementEvidencePairKey(captureRequirement.id, evidenceRef)) ? current : [...current, { requirementId: captureRequirement.id, evidenceRef }])}
+                    onApplicationContext={(id) => setApplicationEvidenceContextIds((current) => current.includes(id) ? current : [...current, id])}
+                  />
+                )}
               </motion.div>
             )}
 

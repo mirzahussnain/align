@@ -50,7 +50,7 @@ export default function PhonePicker({
   return (
     <div>
       <Label>Phone</Label>
-      <div className="grid grid-cols-[7.2rem_1fr] gap-3">
+      <div className="grid grid-cols-1 gap-3 min-[380px]:grid-cols-[7.2rem_minmax(0,1fr)]">
         <Combobox
           value={selectedIso2}
           onChange={(iso2) =>

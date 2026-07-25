@@ -4,6 +4,8 @@ import { auth } from '@/shared/lib/auth';
 import { prisma } from '@/shared/lib/prisma';
 import { parseStoredAnalysisResult } from '@/shared/schemas/analysis-result';
 import { parseStoredJobMatchData } from '@/shared/schemas/ai-output';
+import { checkCapability } from '@/shared/entitlements/server';
+import { projectAnalysisReport } from '@/shared/entitlements/report-projection';
 
 /**
  * Fetch a single stored analysis in full. The complete CVAnalysisResult lives in
@@ -63,13 +65,31 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
         }
       : null;
 
+    const [report, requirementLedger, rewriteStrategy, eligibility] = await Promise.all([
+      checkCapability(
+        session.user.id,
+        analysis.mode === 'job_match' ? 'view_full_job_match_report' : 'view_full_ats_report'
+      ),
+      checkCapability(session.user.id, 'view_requirement_ledger'),
+      checkCapability(session.user.id, 'view_rewrite_strategy'),
+      checkCapability(session.user.id, 'view_eligibility_analysis'),
+    ]);
+    const projected = result
+      ? projectAnalysisReport(result, {
+          report,
+          requirementLedger,
+          rewriteStrategy,
+          eligibility,
+        })
+      : null;
+
     return NextResponse.json({
       id: analysis.id,
       mode: analysis.mode,
       overallScore: analysis.overallScore,
       sourceFileName: analysis.sourceFileName,
       createdAt: analysis.createdAt.toISOString(),
-      result,
+      result: projected,
       legacy: parsed?.legacy ?? true,
     });
   });

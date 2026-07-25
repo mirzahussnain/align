@@ -23,7 +23,7 @@ import type { OccupationProfile } from '../types';
  */
 export const healthcareSupportProfile: OccupationProfile = {
   id: 'healthcare_support',
-  version: '1.0.0',
+  version: '1.1.0',
   label: 'Healthcare Support',
   sector: 'healthcare_nhs',
   roleArchetype: 'frontline_operative',
@@ -134,12 +134,35 @@ export const healthcareSupportProfile: OccupationProfile = {
       /\bdomiciliary\s+care(?:\s+worker)?\b/i,
       /\bcare\s+support\s+worker\b/i,
     ],
-    taskPatterns: [
+    // Cat 2 — defining support-worker duties. "Personal care" IS defining here
+    // (it is the core of the unregistered support role), where for a registered
+    // nurse it is excluded as shared.
+    dutyPatterns: [
       /\bpersonal care\b/i,
-      /\bsafeguarding\b/i,
       /\bmoving and handling\b|\bmanual handling\b/i,
-      /\bmedication (?:prompting|administration|MAR)\b/i,
-      /\bperson[- ]centred\b/i,
+      /\bmedication (?:prompting|MAR)\b/i,
+      /\b(?:repositioning|pressure area care)\b/i,
+      /\b(?:hoists?|slide sheets?)\b/i,
+    ],
+    // Cat 3 — distinctive support outputs.
+    outputPatterns: [
+      /\bMAR charts?\b/i,
+      /\bcare notes?\b/i,
+      /\bsafeguarding\b.*\b(?:concern|report|escalat)/i,
+    ],
+    // Cat 7 — shared support tools/systems; low weight.
+    toolPatterns: [
+      /\b(?:SystmOne|EMIS|care planning software)\b/i,
+    ],
+    genericSkillPatterns: [
+      /\b(?:compassionate|caring|person[- ]centred|dignity|reliab(?:le|ility)|communication)\b/i,
+    ],
+    // Cat 9 — a registered-clinician or non-care title counts against the
+    // unregistered-support reading.
+    negativePatterns: [
+      /\b(?:staff|registered|charge)\s+nurse\b/i,
+      /\b(?:office|team)?\s*administrator\b/i,
+      /\bwarehouse\s+operative\b/i,
     ],
     sectorHint: 'healthcare_nhs',
   },

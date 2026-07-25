@@ -88,9 +88,13 @@ export function validateOccupationProfile(profile: OccupationProfile): string[] 
     problem('hybrid workflow must name secondaryArtifacts');
   }
 
-  // Detection: only the generic fallback may be undetectable.
-  if (profile.id !== 'generic' && !profile.detection.titlePatterns.length) {
-    problem('detection.titlePatterns is empty');
+  // Detection: only the generic fallback may be undetectable. Every real
+  // occupation must declare both a title signal and at least one DEFINING duty —
+  // titles alone cannot make a match confident, and an occupation with no
+  // defining duties would rely entirely on shared/weak evidence.
+  if (profile.id !== 'generic') {
+    if (!profile.detection.titlePatterns.length) problem('detection.titlePatterns is empty');
+    if (!profile.detection.dutyPatterns.length) problem('detection.dutyPatterns is empty');
   }
 
   return problems;

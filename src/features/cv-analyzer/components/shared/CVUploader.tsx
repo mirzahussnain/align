@@ -3,10 +3,16 @@
 import { useCallback, useState } from 'react';
 import { useDropzone } from 'react-dropzone';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Upload, FileText, X, Loader2, Sparkles } from 'lucide-react';
+import { Upload, FileText, X, Sparkles, Loader2 } from 'lucide-react';
 import { cn } from '@/shared/utils/cn';
 import AnalysisProgress from './AnalysisProgress';
+import TargetSelectionStep from './TargetSelectionStep';
 import { formatFileSize } from '@/shared/utils/file';
+import type { DetectResponse, TargetSelectionPayload } from '@/shared/types/target-detection';
+import {
+  ENTITLEMENT_REQUIRED_EVENT,
+  ENTITLEMENTS_REFRESH_EVENT,
+} from '@/shared/entitlements/registry';
 
 interface CVUploaderProps {
   mode?: 'ats' | 'job_match';
@@ -24,6 +30,12 @@ export default function CVUploader({ mode = 'ats', onAnalysisComplete, profileId
   const [jobDescription, setJobDescription] = useState('');
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // The ATS post-upload target step. `view` is 'form' until detection runs.
+  const [view, setView] = useState<'form' | 'target'>('form');
+  const [detection, setDetection] = useState<DetectResponse | null>(null);
+  const [isDetecting, setIsDetecting] = useState(false);
+  // Errors raised by the analyze call while on the target step, shown in-place.
+  const [targetError, setTargetError] = useState<string | null>(null);
 
   const onDrop = useCallback((acceptedFiles: File[]) => {
     setError(null);
@@ -46,11 +58,17 @@ export default function CVUploader({ mode = 'ats', onAnalysisComplete, profileId
     multiple: false,
   });
 
-  const handleAnalyze = async () => {
+  /**
+   * POST the CV to /api/analyze. `targetSelection` carries the ATS post-upload
+   * choice; job match omits it (its target is the JD). The server re-resolves
+   * the selection authoritatively — the payload never dictates the occupation.
+   */
+  const runAnalyze = async (target?: TargetSelectionPayload) => {
     if (!file) return;
 
     setIsAnalyzing(true);
     setError(null);
+    setTargetError(null);
 
     try {
       const formData = new FormData();
@@ -63,29 +81,85 @@ export default function CVUploader({ mode = 'ats', onAnalysisComplete, profileId
         }
         formData.append('jobDescription', jobDescription);
       }
+      if (target) {
+        formData.append('targetSelection', target.targetSelection);
+        if (target.savedProfileId) formData.append('savedProfileId', target.savedProfileId);
+        if (target.targetRole) formData.append('targetRole', target.targetRole);
+      }
 
       const response = await fetch('/api/analyze', {
         method: 'POST',
+        headers: { 'x-operation-id': crypto.randomUUID() },
         body: formData,
       });
 
       if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.error || 'Analysis failed');
+        const data = await response.json().catch(() => ({}));
+        if (data.code === 'ENTITLEMENT_REQUIRED') {
+          window.dispatchEvent(new CustomEvent(ENTITLEMENT_REQUIRED_EVENT, {
+            detail: { capability: data.capability, source: 'analysis' },
+          }));
+        }
+        throw new Error(data.error || 'Analysis failed. Please try again.');
       }
 
       const result = await response.json();
+      window.dispatchEvent(new Event(ENTITLEMENTS_REFRESH_EVENT));
       onAnalysisComplete(result);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Something went wrong');
+      const message = err instanceof Error ? err.message : 'Something went wrong';
+      // Surface the error where the user currently is: the target step or form.
+      if (view === 'target') setTargetError(message);
+      else setError(message);
     } finally {
       setIsAnalyzing(false);
     }
   };
 
+  /**
+   * ATS: run the deterministic, cost-free detection and move to the target step.
+   * No AI is involved and no quota is consumed here (see /api/analyze/detect).
+   */
+  const runDetect = async () => {
+    if (!file) return;
+
+    setIsDetecting(true);
+    setError(null);
+
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      if (profileId) formData.append('profileId', profileId);
+
+      const response = await fetch('/api/analyze/detect', {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data.error || 'Could not read this CV. Please try another file.');
+      }
+
+      const data: DetectResponse = await response.json();
+      setDetection(data);
+      setTargetError(null);
+      setView('target');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Something went wrong');
+    } finally {
+      setIsDetecting(false);
+    }
+  };
+
+  const handlePrimary = () => (mode === 'ats' ? runDetect() : runAnalyze());
+
   const removeFile = () => {
     setFile(null);
     setError(null);
+    setTargetError(null);
+    setDetection(null);
+    setView('form');
   };
 
 
@@ -101,6 +175,25 @@ export default function CVUploader({ mode = 'ats', onAnalysisComplete, profileId
             transition={{ duration: 0.3 }}
           >
             <AnalysisProgress isAnalyzing={isAnalyzing} />
+          </motion.div>
+        ) : view === 'target' && detection ? (
+          <motion.div
+            key="target-view"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            transition={{ duration: 0.3 }}
+          >
+            <TargetSelectionStep
+              detection={detection}
+              isSubmitting={isAnalyzing}
+              error={targetError}
+              onBack={() => {
+                setTargetError(null);
+                setView('form');
+              }}
+              onSubmit={(payload) => runAnalyze(payload)}
+            />
           </motion.div>
         ) : (
           <motion.div
@@ -200,17 +293,29 @@ export default function CVUploader({ mode = 'ats', onAnalysisComplete, profileId
                   )}
 
                   <button
-                    onClick={handleAnalyze}
-                    disabled={isAnalyzing || (mode === 'job_match' && !jobDescription.trim())}
+                    onClick={handlePrimary}
+                    disabled={
+                      isAnalyzing ||
+                      isDetecting ||
+                      (mode === 'job_match' && !jobDescription.trim())
+                    }
                     className={cn(
                       'w-full py-4 rounded-xl font-bold text-base flex items-center justify-center gap-2 transition-all duration-300',
-                      (isAnalyzing || (mode === 'job_match' && !jobDescription.trim()))
+                      (isAnalyzing || isDetecting || (mode === 'job_match' && !jobDescription.trim()))
                         ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
                         : 'bg-accent-purple text-white hover:bg-purple-700 hover:shadow-lg hover:shadow-purple-500/30 hover:scale-[1.02] active:scale-[0.98]'
                     )}
                   >
-                    <Sparkles size={20} />
-                    {mode === 'job_match' ? 'Run Job Match Analysis' : 'Analyze CV'}
+                    {isDetecting ? (
+                      <Loader2 size={20} className="animate-spin" aria-hidden="true" />
+                    ) : (
+                      <Sparkles size={20} aria-hidden="true" />
+                    )}
+                    {mode === 'job_match'
+                      ? 'Run Job Match Analysis'
+                      : isDetecting
+                        ? 'Reading your CV…'
+                        : 'Continue'}
                   </button>
 
                   <p className="text-xs text-slate-500 text-center mt-4">

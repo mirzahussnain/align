@@ -50,11 +50,17 @@ function makeProfile(overrides: {
     ],
     skills: [{ id: 'group-1', category: 'Core', skills: ['Picking'], skillItems: [{ id: 'skill-1', name: 'Picking' }] }],
     certifications: [],
+    trainings: [],
+    licences: [],
+    professionalRegistrations: [],
+    languages: [],
+    volunteering: [],
+    otherEvidence: [],
   };
 }
 
 const A_PROJECT: ProfileData['projects'] = [
-  { id: 'project-1', name: 'CourtBook', stack: 'Next.js', startDate: '', endDate: '', achievements: [] },
+  { id: 'project-1', name: 'CourtBook', skills: [], startDate: '', endDate: '', achievements: [] },
 ];
 
 describe('projectsExpectedFor', () => {

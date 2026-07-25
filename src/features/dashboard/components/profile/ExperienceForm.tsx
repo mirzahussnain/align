@@ -1,166 +1,23 @@
 'use client';
-
 import { forwardRef, useImperativeHandle, useState, useTransition } from 'react';
-import { useRouter } from 'next/navigation';
-import { Plus, Trash2 } from 'lucide-react';
-import {
-  Label,
-  TextField,
-  TextArea,
-  MonthField,
-  SelectField,
-  PresentCheckbox,
-  RequiredMark,
-} from './Field';
-import { SaveStatus, SaveButton } from './PersonalInfoForm';
-import { saveExperience, type ExperienceInput } from '@/features/dashboard/actions/profile-actions';
+import { Plus, Trash2, Pencil } from 'lucide-react';
+import { Label, TextField, TextArea, MonthField, SelectField, PresentCheckbox, RequiredMark } from './Field';
+import { formatDateRange } from '@/shared/utils/date';
+import { deleteExperienceRecord, saveExperienceRecord, type ExperienceRecordInput } from '@/features/dashboard/actions/profile-actions';
 import { EMPLOYMENT_TYPES } from '@/shared/constants/employment-type';
 import type { ProfileData } from '@/features/dashboard/data/load-profile';
 import type { ProfileStepHandle } from './step-handle';
-
-const EMPTY: ExperienceInput = {
-  jobTitle: '',
-  company: '',
-  location: '',
-  type: '',
-  startDate: '',
-  endDate: '',
-  current: false,
-  achievements: [''],
-};
-
-const ExperienceForm = forwardRef<ProfileStepHandle, { initial: ProfileData['experience']; embedded?: boolean; profileId?: string }>(
-  function ExperienceForm({ initial, embedded = false, profileId }, ref) {
-  const router = useRouter();
-  const [rows, setRows] = useState<ExperienceInput[]>(
-    initial.length ? initial.map((r) => ({ ...r, achievements: r.achievements.length ? r.achievements : [''] })) : [{ ...EMPTY }]
-  );
-  const [isPending, startTransition] = useTransition();
-  const [saved, setSaved] = useState(false);
-
-  function update(i: number, patch: Partial<ExperienceInput>) {
-    setRows((rs) => rs.map((r, idx) => (idx === i ? { ...r, ...patch } : r)));
-    setSaved(false);
-  }
-
-  useImperativeHandle(ref, () => ({ save: () => saveExperience(rows, profileId).then(() => undefined) }), [rows]);
-
-  function handleSave() {
-    startTransition(async () => {
-      await saveExperience(rows, profileId);
-      setSaved(true);
-      router.refresh();
-    });
-  }
-
-  return (
-    <div>
-      {!embedded && (
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-bold text-neutral-900">Work experience</h2>
-          <SaveStatus isPending={isPending} saved={saved} />
-        </div>
-      )}
-
-      <div className="mt-6 flex flex-col gap-5">
-        {rows.map((row, i) => (
-          <div key={i} className="rounded-2xl border border-neutral-200 p-5">
-            <div className="mb-4 flex items-center justify-between">
-              <p className="text-xs font-bold uppercase tracking-wider text-neutral-400">Role {i + 1}</p>
-              {rows.length > 1 && (
-                <button
-                  type="button"
-                  onClick={() => setRows((rs) => rs.filter((_, idx) => idx !== i))}
-                  className="inline-flex items-center gap-1 text-xs font-semibold text-rose-500 hover:text-rose-600"
-                >
-                  <Trash2 className="h-3.5 w-3.5" /> Remove
-                </button>
-              )}
-            </div>
-
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <div>
-                <Label>Job title</Label>
-                <TextField value={row.jobTitle} onChange={(e) => update(i, { jobTitle: e.target.value })} placeholder="Backend Engineer" />
-              </div>
-              <div>
-                <Label>Company</Label>
-                <TextField value={row.company} onChange={(e) => update(i, { company: e.target.value })} placeholder="Monzo" />
-              </div>
-              <div>
-                <Label>Location</Label>
-                <TextField value={row.location} onChange={(e) => update(i, { location: e.target.value })} placeholder="London, UK" />
-              </div>
-              <div>
-                <Label>Type</Label>
-                <SelectField
-                  value={row.type}
-                  onChange={(e) => update(i, { type: e.target.value })}
-                  options={EMPLOYMENT_TYPES}
-                  placeholder="Select type…"
-                />
-              </div>
-              <div>
-                <Label>
-                  Start date <RequiredMark />
-                </Label>
-                <MonthField
-                  required
-                  value={row.startDate}
-                  // The start can never be after the end, so the end date caps
-                  // it — the picker greys out impossible months instead of
-                  // letting them be chosen and rejected on save.
-                  max={row.current ? undefined : row.endDate || undefined}
-                  onChange={(e) => update(i, { startDate: e.target.value })}
-                />
-              </div>
-              <div>
-                <Label>
-                  End date {!row.current && <RequiredMark />}
-                </Label>
-                <MonthField
-                  required={!row.current}
-                  disabled={row.current}
-                  value={row.current ? '' : row.endDate}
-                  min={row.startDate || undefined}
-                  onChange={(e) => update(i, { endDate: e.target.value })}
-                />
-                <PresentCheckbox
-                  id={`exp-current-${i}`}
-                  checked={row.current}
-                  // Clearing endDate on tick keeps the stored row honest: an
-                  // ongoing role must not carry a leftover end date that would
-                  // resurface if the box is later unticked.
-                  onChange={(checked) => update(i, { current: checked, endDate: checked ? '' : row.endDate })}
-                  label="I currently work here"
-                />
-              </div>
-            </div>
-
-            <div className="mt-4">
-              <Label>Achievements (one per line)</Label>
-              <TextArea
-                value={row.achievements.join('\n')}
-                onChange={(e) => update(i, { achievements: e.target.value.split('\n') })}
-                placeholder={'Cut checkout latency 40% by…\nLed migration of…'}
-              />
-            </div>
-          </div>
-        ))}
-      </div>
-
-      <div className="mt-4 flex items-center justify-between">
-        <button
-          type="button"
-          onClick={() => setRows((rs) => [...rs, { ...EMPTY }])}
-          className="inline-flex items-center gap-1.5 rounded-full border border-neutral-300 px-4 py-2 text-xs font-semibold text-neutral-700 transition-colors hover:bg-neutral-100"
-        >
-          <Plus className="h-3.5 w-3.5" /> Add role
-        </button>
-        {!embedded && <SaveButton isPending={isPending} onClick={handleSave} />}
-      </div>
-    </div>
-  );
-});
-
-export default ExperienceForm;
+type Editor = { mode: 'closed' } | { mode: 'create'; draftId: string; draft: ExperienceRecordInput } | { mode: 'edit'; recordId: string; draft: ExperienceRecordInput };
+const EMPTY: ExperienceRecordInput = { jobTitle: '', company: '', location: '', type: '', startDate: '', endDate: '', current: false, achievements: [''] };
+const draftId = () => globalThis.crypto?.randomUUID?.() ?? `draft-${Date.now()}`;
+const ExperienceForm = forwardRef<ProfileStepHandle, { initial: ProfileData['experience']; embedded?: boolean; profileId?: string }>(function ExperienceForm({ initial, profileId }, ref) {
+  const [records, setRecords] = useState<ExperienceRecordInput[]>(initial.map((item) => ({ ...item, achievements: item.achievements.length ? item.achievements : [''] })));
+  const [editor, setEditor] = useState<Editor>({ mode: 'closed' }); const [pending, startTransition] = useTransition(); const [feedback, setFeedback] = useState('');
+  const active = editor.mode === 'closed' ? null : editor;
+  const update = (patch: Partial<ExperienceRecordInput>) => active && setEditor({ ...active, draft: { ...active.draft, ...patch } });
+  const close = () => setEditor({ mode: 'closed' });
+  const save = () => { if (!active) return; startTransition(async () => { const result = await saveExperienceRecord({ ...active.draft, id: active.mode === 'edit' ? active.recordId : undefined }, profileId); if (!result.ok) return setFeedback(result.error); const saved = { ...active.draft, id: result.id }; setRecords((items) => active.mode === 'edit' ? items.map((item) => item.id === result.id ? saved : item) : [...items, saved]); close(); setFeedback('Experience saved.'); }); };
+  const remove = (record: ExperienceRecordInput) => { if (!record.id || !window.confirm('Delete this experience? Previously approved evidence will not be remapped.')) return; startTransition(async () => { const result = await deleteExperienceRecord(record.id!, profileId); if (!result.ok) return setFeedback(result.error); setRecords((items) => items.filter((item) => item.id !== record.id)); setFeedback(result.mayHaveStaleApprovals ? 'Deleted. Previous approvals were not remapped.' : 'Deleted.'); }); };
+  useImperativeHandle(ref, () => ({ save: async () => { if (active) await save(); } }), [active]);
+  return <div><h2 className="text-lg font-bold text-neutral-900">Work experience</h2>{!active && !records.length && <div className="mt-6 rounded-2xl border border-dashed border-neutral-300 p-6 text-sm text-neutral-500">No experience yet. Add a role when it supports your career track.</div>}{!active && <button type="button" onClick={() => { setEditor({ mode: 'create', draftId: draftId(), draft: { ...EMPTY } }); setFeedback(''); }} className="mt-4 inline-flex items-center gap-1.5 rounded-full border border-neutral-300 px-4 py-2 text-xs font-semibold text-neutral-700 hover:bg-neutral-100"><Plus className="h-3.5 w-3.5" /> Add experience</button>}{!active && <div className="mt-5 flex flex-col gap-3">{records.map((record) => <div key={`experience:${record.id}`} className="rounded-2xl border border-neutral-200 p-4"><div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"><div><p className="font-semibold text-neutral-900">{record.jobTitle} · {record.company}</p><p className="mt-1 text-xs text-neutral-500">{[record.location, record.type, `${formatDateRange(record.startDate, record.endDate, record.current)}`].filter(Boolean).join(' · ')}</p>{record.achievements[0] && <p className="mt-2 text-xs text-neutral-600">{record.achievements[0]}</p>}</div><div className="flex gap-3"><button type="button" onClick={() => setEditor({ mode: 'edit', recordId: record.id!, draft: { ...record } })} className="text-xs font-semibold text-neutral-700"><Pencil className="mr-1 inline h-3.5 w-3.5" />Edit</button><button type="button" onClick={() => remove(record)} className="text-xs font-semibold text-rose-500"><Trash2 className="mr-1 inline h-3.5 w-3.5" />Delete</button></div></div></div>)}</div>}{active && <div key={active.mode === 'edit' ? `experience:${active.recordId}` : `experience:draft:${active.draftId}`} className="mt-6 rounded-2xl border border-neutral-200 p-4 sm:p-5"><div className="grid grid-cols-1 gap-4 sm:grid-cols-2"><div><Label htmlFor={`experience-${active.mode === 'edit' ? active.recordId : active.draftId}-title`}>Job title <RequiredMark /></Label><TextField id={`experience-${active.mode === 'edit' ? active.recordId : active.draftId}-title`} value={active.draft.jobTitle} onChange={(e) => update({ jobTitle: e.target.value })} /></div><div><Label>Company <RequiredMark /></Label><TextField value={active.draft.company} onChange={(e) => update({ company: e.target.value })} /></div><div><Label>Location</Label><TextField value={active.draft.location} onChange={(e) => update({ location: e.target.value })} /></div><div><Label>Type</Label><SelectField value={active.draft.type} onChange={(e) => update({ type: e.target.value })} options={EMPLOYMENT_TYPES} /></div><div><Label>Start date <RequiredMark /></Label><MonthField required value={active.draft.startDate} onChange={(e) => update({ startDate: e.target.value })} /></div><div><Label>End date</Label><MonthField disabled={active.draft.current} value={active.draft.current ? '' : active.draft.endDate} onChange={(e) => update({ endDate: e.target.value })} /><PresentCheckbox id={`experience-${active.mode === 'edit' ? active.recordId : active.draftId}-current`} checked={active.draft.current} onChange={(current) => update({ current, endDate: current ? '' : active.draft.endDate })} /></div></div><div className="mt-4"><Label>Achievements (one per line)</Label><TextArea value={active.draft.achievements.join('\n')} onChange={(e) => update({ achievements: e.target.value.split('\n') })} /></div><div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end sm:gap-3"><button type="button" onClick={close} disabled={pending} className="w-full rounded-full border border-neutral-300 px-4 py-2 text-xs font-bold sm:w-auto">Cancel</button><button type="button" onClick={save} disabled={pending} className="w-full rounded-full bg-accent-purple px-4 py-2 text-xs font-bold text-white sm:w-auto">{pending ? 'Saving…' : active.mode === 'edit' ? 'Save changes' : 'Save experience'}</button></div></div>}{feedback && <p role="status" className="mt-4 text-xs font-medium text-emerald-600">{feedback}</p>}</div>;
+}); export default ExperienceForm;

@@ -44,3 +44,7 @@ next-env.d.ts
 .vercel
 
 /src/generated/prisma
+
+# Stage 4 artifacts.
+/artifacts/golden-cvs/
+/artifacts/stage4-browser/

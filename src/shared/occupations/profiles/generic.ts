@@ -72,7 +72,7 @@ export const genericProfile: OccupationProfile = {
 
   detection: {
     titlePatterns: [],
-    taskPatterns: [],
+    dutyPatterns: [],
     sectorHint: 'general',
   },
 };

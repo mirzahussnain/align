@@ -13,6 +13,21 @@ import {
   DOCX_CONTENT_TYPE,
 } from '@/shared/services/cv-generation';
 import { TemplateIdSchema } from '@/shared/constants/templates';
+import { planCvBuildSpec } from '@/shared/services/cv-build-spec';
+import { buildTrustedGenerationContext } from '@/shared/services/trusted-generation-context';
+import {
+  buildProfileEvidenceCorpus,
+  experienceDurationFact,
+  profileDateEntities,
+  scanUnsupportedClaims,
+  unsupportedClaimUserMessage,
+} from '@/shared/services/cv-generation-safety';
+import { formatDateRange } from '@/shared/utils/date';
+import {
+  TRUSTED_GENERATION_CONTEXT_VERSION,
+  UNSUPPORTED_CLAIM_VALIDATION_VERSION,
+} from '@/shared/types/cv-rewrite';
+import { assertCapability } from '@/shared/entitlements/server';
 
 const FromProfileSchema = z.object({
   templateId: TemplateIdSchema,
@@ -41,6 +56,7 @@ export async function POST(request: Request) {
 
     const rateLimitResponse = await applyRateLimit(rewriteLimiter, session.user.id);
     if (rateLimitResponse) return rateLimitResponse;
+    await assertCapability(session.user.id, 'tailored_cv_generation');
 
     const parsed = FromProfileSchema.safeParse(await request.json().catch(() => ({})));
     if (!parsed.success) {
@@ -63,8 +79,50 @@ export async function POST(request: Request) {
       );
     }
 
+    // Even a no-AI render passes through the trusted-context boundary. The
+    // builder asserts the generated-evidence quarantine and yields the
+    // deterministic derived facts the safety scan needs. There is no approved
+    // evidence on this path — the Profile is itself the canonical ground truth.
+    const trustedContext = buildTrustedGenerationContext({
+      profile,
+      approvedEvidence: [],
+    });
+
     const data = profileToRewrittenData(profile);
-    const docxBuffer = await renderCvDocx(templateId, data);
+
+    // Deterministic code is not automatically truthful: a user-entered tagline or
+    // summary can still assert a duration the dated history does not support, and
+    // a record could render a date range wider than its precision. Reject before
+    // rendering or persisting — this path invokes no model, so there is nothing to
+    // correct; the fix belongs in the Profile.
+    const unsupportedClaims = scanUnsupportedClaims({
+      cv: data,
+      corpus: buildProfileEvidenceCorpus(profile),
+      durationFact: experienceDurationFact(trustedContext),
+      dateEntities: profileDateEntities(profile, formatDateRange),
+    });
+    if (unsupportedClaims.length > 0) {
+      console.warn(
+        `[from-profile] Deterministic build rejected for profile ${profile.profileId}: ${unsupportedClaims
+          .map((flag) => flag.kind)
+          .join(', ')}.`
+      );
+      throw new APIError(unsupportedClaimUserMessage(unsupportedClaims), 422);
+    }
+
+    // Convert the canonical profile evidence into the single generation
+    // contract before rendering. The planner decides section presence, order and
+    // headings from the profile's declared target occupation; the renderer only
+    // presents it.
+    const buildSpec = planCvBuildSpec({
+      data,
+      templateId,
+      occupationId: profile.personal.targetOccupation || null,
+      role: profile.personal.targetRoleTitle || null,
+      targetSource: 'profile_target',
+      seniority: profile.personal.targetSeniority || null,
+    });
+    const docxBuffer = await renderCvDocx(buildSpec);
 
     try {
       await persistAndArchiveCv({
@@ -74,6 +132,30 @@ export async function POST(request: Request) {
         fileName: 'Profile_CV.docx',
         docxBuffer,
         profileId: profile.profileId || null,
+        // Deterministic-path provenance: no model, no approved evidence, but the
+        // same trusted-context and unsupported-claim guarantees still recorded.
+        provenance: {
+          trustedContextVersion: TRUSTED_GENERATION_CONTEXT_VERSION,
+          trustedContextProfileId: trustedContext.profileSnapshot.profileId,
+          derivedFacts: trustedContext.derivedFacts.map((fact) => ({
+            key: fact.key,
+            confidence: fact.confidence,
+            derivationRule: fact.derivationRule,
+            supportingFactKeys: fact.supportingFactKeys,
+          })),
+          unsupportedClaimValidationVersion: UNSUPPORTED_CLAIM_VALIDATION_VERSION,
+          unsupportedClaimValidationResult: 'passed',
+          deterministic: true,
+          // Canonical build-spec provenance: how the document's structure was planned.
+          cvBuildSpecVersion: buildSpec.version,
+          contentPlannerVersion: buildSpec.provenance.plannerVersion,
+          templateCapabilityVersion: buildSpec.provenance.capabilityVersion,
+          resolvedOccupation: buildSpec.provenance.occupationId,
+          roleArchetype: buildSpec.provenance.roleArchetype,
+          plannedSectionOrder: buildSpec.provenance.sectionOrder,
+          omittedEmptySections: buildSpec.provenance.omittedEmptySections,
+          unsupportedByTemplate: buildSpec.provenance.unsupportedByTemplate,
+        },
         entitlements,
       });
     } catch (persistError) {

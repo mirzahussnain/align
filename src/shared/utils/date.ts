@@ -3,8 +3,98 @@ const MONTHS = [
   'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
 ];
 
-/** `YYYY-MM`, the storage format for every profile date. */
-const ISO_MONTH = /^(\d{4})-(\d{2})$/;
+const MONTHS_LONG = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December',
+];
+
+/** Profile dates preserve the precision supplied by the user. */
+const ISO_YEAR = /^(\d{4})$/;
+const ISO_MONTH = /^(\d{4})-(0[1-9]|1[0-2])$/;
+
+/**
+ * How a canonical `YYYY` / `YYYY-MM` date is presented. Chosen per template via
+ * its capability, so the SAME canonical evidence can render differently across
+ * templates without changing meaning. Every style preserves the stored
+ * precision: a year-only value never gains a month, and no start date is ever
+ * invented — the choice is purely how a known value is spelled.
+ */
+export type DateDisplayStyle =
+  | 'short_month_year'
+  | 'long_month_year'
+  | 'numeric_month_year'
+  | 'year_only_when_possible';
+
+/**
+ * Render one canonical date in the requested style. Non-canonical input (already
+ * display text like "Jan 2022", or free text from an uploaded CV) is returned
+ * unchanged so historical and AI-authored values keep rendering.
+ */
+export function formatProfileDateStyled(
+  value: string | null | undefined,
+  style: DateDisplayStyle
+): string {
+  if (!value) return '';
+  const trimmed = value.trim();
+
+  const yearMatch = ISO_YEAR.exec(trimmed);
+  if (yearMatch) return yearMatch[1]; // year-only stays year-only in every style
+
+  const monthMatch = ISO_MONTH.exec(trimmed);
+  if (!monthMatch) return trimmed; // not canonical — pass through untouched
+
+  const [, year, month] = monthMatch;
+  const index = Number(month) - 1;
+  switch (style) {
+    case 'numeric_month_year':
+      return `${month}/${year}`;
+    case 'long_month_year':
+      return MONTHS_LONG[index] ? `${MONTHS_LONG[index]} ${year}` : year;
+    case 'year_only_when_possible':
+      return year;
+    case 'short_month_year':
+    default:
+      return MONTHS[index] ? `${MONTHS[index]} ${year}` : year;
+  }
+}
+
+/**
+ * Styled counterpart to {@link formatDateRange}. `current` still wins over any
+ * stored end date, and a missing end degrades to just the start — the only thing
+ * the style changes is how each known endpoint is spelled.
+ */
+export function formatDateRangeStyled(
+  start: string | null | undefined,
+  end: string | null | undefined,
+  style: DateDisplayStyle,
+  current = false
+): string {
+  const from = formatProfileDateStyled(start, style);
+  const to = current ? 'Present' : formatProfileDateStyled(end, style);
+  if (from && to) return `${from} – ${to}`;
+  return from || to || '';
+}
+
+/** True only for the canonical profile-date storage formats: `YYYY` or `YYYY-MM`. */
+export function isProfileDate(value: string | null | undefined): boolean {
+  if (!value) return false;
+  const trimmed = value.trim();
+  return ISO_YEAR.test(trimmed) || ISO_MONTH.test(trimmed);
+}
+
+/**
+ * Whether two precise profile dates establish that `end` precedes `start`.
+ * A year-only value does not imply January or December, so mixed-precision
+ * dates in the same year are intentionally incomparable rather than guessed.
+ */
+export function isProfileDateBefore(end: string, start: string): boolean {
+  if (!isProfileDate(end) || !isProfileDate(start)) return false;
+  const [endYear, endMonth] = end.trim().split('-');
+  const [startYear, startMonth] = start.trim().split('-');
+  if (endYear !== startYear) return endYear < startYear;
+  if (!endMonth || !startMonth) return false;
+  return endMonth < startMonth;
+}
 
 /**
  * Render a stored profile date for display: `2022-01` becomes `Jan 2022`.
@@ -17,15 +107,12 @@ const ISO_MONTH = /^(\d{4})-(\d{2})$/;
  * picker existed hold free text like "Jan 2022" or "2018", and passing those
  * through keeps old CVs rendering rather than blanking their dates.
  */
-export function formatMonth(value: string | null | undefined): string {
-  if (!value) return '';
-  const match = ISO_MONTH.exec(value.trim());
-  if (!match) return value.trim();
-
-  const [, year, month] = match;
-  const label = MONTHS[Number(month) - 1];
-  return label ? `${label} ${year}` : year;
+export function formatProfileDate(value: string | null | undefined): string {
+  return formatProfileDateStyled(value, 'short_month_year');
 }
+
+/** @deprecated Use `formatProfileDate` for profile values. */
+export const formatMonth = formatProfileDate;
 
 /**
  * Render a start–end pair as one string, e.g. `Jan 2022 – Present`.
@@ -40,11 +127,7 @@ export function formatDateRange(
   end: string | null | undefined,
   current = false
 ): string {
-  const from = formatMonth(start);
-  const to = current ? 'Present' : formatMonth(end);
-
-  if (from && to) return `${from} – ${to}`;
-  return from || to || '';
+  return formatDateRangeStyled(start, end, 'short_month_year', current);
 }
 
 /**

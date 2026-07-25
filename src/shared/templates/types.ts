@@ -21,7 +21,7 @@ export interface RewrittenCVData {
   }[];
   projects: {
     name: string;
-    stack: string;
+    skills: string;
     startDate: string;
     endDate: string;
     achievements: {

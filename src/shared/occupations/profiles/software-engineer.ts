@@ -2,7 +2,7 @@ import type { OccupationProfile } from '../types';
 
 export const softwareEngineerProfile: OccupationProfile = {
   id: 'software_engineer',
-  version: '1.1.0',
+  version: '1.2.0',
   label: 'Software Engineering',
   sector: 'tech',
   roleArchetype: 'technical_specialist',
@@ -97,10 +97,37 @@ export const softwareEngineerProfile: OccupationProfile = {
       /\b(?:junior|senior|lead|staff|principal)\s+(?:engineer|developer)\b/i,
       /\bsite reliability engineer\b/i,
     ],
-    taskPatterns: [
-      /\b(?:built|shipped|deployed|refactored|implemented)\b.*\b(?:api|service|component|pipeline|feature)\b/i,
-      /\b(?:react|typescript|javascript|python|java|node\.?js|golang|rust|c#|\.net)\b/i,
-      /\b(?:pull request|code review|unit test|ci\/cd|git)\b/i,
+    // Cat 2 — defining engineering duties (building/shipping software), NOT the
+    // languages, which are shared tools. "Built an API" defines the work;
+    // "Python" does not.
+    dutyPatterns: [
+      /\b(?:built|build|shipp(?:ed|ing)?|deploy(?:ed|ing)?|refactor(?:ed|ing)?|implement(?:ed|ing)?|develop(?:ed|ing)?|maintain(?:ed|ing)?)\b.*\b(?:api|endpoint|service|micro-?service|component|pipeline|feature|codebase|app|application|platform|system|website)\b/i,
+      /\b(?:pull requests?|code reviews?|unit tests?|end[- ]to[- ]end tests?|ci\/cd|continuous integration)\b/i,
+      /\bfull[- ]?stack\b.*\b(?:app|application|platform|web|booking|system)\b/i,
+    ],
+    // Cat 3 — distinctive engineering outputs / deliverables.
+    outputPatterns: [
+      /\b(?:production|live)\b.*\b(?:app|application|service|website|platform|system)\b/i,
+      /\bopen[- ]source\b/i,
+      /\btest coverage\b|\b\d{1,3}%\s+coverage\b/i,
+      /\bCI\b.*\bpipeline\b|\bpipeline\b.*\b(?:lint|tests?|deploy)/i,
+    ],
+    // Cat 7 — tools & methods: shared, low weight. Python/SQL alone cannot
+    // decide software engineering versus analytical work.
+    toolPatterns: [
+      /\b(?:react|typescript|javascript|node\.?js|golang|\bgo\b|rust|c#|\.net|next\.?js|express|postgres(?:ql)?|prisma|docker|kubernetes|git(?:hub)?)\b/i,
+      /\b(?:python|java|sql)\b/i,
+    ],
+    // Cat 8 — generic transferable skills; never decisive.
+    genericSkillPatterns: [
+      /\b(?:communication|teamwork|problem[- ]solving|collaborat(?:e|ion)|agile ceremon)/i,
+    ],
+    // Cat 9 — a clearly non-engineering role title on this CV counts against it.
+    negativePatterns: [
+      /\b(?:data|business|financial)\s+analyst\b/i,
+      /\b(?:staff|registered|charge)\s+nurse\b/i,
+      /\bwarehouse\s+operative\b/i,
+      /\bhealthcare\s+assistant\b/i,
     ],
     sectorHint: 'tech',
   },

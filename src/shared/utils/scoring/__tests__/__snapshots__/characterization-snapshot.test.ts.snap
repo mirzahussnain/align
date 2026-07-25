@@ -64,6 +64,7 @@ exports[`numeric characterization (pre-Phase-A pin) > admin-office scores identi
   "reasonCodes": [
     "CORE_TASKS_MATCH",
     "CREDENTIAL_EVIDENCE",
+    "DISTINCTIVE_OUTPUT_MATCH",
     "JOB_TITLE_EXACT_MATCH",
   ],
   "recommendationShape": [
@@ -154,6 +155,7 @@ exports[`numeric characterization (pre-Phase-A pin) > hca-no-nmc scores identica
   "reasonCodes": [
     "CORE_TASKS_MATCH",
     "CREDENTIAL_EVIDENCE",
+    "DISTINCTIVE_OUTPUT_MATCH",
     "JOB_TITLE_EXACT_MATCH",
   ],
   "recommendationShape": [
@@ -229,7 +231,7 @@ exports[`numeric characterization (pre-Phase-A pin) > junior-dev-with-projects s
       "status": "excellent",
     },
   ],
-  "confidence": 0.9,
+  "confidence": 1,
   "credentials": {
     "findings": [],
     "notMaterial": true,
@@ -241,6 +243,7 @@ exports[`numeric characterization (pre-Phase-A pin) > junior-dev-with-projects s
   "reasonCodes": [
     "CORE_TASKS_MATCH",
     "CREDENTIAL_EVIDENCE",
+    "DISTINCTIVE_OUTPUT_MATCH",
     "JOB_TITLE_EXACT_MATCH",
   ],
   "recommendationShape": [
@@ -413,6 +416,7 @@ exports[`numeric characterization (pre-Phase-A pin) > registered-nurse-no-nmc sc
   "reasonCodes": [
     "CORE_TASKS_MATCH",
     "CREDENTIAL_EVIDENCE",
+    "DISTINCTIVE_OUTPUT_MATCH",
     "JOB_TITLE_EXACT_MATCH",
   ],
   "recommendationShape": [
@@ -512,6 +516,7 @@ exports[`numeric characterization (pre-Phase-A pin) > warehouse-flt-no-projects 
   "reasonCodes": [
     "CORE_TASKS_MATCH",
     "CREDENTIAL_EVIDENCE",
+    "DISTINCTIVE_OUTPUT_MATCH",
     "JOB_TITLE_EXACT_MATCH",
   ],
   "recommendationShape": [

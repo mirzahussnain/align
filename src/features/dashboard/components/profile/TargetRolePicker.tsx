@@ -32,7 +32,7 @@ export default function TargetRolePicker({
     <>
       <div>
         <Label htmlFor="targetOccupation">
-          CV evaluation type {required && <span className="text-rose-500">*</span>}
+          Career area {required && <span className="text-rose-500">*</span>}
         </Label>
         <select
           id="targetOccupation"

@@ -11,13 +11,13 @@
  * body over-claims, the whole body is demoted to intent; structural fields
  * (labels, target role) are kept because they assert no facts.
  */
-import type { CvBuildSpec } from '@/shared/types/ai';
+import type { AiCvBuildGuidance } from '@/shared/types/ai';
 import { extractImpactMetrics, metricSupported, type EvidenceCorpus } from './cv-evidence';
 
-type BuildSpecBullet = CvBuildSpec['bullets_to_rewrite'][number];
+type BuildSpecBullet = AiCvBuildGuidance['bullets_to_rewrite'][number];
 
 export interface BuildSpecGroundingResult {
-  spec: CvBuildSpec;
+  spec: AiCvBuildGuidance;
   /** Number of bullets whose body was demoted to a neutral directive. */
   demotedBullets: number;
   /** Internal diagnostics — never shown to the user. */
@@ -43,7 +43,7 @@ export function neutralRewriteDirective(bullet: BuildSpecBullet): string {
  * build-spec text is never part of the evidence corpus.
  */
 export function groundBuildSpec(
-  spec: CvBuildSpec,
+  spec: AiCvBuildGuidance,
   corpus: EvidenceCorpus
 ): BuildSpecGroundingResult {
   const changes: string[] = [];

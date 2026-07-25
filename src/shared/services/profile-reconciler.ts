@@ -17,8 +17,20 @@ import {
 } from '@/shared/types/profile-reasoning';
 import { generateJSONFromAI } from './ai-orchestrator';
 import { THINKING_BUDGETS } from '@/shared/lib/config';
+import { languageProficiencyLabel } from '@/shared/constants/profile-field-options';
+import { formatDateRange, formatProfileDate } from '@/shared/utils/date';
+
+/** Shared credential verification phrasing — never upgrades an unverified record. */
+function verificationPhrase(verificationStatus: string): string {
+  return verificationStatus === 'verified' ? 'verified' : 'user-confirmed, unverified';
+}
 
 const SUGGESTIBLE_STATUSES = new Set(['partial', 'not_met', 'contradicted', 'unclear']);
+
+/** Adds an optional display date without ever leaving a dangling separator. */
+function withDate(text: string, date: string): string {
+  return date ? `${text} — ${date}` : text;
+}
 
 /**
  * Flatten complete profile data into database-addressed evidence records.
@@ -30,10 +42,12 @@ export function buildProfileCandidates(profile: ProfileData): ProfileCandidate[]
   for (const experience of profile.experience) {
     candidates.push({
       evidenceRef: { type: 'experience', id: experience.id },
-      evidenceText:
+      evidenceText: withDate(
         experience.achievements.length > 0
           ? experience.achievements.join('\n')
           : `${experience.jobTitle} at ${experience.company}`,
+        formatDateRange(experience.startDate, experience.endDate, experience.current)
+      ),
       evidenceLocation: `${experience.jobTitle} at ${experience.company} — Work experience`,
     });
   }
@@ -41,10 +55,12 @@ export function buildProfileCandidates(profile: ProfileData): ProfileCandidate[]
   for (const project of profile.projects) {
     candidates.push({
       evidenceRef: { type: 'project', id: project.id },
-      evidenceText:
+      evidenceText: withDate(
         project.achievements.length > 0
           ? project.achievements.join('\n')
-          : [project.name, project.stack].filter(Boolean).join(' — '),
+          : [project.name, project.skills?.map((skill) => skill.name).join(', ')].filter(Boolean).join(' — '),
+        formatDateRange(project.startDate, project.endDate)
+      ),
       evidenceLocation: `${project.name} — Project`,
     });
   }
@@ -63,7 +79,15 @@ export function buildProfileCandidates(profile: ProfileData): ProfileCandidate[]
     for (const skill of group.skillItems) {
       candidates.push({
         evidenceRef: { type: 'skill', id: skill.id },
-        evidenceText: skill.name,
+        evidenceText: [
+          skill.name,
+          skill.level && skill.activity
+            ? `${skill.level.replaceAll('_', ' ')}: ${skill.activity}`
+            : '',
+          skill.outcome,
+        ]
+          .filter(Boolean)
+          .join(' — '),
         evidenceLocation: `${group.category} — Skills`,
       });
     }
@@ -72,12 +96,26 @@ export function buildProfileCandidates(profile: ProfileData): ProfileCandidate[]
   for (const certification of profile.certifications) {
     candidates.push({
       evidenceRef: { type: 'certification', id: certification.id },
-      evidenceText: [certification.name, certification.issuer, certification.year]
-        .filter(Boolean)
-        .join(' — '),
+      evidenceText: [
+        certification.name,
+        certification.issuer,
+        formatProfileDate(certification.issueDate || certification.year),
+        certification.verificationStatus
+          ? certification.verificationStatus === 'verified'
+            ? 'verified'
+            : 'user-confirmed, unverified'
+          : '',
+      ].filter(Boolean).join(' — '),
       evidenceLocation: `${certification.name} — Certification or licence`,
     });
   }
+
+  for (const item of profile.trainings) candidates.push({ evidenceRef: { type: 'training', id: item.id }, evidenceText: [item.course, item.provider, item.field, item.result].filter(Boolean).join(' — '), evidenceLocation: `${item.course} — Training` });
+  for (const item of profile.licences) candidates.push({ evidenceRef: { type: 'licence', id: item.id }, evidenceText: `${[item.officialName, item.issuingBody].filter(Boolean).join(' — ')} (${verificationPhrase(item.verificationStatus)})`, evidenceLocation: `${item.officialName} — Licence` });
+  for (const item of profile.professionalRegistrations) candidates.push({ evidenceRef: { type: 'professional_registration', id: item.id }, evidenceText: `${[item.officialName, item.issuingBody].filter(Boolean).join(' — ')} (${verificationPhrase(item.verificationStatus)})`, evidenceLocation: `${item.officialName} — Professional registration` });
+  for (const item of profile.languages) { const abilities = ([['speaking', item.speaking], ['reading', item.reading], ['writing', item.writing]] as const).filter(([, level]) => level).map(([ability, level]) => `${ability}: ${languageProficiencyLabel(level)}`).join('; '); candidates.push({ evidenceRef: { type: 'language', id: item.id }, evidenceText: [item.language, abilities].filter(Boolean).join(' — '), evidenceLocation: `${item.language} — Language` }); }
+  for (const item of profile.volunteering) candidates.push({ evidenceRef: { type: 'volunteering', id: item.id }, evidenceText: item.contribution ? `${item.role} at ${item.organisation}: ${item.contribution}` : `${item.role} at ${item.organisation}`, evidenceLocation: `${item.organisation} — Volunteering` });
+  for (const item of profile.otherEvidence) candidates.push({ evidenceRef: { type: 'other', id: item.id }, evidenceText: `${item.title}: ${item.description}`, evidenceLocation: [item.context, 'Other evidence'].filter(Boolean).join(' — ') });
 
   return candidates;
 }
@@ -106,7 +144,13 @@ function parseEvidenceRef(value: unknown): ProfileEvidenceRef {
     ref.type !== 'project' &&
     ref.type !== 'education' &&
     ref.type !== 'skill' &&
-    ref.type !== 'certification'
+    ref.type !== 'certification' &&
+    ref.type !== 'training' &&
+    ref.type !== 'licence' &&
+    ref.type !== 'professional_registration' &&
+    ref.type !== 'language' &&
+    ref.type !== 'volunteering' &&
+    ref.type !== 'other'
   ) {
     throw new ProfileEvidenceValidationError('Suggestion has an unsupported evidence type.');
   }
@@ -245,7 +289,7 @@ Return only JSON in this shape:
   "suggestions": [
     {
       "requirementId": "exact requirement id",
-      "evidenceRef": { "type": "experience | project | education | skill | certification", "id": "exact database id" },
+      "evidenceRef": { "type": "experience | project | education | skill | certification | training | licence | professional_registration | language | volunteering | other", "id": "exact database id" },
       "evidenceText": "optional wording; the server will discard it",
       "evidenceLocation": "optional wording; the server will discard it",
       "rationale": "why this stored evidence supports this exact requirement",
@@ -277,6 +321,39 @@ Return only JSON in this shape:
  * ledger snapshot. Any stale, cross-profile, duplicate, or mistyped reference
  * rejects the generation request rather than being silently dropped.
  */
+function snapshotApprovedEvidence(profile: ProfileData, ref: ProfileEvidenceRef): Record<string, unknown> {
+  if (ref.type === 'skill') {
+    const group = profile.skills.find((item) => item.skillItems.some((skill) => skill.id === ref.id));
+    const skill = group?.skillItems.find((item) => item.id === ref.id);
+    if (!skill) return {};
+    const projects = profile.projects.filter((project) => project.skillIds?.includes(ref.id)).map((project) => ({
+      id: project.id,
+      name: project.name,
+      evidenceLines: [...project.achievements],
+      startDate: project.startDate || null,
+      endDate: project.endDate || null,
+      liveUrl: project.liveUrl || null,
+      repositoryUrl: project.repositoryUrl || null,
+    }));
+    return {
+      kind: 'skill', id: skill.id, name: skill.name,
+      skillGroupLabel: group?.id === 'ungrouped' ? null : group?.category ?? null,
+      taxonomy: skill.taxonomy ? { ...skill.taxonomy } : null,
+      linkedProjects: projects,
+    };
+  }
+  if (ref.type === 'project') {
+    const project = profile.projects.find((item) => item.id === ref.id);
+    if (!project) return {};
+    return {
+      kind: 'project', id: project.id, name: project.name,
+      evidenceLines: [...project.achievements], startDate: project.startDate || null, endDate: project.endDate || null,
+      liveUrl: project.liveUrl || null, repositoryUrl: project.repositoryUrl || null,
+      linkedSkills: (project.skills ?? []).map((skill) => ({ id: skill.id, name: skill.name })),
+    };
+  }
+  return { kind: ref.type, id: ref.id };
+}
 export function resolveApprovedProfileEvidence(
   profile: ProfileData,
   approved: Array<ApprovedProfileEvidence & { rationale?: string }>,
@@ -328,6 +405,7 @@ export function resolveApprovedProfileEvidence(
       resolvedEvidenceText: candidate.evidenceText,
       evidenceLocation: candidate.evidenceLocation,
       userApproved: true,
+      evidenceSnapshot: snapshotApprovedEvidence(profile, candidate.evidenceRef),
       ...(rationale ? { rationale } : {}),
     };
   });

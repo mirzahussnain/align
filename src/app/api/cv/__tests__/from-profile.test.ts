@@ -23,13 +23,39 @@ vi.mock('@/shared/services/usage-meter', () => ({
   recordUsage: vi.fn(async () => {}),
 }));
 vi.mock('@/features/dashboard/data/load-profile', () => ({
-  loadProfileData: vi.fn(async () => ({ profileId: 'profile-abc' })),
+  // A structurally-complete ProfileData so the trusted-context builder and the
+  // deterministic safety scan have the arrays they iterate.
+  loadProfileData: vi.fn(async () => ({
+    profileId: 'profile-abc',
+    label: 'Default',
+    targetIndustry: '',
+    personal: {
+      label: 'Default', fullName: 'A Candidate', tagline: '', professionalSummary: '',
+      targetOccupation: '', targetRoleTitle: '', targetSeniority: '', targetIndustry: '',
+      email: '', phoneDialCode: '', phoneNumber: '', phoneCountry: '', city: '', state: '',
+      country: '', website: '', linkedin: '', github: '', visaStatus: '', visaExpiry: '',
+    },
+    experience: [], projects: [], education: [], skills: [], certifications: [],
+    trainings: [], licences: [], professionalRegistrations: [], languages: [],
+    volunteering: [], otherEvidence: [],
+  })),
   isProfileComplete: vi.fn(() => true),
 }));
 vi.mock('@/shared/services/cv-generation', () => ({
   renderCvDocx: vi.fn(async () => Buffer.from('docx-bytes')),
   persistAndArchiveCv: vi.fn(async () => 'cv-1'),
-  profileToRewrittenData: vi.fn(() => ({ fullName: 'A. Candidate' })),
+  // A benign, fully-supported CV shape by default; individual tests can override.
+  profileToRewrittenData: vi.fn(() => ({
+    fullName: 'A. Candidate',
+    tagline: '',
+    contact: { email: '', phone: '', location: '' },
+    professionalSummary: '',
+    education: [],
+    projects: [],
+    experience: [],
+    coreSkills: [],
+    certifications: [],
+  })),
   DOCX_CONTENT_TYPE: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
 }));
 
@@ -37,7 +63,7 @@ import { POST } from '@/app/api/cv/from-profile/route';
 import { auth } from '@/shared/lib/auth';
 import { checkQuota, recordUsage } from '@/shared/services/usage-meter';
 import { isProfileComplete } from '@/features/dashboard/data/load-profile';
-import { persistAndArchiveCv } from '@/shared/services/cv-generation';
+import { persistAndArchiveCv, profileToRewrittenData } from '@/shared/services/cv-generation';
 
 function fromProfileRequest(body: Record<string, unknown> = {}) {
   return new Request('http://test/api/cv/from-profile', {
@@ -63,14 +89,22 @@ describe('POST /api/cv/from-profile', () => {
     expect(recordUsage).not.toHaveBeenCalledWith(expect.anything(), 'cvGenerations');
   });
 
-  it('labels the CV as profile-derived: persists a profileId and no analysisId', async () => {
+  it('labels the CV as profile-derived: persists a profileId, no analysisId, and safety provenance', async () => {
     await POST(fromProfileRequest());
 
     expect(persistAndArchiveCv).toHaveBeenCalledTimes(1);
     const args = vi.mocked(persistAndArchiveCv).mock.calls[0][0];
     expect(args.profileId).toBe('profile-abc');
     expect(args.analysisId ?? null).toBeNull();
-    expect(args.provenance).toBeUndefined();
+    // Deterministic path now records the trusted-context + unsupported-claim guarantees.
+    expect(args.provenance).toEqual(
+      expect.objectContaining({
+        deterministic: true,
+        trustedContextVersion: expect.any(Number),
+        trustedContextProfileId: 'profile-abc',
+        unsupportedClaimValidationResult: 'passed',
+      })
+    );
   });
 
   it('refuses to build from an incomplete profile', async () => {
@@ -79,6 +113,26 @@ describe('POST /api/cv/from-profile', () => {
     const res = await POST(fromProfileRequest());
 
     expect(res.status).toBe(400);
+    expect(persistAndArchiveCv).not.toHaveBeenCalled();
+  });
+
+  it('refuses to render or persist when the deterministic output carries an unsupported claim', async () => {
+    // The profile has no qualifying experience, but the reshaped CV asserts tenure.
+    vi.mocked(profileToRewrittenData).mockReturnValueOnce({
+      fullName: 'A. Candidate',
+      tagline: 'Data Analyst · 2+ yrs',
+      contact: { email: '', phone: '', location: '' },
+      professionalSummary: '',
+      education: [],
+      projects: [],
+      experience: [],
+      coreSkills: [],
+      certifications: [],
+    });
+
+    const res = await POST(fromProfileRequest());
+
+    expect(res.status).toBe(422);
     expect(persistAndArchiveCv).not.toHaveBeenCalled();
   });
 });

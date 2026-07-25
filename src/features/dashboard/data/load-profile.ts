@@ -45,7 +45,7 @@ export interface ProfileData {
     visaExpiry: string;
   };
   /**
-   * Dates below are the raw stored `YYYY-MM` values, not display strings — the
+   * Dates below are the raw stored `YYYY` or `YYYY-MM` values, not display strings — the
    * forms bind them straight to a month input. Rendering (e.g. "Jan 2022 –
    * Present") happens at the point of use via shared/utils/date.ts.
    */
@@ -65,7 +65,10 @@ export interface ProfileData {
   projects: {
     id: string;
     name: string;
-    stack: string;
+    skillIds?: string[];
+    skills?: { id: string; name: string; level: string; category: string }[];
+    liveUrl?: string;
+    repositoryUrl?: string;
     startDate: string;
     endDate: string;
     achievements: string[];
@@ -86,14 +89,36 @@ export interface ProfileData {
     /** Form-compatible names, retained so profile editing is unchanged. */
     skills: string[];
     /** Individual database rows used for evidence references. */
-    skillItems: { id: string; name: string }[];
+    skillItems: {
+      id: string;
+      name: string;
+      level?: string;
+      contextType?: string;
+      activity?: string;
+      period?: string;
+      outcome?: string;
+      taxonomyTermId?: string;
+      taxonomy?: { id: string; externalUri: string; source: string; sourceVersion: string; preferredLabel: string } | null;
+    }[];
   }[];
   certifications: {
     id: string;
     name: string;
     issuer: string;
     year: string;
+    issueDate?: string;
+    expiryDate?: string;
+    credentialNumber?: string;
+    status?: string;
+    verificationUrl?: string;
+    verificationStatus?: string;
   }[];
+  trainings: { id: string; course: string; provider: string; field: string; status: string; startDate: string; endDate: string; result: string }[];
+  licences: { id: string; officialName: string; issuingBody: string; issueDate: string; expiryDate: string; credentialNumber: string; status: string; verificationUrl: string; verificationStatus: string }[];
+  professionalRegistrations: { id: string; officialName: string; issuingBody: string; issueDate: string; expiryDate: string; registrationNumber: string; status: string; verificationUrl: string; verificationStatus: string }[];
+  languages: { id: string; language: string; speaking: string; reading: string; writing: string; professionalUseContext: string; formalTest: string }[];
+  volunteering: { id: string; organisation: string; role: string; startDate: string; endDate: string; contribution: string; skillsTools: string[]; outcome: string }[];
+  otherEvidence: { id: string; title: string; context: string; description: string; period: string; outcome: string }[];
 }
 
 // Completeness helpers live in a Prisma-free module so client components can
@@ -110,13 +135,20 @@ import { evaluateProfileCompleteness } from './profile-completeness';
 async function resolveProfile(userId: string, profileId?: string) {
   const include = {
     experience: { orderBy: { sortOrder: 'asc' } },
-    projects: { orderBy: { sortOrder: 'asc' } },
+    projects: { orderBy: { sortOrder: 'asc' }, include: { projectSkills: { orderBy: { sortOrder: 'asc' }, include: { skill: { include: { skillGroup: true, taxonomyTerm: true } } } } } },
     education: { orderBy: { sortOrder: 'asc' } },
     skillGroups: {
       orderBy: { sortOrder: 'asc' },
-      include: { skills: { orderBy: { sortOrder: 'asc' } } },
+      include: { skills: { orderBy: { sortOrder: 'asc' }, include: { taxonomyTerm: true } } },
     },
+    skills: { orderBy: { sortOrder: 'asc' }, include: { skillGroup: true, taxonomyTerm: true } },
     certifications: { orderBy: { name: 'asc' } },
+    trainings: { orderBy: { course: 'asc' } },
+    licences: { orderBy: { officialName: 'asc' } },
+    professionalRegistrations: { orderBy: { officialName: 'asc' } },
+    languages: { orderBy: { language: 'asc' } },
+    volunteering: { orderBy: { organisation: 'asc' } },
+    otherEvidence: { orderBy: { title: 'asc' } },
   } as const;
 
   if (profileId) {
@@ -218,7 +250,10 @@ export async function loadProfileData(userId: string, profileId?: string): Promi
       profile?.projects.map((p) => ({
         id: p.id,
         name: p.name,
-        stack: p.stack ?? '',
+        skillIds: p.projectSkills.map((link) => link.skillId),
+        skills: p.projectSkills.map((link) => ({ id: link.skill.id, name: link.skill.name, level: link.skill.level ?? '', category: link.skill.skillGroup?.category ?? '' })),
+        liveUrl: p.liveUrl ?? '',
+        repositoryUrl: p.repositoryUrl ?? '',
         startDate: p.startDate ?? '',
         endDate: p.endDate ?? '',
         achievements: toStrings(p.achievements),
@@ -234,20 +269,57 @@ export async function loadProfileData(userId: string, profileId?: string): Promi
         grade: ed.grade ?? '',
         description: ed.description ?? '',
       })) ?? [],
-    skills:
-      profile?.skillGroups.map((s) => ({
-        id: s.id,
-        category: s.category,
-        skills: s.skills.map((skill) => skill.name),
-        skillItems: s.skills.map((skill) => ({ id: skill.id, name: skill.name })),
-      })) ?? [],
+    skills: [
+      ...(profile?.skillGroups.map((group) => ({
+        id: group.id,
+        category: group.category,
+        skills: group.skills.map((skill) => skill.name),
+        skillItems: group.skills.map((skill) => ({
+          id: skill.id,
+          name: skill.name,
+          level: skill.level ?? '',
+          contextType: skill.contextType ?? '',
+          activity: skill.activity ?? '',
+          period: skill.period ?? '',
+          outcome: skill.outcome ?? '',
+          taxonomyTermId: skill.taxonomyTermId ?? '', taxonomy: skill.taxonomyTerm ? { id: skill.taxonomyTerm.id, externalUri: skill.taxonomyTerm.externalUri, source: skill.taxonomyTerm.source, sourceVersion: skill.taxonomyTerm.sourceVersion, preferredLabel: skill.taxonomyTerm.preferredLabel } : null,
+        })),
+      })) ?? []),
+      ...((profile?.skills ?? []).some((skill) => !skill.skillGroupId) ? [{
+        id: 'ungrouped',
+        category: 'Additional Skills',
+        skills: (profile?.skills ?? []).filter((skill) => !skill.skillGroupId).map((skill) => skill.name),
+        skillItems: (profile?.skills ?? []).filter((skill) => !skill.skillGroupId).map((skill) => ({
+          id: skill.id,
+          name: skill.name,
+          level: skill.level ?? '',
+          contextType: skill.contextType ?? '',
+          activity: skill.activity ?? '',
+          period: skill.period ?? '',
+          outcome: skill.outcome ?? '',
+          taxonomyTermId: skill.taxonomyTermId ?? '', taxonomy: skill.taxonomyTerm ? { id: skill.taxonomyTerm.id, externalUri: skill.taxonomyTerm.externalUri, source: skill.taxonomyTerm.source, sourceVersion: skill.taxonomyTerm.sourceVersion, preferredLabel: skill.taxonomyTerm.preferredLabel } : null,
+        })),
+      }] : []),
+    ],
     certifications:
       profile?.certifications.map((certification) => ({
         id: certification.id,
         name: certification.name,
         issuer: certification.issuer ?? '',
         year: certification.year ?? '',
+        issueDate: certification.issueDate ?? '',
+        expiryDate: certification.expiryDate ?? '',
+        credentialNumber: certification.credentialNumber ?? '',
+        status: certification.status ?? '',
+        verificationUrl: certification.verificationUrl ?? '',
+        verificationStatus: certification.verificationStatus ?? '',
       })) ?? [],
+    trainings: profile?.trainings?.map((item) => ({ id: item.id, course: item.course, provider: item.provider ?? '', field: item.field ?? '', status: item.status ?? '', startDate: item.startDate ?? '', endDate: item.endDate ?? '', result: item.result ?? '' })) ?? [],
+    licences: profile?.licences?.map((item) => ({ id: item.id, officialName: item.officialName, issuingBody: item.issuingBody ?? '', issueDate: item.issueDate ?? '', expiryDate: item.expiryDate ?? '', credentialNumber: item.credentialNumber ?? '', status: item.status ?? '', verificationUrl: item.verificationUrl ?? '', verificationStatus: item.verificationStatus ?? '' })) ?? [],
+    professionalRegistrations: profile?.professionalRegistrations?.map((item) => ({ id: item.id, officialName: item.officialName, issuingBody: item.issuingBody, issueDate: item.issueDate ?? '', expiryDate: item.expiryDate ?? '', registrationNumber: item.registrationNumber ?? '', status: item.status ?? '', verificationUrl: item.verificationUrl ?? '', verificationStatus: item.verificationStatus ?? '' })) ?? [],
+    languages: profile?.languages?.map((item) => ({ id: item.id, language: item.language, speaking: item.speaking ?? '', reading: item.reading ?? '', writing: item.writing ?? '', professionalUseContext: item.professionalUseContext ?? '', formalTest: item.formalTest ?? '' })) ?? [],
+    volunteering: profile?.volunteering?.map((item) => ({ id: item.id, organisation: item.organisation, role: item.role, startDate: item.startDate ?? '', endDate: item.endDate ?? '', contribution: item.contribution ?? '', skillsTools: item.skillsTools, outcome: item.outcome ?? '' })) ?? [],
+    otherEvidence: profile?.otherEvidence?.map((item) => ({ id: item.id, title: item.title, context: item.context ?? '', description: item.description, period: item.period ?? '', outcome: item.outcome ?? '' })) ?? [],
   };
 }
 
@@ -320,4 +392,77 @@ export async function listProfiles(userId: string): Promise<ProfileSummary[]> {
       completeness: percentage,
     };
   });
+}
+
+/**
+ * A career track's declared TARGET only — the fields that decide what a CV is
+ * analysed against, without loading any of the track's content. Used by the
+ * post-upload target picker and by the analyze route to resolve a chosen
+ * Profile target server-side (never trusting a client-supplied occupation).
+ */
+export interface ProfileTarget {
+  profileId: string;
+  label: string;
+  isDefault: boolean;
+  /** OccupationId or '' — the structured scoring lens the track declares. */
+  targetOccupation: string;
+  targetRoleTitle: string;
+  targetSeniority: string;
+  targetIndustry: string;
+}
+
+const PROFILE_TARGET_SELECT = {
+  id: true,
+  label: true,
+  isDefault: true,
+  targetOccupation: true,
+  targetRoleTitle: true,
+  targetSeniority: true,
+  targetIndustry: true,
+} as const;
+
+function toProfileTarget(p: {
+  id: string;
+  label: string;
+  isDefault: boolean;
+  targetOccupation: string | null;
+  targetRoleTitle: string | null;
+  targetSeniority: string | null;
+  targetIndustry: string | null;
+}): ProfileTarget {
+  return {
+    profileId: p.id,
+    label: p.label,
+    isDefault: p.isDefault,
+    targetOccupation: p.targetOccupation ?? '',
+    targetRoleTitle: p.targetRoleTitle ?? '',
+    targetSeniority: p.targetSeniority ?? '',
+    targetIndustry: p.targetIndustry ?? '',
+  };
+}
+
+/** Every career-track target a user holds, for the post-upload target picker. */
+export async function listProfileTargets(userId: string): Promise<ProfileTarget[]> {
+  const profiles = await prisma.profile.findMany({
+    where: { userId },
+    orderBy: [{ isDefault: 'desc' }, { createdAt: 'asc' }],
+    select: PROFILE_TARGET_SELECT,
+  });
+  return profiles.map(toProfileTarget);
+}
+
+/**
+ * One owned profile's declared target, or null when the id is not owned. Used
+ * to resolve a "choose another saved Profile" target authoritatively: an
+ * unowned id resolves to null so the caller can reject it rather than trust it.
+ */
+export async function loadProfileTarget(
+  userId: string,
+  profileId: string
+): Promise<ProfileTarget | null> {
+  const profile = await prisma.profile.findFirst({
+    where: { id: profileId, userId },
+    select: PROFILE_TARGET_SELECT,
+  });
+  return profile ? toProfileTarget(profile) : null;
 }

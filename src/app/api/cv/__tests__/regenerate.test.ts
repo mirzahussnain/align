@@ -16,6 +16,7 @@ vi.mock('@/shared/lib/prisma', () => ({
   prisma: {
     user: { findUnique: vi.fn(async () => ({ subscriptionTier: null })) },
     analysis: { findUnique: vi.fn() },
+    profileEvidenceApproval: { findMany: vi.fn() },
   },
 }));
 vi.mock('@/shared/lib/entitlements', () => ({
@@ -34,6 +35,23 @@ vi.mock('@/shared/services/profile-reconciler', () => ({
 vi.mock('@/features/dashboard/data/load-profile', () => ({
   loadOwnedProfileData: vi.fn(async () => ({ profileId: 'profile-123' })),
   resolveProfileId: vi.fn(async () => 'profile-123'),
+  // The tailored path now loads the canonical profile for its trusted context.
+  // A structurally-complete, experience-free profile keeps the derived duration
+  // `insufficient` unless a test says otherwise.
+  loadProfileData: vi.fn(async () => ({
+    profileId: 'profile-123',
+    label: 'Default',
+    targetIndustry: '',
+    personal: {
+      label: 'Default', fullName: 'A Candidate', tagline: '', professionalSummary: '',
+      targetOccupation: '', targetRoleTitle: '', targetSeniority: '', targetIndustry: '',
+      email: '', phoneDialCode: '', phoneNumber: '', phoneCountry: '', city: '', state: '',
+      country: '', website: '', linkedin: '', github: '', visaStatus: '', visaExpiry: '',
+    },
+    experience: [], projects: [], education: [], skills: [], certifications: [],
+    trainings: [], licences: [], professionalRegistrations: [], languages: [],
+    volunteering: [], otherEvidence: [],
+  })),
 }));
 vi.mock('@/shared/services/cv-generation', () => ({
   renderCvDocx: vi.fn(async () => Buffer.from('docx-bytes')),
@@ -63,6 +81,13 @@ import { resolveApprovedProfileEvidence } from '@/shared/services/profile-reconc
 import { loadOwnedProfileData } from '@/features/dashboard/data/load-profile';
 import { ProfileEvidenceValidationError } from '@/shared/types/profile-reasoning';
 import { TRUTHFULNESS_FAILURE_MESSAGE } from '@/shared/services/cv-rewrite-validation';
+import { parseStoredAnalysisResult } from '@/shared/schemas/analysis-result';
+import {
+  invalidStructuredVariants,
+  makeExperience,
+  makeStructuredRewriteOutput,
+  sourceCvRef,
+} from '@/shared/services/__tests__/fixtures/structured-rewrite';
 
 const USER = { id: 'u1' };
 
@@ -140,8 +165,9 @@ beforeEach(() => {
   vi.mocked(auth.api.getSession).mockResolvedValue({ user: USER } as never);
   vi.mocked(prisma.user.findUnique).mockResolvedValue({ subscriptionTier: null } as never);
   vi.mocked(prisma.analysis.findUnique).mockResolvedValue(storedJobMatchAnalysis() as never);
+  vi.mocked(prisma.profileEvidenceApproval.findMany).mockResolvedValue([] as never);
   vi.mocked(checkQuota).mockResolvedValue({ allowed: true, used: 0, limit: 10, remaining: 10 });
-  vi.mocked(rewriteCV).mockResolvedValue({ fullName: 'A. Candidate', tagline: 'Data Engineer' } as never);
+  vi.mocked(rewriteCV).mockResolvedValue(makeStructuredRewriteOutput());
   vi.mocked(resolveApprovedProfileEvidence).mockReturnValue([]);
 });
 
@@ -258,6 +284,29 @@ describe('POST /api/cv/regenerate', () => {
     expect(v2JobMatchData).toEqual(before);
   });
 
+  it('uses the durable approval snapshot after its live skill and project facts have changed', async () => {
+    const snapshot = { schemaVersion: 1, evidenceType: 'skill', evidenceId: 'skill-123', displayTitle: 'Original spreadsheet skill — Skills', displaySummary: 'Original spreadsheet skill — advanced: Original outcome', capturedAt: '2026-07-22T00:00:00.000Z', kind: 'skill', id: 'skill-123', name: 'Original spreadsheet skill', skillGroupLabel: 'Tools', taxonomy: { id: 'esco-1', preferredLabel: 'spreadsheet software' }, linkedProjects: [{ id: 'project-123', name: 'Original project', evidenceLines: ['Original evidence'], startDate: '2023', endDate: '2024-12', liveUrl: 'https://example.com/live', repositoryUrl: 'https://github.com/example/repo' }] };
+    vi.mocked(prisma.profileEvidenceApproval.findMany).mockResolvedValue([
+      { id: 'approval-123', requirementId: 'requirement-001', evidenceType: 'skill', evidenceId: 'skill-123', profileId: 'profile-123', snapshot },
+    ] as never);
+
+    const response = await POST(regenRequest({
+      analysisId: 'an-1',
+      profileId: 'profile-123',
+      approvedProfileEvidence: [{ requirementId: 'requirement-001', evidenceRef: { type: 'skill', id: 'skill-123' }, approvalId: 'approval-123' }],
+    }));
+
+    expect(response.status).toBe(200);
+    expect(loadOwnedProfileData).not.toHaveBeenCalled();
+    expect(vi.mocked(rewriteCV).mock.calls[0][0].approvedProfileEvidence[0]).toMatchObject({
+      resolvedEvidenceText: snapshot.displaySummary,
+      evidenceLocation: snapshot.displayTitle,
+      evidenceSnapshot: snapshot,
+    });
+    expect(vi.mocked(persistAndArchiveCv).mock.calls[0][0].provenance).toEqual(
+      expect.objectContaining({ approvedProfileEvidence: [expect.objectContaining({ evidenceSnapshot: snapshot })] })
+    );
+  });
   it('persists user-provided context in provenance, kept separate from evidence', async () => {
     await POST(
       regenRequest({
@@ -302,27 +351,13 @@ describe('POST /api/cv/regenerate', () => {
   });
 
   it('does not consume a generation when the draft fails truthfulness validation', async () => {
-    vi.mocked(rewriteCV).mockResolvedValue({
-      fullName: 'A. Candidate',
-      tagline: 'Data Engineer',
-      contact: { email: '', phone: '', location: '' },
-      professionalSummary: '',
-      education: [],
-      projects: [],
-      experience: [
-        {
-          jobTitle: 'Engineer',
-          company: 'Globex Fabrications',
-          location: '',
-          type: '',
-          startDate: '',
-          endDate: '',
-          achievements: [],
-        },
-      ],
-      coreSkills: [],
-      certifications: [],
-    } as never);
+    vi.mocked(rewriteCV).mockResolvedValue(
+      makeStructuredRewriteOutput({
+        experience: [
+          makeExperience({ jobTitle: 'Engineer', company: 'Globex Fabrications' }),
+        ],
+      })
+    );
 
     const res = await POST(regenRequest({ analysisId: 'an-1' }));
 
@@ -331,6 +366,76 @@ describe('POST /api/cv/regenerate', () => {
     expect(body.error).toBe(TRUTHFULNESS_FAILURE_MESSAGE);
     expect(recordUsage).not.toHaveBeenCalled();
     expect(persistAndArchiveCv).not.toHaveBeenCalled();
+  });
+
+  it('rejects an unsupported-claim draft after a failed correction attempt, without charging', async () => {
+    // Passes truthfulness (no new employer/metric) but asserts unearned seniority.
+    vi.mocked(rewriteCV).mockResolvedValue(makeStructuredRewriteOutput({
+      identity: {
+        name: 'A. Candidate',
+        professionalTitle: 'Senior Data Engineer',
+        contact: {},
+        sourceRefs: [sourceCvRef()],
+      },
+    }));
+
+    const res = await POST(regenRequest({ analysisId: 'an-1' }));
+
+    expect(res.status).toBe(422);
+    // One controlled correction attempt was made, then it failed safely.
+    expect(rewriteCV).toHaveBeenCalledTimes(2);
+    expect(recordUsage).not.toHaveBeenCalled();
+    expect(persistAndArchiveCv).not.toHaveBeenCalled();
+  });
+
+  it('accepts a draft once a controlled correction attempt returns clean output', async () => {
+    vi.mocked(rewriteCV)
+      .mockResolvedValueOnce(makeStructuredRewriteOutput({
+        identity: {
+          name: 'A. Candidate',
+          professionalTitle: 'Senior Data Engineer',
+          contact: {},
+          sourceRefs: [sourceCvRef()],
+        },
+      }))
+      .mockResolvedValueOnce(
+        makeStructuredRewriteOutput({
+          generationNotes: { unsupportedRequirementsNotAdded: ['requirement-001'] },
+        })
+      );
+
+    const res = await POST(regenRequest({ analysisId: 'an-1' }));
+
+    expect(res.status).toBe(200);
+    expect(rewriteCV).toHaveBeenCalledTimes(2);
+    expect(recordUsage).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(persistAndArchiveCv).mock.calls[0][0].provenance).toEqual(
+      expect.objectContaining({
+        correctionAttempts: 1,
+        unsupportedClaimValidationResult: 'passed',
+        unsupportedRequirementsNotAdded: ['requirement-001'],
+      })
+    );
+  });
+
+  it('records trusted-context and unsupported-claim safety provenance on success', async () => {
+    await POST(regenRequest({ analysisId: 'an-1' }));
+
+    const provenance = vi.mocked(persistAndArchiveCv).mock.calls[0][0].provenance as Record<string, unknown>;
+    expect(provenance).toEqual(
+      expect.objectContaining({
+        trustedContextVersion: expect.any(Number),
+        trustedContextProfileId: 'profile-123',
+        unsupportedClaimValidationVersion: expect.any(Number),
+        unsupportedClaimValidationResult: 'passed',
+        correctionAttempts: 0,
+      })
+    );
+    expect(provenance.derivedFacts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ key: 'professional_experience_duration' }),
+      ])
+    );
   });
 
   it('rejects versionless canonical data and never falls back to a nested rawResult copy', async () => {
@@ -368,6 +473,93 @@ describe('POST /api/cv/regenerate', () => {
     expect(rewriteCV).toHaveBeenCalledTimes(1);
     expect(recordUsage).not.toHaveBeenCalled();
     expect(persistAndArchiveCv).not.toHaveBeenCalled();
+  });
+
+  it('rejects legacy provider output without charging or persisting', async () => {
+    vi.mocked(rewriteCV).mockResolvedValue({
+      fullName: 'A. Candidate',
+      tagline: 'Data Engineer',
+      contact: {},
+      professionalSummary: '',
+      experience: [],
+      projects: [],
+      education: [],
+      coreSkills: [],
+      certifications: [],
+    } as never);
+
+    const response = await POST(regenRequest({ analysisId: 'an-1' }));
+
+    expect(response.status).toBe(422);
+    expect(recordUsage).not.toHaveBeenCalled();
+    expect(persistAndArchiveCv).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['missing provenance', invalidStructuredVariants.missingProvenance()],
+    ['unknown source id', invalidStructuredVariants.unknownRequirement()],
+    ['unapproved profile evidence', invalidStructuredVariants.unapprovedProfile()],
+    ['stale application context', invalidStructuredVariants.staleApplicationContext()],
+  ])('rejects structured output with %s without charging', async (_label, output) => {
+    vi.mocked(rewriteCV).mockResolvedValue(output as never);
+
+    const response = await POST(regenRequest({ analysisId: 'an-1' }));
+
+    expect(response.status).toBe(422);
+    expect(recordUsage).not.toHaveBeenCalled();
+    expect(persistAndArchiveCv).not.toHaveBeenCalled();
+  });
+
+  it('charges exactly once only after structured and truthfulness validation succeeds', async () => {
+    vi.mocked(rewriteCV).mockResolvedValue(makeStructuredRewriteOutput());
+
+    const response = await POST(regenRequest({ analysisId: 'an-1' }));
+
+    expect(response.status).toBe(200);
+    expect(recordUsage).toHaveBeenCalledTimes(1);
+    expect(persistAndArchiveCv).toHaveBeenCalledTimes(1);
+  });
+  it('carries the analysis context into generation provenance (traceability only)', async () => {
+    vi.mocked(parseStoredAnalysisResult).mockReturnValueOnce({
+      result: {
+        rawText: 'x'.repeat(120),
+        categories: [],
+        recommendations: [],
+        keywords: { present: [{ keyword: 'react' }] },
+        aiClichés: [],
+        analysisContext: {
+          mode: 'job_match',
+          evidenceSource: { type: 'cv_only' },
+          targetSource: 'job_description',
+          resolvedTargetOccupation: 'software_engineer',
+          resolvedTargetRole: 'Senior Data Engineer',
+          confidence: 'high',
+        },
+      },
+      legacy: false,
+    } as never);
+
+    await POST(regenRequest({ analysisId: 'an-1' }));
+
+    expect(vi.mocked(persistAndArchiveCv).mock.calls[0][0].provenance).toEqual(
+      expect.objectContaining({
+        analysisContext: {
+          targetSource: 'job_description',
+          resolvedTargetOccupation: 'software_engineer',
+          resolvedTargetRole: 'Senior Data Engineer',
+          evidenceSource: 'cv_only',
+          targetProfileId: null,
+        },
+      })
+    );
+  });
+
+  it('records a null analysis context when the stored analysis predates the contract', async () => {
+    await POST(regenRequest({ analysisId: 'an-1' }));
+
+    expect(vi.mocked(persistAndArchiveCv).mock.calls[0][0].provenance).toEqual(
+      expect.objectContaining({ analysisContext: null })
+    );
   });
 
   it('rejects an analysis that belongs to another user', async () => {

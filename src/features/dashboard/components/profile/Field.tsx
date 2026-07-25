@@ -4,64 +4,118 @@ import { cn } from '@/shared/utils/cn';
 const baseField =
   'w-full rounded-xl border border-neutral-300 bg-white px-4 py-2.5 text-sm text-neutral-900 placeholder:text-neutral-400 transition-colors focus:border-accent-purple focus:outline-none focus:ring-2 focus:ring-accent-purple/15';
 
-export function Label({ children, htmlFor }: { children: React.ReactNode; htmlFor?: string }) {
-  return (
-    <label htmlFor={htmlFor} className="mb-1.5 block text-xs font-semibold text-neutral-600">
-      {children}
-    </label>
-  );
+/** Field label with a single, shared convention for required vs optional. */
+export function Label({
+  children,
+  htmlFor,
+  required,
+  optional,
+}: {
+  children: React.ReactNode;
+  htmlFor?: string;
+  required?: boolean;
+  optional?: boolean;
+}) {
+  return <label htmlFor={htmlFor} className="mb-1.5 block text-xs font-semibold text-neutral-600">{children}{required ? <RequiredMark /> : optional ? <span className="ml-1 font-normal text-neutral-400">(optional)</span> : null}</label>;
 }
 
-export function TextField({
-  className,
-  ...props
-}: React.InputHTMLAttributes<HTMLInputElement>) {
+export function TextField({ className, ...props }: React.InputHTMLAttributes<HTMLInputElement>) {
   return <input className={cn(baseField, className)} {...props} />;
 }
 
-export function TextArea({
-  className,
-  ...props
-}: React.TextareaHTMLAttributes<HTMLTextAreaElement>) {
+export function TextArea({ className, ...props }: React.TextareaHTMLAttributes<HTMLTextAreaElement>) {
   return <textarea className={cn(baseField, 'min-h-[96px] resize-y', className)} {...props} />;
 }
 
-/** Marks a required field. Paired with the `required` attribute, not a substitute for it. */
+/** Marks a required field. Paired with the input's required attribute. */
 export function RequiredMark() {
-  return <span className="text-rose-500">*</span>;
+  return <span className="text-rose-500" aria-hidden="true">{' '}*</span>;
+}
+
+/** Small muted helper line under a field, associated to its input via aria-describedby. */
+export function FieldHint({ id, children }: { id?: string; children: React.ReactNode }) {
+  return <p id={id} className="mt-1 text-[10px] text-neutral-400">{children}</p>;
 }
 
 /**
- * Month/year picker for CV dates.
- *
- * `type="month"` rather than a full date input: a CV never shows a day, so
- * asking for one invites an invented value the user then has to think about.
- * The browser's own picker keeps the value in `YYYY-MM`, which is exactly the
- * storage format — no parsing of typed text, and no locale ambiguity between
- * 01/02 and 02/01.
- *
- * `max` defaults to the current month because no CV date is in the future; the
- * browser enforces it, so an unreachable "start date 2032" can't be saved.
+ * Precision-preserving profile-date picker. The year is always explicit and
+ * the month is optional, so the control can store either `YYYY` or `YYYY-MM`
+ * without inventing a month. Native selects keep this dependency-free,
+ * keyboard-friendly, and consistent across browsers.
  */
+const MONTH_OPTIONS = [
+  ['01', 'January'], ['02', 'February'], ['03', 'March'], ['04', 'April'],
+  ['05', 'May'], ['06', 'June'], ['07', 'July'], ['08', 'August'],
+  ['09', 'September'], ['10', 'October'], ['11', 'November'], ['12', 'December'],
+] as const;
+
+function dateParts(value: string | readonly string[] | number | undefined) {
+  const match = /^(\d{4})(?:-(0[1-9]|1[0-2]))?$/.exec(String(value ?? '').trim());
+  return { year: match?.[1] ?? '', month: match?.[2] ?? '' };
+}
+
 export function MonthField({
   className,
-  max,
+  value,
+  onChange,
+  id,
+  disabled,
+  required,
+  'aria-describedby': describedBy,
   ...props
 }: React.InputHTMLAttributes<HTMLInputElement>) {
+  const { year, month } = dateParts(value);
+  const currentYear = new Date().getFullYear();
+  const years = Array.from({ length: currentYear - 1900 + 21 }, (_, index) => String(currentYear + 20 - index));
+  if (year && !years.includes(year)) years.push(year);
+  years.sort((left, right) => Number(right) - Number(left));
+  const emit = (nextValue: string) => onChange?.({ target: { value: nextValue }, currentTarget: { value: nextValue } } as React.ChangeEvent<HTMLInputElement>);
+  const selectClass = cn(baseField, 'appearance-none pr-9 disabled:cursor-not-allowed disabled:border-neutral-200 disabled:bg-neutral-50 disabled:text-neutral-300 disabled:shadow-none');
+
   return (
-    <input
-      type="month"
-      max={max ?? currentMonth()}
-      className={cn(
-        baseField,
-        // Without this the empty state renders as a near-invisible "mm/yyyy" in
-        // full-strength text, which reads as though a value is already set.
-        'disabled:cursor-not-allowed disabled:bg-neutral-100 disabled:text-neutral-400',
-        className
-      )}
-      {...props}
-    />
+    <div className={cn('grid grid-cols-1 gap-2 min-[360px]:grid-cols-2', className)}>
+      {props.name && <input type="hidden" name={props.name} value={year ? `${year}${month ? `-${month}` : ''}` : ''} />}
+      <div className="relative">
+        <select
+          id={id}
+          value={year}
+          disabled={disabled}
+          required={required}
+          aria-describedby={describedBy}
+          aria-label={id ? undefined : "Year"}
+          aria-required={required || undefined}
+          onChange={(event) => emit(event.target.value ? `${event.target.value}${month ? `-${month}` : ''}` : '')}
+          className={cn(selectClass, !year && 'text-neutral-400')}
+        >
+          <option value="">Year</option>
+          {years.map((option) => <option key={option} value={option}>{option}</option>)}
+        </select>
+        <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-400" />
+      </div>
+      <div className="relative">
+        <select
+          id={id ? `${id}-month` : undefined}
+          value={month}
+          disabled={disabled || !year}
+          aria-label="Month (optional)"
+          onChange={(event) => emit(year ? `${year}${event.target.value ? `-${event.target.value}` : ''}` : '')}
+          className={cn(selectClass, !month && 'text-neutral-400')}
+        >
+          <option value="">{year ? 'Month' : 'Select year first'}</option>
+          {MONTH_OPTIONS.map(([option, label]) => <option key={option} value={option}>{label}</option>)}
+        </select>
+        <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-400" />
+      </div>
+    </div>
   );
+}
+
+/**
+ * Classify a status-line message so a validation or server error never renders
+ * in success green. Shared by every profile form so the tone is identical.
+ */
+export function isErrorFeedback(message: string): boolean {
+  return /not found|Use the matching|Invalid|required|already exists|at least one|^Add /i.test(message);
 }
 
 /** `YYYY-MM` for today, used as the ceiling on every profile date input. */

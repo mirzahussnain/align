@@ -1,4 +1,4 @@
-import type { RewrittenCVData } from '../templates/types';
+import type { StructuredCvRewriteOutput } from '@/shared/types/cv-rewrite';
 import type { LedgerNativeRewriteInput } from '@/shared/types/cv-rewrite';
 import { generateJSONFromAI } from './ai-orchestrator';
 import { composeRewritePrompt } from './cv-rewrite-prompt';
@@ -19,8 +19,8 @@ import { THINKING_BUDGETS } from '@/shared/lib/config';
  */
 export async function rewriteCV(
   input: LedgerNativeRewriteInput
-): Promise<RewrittenCVData | null> {
-  return generateJSONFromAI<RewrittenCVData>({
+): Promise<StructuredCvRewriteOutput | null> {
+  return generateJSONFromAI<StructuredCvRewriteOutput>({
     prompt: composeRewritePrompt(input),
     temperature: 0.2,
     thinkingBudget: THINKING_BUDGETS.rewrite,

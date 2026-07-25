@@ -118,7 +118,7 @@ const proposedHealthcareSupport: OccupationProfile = {
       /\bHCA\b/,
       /\bdomiciliary\s+care\b/i,
     ],
-    taskPatterns: [
+    dutyPatterns: [
       /\bpersonal care\b/i,
       /\bsafeguarding\b/i,
       /\bmoving and handling\b|\bmanual handling\b/i,

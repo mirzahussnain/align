@@ -8,7 +8,13 @@ export type ProfileEvidenceType =
   | 'project'
   | 'education'
   | 'skill'
-  | 'certification';
+  | 'certification'
+  | 'training'
+  | 'licence'
+  | 'professional_registration'
+  | 'language'
+  | 'volunteering'
+  | 'other';
 
 /** Stable database identity for one stored profile record. */
 export type ProfileEvidenceRef =
@@ -16,7 +22,13 @@ export type ProfileEvidenceRef =
   | { type: 'project'; id: string }
   | { type: 'education'; id: string }
   | { type: 'skill'; id: string }
-  | { type: 'certification'; id: string };
+  | { type: 'certification'; id: string }
+  | { type: 'training'; id: string }
+  | { type: 'licence'; id: string }
+  | { type: 'professional_registration'; id: string }
+  | { type: 'language'; id: string }
+  | { type: 'volunteering'; id: string }
+  | { type: 'other'; id: string };
 
 /** Canonical inventory entry supplied to the model and re-resolved by servers. */
 export interface ProfileCandidate {
@@ -39,6 +51,7 @@ export interface ProfileEvidenceSuggestion {
 export interface ApprovedProfileEvidence {
   requirementId: string;
   evidenceRef: ProfileEvidenceRef;
+  approvalId?: string;
 }
 
 /** Small requirement view returned beside suggestions for plain-language UI. */
@@ -57,6 +70,8 @@ export interface ApprovedProfileEvidenceOverlay extends ApprovedProfileEvidence 
   evidenceLocation: string;
   userApproved: true;
   rationale?: string;
+  /** Immutable facts used at generation time; never re-resolved for history. */
+  evidenceSnapshot?: Record<string, unknown>;
 }
 
 /** Untrusted shape returned by the model. Evidence wording is ignored. */

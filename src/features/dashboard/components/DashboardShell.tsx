@@ -12,6 +12,8 @@ import { useDashboardStore } from '@/shared/stores/dashboard-store';
 import type { ProfileData, ProfileSummary } from '@/features/dashboard/data/load-profile';
 import type { StorageUsage } from '@/shared/services/storage-quota';
 import type { UsageSnapshot } from '@/shared/services/usage-meter';
+import { EntitlementProvider } from '@/shared/components/entitlements/EntitlementProvider';
+import type { EntitlementSnapshot } from '@/shared/entitlements/server';
 
 export interface AnalysisRow {
   id: string;
@@ -118,14 +120,16 @@ export interface DashboardData {
 interface DashboardShellProps {
   user: { name: string; email: string; image?: string | null };
   tier: string;
+  entitlementSnapshot: EntitlementSnapshot;
   data: DashboardData;
 }
 
-export default function DashboardShell({ user, tier, data }: DashboardShellProps) {
+export default function DashboardShell({ user, tier, entitlementSnapshot, data }: DashboardShellProps) {
   const tab = useDashboardStore((s) => s.tab);
 
   return (
-    <div className="flex min-h-screen bg-neutral-50 text-neutral-900">
+    <EntitlementProvider initialSnapshot={entitlementSnapshot}>
+      <div className="flex min-h-screen bg-neutral-50 text-neutral-900">
       <Sidebar
         user={user}
         tier={tier}
@@ -164,6 +168,7 @@ export default function DashboardShell({ user, tier, data }: DashboardShellProps
         )}
         {tab === 'billing' && <BillingView tier={tier} storage={data.storage} />}
       </div>
-    </div>
+      </div>
+    </EntitlementProvider>
   );
 }

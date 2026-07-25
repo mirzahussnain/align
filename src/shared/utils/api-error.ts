@@ -6,10 +6,12 @@ import { NextResponse } from 'next/server';
 
 export class APIError extends Error {
   statusCode: number;
+  responseBody?: Record<string, unknown>;
   
-  constructor(message: string, statusCode: number = 500) {
+  constructor(message: string, statusCode: number = 500, responseBody?: Record<string, unknown>) {
     super(message);
     this.statusCode = statusCode;
+    this.responseBody = responseBody;
     this.name = 'APIError';
   }
 }
@@ -27,7 +29,7 @@ export async function withErrorHandler(
     
     // If it's a known APIError, we can return its specific status code and message
     if (error instanceof APIError) {
-      return NextResponse.json({ error: error.message }, { status: error.statusCode });
+      return NextResponse.json(error.responseBody ?? { error: error.message }, { status: error.statusCode });
     }
     
     // For unknown errors, return a generic 500 to prevent leaking internal stack traces

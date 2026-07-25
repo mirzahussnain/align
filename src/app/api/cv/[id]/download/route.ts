@@ -3,6 +3,7 @@ import { withErrorHandler, APIError } from '@/shared/utils/api-error';
 import { auth } from '@/shared/lib/auth';
 import { prisma } from '@/shared/lib/prisma';
 import { storage } from '@/shared/lib/storage';
+import { assertCapability } from '@/shared/entitlements/server';
 
 /**
  * Presign the archived DOCX for a generated CV and redirect straight to it.
@@ -31,6 +32,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
       throw new APIError('This CV has no archived file to download.', 404);
     }
 
+    await assertCapability(session.user.id, 'download_generated_cv');
     const url = await storage.createSignedUrl('rewrites', cv.fileKey, 300);
     return NextResponse.redirect(url, 302);
   });

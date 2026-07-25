@@ -57,13 +57,59 @@ export interface CredentialRule {
 /** Whether credentials meaningfully gate hiring for this occupation. */
 export type CredentialRelevance = 'critical' | 'useful' | 'not_material';
 
-/** Signals the classifier uses to detect this occupation. */
+/**
+ * Signals the classifier uses to detect this occupation, grouped by
+ * discriminating power. The categories map to the evidence model in
+ * {@link file://../../services/classifier.ts scoreOccupationEvidence}:
+ *
+ *  1. `titlePatterns`     — explicit role/title evidence (strongest)
+ *  2. `dutyPatterns`      — occupation-defining duties
+ *  3. `outputPatterns`    — distinctive work outputs / deliverables
+ *  4. sector dictionary   — domain terminology (weak; via `sectorHint`)
+ *  5. `credentials`       — qualifications / licences / registrations (on the profile)
+ *  7. `toolPatterns`      — tools & methods (LOW weight — shared across occupations)
+ *  8. `genericSkillPatterns` — generic transferable skills (near-zero weight)
+ *  9. `negativePatterns`  — conflicting evidence pointing at a DIFFERENT occupation
+ *
+ * Only categories 1–3 and mandatory credentials are "defining": a classification
+ * can only become CONFIDENT when at least one defining signal is present AND the
+ * evidence spans two or more independent categories. Tools, generic skills and
+ * sector vocabulary can support a match another signal established, but never
+ * decide one on their own — Python/SQL alone must not pick Software Engineering,
+ * "customer service" alone must not pick Administration, sector words alone must
+ * not activate a clinician.
+ */
 export interface OccupationDetection {
-  /** Matched against job titles in the CV/JD — the strongest signal. */
+  /** Category 1 — role/job titles. The strongest, most discriminating signal. */
   titlePatterns: RegExp[];
-  /** Responsibility/task verbs and tools that evidence the occupation day-to-day. */
-  taskPatterns: RegExp[];
-  /** The sector whose vocabulary dictionary this occupation defaults to. */
+  /**
+   * Category 2 — occupation-DEFINING duties: the day-to-day responsibilities
+   * that only this occupation performs. NOT tools and NOT generic verbs — a
+   * defining duty for a nurse is "medication administration", not "Python".
+   */
+  dutyPatterns: RegExp[];
+  /** Category 3 — distinctive work outputs / deliverables this occupation produces. */
+  outputPatterns?: RegExp[];
+  /**
+   * Category 7 — tools & methods. Deliberately LOW discriminating weight because
+   * they are shared across occupations (Python, SQL, Excel, RF scanners). Never
+   * sufficient alone to classify.
+   */
+  toolPatterns?: RegExp[];
+  /**
+   * Category 8 — generic transferable skills (communication, teamwork,
+   * reliability). Near-zero weight: they describe everyone and must never decide
+   * an occupation.
+   */
+  genericSkillPatterns?: RegExp[];
+  /**
+   * Category 9 — negative / conflicting evidence: another occupation's role
+   * title appearing as this CV's own title line, which counts AGAINST this
+   * occupation. Matched against title-like lines only, never prose, so a nurse
+   * mentioning "healthcare assistants" in a bullet is not penalised.
+   */
+  negativePatterns?: RegExp[];
+  /** Category 4 — the sector whose vocabulary dictionary this occupation defaults to. */
   sectorHint: Sector;
 }
 

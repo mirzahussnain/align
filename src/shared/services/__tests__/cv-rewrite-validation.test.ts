@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { validateRewrittenCv } from '@/shared/services/cv-rewrite-validation';
 import type { LedgerNativeRewriteInput, RewriteRequirement } from '@/shared/types/cv-rewrite';
-import type { CvBuildSpec } from '@/shared/types/ai';
+import type { AiCvBuildGuidance } from '@/shared/types/ai';
 import type { RewrittenCVData } from '@/shared/templates/types';
 import type { ApprovedProfileEvidenceOverlay } from '@/shared/types/profile-reasoning';
 
-const EMPTY_SPEC: CvBuildSpec = {
+const EMPTY_SPEC: AiCvBuildGuidance = {
   recommended_template: 'architect',
   template_rationale: '',
   section_order: [],
@@ -237,7 +237,7 @@ describe('validateRewrittenCv', () => {
         },
       ],
     });
-    const spec: CvBuildSpec = {
+    const spec: AiCvBuildGuidance = {
       ...EMPTY_SPEC,
       bullets_to_rewrite: [
         {
@@ -260,7 +260,7 @@ describe('validateRewrittenCv', () => {
 
   it('does not let build-spec fields whitelist a skill tied to an unmet requirement', () => {
     const cv = makeCv({ coreSkills: [{ category: 'Infra', skills: 'Kubernetes' }] });
-    const spec: CvBuildSpec = { ...EMPTY_SPEC, skills_to_surface: ['Kubernetes'] };
+    const spec: AiCvBuildGuidance = { ...EMPTY_SPEC, skills_to_surface: ['Kubernetes'] };
     const input = makeInput({
       rewriteContext: {
         requirements: [requirement({ id: 'r1', text: 'Kubernetes', status: 'not_met', category: 'tool' })],

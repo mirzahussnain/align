@@ -2,7 +2,7 @@ import type { OccupationProfile } from '../types';
 
 export const registeredNurseProfile: OccupationProfile = {
   id: 'registered_nurse',
-  version: '1.0.0',
+  version: '1.1.0',
   label: 'Registered Nurse',
   sector: 'healthcare_nhs',
   roleArchetype: 'regulated_clinician',
@@ -106,14 +106,38 @@ export const registeredNurseProfile: OccupationProfile = {
       /\bclinical nurse specialist\b/i,
       /\bnurse practitioner\b/i,
     ],
-    taskPatterns: [
-      /\bmedication administration\b|\badminister(?:ed|ing)?\s+(?:oral|IV|medication)\b/i,
+    // Cat 2 — defining REGISTERED-nurse clinical duties. "Patient care" and
+    // "personal care" are deliberately excluded: they are shared with unregistered
+    // healthcare support and must not, on their own, activate a clinician.
+    dutyPatterns: [
+      /\bmedication administration\b|\badminister(?:ed|ing)?\s+(?:oral|IV|intravenous|medication)\b/i,
       /\bcare plan(?:s|ning)?\b/i,
-      /\bNEWS2?\b/,
-      /\b(?:wound care|aseptic|venepuncture|catheteri[sz]ation|cannulation)\b/i,
-      /\bhandovers?\b/i,
+      /\b(?:wound care|aseptic technique|venepuncture|catheteri[sz]ation|cannulation)\b/i,
       /\bmultidisciplinary\b|\bMDT\b/,
-      /\bdeteriorat(?:ing|ion)\b/i,
+      /\bdeteriorat(?:ing|ion)\b.*\b(?:patient|escalat)/i,
+      /\b(?:preceptor|mentor(?:ed|ing)?\s+student nurses?)\b/i,
+    ],
+    // Cat 3 — distinctive clinical outputs.
+    outputPatterns: [
+      /\bNEWS2?\b/,
+      /\bward handovers?\b|\bclinical handovers?\b/i,
+      /\bfalls[- ]reduction\b|\bpatient outcomes?\b/i,
+    ],
+    // Cat 7 — clinical tools/systems; shared across clinical roles, low weight.
+    toolPatterns: [
+      /\b(?:EPR|electronic patient records?|SystmOne|EMIS)\b/i,
+    ],
+    genericSkillPatterns: [
+      /\b(?:compassionate|patient[- ]centred|communication|team\s?work|reliab(?:le|ility))\b/i,
+    ],
+    // Cat 9 — an unregistered-support or non-clinical title on this CV counts
+    // against the registered-nurse reading (reinforces the regulated guard).
+    negativePatterns: [
+      /\bhealthcare\s+assistant\b/i,
+      /\b(?:senior\s+)?care\s+(?:worker|assistant)\b/i,
+      /\bsupport\s+worker\b/i,
+      /\b(?:data|business)\s+analyst\b/i,
+      /\b(?:office|team)?\s*administrator\b/i,
     ],
     sectorHint: 'healthcare_nhs',
   },

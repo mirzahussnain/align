@@ -6,12 +6,13 @@ import { prisma } from '@/shared/lib/prisma';
 import { storage, keyFor } from '@/shared/lib/storage';
 import { APIError } from '@/shared/utils/api-error';
 import type { RewrittenCVData } from '@/shared/templates/types';
+import type { CvBuildSpec } from '@/shared/services/cv-build-spec/types';
 import type { ProfileData } from '@/features/dashboard/data/load-profile';
 import { visaStatusLabel } from '@/shared/constants/visa-status';
 import { employmentTypeLabel } from '@/shared/constants/employment-type';
-import { formatMonth } from '@/shared/utils/date';
 import { pruneGeneratedCvs } from './storage-quota';
 import type { Entitlements } from '@/shared/lib/entitlements';
+export { CV_TEMPLATE_CAPABILITIES, type CvTemplateCapabilities } from '@/shared/constants/cv-template-capabilities';
 
 export const DOCX_CONTENT_TYPE =
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
@@ -21,24 +22,23 @@ export const DOCX_CONTENT_TYPE =
 export type { TemplateId } from '@/shared/constants/templates';
 
 /**
- * Single source of truth for turning structured CV data into a rendered DOCX.
- * Shared by every generate path (rewrite, from-profile, regenerate) so a new
- * template only has to be wired in here once.
+ * Single source of truth for turning a canonical {@link CvBuildSpec} into a
+ * rendered DOCX. Shared by every generate path (from-profile, regenerate) so a
+ * new template is wired in here once. Renderers are isolated: they consume ONLY
+ * the spec — never a raw Profile, raw LLM output, or ad-hoc route data — and the
+ * spec already carries the planned section order, headings and content. The
+ * chosen template lives in `spec.presentation.templateId`.
  */
-export async function renderCvDocx(
-  templateId: string | undefined,
-  data: RewrittenCVData
-): Promise<Buffer> {
-  switch (templateId) {
+export async function renderCvDocx(spec: CvBuildSpec): Promise<Buffer> {
+  switch (spec.presentation.templateId) {
     case 'editorial_refined':
-      return generateEditorialTemplate(data);
+      return generateEditorialTemplate(spec);
     case 'technical_precision':
-      return generateTechnicalTemplate(data);
+      return generateTechnicalTemplate(spec);
     case 'academic_latex':
-      return generateAcademicTemplate(data);
+      return generateAcademicTemplate(spec);
     case 'architect':
-    case undefined:
-      return generateArchitectTemplate(data);
+      return generateArchitectTemplate(spec);
     default:
       throw new APIError('Unknown template ID', 400);
   }
@@ -156,25 +156,24 @@ export function profileToRewrittenData(profile: ProfileData): RewrittenCVData {
       visaStatus,
     },
     professionalSummary: p.professionalSummary,
-    // Dates and employment type are converted to display form HERE, at the
-    // boundary into the templates. The templates concatenate these straight
-    // into the document (`${startDate} – ${endDate}`), so handing them raw
-    // `YYYY-MM` would print "2022-01" on the CV, and a raw enum would print
-    // "FULL_TIME". Storage stays machine-readable; only the rendering is
-    // human-readable.
+    // Dates are carried through in their CANONICAL `YYYY` / `YYYY-MM` form so the
+    // renderer can spell them in the chosen template's date style (§7). The
+    // `current` flag collapses to the "Present" sentinel here, which the styled
+    // formatter passes through unchanged. Employment type is still converted to a
+    // display label — it is not a date fact and every template shows it verbatim.
     education: profile.education.map((e) => ({
       degree: e.degree,
       university: e.university,
-      startDate: formatMonth(e.startDate),
-      endDate: e.current ? 'Present' : formatMonth(e.endDate),
+      startDate: e.startDate,
+      endDate: e.current ? 'Present' : e.endDate,
       grade: e.grade,
       description: e.description,
     })),
     projects: profile.projects.map((pr) => ({
       name: pr.name,
-      stack: pr.stack,
-      startDate: formatMonth(pr.startDate),
-      endDate: formatMonth(pr.endDate),
+      skills: (pr.skills ?? []).map((skill) => skill.name).join(', '),
+      startDate: pr.startDate,
+      endDate: pr.endDate,
       achievements: pr.achievements.map((body) => ({ label: '', body })),
     })),
     experience: profile.experience.map((ex) => ({
@@ -182,8 +181,8 @@ export function profileToRewrittenData(profile: ProfileData): RewrittenCVData {
       company: ex.company,
       location: ex.location,
       type: employmentTypeLabel(ex.type),
-      startDate: formatMonth(ex.startDate),
-      endDate: ex.current ? 'Present' : formatMonth(ex.endDate),
+      startDate: ex.startDate,
+      endDate: ex.current ? 'Present' : ex.endDate,
       achievements: ex.achievements.map((body) => ({ label: '', body })),
     })),
     coreSkills: profile.skills.map((s) => ({

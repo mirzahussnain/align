@@ -2,6 +2,7 @@
 import type { JobMatchDataV2 } from './ai';
 import type { Sector } from '@/shared/constants/sector-keywords';
 import type { Classification } from './classification';
+import type { AnalysisContext } from './analysis-context';
 
 export interface CVAnalysisResult {
   overallScore: number;
@@ -26,6 +27,14 @@ export interface CVAnalysisResult {
 
   /** How this CV was classified before scoring (scoring v2+). */
   classification?: Classification;
+  /**
+   * The explicit analysis context resolved for this run — evidence source,
+   * target source, resolved target occupation, confidence, and any CV/Profile
+   * mismatch. Persisted inside `rawResult` (no migration; the stored schema is
+   * loose and passes it through). Separates evidence from target so the active
+   * Profile can never silently drive an upload's occupation rules.
+   */
+  analysisContext?: AnalysisContext;
   /** Credential/licence findings for the classified occupation (scoring v2+). */
   credentials?: CredentialAnalysis;
   /** Version stamps — absent on pre-rebuild results. */

@@ -2,7 +2,7 @@ import type { OccupationProfile } from '../types';
 
 export const warehouseOperativeProfile: OccupationProfile = {
   id: 'warehouse_operative',
-  version: '1.1.0',
+  version: '1.2.0',
   label: 'Frontline Operations',
   sector: 'warehouse_logistics',
   roleArchetype: 'frontline_operative',
@@ -104,13 +104,38 @@ export const warehouseOperativeProfile: OccupationProfile = {
       /\bfork ?lift\s+(?:driver|operator)\b/i,
       /\bgeneral\s+operative\b/i,
     ],
-    taskPatterns: [
+    // Cat 2 — defining warehouse duties. Note "stock" requires a qualifier
+    // (rotation/control/counts): "stock" alone must not decide warehouse versus
+    // retail.
+    dutyPatterns: [
       /\bpick(?:ing|ed)?\s+(?:and\s+pack(?:ing|ed)?|orders?)\b/i,
-      /\bRF\s+scanner\b/i,
-      /\bpallets?\b/i,
       /\bgoods\s+(?:in|out)\b/i,
-      /\bstock\s+(?:rotation|control|counts?)\b/i,
+      /\bstock\s+(?:rotation|control|counts?|takes?)\b/i,
       /\bloading\s+and\s+unloading\b/i,
+      /\border\s+(?:picking|fulfil(?:ment|ling)?)\b/i,
+    ],
+    // Cat 3 — distinctive operational outputs.
+    outputPatterns: [
+      /\bpicking accuracy\b/i,
+      /\bzero[- ]accident\b/i,
+      /\b(?:daily|hourly)\s+(?:pick|picking)\s+(?:targets?|rates?)\b/i,
+      /\bSLA\b/,
+    ],
+    // Cat 7 — tools & equipment (shared with other manual roles); low weight.
+    toolPatterns: [
+      /\bRF\s+(?:scanner|gun)\b|\bhand\s+scanner\b/i,
+      /\bpallets?\b|\bpallet\s+truck\b/i,
+      /\bfork ?lift\b|\bFLT\b/i,
+      /\bWMS\b|\bwarehouse management system\b/i,
+    ],
+    genericSkillPatterns: [
+      /\b(?:reliab(?:le|ility)|attendance|punctual|team\s?work|health and safety awareness)\b/i,
+    ],
+    // Cat 9 — a clearly non-operative role title counts against this occupation.
+    negativePatterns: [
+      /\b(?:office|team)?\s*administrator\b/i,
+      /\b(?:software|web)\s+(?:engineer|developer)\b/i,
+      /\b(?:staff|registered)\s+nurse\b/i,
     ],
     sectorHint: 'warehouse_logistics',
   },
