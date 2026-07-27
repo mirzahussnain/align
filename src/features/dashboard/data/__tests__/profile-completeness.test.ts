@@ -9,11 +9,13 @@ import {
   toCompletenessInput,
   toCompletenessInputFromFlags,
 } from '../profile-completeness';
+import { evaluateProfileReadiness, profileActionAvailability } from '../profile-readiness';
 import type { ProfileData } from '../load-profile';
 
 function makeProfile(overrides: {
   targetOccupation: string;
   projects?: ProfileData['projects'];
+  targetRoleTitle?: string;
 }): ProfileData {
   return {
     profileId: 'p1',
@@ -25,7 +27,7 @@ function makeProfile(overrides: {
       tagline: '',
       professionalSummary: 'Reliable warehouse operative.',
       targetOccupation: overrides.targetOccupation,
-      targetRoleTitle: '',
+      targetRoleTitle: overrides.targetRoleTitle ?? 'Warehouse Operative',
       targetSeniority: '',
       targetIndustry: '',
       email: '',
@@ -180,13 +182,13 @@ describe('relevant checks', () => {
       toCompletenessInput(makeProfile({ targetOccupation: 'software_engineer' }))
     );
 
-    // Five base checks (no target-occupation check); software adds projects.
-    expect(asNurse.relevantChecks).toHaveLength(5);
-    expect(asEngineer.relevantChecks).toHaveLength(6);
+    // Six base checks (no target-occupation check); software adds projects.
+    expect(asNurse.relevantChecks).toHaveLength(6);
+    expect(asEngineer.relevantChecks).toHaveLength(7);
     // Same underlying content, different verdict — purely because the
     // occupation changed which evidence is expected.
     expect(asNurse.percentage).toBe(100);
-    expect(asEngineer.percentage).toBe(83);
+    expect(asEngineer.percentage).toBe(86);
   });
 
   it('partitions relevant checks into completed and missing with no overlap', () => {
@@ -200,6 +202,99 @@ describe('relevant checks', () => {
   });
 });
 
+describe('career direction', () => {
+  it('counts a target role as a completeness check', () => {
+    const withDirection = makeProfile({ targetOccupation: 'generic' });
+    const without = makeProfile({ targetOccupation: 'generic', targetRoleTitle: '' });
+
+    expect(evaluateProfileCompleteness(toCompletenessInput(withDirection)).missingChecks).toEqual([]);
+    expect(evaluateProfileCompleteness(toCompletenessInput(without)).missingChecks).toEqual([
+      'career-direction',
+    ]);
+  });
+
+  it('treats whitespace as no direction at all', () => {
+    const blank = makeProfile({ targetOccupation: 'generic', targetRoleTitle: '   ' });
+    expect(evaluateProfileCompleteness(toCompletenessInput(blank)).missingChecks).toContain(
+      'career-direction'
+    );
+  });
+
+  it('does not make the internal occupation lens a check', () => {
+    // targetOccupation stays optional: it is a scoring lens, not something the
+    // user has to answer, and the classifier resolves a missing one safely.
+    const result = evaluateProfileCompleteness(
+      toCompletenessInput(makeProfile({ targetOccupation: '' }))
+    );
+    expect(result.relevantChecks).toContain('career-direction');
+    expect(result.percentage).toBe(100);
+  });
+});
+
+describe('profile readiness', () => {
+  it('is DRAFT until it has a name, a direction and some content', () => {
+    expect(
+      evaluateProfileReadiness(
+        toCompletenessInput(makeProfile({ targetOccupation: 'generic', targetRoleTitle: '' }))
+      ).lifecycle
+    ).toBe('DRAFT');
+
+    const ready = evaluateProfileReadiness(
+      toCompletenessInput(makeProfile({ targetOccupation: 'generic' }))
+    );
+    expect(ready.lifecycle).toBe('READY');
+    expect(ready.blocking).toEqual([]);
+  });
+
+  it('reports only the ready-state blockers, not every optional gap', () => {
+    const readiness = evaluateProfileReadiness({
+      targetOccupation: 'software_engineer',
+      fullName: true,
+      careerDirection: false,
+      professionalSummary: false,
+      experience: 2,
+      education: 0,
+      skills: 1,
+      projects: 0,
+    });
+    // Several checks are missing, but only the target role stands between this
+    // profile and being usable.
+    expect(readiness.missing.length).toBeGreaterThan(1);
+    expect(readiness.blocking).toEqual(['career-direction']);
+    expect(readiness.lifecycle).toBe('DRAFT');
+  });
+
+  it('explains which missing fields block which actions', () => {
+    const empty = profileActionAvailability({
+      targetOccupation: '',
+      fullName: true,
+      careerDirection: true,
+      professionalSummary: false,
+      experience: 0,
+      education: 0,
+      skills: 0,
+      projects: 0,
+    });
+    expect(empty.jobMatch.available).toBe(true);
+    expect(empty.cvGeneration.available).toBe(false);
+    expect(empty.cvGeneration.missing).toContain('experience');
+  });
+
+  it('does not require a professional summary to be ready', () => {
+    const readiness = evaluateProfileReadiness({
+      targetOccupation: 'warehouse_operative',
+      fullName: true,
+      careerDirection: true,
+      professionalSummary: false,
+      experience: 1,
+      education: 0,
+      skills: 0,
+      projects: 0,
+    });
+    expect(readiness.lifecycle).toBe('READY');
+  });
+});
+
 describe('wizard and dashboard agree', () => {
   /** The onboarding wizard's view: per-step "was this filled in" booleans. */
   function wizardPercentage(profile: ProfileData): number {
@@ -207,6 +302,7 @@ describe('wizard and dashboard agree', () => {
       toCompletenessInputFromFlags({
         targetOccupation: profile.personal.targetOccupation,
         fullName: Boolean(profile.personal.fullName),
+        careerDirection: Boolean(profile.personal.targetRoleTitle.trim()),
         professionalSummary: Boolean(profile.personal.professionalSummary),
         experience: profile.experience.length > 0,
         education: profile.education.length > 0,

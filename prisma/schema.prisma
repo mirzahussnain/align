@@ -33,6 +33,10 @@ model User {
   applicationEvidenceContexts ApplicationEvidenceContext[]
   profileEvidenceApprovals   ProfileEvidenceApproval[]
   billingAccount              BillingAccount?
+  storedCvs                   StoredCv[]
+  cvImportSessions            CvImportSession[]
+  cvImportCandidates          CvImportCandidate[]
+  onboardingState             OnboardingState?
 
   @@unique([email])
   @@map("user")
@@ -277,6 +281,7 @@ model Profile {
   profileEvidenceApprovals   ProfileEvidenceApproval[]
   generatedCVs                GeneratedCV[]
   analyses                    Analysis[]
+  cvImportSessions            CvImportSession[]
 
   @@unique([userId, label])
   @@index([userId])
@@ -922,4 +927,373 @@ model Verification {
 
   @@index([identifier])
   @@map("verification")
+}
+
+// ── Stored source CVs, extraction and import ─────────────────────────────────
+//
+// The pipeline is StoredCv → CvExtraction → CvImportSession → CvImportCandidate.
+// Each step is a separate row so the original file, what a parser read out of it,
+// which Career Profile it is being imported into, and what the user confirmed all
+// stay independently addressable and independently retained.
+
+/**
+ * Lifecycle of the archived original file. UPLOADING → STORED covers the window
+ * where a row exists but the object may not; EXPIRED/DELETED mean the BINARY is
+ * gone while the row, its extractions and its confirmed provenance survive.
+ */
+enum StoredCvStatus {
+  UPLOADING
+  STORED
+  EXTRACTING
+  READY
+  FAILED
+  EXPIRED
+  DELETED
+}
+
+/**
+ * A user's original uploaded CV, stored once in object storage.
+ *
+ * Deliberately owned by the USER and not by a Career Profile: one CV is commonly
+ * imported into several profiles ("import as an update to my Nursing track", then
+ * later into "Care Assistant"), and hanging it off a single profileId would force
+ * either a duplicate upload or a lie about which track it belongs to. The
+ * profile-scoped part of the story lives in CvImportSession.
+ *
+ * `checksum` (sha256 of the bytes) is the identity used for duplicate detection —
+ * the filename is display metadata only, so the same CV re-uploaded under a new
+ * name is still recognised. Unique per owner, never globally: two users uploading
+ * an identical template must not collide, and one user must not be told their own
+ * file already exists in someone else's account.
+ *
+ * Rows are SOFT-deleted. Retention expiry removes the object and stamps
+ * `objectDeletedAt`; nothing here ever cascades into confirmed profile records.
+ */
+model StoredCv {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  /** Storage provider key, server-selected — never accepted from a client. */
+  storageProvider String
+  storageKey      String @unique
+
+  originalFilename String
+  mimeType         String
+  sizeBytes        Int
+  /** Lowercase hex sha256 of the file bytes. */
+  checksum         String
+  /** Detected and signature-verified container format: 'pdf' | 'docx'. */
+  sourceFormat     String
+
+  status StoredCvStatus @default(UPLOADING)
+
+  /**
+   * When the archived object becomes eligible for removal, stamped from the
+   * user's `source_file_retention` window at upload time. Null means keep.
+   */
+  retentionEndsAt DateTime?
+  /** The binary is gone; the row and its provenance remain readable. */
+  objectDeletedAt DateTime?
+  /** Soft delete. The pipeline never hard-deletes a stored CV. */
+  deletedAt       DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  extractions    CvExtraction[]
+  importSessions CvImportSession[]
+
+  @@unique([userId, checksum])
+  @@index([userId, status])
+  @@index([retentionEndsAt])
+  @@map("stored_cv")
+}
+
+enum CvExtractionStatus {
+  PENDING
+  PROCESSING
+  READY
+  FAILED
+}
+
+/**
+ * One immutable attempt at reading a stored CV.
+ *
+ * Versioned rather than unique-per-CV: a parser upgrade or a retry after a
+ * transient failure must produce a NEW row, because candidates already confirmed
+ * against an earlier extraction cite its `parserVersion` and its excerpts as
+ * durable provenance. Overwriting would silently rewrite the evidence behind
+ * records the user has already approved.
+ */
+model CvExtraction {
+  id         String   @id @default(cuid())
+  storedCvId String
+  storedCv   StoredCv @relation(fields: [storedCvId], references: [id], onDelete: Cascade)
+
+  /** Server-selected extractor version, e.g. "cv-extract@1". */
+  parserVersion String
+  /** Retry counter within a parser version; (cv, version, attempt) is unique. */
+  attempt       Int    @default(1)
+  sourceFormat  String
+
+  status CvExtractionStatus @default(PENDING)
+
+  /** Normalised plain text. Stored in Postgres — CV text is a few tens of KB. */
+  extractedText  String?
+  /** Validated CvExtractionPayload; never raw parser output. */
+  structuredData Json?
+  pageCount      Int?
+  /** Stable project error code. Never provider or library wording. */
+  errorCode      String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  importSessions CvImportSession[]
+  candidates     CvImportCandidate[]
+
+  @@unique([storedCvId, parserVersion, attempt])
+  @@index([storedCvId, status])
+  @@map("cv_extraction")
+}
+
+enum CvImportSessionStatus {
+  DRAFT
+  REVIEWING
+  PARTIALLY_IMPORTED
+  COMPLETED
+  ABANDONED
+  FAILED
+}
+
+/**
+ * One (stored CV → one Career Profile) import. This is where a user-owned file
+ * becomes profile-scoped work.
+ *
+ * Unique on (storedCvId, profileId) so returning to an interrupted import — or
+ * two tabs racing the same "import into this profile" button — resolves to the
+ * same session instead of creating a second set of candidates.
+ *
+ * The reconciliation fields are metadata about whether the comparison ran, not
+ * entitlement state: plan, quota and capability decisions are resolved live and
+ * are never persisted here.
+ */
+model CvImportSession {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  storedCvId   String
+  storedCv     StoredCv     @relation(fields: [storedCvId], references: [id], onDelete: Cascade)
+  extractionId String
+  extraction   CvExtraction @relation(fields: [extractionId], references: [id], onDelete: Cascade)
+  profileId    String
+  profile      Profile      @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  status CvImportSessionStatus @default(DRAFT)
+
+  /** not_requested | unavailable | completed | failed — display + retry state. */
+  reconciliationStatus      String?
+  /** The ledger operation id, so a retry is idempotent rather than re-charged. */
+  reconciliationOperationId String?
+  reconciliationRanAt       DateTime?
+  reconciliationSummary     Json?
+
+  importedAt DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  candidates CvImportCandidate[]
+
+  @@unique([storedCvId, profileId])
+  @@index([userId, status])
+  @@map("cv_import_session")
+}
+
+enum CvImportEntityType {
+  /**
+   * A proposal about one field of the shared `ProfileIdentity` — a phone, a
+   * LinkedIn URL, a personal site. One candidate per FIELD rather than one per
+   * CV, so a user can accept the LinkedIn address the CV got right and reject
+   * the phone number it got wrong, and so a field that contradicts what the
+   * account already holds can be flagged on its own.
+   */
+  IDENTITY_UPDATE
+  /**
+   * A proposal for `Profile.professionalSummary`. Separate from
+   * IDENTITY_UPDATE because it targets a different table with different scope:
+   * identity is shared across every Career Track, a summary belongs to one.
+   */
+  PROFILE_SUMMARY_UPDATE
+  EXPERIENCE
+  PROJECT
+  EDUCATION
+  SKILL
+  CERTIFICATION
+  TRAINING
+  LICENCE
+  PROFESSIONAL_REGISTRATION
+  LANGUAGE
+  VOLUNTEERING
+  OTHER_EVIDENCE
+}
+
+enum CvImportReviewStatus {
+  PROPOSED
+  CONFIRMED
+  EDITED
+  REJECTED
+  DUPLICATE
+  CONFLICT
+}
+
+/**
+ * A reviewable proposal, and — once confirmed — the durable provenance record
+ * for the canonical row it created.
+ *
+ * Parser output NEVER goes straight into Experience/Education/Skill/... . It
+ * lands here first, is reviewed, and only a user confirmation writes a canonical
+ * record. `createdEntityType`/`createdEntityId` then point at what was written,
+ * which is what lets a canonical profile record be traced back to an excerpt, an
+ * extraction and a parser version without adding provenance columns to ten tables.
+ *
+ * `sourceExcerpt`, `extractionId` and `parserVersion` are immutable after
+ * creation, and the row outlives the stored object: when the original file
+ * expires the excerpt is all that remains of the evidence, so deleting it would
+ * destroy the audit trail for records the user still holds.
+ *
+ * Only a CONFIRMED OTHER_EVIDENCE candidate ever consumes the reusable-evidence
+ * allowance. Every other entity type is canonical career history and consumes
+ * nothing; proposed, rejected, duplicate and conflicting candidates consume
+ * nothing regardless of type.
+ */
+model CvImportCandidate {
+  id        String          @id @default(cuid())
+  userId    String
+  user      User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sessionId String
+  session   CvImportSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  storedCvId   String
+  extractionId String
+  extraction   CvExtraction @relation(fields: [extractionId], references: [id], onDelete: Cascade)
+  profileId    String
+
+  entityType     CvImportEntityType
+  /** Validated against the per-entity import payload schema, never free JSON. */
+  structuredData Json
+
+  /** Immutable verbatim source wording this proposal came from. */
+  sourceExcerpt  String
+  sourceLocation Json?
+  confidence     Float?
+
+  reviewStatus CvImportReviewStatus @default(PROPOSED)
+  /** Stable code for a terminal conflict the user must resolve explicitly. */
+  conflictCode String?
+  /** Immutable: which extractor produced this proposal. */
+  parserVersion String
+
+  createdEntityType String?
+  createdEntityId   String?
+  confirmedAt       DateTime?
+  confirmedByUserId String?
+
+  /**
+   * Normalised identity of the proposal within its session. Makes candidate
+   * generation and bulk confirmation idempotent: re-running either resolves to
+   * the same row rather than proposing or importing the same job twice.
+   */
+  dedupeKey String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([sessionId, dedupeKey])
+  @@index([sessionId, reviewStatus])
+  @@index([userId])
+  @@index([createdEntityType, createdEntityId])
+  @@map("cv_import_candidate")
+}
+
+// ── Onboarding ───────────────────────────────────────────────────────────────
+
+enum OnboardingGoal {
+  CHECK_CV
+  MATCH_JOB
+  BUILD_PROFILE
+  NO_CV
+}
+
+enum OnboardingStage {
+  GOAL
+  CV_SOURCE
+  UPLOAD
+  EXTRACTION
+  PROFILE_SELECTION
+  CAREER_DIRECTION
+  IMPORT_REVIEW
+  ELIGIBILITY_BASICS
+  FIRST_ACTION
+  COMPLETE
+}
+
+enum OnboardingStatus {
+  NOT_STARTED
+  IN_PROGRESS
+  BLOCKED
+  COMPLETED
+  DISMISSED
+}
+
+enum OnboardingFirstValue {
+  DETERMINISTIC_ATS
+  AI_ATS
+  JOB_MATCH
+  PROFILE_CREATED
+}
+
+/**
+ * Where a user is in the goal-led first-run journey, persisted so a refresh, a
+ * closed browser or another device resumes rather than restarts.
+ *
+ * Deliberately holds NO plan, quota, entitlement decision, capability access or
+ * billing state. Those are server-authoritative and resolved live on every
+ * request; a copy here would go stale the moment a user upgrades, and a client
+ * that could influence it would be a way around the entitlement system.
+ *
+ * Separate from `User.onboardedAt`, which is retained as-is: users who completed
+ * the old wizard already carry it and must never be pulled into this flow.
+ */
+model OnboardingState {
+  id     String @id @default(cuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  goal   OnboardingGoal?
+  stage  OnboardingStage  @default(GOAL)
+  status OnboardingStatus @default(NOT_STARTED)
+
+  /** Resolved and ownership-checked server-side on every write. */
+  selectedProfileId String?
+  storedCvId        String?
+  extractionId      String?
+  importSessionId   String?
+
+  firstValueType        OnboardingFirstValue?
+  /** analysisId of the outcome, or the profileId for PROFILE_CREATED. */
+  firstValueRef         String?
+  firstValueCompletedAt DateTime?
+
+  /** Stable project error code for a BLOCKED stage. Never provider wording. */
+  lastErrorCode String?
+  completedAt   DateTime?
+  dismissedAt   DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId, status])
+  @@map("onboarding_state")
 }

@@ -23,22 +23,35 @@ type OptionalKey = 'experience' | 'projects' | 'education' | 'skills';
 type StepKey = 'basics' | OptionalKey;
 
 const STEPS = [
-  { key: 'basics', label: 'Basics', title: 'Start with the basics', subtitle: 'The essentials every CV needs. This part is required.' },
+  { key: 'basics', label: 'Direction', title: 'Career direction', subtitle: 'Your name and the role you are targeting. Everything else on this step is optional.' },
   { key: 'experience', label: 'Experience', title: 'Work experience', subtitle: 'Add your roles — or skip and add them later.' },
   { key: 'projects', label: 'Projects', title: 'Projects', subtitle: 'Showcase what you have built. Optional.' },
   { key: 'education', label: 'Education', title: 'Education', subtitle: 'Your qualifications. Optional.' },
   { key: 'skills', label: 'Skills', title: 'Skills', subtitle: 'Group your skills by category. Optional.' },
 ] as const satisfies readonly { key: StepKey; label: string; title: string; subtitle: string }[];
 
-export default function OnboardingWizard({
+/**
+ * Complete a Career Profile manually.
+ *
+ * Retained deliberately, and no longer the universal first-run path. It is the
+ * right tool for a user with no CV, for filling in what an import could not
+ * read, for editing imported records, and for building a second Career Profile —
+ * every one of which is a case where a form beats an upload.
+ *
+ * `includeBasics` is false when the goal-led journey has already collected the
+ * career direction, so the user is not asked the same two questions twice.
+ */
+export default function ManualProfileWizard({
   initial,
   fallback,
+  includeBasics = true,
 }: {
   initial: ProfileData;
   fallback: { name: string; email: string };
+  includeBasics?: boolean;
 }) {
   const router = useRouter();
-  const [stepKey, setStepKey] = useState<StepKey>('basics');
+  const [stepKey, setStepKey] = useState<StepKey>(includeBasics ? 'basics' : 'experience');
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState('');
   const [toast, setToast] = useState('');
@@ -46,6 +59,7 @@ export default function OnboardingWizard({
   const [basics, setBasics] = useState<BasicsState>(() => ({
     valid: basicsAreValid({ ...initial.personal }),
     fullName: initial.personal.fullName || fallback.name,
+    targetRoleTitle: initial.personal.targetRoleTitle,
     professionalSummary: initial.personal.professionalSummary,
     targetOccupation: initial.personal.targetOccupation,
   }));
@@ -68,8 +82,11 @@ export default function OnboardingWizard({
   const showProjects = projectsSectionVisible(basics.targetOccupation, initial.projects.length);
 
   const steps = useMemo(
-    () => STEPS.filter((s) => s.key !== 'projects' || showProjects),
-    [showProjects]
+    () =>
+      STEPS.filter(
+        (s) => (s.key !== 'projects' || showProjects) && (s.key !== 'basics' || includeBasics)
+      ),
+    [showProjects, includeBasics]
   );
 
   // Navigation is keyed, not indexed: changing occupation on the basics step
@@ -88,6 +105,7 @@ export default function OnboardingWizard({
         toCompletenessInputFromFlags({
           targetOccupation: basics.targetOccupation,
           fullName: Boolean(basics.fullName.trim()),
+          careerDirection: Boolean(basics.targetRoleTitle.trim()),
           professionalSummary: Boolean(basics.professionalSummary.trim()),
           ...merged,
         })
@@ -183,9 +201,24 @@ export default function OnboardingWizard({
             </div>
           ))}
         </div>
-        <p className="mt-3 text-xs font-medium text-neutral-500">
-          Step {stepIndex + 1} of {steps.length} · Profile {completeness}% complete
-        </p>
+        {/*
+          Two different measurements, shown as two different things. Where you
+          are in the form is not how complete your profile is: opening step two
+          of five does not make a profile 40% complete, and printing them as one
+          sentence made the old wizard claim exactly that.
+        */}
+        <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs font-medium">
+          <span className="text-neutral-500">
+            Step {stepIndex + 1} of {steps.length}
+          </span>
+          <span aria-hidden="true" className="text-neutral-300">
+            ·
+          </span>
+          <span className="text-neutral-500">
+            Career Profile {completeness}% complete
+            <span className="sr-only"> — based on the details you have saved, not on this form&apos;s progress</span>
+          </span>
+        </div>
       </div>
 
       <div className="rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm sm:p-8">

@@ -1,4 +1,5 @@
 import { prisma } from '@/shared/lib/prisma';
+import { repairStoredPhone } from '@/shared/utils/phone';
 
 /** One career track in the switcher — no content, just enough to list and pick. */
 export interface ProfileSummary {
@@ -208,6 +209,12 @@ export async function loadProfileData(userId: string, profileId?: string): Promi
   const toStrings = (value: unknown): string[] =>
     Array.isArray(value) ? value.map((v) => String(v)) : [];
 
+  const phone = repairStoredPhone({
+    phoneDialCode: identity?.phoneDialCode,
+    phoneNumber: identity?.phoneNumber,
+    phoneCountry: identity?.phoneCountry,
+  });
+
   return {
     profileId: profile?.id ?? '',
     label: profile?.label ?? 'Default',
@@ -222,9 +229,13 @@ export async function loadProfileData(userId: string, profileId?: string): Promi
       targetSeniority: profile?.targetSeniority ?? '',
       targetIndustry: profile?.targetIndustry ?? '',
       email: identity?.email ?? '',
-      phoneDialCode: identity?.phoneDialCode ?? '',
-      phoneNumber: identity?.phoneNumber ?? '',
-      phoneCountry: identity?.phoneCountry ?? '',
+      // Re-split on the way out as well as on the way in. Rows written before the
+      // three-column contract existed hold the whole international number in
+      // `phoneNumber`, which renders as an empty dial-code picker beside
+      // "+44 7737-853800" — a defect the user sees whether or not they ever save
+      // again. This repairs the VIEW only; the row is rewritten the next time the
+      // form is saved, so nothing is silently mutated underneath them.
+      ...phone,
       city: identity?.city ?? '',
       state: identity?.state ?? '',
       country: identity?.country ?? '',
@@ -362,6 +373,7 @@ export async function listProfiles(userId: string): Promise<ProfileSummary[]> {
         isDefault: true,
         targetIndustry: true,
         targetOccupation: true,
+        targetRoleTitle: true,
         professionalSummary: true,
         _count: {
           select: { experience: true, projects: true, education: true, skillGroups: true },
@@ -377,6 +389,7 @@ export async function listProfiles(userId: string): Promise<ProfileSummary[]> {
     const { percentage } = evaluateProfileCompleteness({
       targetOccupation: p.targetOccupation ?? '',
       fullName: Boolean(identity?.fullName),
+      careerDirection: Boolean(p.targetRoleTitle?.trim()),
       professionalSummary: Boolean(p.professionalSummary),
       experience: p._count.experience,
       education: p._count.education,

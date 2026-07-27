@@ -5,6 +5,7 @@ import { Plus, Trash2, Pencil } from 'lucide-react';
 import { Label, MonthField, SelectField, TextArea, TextField } from './Field';
 import { CERTIFICATION_STATUS_OPTIONS, LANGUAGE_PROFICIENCY_OPTIONS, LICENCE_STATUS_OPTIONS, optionLabel, REGISTRATION_STATUS_OPTIONS, TRAINING_STATUS_OPTIONS, VERIFICATION_STATUS_OPTIONS, type ProfileFieldOption } from '@/shared/constants/profile-field-options';
 import { deleteManagedEvidence, saveManagedEvidence, type ManagedEvidenceKind } from '@/features/dashboard/actions/profile-actions';
+import { ENTITLEMENTS_REFRESH_EVENT } from '@/shared/entitlements/registry';
 import { formatDateRange, formatProfileDate } from '@/shared/utils/date';
 
 type Row = Record<string, string | string[]> & { id?: string };
@@ -38,14 +39,15 @@ const CONFIG: Record<ManagedEvidenceKind, { singular: string; fields: Field[] }>
   registration: { singular: 'professional registration', fields: [{ key: 'officialName', label: 'Registration type or profession', required: true }, { key: 'issuingBody', label: 'Regulatory body', required: true }, { key: 'credentialNumber', label: 'Registration number', hideOnCard: true }, { key: 'issueDate', label: 'Issue / start date', date: true }, { key: 'expiryDate', label: 'Expiry / renewal date', date: true }, { key: 'status', label: 'Registration status', options: REGISTRATION_STATUS_OPTIONS }, { key: 'verificationUrl', label: 'Evidence URL', hideOnCard: true }, { key: 'verificationStatus', label: 'Evidence status', options: VERIFICATION_STATUS_OPTIONS }] },
   language: { singular: 'language', fields: [{ key: 'language', label: 'Language', required: true }, { key: 'speaking', label: 'Speaking proficiency', options: LANGUAGE_PROFICIENCY_OPTIONS, hint: 'Give at least one of speaking, reading, or writing.' }, { key: 'reading', label: 'Reading proficiency', options: LANGUAGE_PROFICIENCY_OPTIONS }, { key: 'writing', label: 'Writing proficiency', options: LANGUAGE_PROFICIENCY_OPTIONS }, { key: 'professionalUseContext', label: 'Professional-use context', multiline: true }, { key: 'formalTest', label: 'Formal test / certification' }] },
   volunteering: { singular: 'volunteering role', fields: [{ key: 'organisation', label: 'Organisation', required: true }, { key: 'role', label: 'Role', required: true }, { key: 'startDate', label: 'Start date', date: true }, { key: 'endDate', label: 'End date', date: true }, { key: 'contribution', label: 'Responsibilities', multiline: true }, { key: 'skillsTools', label: 'Skills used (comma-separated)', list: true }, { key: 'outcome', label: 'Achievements', multiline: true }] },
-  other: { singular: 'other evidence item', fields: [{ key: 'title', label: 'Title', required: true }, { key: 'context', label: 'Category / context', hint: 'Do not use this for skills, credentials, work, education, languages, or training.' }, { key: 'description', label: 'Description', required: true, multiline: true }, { key: 'period', label: 'Date', date: true }, { key: 'outcome', label: 'Source, link, or outcome', multiline: true }] },
+  other: { singular: 'reusable evidence record', fields: [{ key: 'title', label: 'Title', required: true }, { key: 'context', label: 'Category / context', hint: 'Do not use this for skills, credentials, work, education, languages, or training.' }, { key: 'description', label: 'Description', required: true, multiline: true }, { key: 'period', label: 'Date', date: true }, { key: 'outcome', label: 'Source, link, or outcome', multiline: true }] },
   certification: { singular: 'certification', fields: [{ key: 'officialName', label: 'Certification name', required: true }, { key: 'issuingBody', label: 'Issuing body' }, { key: 'credentialNumber', label: 'Credential number', hideOnCard: true }, { key: 'issueDate', label: 'Issue date', date: true }, { key: 'expiryDate', label: 'Expiry date', date: true }, { key: 'status', label: 'Certification status', options: CERTIFICATION_STATUS_OPTIONS }, { key: 'verificationUrl', label: 'Evidence URL', hideOnCard: true }, { key: 'verificationStatus', label: 'Evidence status', options: VERIFICATION_STATUS_OPTIONS }] },
 };
 
 function blank(kind: ManagedEvidenceKind): Row { return Object.fromEntries(CONFIG[kind].fields.map((field) => [field.key, field.list ? [] : ''])); }
 function draftId() { return globalThis.crypto?.randomUUID?.() ?? `draft-${Date.now()}`; }
-// "Training" is uncountable, "Other evidence" already plural — everything else pluralises.
-function heading(kind: ManagedEvidenceKind) { const singular = CONFIG[kind].singular; return `${singular[0].toUpperCase()}${singular.slice(1)}${kind === 'other' || kind === 'training' ? '' : 's'}`; }
+// "Training" is uncountable; `other` is the reusable evidence library and is
+// named for what it holds, not for its record shape. Everything else pluralises.
+function heading(kind: ManagedEvidenceKind) { if (kind === 'other') return 'Reusable evidence'; const singular = CONFIG[kind].singular; return `${singular[0].toUpperCase()}${singular.slice(1)}${kind === 'training' ? '' : 's'}`; }
 
 /**
  * Concise, code-free card subtitle. Option-backed values map to their human
@@ -82,9 +84,15 @@ export default function StructuredEvidenceManager({ kind, initial, profileId }: 
   const [records, setRecords] = useState<Row[]>(initial);
   const [editor, setEditor] = useState<EvidenceEditorState>(CLOSED_EDITOR);
   const [isPending, startTransition] = useTransition();
-  const [feedback, setFeedback] = useState('');
-  const openCreate = () => { setEditor({ mode: 'create', evidenceType: kind, draftId: draftId(), draft: blank(kind) }); setFeedback(''); };
-  const openEdit = (record: Row) => { if (!record.id) return; setEditor({ mode: 'edit', evidenceType: kind, recordId: record.id, draft: { ...record } }); setFeedback(''); };
+  const [feedback, setFeedback] = useState<{ text: string; failed: boolean }>({ text: '', failed: false });
+  const fail = (text: string) => setFeedback({ text, failed: true });
+  const succeed = (text: string) => setFeedback({ text, failed: false });
+  const clearFeedback = () => setFeedback({ text: '', failed: false });
+  // Only this section is governed by the reusable-evidence allowance, so only it
+  // needs the shared usage snapshot re-read after a create or delete.
+  const refreshUsage = () => { if (kind === 'other') window.dispatchEvent(new Event(ENTITLEMENTS_REFRESH_EVENT)); };
+  const openCreate = () => { setEditor({ mode: 'create', evidenceType: kind, draftId: draftId(), draft: blank(kind) }); clearFeedback(); };
+  const openEdit = (record: Row) => { if (!record.id) return; setEditor({ mode: 'edit', evidenceType: kind, recordId: record.id, draft: { ...record } }); clearFeedback(); };
   const closeEditor = () => setEditor(CLOSED_EDITOR);
   const activeEditor = editorMatchesType(editor, kind) ? editor : null;
   const updateDraft = (field: Field, value: string) => { if (!activeEditor) return; setEditor({ ...activeEditor, draft: { ...activeEditor.draft, [field.key]: field.list ? value.split(',').map((item) => item.trim()).filter(Boolean) : value } }); };
@@ -92,21 +100,22 @@ export default function StructuredEvidenceManager({ kind, initial, profileId }: 
     if (!activeEditor) return;
     startTransition(async () => {
       const result = await saveManagedEvidence({ kind, id: activeEditor.mode === 'edit' ? activeEditor.recordId : undefined, details: activeEditor.draft }, profileId);
-      if (!result.ok) return setFeedback(result.error);
+      if (!result.ok) return fail(result.error);
       const saved = { ...activeEditor.draft, id: result.id };
       setRecords((current) => activeEditor.mode === 'edit' ? current.map((record) => record.id === result.id ? saved : record) : [...current, saved]);
-      closeEditor(); setFeedback(`${config.singular[0].toUpperCase()}${config.singular.slice(1)} saved.`);
+      if (activeEditor.mode === 'create') refreshUsage();
+      closeEditor(); succeed(`${config.singular[0].toUpperCase()}${config.singular.slice(1)} saved.`);
     });
   }
   function remove(record: Row) {
     if (!record.id || !window.confirm('Delete this record? If it was approved as CV evidence, a future generation using that approval will safely require you to choose evidence again.')) return;
-    startTransition(async () => { const result = await deleteManagedEvidence(kind, record.id!, profileId); if (!result.ok) return setFeedback(result.error); setRecords((current) => current.filter((item) => item.id !== record.id)); setFeedback(result.mayHaveStaleApprovals ? 'Deleted. Previous evidence approvals were not remapped.' : 'Deleted.'); });
+    startTransition(async () => { const result = await deleteManagedEvidence(kind, record.id!, profileId); if (!result.ok) return fail(result.error); setRecords((current) => current.filter((item) => item.id !== record.id)); refreshUsage(); succeed(result.mayHaveStaleApprovals ? 'Deleted. Previous evidence approvals were not remapped.' : 'Deleted.'); });
   }
   return <div><div className="flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-4"><div><h2 className="text-lg font-bold text-neutral-900">{heading(kind)}</h2><p className="mt-1 text-xs text-neutral-500">These reusable records are available in the evidence selector when tailoring a CV.</p></div></div>
     {!activeEditor && records.length === 0 && <div className="mt-6 rounded-2xl border border-dashed border-neutral-300 p-6 text-sm text-neutral-500">No {config.singular}s yet. Add one whenever it is relevant to your career track.</div>}
     {!activeEditor && <div className="mt-4"><button type="button" onClick={openCreate} className="inline-flex items-center gap-1.5 rounded-full border border-neutral-300 px-4 py-2 text-xs font-semibold text-neutral-700 hover:bg-neutral-100"><Plus className="h-3.5 w-3.5" /> Add {config.singular}</button></div>}
     {!activeEditor && <div className="mt-5 flex flex-col gap-3">{records.map((record) => <div key={evidenceRecordKey(kind, record.id!)} className="flex flex-col gap-3 rounded-2xl border border-neutral-200 p-4 sm:flex-row sm:items-center sm:justify-between"><div><p className="text-sm font-semibold text-neutral-900">{String(record[config.fields[0].key] ?? config.singular)}</p><p className="mt-1 text-xs text-neutral-500">{cardSubtitle(kind, record)}</p></div><div className="flex shrink-0 gap-3"><button type="button" onClick={() => openEdit(record)} className="inline-flex items-center gap-1 text-xs font-semibold text-neutral-700 hover:text-neutral-900"><Pencil className="h-3.5 w-3.5" /> Edit</button><button type="button" onClick={() => remove(record)} className="inline-flex items-center gap-1 text-xs font-semibold text-rose-500 hover:text-rose-600"><Trash2 className="h-3.5 w-3.5" /> Delete</button></div></div>)}</div>}
     {activeEditor && <div key={activeEditor.mode === 'edit' ? evidenceRecordKey(kind, activeEditor.recordId) : `${kind}:draft:${activeEditor.draftId}`} className="mt-6 rounded-2xl border border-neutral-200 p-4 sm:p-5"><p className="mb-4 text-xs font-bold uppercase tracking-wider text-neutral-400">{activeEditor.mode === 'edit' ? `Edit ${config.singular}` : `Add ${config.singular}`}</p><div className="grid grid-cols-1 gap-4 sm:grid-cols-2">{config.fields.map((field) => { const fieldId = evidenceFormFieldId(kind, activeEditor.mode === 'edit' ? activeEditor.recordId : activeEditor.draftId, field.key); const hintId = field.hint ? `${fieldId}-hint` : undefined; return <div key={field.key} className={field.multiline ? 'sm:col-span-2' : ''}><Label htmlFor={fieldId} required={field.required}>{field.label}</Label>{field.multiline ? <TextArea id={fieldId} required={field.required} aria-describedby={hintId} value={String(activeEditor.draft[field.key] ?? '')} onChange={(event) => updateDraft(field, event.target.value)} /> : field.date ? <MonthField id={fieldId} required={field.required} aria-describedby={hintId} value={String(activeEditor.draft[field.key] ?? '')} onChange={(event) => updateDraft(field, event.target.value)} /> : field.options ? <SelectField id={fieldId} required={field.required} aria-describedby={hintId} value={String(activeEditor.draft[field.key] ?? '')} onChange={(event) => updateDraft(field, event.target.value)} options={field.options} placeholder="Select" /> : <TextField id={fieldId} required={field.required} aria-describedby={hintId} value={field.list ? (activeEditor.draft[field.key] as string[] ?? []).join(', ') : String(activeEditor.draft[field.key] ?? '')} onChange={(event) => updateDraft(field, event.target.value)} />}{field.hint && <p id={hintId} className="mt-1 text-[10px] text-neutral-400">{field.hint}</p>}</div>; })}</div><div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end sm:gap-3"><button type="button" onClick={closeEditor} disabled={isPending} className="w-full rounded-full border border-neutral-300 px-4 py-2 text-xs font-bold text-neutral-700 disabled:opacity-50 sm:w-auto">Cancel</button><button type="button" onClick={save} disabled={isPending} className="w-full rounded-full bg-accent-purple px-4 py-2 text-xs font-bold text-white disabled:opacity-50 sm:w-auto">{isPending ? 'Saving…' : `Save ${config.singular}`}</button></div></div>}
-    {feedback && <p role="status" className={`mt-4 text-xs font-medium ${feedback.includes('not found') || feedback.includes('Use the matching') || feedback.includes('Invalid') ? 'text-rose-600' : 'text-emerald-600'}`}>{feedback}</p>}
+    {feedback.text && <p role="status" className={`mt-4 text-xs font-medium ${feedback.failed ? 'text-rose-600' : 'text-emerald-600'}`}>{feedback.text}</p>}
   </div>;
 }

@@ -40,6 +40,7 @@ import { logReservationEvent } from '@/shared/services/reservation-observability
 import type { ProductCapability } from '@/shared/entitlements/registry';
 import { cleanJobTitle, cleanJobCompany, deriveJobTitleFromJd } from '@/shared/utils/job-title';
 import { loadProfileTarget, resolveProfileId } from '@/features/dashboard/data/load-profile';
+import { recordFirstValueIfOnboarding } from '@/shared/services/onboarding';
 import type { CVAnalysisResult } from '@/shared/types/cv';
 import { JobMatchDataV2Schema } from '@/shared/schemas/ai-output';
 
@@ -670,6 +671,19 @@ export async function POST(request: NextRequest) {
     // The results screen threads this into the rewrite wizard so a fresh
     // analysis can be rebuilt into a CV without re-uploading the source.
     if (analysisId) result.analysisId = analysisId;
+
+    // First value, recorded server-side from what actually happened rather than
+    // from anything the client claims. A deterministic ATS result counts: a Free
+    // user whose AI quota is spent has still received a useful outcome, and
+    // onboarding must not require a paid operation to finish.
+    if (analysisId) {
+      await recordFirstValueIfOnboarding({
+        userId: session.user.id,
+        firstValueType:
+          mode === 'job_match' ? 'JOB_MATCH' : aiSucceeded ? 'AI_ATS' : 'DETERMINISTIC_ATS',
+        firstValueRef: analysisId,
+      });
+    }
 
     return projectForUser(session.user.id, result, mode);
   });

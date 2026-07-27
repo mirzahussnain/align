@@ -40,6 +40,12 @@ export const THINKING_BUDGETS = {
   /** Relevance matching against a supplied inventory — mostly comparison. */
   profileReconcile: 768 as number | undefined,
   /**
+   * Matching imported CV proposals against the records a Career Profile already
+   * holds. Comparison over two supplied inventories, like profileReconcile, but
+   * over more items — a CV import can carry thirty-odd proposals at once.
+   */
+  cvImportReconcile: 1024 as number | undefined,
+  /**
    * Occupation classification of an ambiguous CV excerpt — pure extraction,
    * fires only when deterministic tiers can't resolve it. Never metered
    * against user quota.

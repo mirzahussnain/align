@@ -34,6 +34,10 @@ vi.mock('@/shared/entitlements/server', async (importActual) => {
     assertCapability: vi.fn(async () => ({ allowed: true })),
     // Per-application approval cap: allowed by default; specific tests override it.
     assertApplicationApprovalLimit: vi.fn(async () => {}),
+    // Reusable-evidence capacity: allowed by default. Its atomicity and counting
+    // definition are proven in the real-Postgres entitlement suite; here we only
+    // assert WHICH kinds reach it.
+    assertStoredEvidenceLimit: vi.fn(async () => {}),
   };
 });
 vi.mock('@/shared/services/reservation-observability', () => ({
@@ -69,7 +73,8 @@ import {
   releaseCapability,
   createResultForReservation,
 } from '@/shared/services/capability-reservation';
-import { createCanonicalEvidence } from '@/shared/services/structured-evidence';
+import { createCanonicalEvidence, validateStructuredEvidence } from '@/shared/services/structured-evidence';
+import { assertCapability, assertStoredEvidenceLimit } from '@/shared/entitlements/server';
 
 const USER = { id: 'u1' };
 
@@ -133,6 +138,27 @@ describe('POST /api/profile-evidence', () => {
     expect(body.evidenceRef).toEqual({ type: 'other', id: 'ev-1' });
     expect(createCanonicalEvidence).toHaveBeenCalledTimes(1);
     expect(vi.mocked(commitCapability).mock.calls[0][0]).toMatchObject({ resultRef: 'evidence:other:ev-1' });
+    // An `other` capture is a reusable evidence record, so it does consume the
+    // allowance — checked inside the creator transaction.
+    expect(assertStoredEvidenceLimit).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not charge the evidence allowance when the capture is career history', async () => {
+    // Saving employment evidence to the profile writes an Experience row — a
+    // canonical Career Profile record, not commercial reusable evidence.
+    vi.mocked(validateStructuredEvidence).mockReturnValueOnce({
+      kind: 'employment',
+      details: { employer: 'E', role: 'R' },
+    } as never);
+
+    const res = await POST(captureRequest({ reuseInProfile: true }));
+
+    expect(res.status).toBe(201);
+    expect(createCanonicalEvidence).toHaveBeenCalledTimes(1);
+    expect(assertStoredEvidenceLimit).not.toHaveBeenCalled();
+    expect(vi.mocked(assertCapability).mock.calls.map(([, capability]) => capability)).not.toContain(
+      'profile_evidence_storage'
+    );
   });
 
   it('returns the existing evidence on a committed retry, without a second write or charge', async () => {

@@ -8,6 +8,7 @@ import { buildProfileCandidates } from '@/shared/services/profile-reconciler';
 import {
   assertCapability,
   assertApplicationApprovalLimit,
+  assertStoredEvidenceLimit,
   EntitlementRequiredError,
 } from '@/shared/entitlements/server';
 import {
@@ -179,7 +180,14 @@ export async function POST(request: Request) {
     }
     if (input.reuseInProfile) {
       await assertCapability(session.user.id, 'reuse_evidence_across_applications');
-      await assertCapability(session.user.id, 'profile_evidence_storage');
+      // Only an `other` capture creates a qualifying reusable evidence record;
+      // every other kind writes a canonical Career Profile record (experience,
+      // skill, education, …), which is career history and is never charged
+      // against the stored-evidence allowance. Cheap pre-check only — the
+      // authoritative one runs inside the creator transaction below.
+      if (parsedEvidence.kind === 'other') {
+        await assertCapability(session.user.id, 'profile_evidence_storage');
+      }
     }
 
     const description = describeStructuredEvidence(parsedEvidence.kind, parsedEvidence.details);
@@ -299,6 +307,12 @@ export async function POST(request: Request) {
         operationId,
         creator: async (tx) => {
           if (input.reuseInProfile) {
+            // Authoritative reusable-evidence capacity check, under the same
+            // transaction as the create so it cannot be raced. Canonical career
+            // history is exempt.
+            if (parsedEvidence.kind === 'other') {
+              await assertStoredEvidenceLimit(session.user.id, tx);
+            }
             const ref = await createCanonicalEvidence(profile.profileId, parsedEvidence.kind, parsedEvidence.details, tx);
             return { resultRef: `evidence:${ref.type}:${ref.id}`, value: ref };
           }

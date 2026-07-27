@@ -11,6 +11,7 @@ import type { SectionPresence } from '@/shared/occupations/types';
  */
 export type CompletenessCheckId =
   | 'full-name'
+  | 'career-direction'
   | 'professional-summary'
   | 'experience'
   | 'education'
@@ -43,6 +44,16 @@ export interface CompletenessInput {
   /** OccupationId, or '' when unset. */
   targetOccupation: string;
   fullName: boolean;
+  /**
+   * Whether the track states what it is FOR — its target role title.
+   *
+   * A Career Profile is a career track, and a track with no direction cannot be
+   * meaningfully scored, matched or rewritten against anything: it is the one
+   * field that distinguishes "Warehouse Operative" from an untitled bag of
+   * history. `targetOccupation` remains optional and is deliberately not a
+   * check — it is an internal classification lens the user need never see.
+   */
+  careerDirection: boolean;
   professionalSummary: boolean;
   experience: number;
   education: number;
@@ -112,6 +123,7 @@ export function evaluateProfileCompleteness(
 ): ProfileCompletenessResult {
   const checks: [CompletenessCheckId, boolean][] = [
     ['full-name', input.fullName],
+    ['career-direction', input.careerDirection],
     ['professional-summary', input.professionalSummary],
     // The CV evaluation type (targetOccupation) is NOT a completeness check.
     // It is optional: a missing one resolves safely through the classifier and
@@ -150,6 +162,7 @@ export function evaluateProfileCompleteness(
 export function toCompletenessInputFromFlags(flags: {
   targetOccupation: string;
   fullName: boolean;
+  careerDirection: boolean;
   professionalSummary: boolean;
   experience: boolean;
   education: boolean;
@@ -159,6 +172,7 @@ export function toCompletenessInputFromFlags(flags: {
   return {
     targetOccupation: flags.targetOccupation,
     fullName: flags.fullName,
+    careerDirection: flags.careerDirection,
     professionalSummary: flags.professionalSummary,
     experience: flags.experience ? 1 : 0,
     education: flags.education ? 1 : 0,
@@ -172,6 +186,7 @@ export function toCompletenessInput(profile: ProfileData): CompletenessInput {
   return {
     targetOccupation: profile.personal.targetOccupation,
     fullName: Boolean(profile.personal.fullName),
+    careerDirection: Boolean(profile.personal.targetRoleTitle.trim()),
     professionalSummary: Boolean(profile.personal.professionalSummary),
     experience: profile.experience.length,
     education: profile.education.length,

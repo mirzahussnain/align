@@ -121,7 +121,7 @@ describe('lifecycle status and evidence status are distinct', () => {
 
 describe('training section wording', () => {
   it('renders a singular heading and updated field labels', () => {
-    expect(evidence).toContain("kind === 'other' || kind === 'training'");
+    expect(evidence).toContain("kind === 'training' ? '' : 's'");
     expect(evidence).toContain("label: 'Training name'");
     expect(evidence).toContain("label: 'Training topic'");
     expect(evidence).toContain("label: 'Result or outcome'");

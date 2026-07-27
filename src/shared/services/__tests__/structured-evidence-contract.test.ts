@@ -60,6 +60,25 @@ describe('canonical evidence contract — server-side rejection of invalid contr
     expect(() => validateStructuredEvidence('other', { title: 'My certifications', description: 'AWS, Azure' })).toThrow(/matching profile section/);
   });
 
+  it('applies that routing hint only where a human is choosing the section', () => {
+    // The check is a substring match, so it cannot tell a mis-filed record from
+    // an award that happens to contain an ordinary word. It is an authoring aid
+    // and must not run on a path that already routed by entity type.
+    const award = { title: 'First Place – D.I.E Project Award', description: 'Won the departmental competition.' };
+    expect(() => validateStructuredEvidence('other', award)).toThrow(/matching profile section/);
+    expect(validateStructuredEvidence('other', award, { enforceSectionRouting: false }).kind).toBe('other');
+  });
+
+  it('renders a stored record whose wording would fail the authoring hint', () => {
+    // A row that exists must always render; re-judging its section at read time
+    // would make an imported award unshowable.
+    const { text } = describeStructuredEvidence('other', {
+      title: 'First Place – D.I.E Project Award',
+      description: 'Won the departmental competition.',
+    });
+    expect(text).toContain('First Place');
+  });
+
   it('still rejects reversed date ranges', () => {
     expect(() => validateStructuredEvidence('training', { course: 'X', startDate: '2025-01', endDate: '2024-01' })).toThrow(/before/i);
   });

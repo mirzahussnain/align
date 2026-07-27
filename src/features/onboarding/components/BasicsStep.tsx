@@ -12,22 +12,32 @@ import type { ProfileData } from '@/features/dashboard/data/load-profile';
 import { visaRequiresExpiry } from '@/shared/constants/visa-status';
 import { suggestCareerTrackLabel } from '@/shared/occupations/track-label';
 
-/** Are all non-skippable basics filled in (incl. an expiry for temporary visas)? */
+/**
+ * The minimum needed to save a meaningful Career Profile.
+ *
+ * Only two fields, and both earn their place: a name, because a CV without one
+ * is not a CV, and a target role, because a career track with no direction
+ * cannot be scored, matched or rewritten against anything.
+ *
+ * Everything the old wizard demanded here has been moved to where it is
+ * actually needed, because none of it blocks a first result:
+ *
+ *   - `email` duplicated the verified account email and was asked for twice;
+ *   - `city`/`country` and `visaStatus` are eligibility facts, collected at the
+ *     point an action needs them rather than at sign-up;
+ *   - `professionalSummary` is genuinely optional — a user can get a full ATS
+ *     report without having written one, and demanding it up front stopped new
+ *     users reaching any result at all.
+ *
+ * The CV evaluation type (`targetOccupation`) stays optional: a missing one
+ * resolves safely through the classifier's Generic fallback.
+ */
 export function basicsAreValid(form: PersonalInfoInput): boolean {
-  const required: (keyof PersonalInfoInput)[] = [
-    'fullName',
-    'email',
-    'city',
-    'country',
-    'professionalSummary',
-    // The CV evaluation type (targetOccupation) is intentionally NOT required.
-    // It is an optional broad lens; a missing one resolves safely through the
-    // classifier and the Generic fallback. The target role stays the primary
-    // career-direction field.
-  ];
-  if (!required.every((k) => form[k].trim().length > 0)) return false;
-  if (!form.visaStatus) return false;
-  if (visaRequiresExpiry(form.visaStatus) && !form.visaExpiry.trim()) return false;
+  if (!form.fullName.trim()) return false;
+  if (!form.targetRoleTitle.trim()) return false;
+  // Still conditional, wherever a visa status IS given: a time-limited status
+  // without its expiry is an incomplete fact, not a deferred one.
+  if (form.visaStatus && visaRequiresExpiry(form.visaStatus) && !form.visaExpiry.trim()) return false;
   return true;
 }
 
@@ -40,6 +50,8 @@ export function basicsAreValid(form: PersonalInfoInput): boolean {
 export interface BasicsState {
   valid: boolean;
   fullName: string;
+  /** The track's target role — the career-direction completeness check. */
+  targetRoleTitle: string;
   professionalSummary: string;
   targetOccupation: string;
 }
@@ -76,6 +88,7 @@ const BasicsStep = forwardRef<ProfileStepHandle, BasicsStepProps>(function Basic
     onBasicsChange({
       valid: basicsAreValid(form),
       fullName: form.fullName,
+      targetRoleTitle: form.targetRoleTitle,
       professionalSummary: form.professionalSummary,
       targetOccupation: form.targetOccupation,
     });

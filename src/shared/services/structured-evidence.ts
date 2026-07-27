@@ -50,20 +50,48 @@ const schemas = {
   registration: z.object({ officialName: text, issuingBody: text, issueDate: date, expiryDate: date, credentialNumber: optionalText, status: registrationStatus, verificationUrl: z.string().url().optional().or(z.literal('')).default(''), verificationStatus: verificationStatus }).superRefine((value, ctx) => checkDateRange(value, ctx, 'issueDate', 'expiryDate', 'Issue date', 'Expiry date', 'future-allowed')),
   language: z.object({ language: text, speaking: languageProficiency, reading: languageProficiency, writing: languageProficiency, professionalUseContext: optionalText, formalTest: optionalText }).superRefine(requireOneAbility),
   volunteering: z.object({ organisation: text, role: text, startDate: date, endDate: date, contribution: optionalText, skillsTools: stringList, outcome: optionalText }).superRefine((value, ctx) => checkDateRange(value, ctx, 'startDate', 'endDate', 'Start date', 'End date')),
-  other: z.object({ title: text, context: optionalText, description: text, period: optionalText, outcome: optionalText }).superRefine((value, ctx) => {
-    const combined = `${value.title} ${value.context}`.toLowerCase();
-    if (/\b(skill|employment|work history|project|education|degree|certification|licen[cs]e|registration|language|training|volunteer)/.test(combined)) ctx.addIssue({ code: 'custom', message: 'Use the matching profile section instead of Other evidence for this type of record.' });
-  }),
+  other: z.object({ title: text, context: optionalText, description: text, period: optionalText, outcome: optionalText }),
 } as const;
 
 export class StructuredEvidenceValidationError extends Error {}
 
-export function validateStructuredEvidence(kind: unknown, details: unknown) {
+/** Record types that have a profile section of their own, as a user might word them. */
+const MISFILED_AS_OTHER = /\b(skill|employment|work history|project|education|degree|certification|licen[cs]e|registration|language|training|volunteer)/;
+
+export interface StructuredEvidenceOptions {
+  /**
+   * Apply the "use the matching profile section instead" routing hint to `other`
+   * evidence. Default true.
+   *
+   * This is an AUTHORING hint, not a data rule: it catches someone typing their
+   * job history into the free-text Other-evidence box, where nothing else would.
+   * It is a substring match over the title, so it cannot tell "My certifications"
+   * (a mis-filed record) from "First Place – D.I.E Project Award" (an award that
+   * happens to contain an ordinary English word), and it must therefore only run
+   * where a human is choosing the section.
+   *
+   * Turn it OFF wherever the record type was already decided by something other
+   * than the wording — CV import routes by entity type, and re-guessing from the
+   * text there produces nothing but false positives. Turn it off, too, when
+   * re-reading a stored record: the routing decision was made when it was
+   * created, and a row that exists must always render.
+   */
+  enforceSectionRouting?: boolean;
+}
+
+export function validateStructuredEvidence(kind: unknown, details: unknown, options: StructuredEvidenceOptions = {}) {
   if (!STRUCTURED_EVIDENCE_KINDS.includes(kind as StructuredEvidenceKind)) {
     throw new StructuredEvidenceValidationError('Unsupported evidence type.');
   }
   const result = schemas[kind as StructuredEvidenceKind].safeParse(details);
   if (!result.success) throw new StructuredEvidenceValidationError(result.error.issues[0]?.message ?? 'Invalid evidence details.');
+  const parsed = result.data as Record<string, unknown>;
+  if (kind === 'other' && options.enforceSectionRouting !== false) {
+    const combined = `${String(parsed.title ?? '')} ${String(parsed.context ?? '')}`.toLowerCase();
+    if (MISFILED_AS_OTHER.test(combined)) {
+      throw new StructuredEvidenceValidationError('Use the matching profile section instead of Other evidence for this type of record.');
+    }
+  }
   return { kind: kind as StructuredEvidenceKind, details: result.data };
 }
 
@@ -78,10 +106,11 @@ export async function createCanonicalEvidence(
   profileId: string,
   kind: unknown,
   raw: unknown,
-  client: Prisma.TransactionClient = prisma
+  client: Prisma.TransactionClient = prisma,
+  options: StructuredEvidenceOptions = {}
 ): Promise<ProfileEvidenceRef> {
   const prisma = client;
-  const { kind: parsedKind, details } = validateStructuredEvidence(kind, raw);
+  const { kind: parsedKind, details } = validateStructuredEvidence(kind, raw, options);
   const d = details as Record<string, unknown>;
   const text = (key: string) => String(d[key] ?? '').trim();
   const list = (key: string) => Array.isArray(d[key]) ? d[key].map(String) : [];
@@ -116,7 +145,12 @@ const labels: Record<StructuredEvidenceKind, string> = {
  * no inferred issuer/ability/status — and controlled codes map to human labels.
  */
 export function describeStructuredEvidence(kind: string, raw: unknown) {
-  const { kind: parsedKind, details } = validateStructuredEvidence(kind.toLowerCase(), raw);
+  // Rendering is not authoring: the section was chosen when the record was
+  // created, so re-running the routing hint here could only make an existing row
+  // unrenderable.
+  const { kind: parsedKind, details } = validateStructuredEvidence(kind.toLowerCase(), raw, {
+    enforceSectionRouting: false,
+  });
   const d = details as Record<string, unknown>;
   const value = (key: string) => (typeof d[key] === 'string' ? (d[key] as string).trim() : '');
   const list = (key: string) => (Array.isArray(d[key]) ? d[key].join(', ') : '');

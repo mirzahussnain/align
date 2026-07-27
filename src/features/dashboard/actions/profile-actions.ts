@@ -10,11 +10,13 @@ import { EMPLOYMENT_TYPES } from '@/shared/constants/employment-type';
 import { isKnownIndustry } from '@/shared/constants/sector-keywords';
 import { isKnownOccupation } from '@/shared/occupations/registry';
 import { isSeniorityValue } from '@/shared/constants/occupation-options';
-import { checkCapability } from '@/shared/entitlements/server';
+import { assertStoredEvidenceLimit, checkCapability, EntitlementRequiredError } from '@/shared/entitlements/server';
 import { createCanonicalEvidence, validateStructuredEvidence } from '@/shared/services/structured-evidence';
 import { isProfileDate, isProfileDateBefore } from '@/shared/utils/date';
+import { repairStoredPhone } from '@/shared/utils/phone';
 import { cleanSkillDisplayName, normaliseSkillName } from '@/shared/utils/skill-normalization';
 import { searchLocalSkillTaxonomy, skillTaxonomySearchLimits } from '@/shared/services/skill-taxonomy';
+import { recordProfileFirstValue } from '@/shared/services/onboarding';
 
 async function requireUserId(): Promise<string> {
   const session = await auth.api.getSession({ headers: await headers() });
@@ -66,12 +68,24 @@ export async function savePersonalInfo(input: PersonalInfoInput, profileId?: str
       ? new Date(input.visaExpiry)
       : null;
 
+  // A user who pastes "+44 7737 853800" into the number box has stated their
+  // dial code; splitting it here is the difference between the picker showing
+  // +44 on reload and showing nothing. Unparseable input is left exactly as
+  // typed rather than being rejected or cleared — plenty of valid numbers are
+  // written in ways no library recognises, and losing one is worse than storing
+  // it unsplit.
+  const phone = repairStoredPhone({
+    phoneDialCode: input.phoneDialCode,
+    phoneNumber: input.phoneNumber,
+    phoneCountry: input.phoneCountry,
+  });
+
   const identity = {
     fullName: input.fullName.trim(),
     email: input.email.trim() || null,
-    phoneDialCode: input.phoneDialCode.trim() || null,
-    phoneNumber: input.phoneNumber.trim() || null,
-    phoneCountry: input.phoneCountry.trim() || null,
+    phoneDialCode: phone.phoneDialCode || null,
+    phoneNumber: phone.phoneNumber || null,
+    phoneCountry: phone.phoneCountry || null,
     city: input.city.trim() || null,
     state: input.state.trim() || null,
     country: input.country.trim() || null,
@@ -127,9 +141,17 @@ export async function savePersonalInfo(input: PersonalInfoInput, profileId?: str
  * Stamp the user as having been through onboarding, so the dashboard layout
  * stops redirecting them back to `/onboarding`. Idempotent — safe to call on
  * "finish" or on "skip the rest".
+ *
+ * Also records a PROFILE_CREATED first value where the profile the user has just
+ * finished is genuinely usable. That is judged from its content, not from having
+ * reached the end of the form: someone who skipped every optional step has not
+ * produced anything to congratulate them on, and saying otherwise is what made
+ * the old wizard report progress that did not exist.
  */
 export async function completeOnboarding() {
   const userId = await requireUserId();
+  const profileId = await resolveOwnedProfileId(userId);
+  await recordProfileFirstValue(userId, profileId);
   await prisma.user.update({
     where: { id: userId },
     data: { onboardedAt: new Date() },
@@ -260,8 +282,22 @@ export async function saveManagedEvidence(input: ManagedEvidenceInput, targetPro
   const userId = await requireUserId(); const profileId = await requireOwnedEvidenceProfile(userId, targetProfileId);
   let parsed; try { parsed = validateStructuredEvidence(input.kind, input.details); } catch (error) { return { ok: false as const, error: error instanceof Error ? error.message : 'Invalid evidence details.' }; }
   if (!input.id) {
-    const blocked = await evidenceCreationBlocked(userId); if (blocked) return blocked;
-    try { const ref = await createCanonicalEvidence(profileId, parsed.kind, parsed.details); revalidatePath('/dashboard'); return { ok: true as const, id: ref.id }; } catch (error) { return { ok: false as const, error: error instanceof Error ? error.message : 'Unable to save evidence.' }; }
+    try {
+      // Only `other` creates a qualifying reusable evidence record, so only it
+      // consumes the stored-evidence allowance — and the capacity check runs in
+      // the same transaction as the create so concurrent saves cannot exceed it.
+      // Every other kind here is canonical career history and is uncapped.
+      const ref = parsed.kind === 'other'
+        ? await prisma.$transaction(async (tx) => {
+            await assertStoredEvidenceLimit(userId, tx);
+            return createCanonicalEvidence(profileId, parsed.kind, parsed.details, tx);
+          })
+        : await createCanonicalEvidence(profileId, parsed.kind, parsed.details);
+      revalidatePath('/dashboard'); return { ok: true as const, id: ref.id };
+    } catch (error) {
+      if (error instanceof EntitlementRequiredError) return { ok: false as const, error: REUSABLE_EVIDENCE_LIMIT_MESSAGE, decision: error.decision };
+      return { ok: false as const, error: error instanceof Error ? error.message : 'Unable to save evidence.' };
+    }
   }
   const d = parsed.details as Record<string, unknown>; const text = (key: string) => evidenceText(d, key); const list = (key: string) => evidenceList(d, key); let count = 0;
   if (parsed.kind === 'training') count = (await prisma.training.updateMany({ where: { id: input.id, profileId }, data: { course: text('course')!, provider: text('provider'), field: text('field'), status: text('status'), startDate: text('startDate'), endDate: text('endDate'), result: text('result') } })).count;
@@ -417,17 +453,16 @@ export interface EducationRecordInput extends EducationInput { id?: string; }
 export interface SkillRecordInput { id?: string; category: string; name: string; level: string; contextType: string; activity: string; period: string; outcome: string; taxonomyTermId?: string; }
 async function evidenceDeleteWarning(profileId: string) { return (await prisma.generatedCV.count({ where: { profileId } })) > 0; }
 function recordError(message: string) { return { ok: false as const, error: message }; }
-async function evidenceCreationBlocked(userId: string) {
-  const decision = await checkCapability(userId, 'profile_evidence_storage');
-  return decision.allowed
-    ? null
-    : {
-        ok: false as const,
-        error: `Your plan allows ${decision.limit} stored evidence records. Editing and deleting existing evidence remain available.`,
-        decision,
-      };
-}
-export async function saveExperienceRecord(input: ExperienceRecordInput, targetProfileId?: string) { const userId = await requireUserId(); const profileId = await requireOwnedEvidenceProfile(userId, targetProfileId); if (!input.jobTitle.trim() || !input.company.trim() || !input.startDate.trim()) return recordError('Job title, company, and start date are required.'); const range = normaliseRange(input.startDate, input.endDate, input.current); if ('error' in range) return recordError(range.error); const { start, end, current } = range; const data = { jobTitle: input.jobTitle.trim(), company: input.company.trim(), location: input.location.trim() || null, type: toEmploymentType(input.type), startDate: start!, endDate: end, current, achievements: input.achievements.map((value) => value.trim()).filter(Boolean) }; if (input.id) { const updated = await prisma.experience.updateMany({ where: { id: input.id, profileId }, data }); if (!updated.count) return recordError('Experience record not found in this profile.'); revalidatePath('/dashboard'); return { ok: true as const, id: input.id }; } const blocked = await evidenceCreationBlocked(userId); if (blocked) return blocked; const created = await prisma.experience.create({ data: { profileId, ...data, sortOrder: await prisma.experience.count({ where: { profileId } }) }, select: { id: true } }); revalidatePath('/dashboard'); return { ok: true as const, id: created.id }; }
+/**
+ * Message for the reusable-evidence allowance. Ordinary Career Profile records
+ * (experience, education, projects, skills, certifications, training, licences,
+ * registrations, languages, volunteering) never reach this — they are career
+ * history, not commercial evidence, and are governed by authentication,
+ * ownership, validation and database constraints alone.
+ */
+const REUSABLE_EVIDENCE_LIMIT_MESSAGE =
+  'You’ve reached your reusable evidence limit. You can edit or delete existing evidence, or upgrade to add more.';
+export async function saveExperienceRecord(input: ExperienceRecordInput, targetProfileId?: string) { const userId = await requireUserId(); const profileId = await requireOwnedEvidenceProfile(userId, targetProfileId); if (!input.jobTitle.trim() || !input.company.trim() || !input.startDate.trim()) return recordError('Job title, company, and start date are required.'); const range = normaliseRange(input.startDate, input.endDate, input.current); if ('error' in range) return recordError(range.error); const { start, end, current } = range; const data = { jobTitle: input.jobTitle.trim(), company: input.company.trim(), location: input.location.trim() || null, type: toEmploymentType(input.type), startDate: start!, endDate: end, current, achievements: input.achievements.map((value) => value.trim()).filter(Boolean) }; if (input.id) { const updated = await prisma.experience.updateMany({ where: { id: input.id, profileId }, data }); if (!updated.count) return recordError('Experience record not found in this profile.'); revalidatePath('/dashboard'); return { ok: true as const, id: input.id }; } const created = await prisma.experience.create({ data: { profileId, ...data, sortOrder: await prisma.experience.count({ where: { profileId } }) }, select: { id: true } }); revalidatePath('/dashboard'); return { ok: true as const, id: created.id }; }
 export async function deleteExperienceRecord(id: string, targetProfileId?: string) { const userId = await requireUserId(); const profileId = await requireOwnedEvidenceProfile(userId, targetProfileId); const warning = await evidenceDeleteWarning(profileId); const deleted = await prisma.experience.deleteMany({ where: { id, profileId } }); if (!deleted.count) return recordError('Experience record not found in this profile.'); revalidatePath('/dashboard'); return { ok: true as const, mayHaveStaleApprovals: warning }; }
 function normaliseHttpUrl(value: string, label: string): string | null | { error: string } {
   const trimmed = value.trim();
@@ -461,7 +496,6 @@ export async function saveProjectRecord(input: ProjectRecordInput, targetProfile
     if (selectedIds.length) await prisma.projectSkill.createMany({ data: selectedIds.map((skillId, sortOrder) => ({ projectId: input.id!, skillId, sortOrder })) });
     revalidatePath('/dashboard'); return { ok: true as const, id: input.id };
   }
-  const blocked = await evidenceCreationBlocked(userId); if (blocked) return blocked;
   const created = await prisma.projectEntry.create({ data: { profileId, ...data, sortOrder: await prisma.projectEntry.count({ where: { profileId } }), projectSkills: { create: selectedIds.map((skillId, sortOrder) => ({ skillId, sortOrder })) } }, select: { id: true } });
   revalidatePath('/dashboard'); return { ok: true as const, id: created.id };
 }
@@ -469,7 +503,6 @@ export async function saveProjectRecord(input: ProjectRecordInput, targetProfile
 export async function createProjectSkill(input: InlineProjectSkillInput, targetProfileId?: string) {
   const userId = await requireUserId(); const profileId = await requireOwnedEvidenceProfile(userId, targetProfileId); const name = cleanSkillDisplayName(input.name);
   if (!name) return recordError('Skill name is required.');
-  const blocked = await evidenceCreationBlocked(userId); if (blocked) return blocked;
   const skills = await prisma.skill.findMany({ where: { profileId }, select: { id: true, name: true } });
   const existing = skills.find((skill) => normaliseSkillName(skill.name) === normaliseSkillName(name));
   if (existing) return recordError(`This skill already exists in this profile: ${existing.name}. Select it instead.`);
@@ -481,7 +514,7 @@ export async function createProjectSkill(input: InlineProjectSkillInput, targetP
   revalidatePath('/dashboard'); return { ok: true as const, skill: { id: created.id, name: created.name, level: created.level ?? '', category: created.skillGroup?.category ?? '' } };
 }
 export async function deleteProjectRecord(id: string, targetProfileId?: string) { const userId = await requireUserId(); const profileId = await requireOwnedEvidenceProfile(userId, targetProfileId); const warning = await evidenceDeleteWarning(profileId); const deleted = await prisma.projectEntry.deleteMany({ where: { id, profileId } }); if (!deleted.count) return recordError('Project not found in this profile.'); revalidatePath('/dashboard'); return { ok: true as const, mayHaveStaleApprovals: warning }; }
-export async function saveEducationRecord(input: EducationRecordInput, targetProfileId?: string) { const userId = await requireUserId(); const profileId = await requireOwnedEvidenceProfile(userId, targetProfileId); if (!input.degree.trim() || !input.university.trim()) return recordError('Qualification and institution are required.'); const range = normaliseRange(input.startDate, input.endDate, input.current); if ('error' in range) return recordError(range.error); const { start, end, current } = range; const data = { degree: input.degree.trim(), university: input.university.trim(), startDate: start, endDate: end, current, grade: input.grade.trim() || null, description: input.description.trim() || null }; if (input.id) { const updated = await prisma.education.updateMany({ where: { id: input.id, profileId }, data }); if (!updated.count) return recordError('Education record not found in this profile.'); revalidatePath('/dashboard'); return { ok: true as const, id: input.id }; } const blocked = await evidenceCreationBlocked(userId); if (blocked) return blocked; const created = await prisma.education.create({ data: { profileId, ...data, sortOrder: await prisma.education.count({ where: { profileId } }) }, select: { id: true } }); revalidatePath('/dashboard'); return { ok: true as const, id: created.id }; }
+export async function saveEducationRecord(input: EducationRecordInput, targetProfileId?: string) { const userId = await requireUserId(); const profileId = await requireOwnedEvidenceProfile(userId, targetProfileId); if (!input.degree.trim() || !input.university.trim()) return recordError('Qualification and institution are required.'); const range = normaliseRange(input.startDate, input.endDate, input.current); if ('error' in range) return recordError(range.error); const { start, end, current } = range; const data = { degree: input.degree.trim(), university: input.university.trim(), startDate: start, endDate: end, current, grade: input.grade.trim() || null, description: input.description.trim() || null }; if (input.id) { const updated = await prisma.education.updateMany({ where: { id: input.id, profileId }, data }); if (!updated.count) return recordError('Education record not found in this profile.'); revalidatePath('/dashboard'); return { ok: true as const, id: input.id }; } const created = await prisma.education.create({ data: { profileId, ...data, sortOrder: await prisma.education.count({ where: { profileId } }) }, select: { id: true } }); revalidatePath('/dashboard'); return { ok: true as const, id: created.id }; }
 export async function deleteEducationRecord(id: string, targetProfileId?: string) { const userId = await requireUserId(); const profileId = await requireOwnedEvidenceProfile(userId, targetProfileId); const warning = await evidenceDeleteWarning(profileId); const deleted = await prisma.education.deleteMany({ where: { id, profileId } }); if (!deleted.count) return recordError('Education record not found in this profile.'); revalidatePath('/dashboard'); return { ok: true as const, mayHaveStaleApprovals: warning }; }
 export async function saveSkillRecord(input: SkillRecordInput, targetProfileId?: string) {
   const userId = await requireUserId(); const profileId = await requireOwnedEvidenceProfile(userId, targetProfileId); const name = cleanSkillDisplayName(input.name);
@@ -489,7 +522,6 @@ export async function saveSkillRecord(input: SkillRecordInput, targetProfileId?:
   const skills = await prisma.skill.findMany({ where: { profileId, ...(input.id ? { NOT: { id: input.id } } : {}) }, select: { id: true, name: true } });
   const duplicate = skills.find((skill) => normaliseSkillName(skill.name) === normaliseSkillName(name));
   if (duplicate) return recordError(`This skill already exists in this profile: ${duplicate.name}. Edit it instead.`);
-  if (!input.id) { const blocked = await evidenceCreationBlocked(userId); if (blocked) return blocked; }
   const category = input.category.trim();
   const group = category ? ((await prisma.skillGroup.findFirst({ where: { profileId, category }, select: { id: true } })) ?? await prisma.skillGroup.create({ data: { profileId, category, sortOrder: await prisma.skillGroup.count({ where: { profileId } }) }, select: { id: true } })) : null;
   const taxonomyTermId = input.taxonomyTermId?.trim() || null;

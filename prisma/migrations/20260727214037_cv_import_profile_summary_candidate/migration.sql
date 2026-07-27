@@ -1,0 +1,2 @@
+-- AlterEnum
+ALTER TYPE "CvImportEntityType" ADD VALUE 'PROFILE_SUMMARY_UPDATE';

@@ -26,8 +26,20 @@ const {
   releaseCapability,
   countActiveUsage,
 } = await import('../capability-reservation');
+const { getPlanEntitlement } = await import('@/shared/entitlements/registry');
 
-const CAP = 'ai_enhanced_ats_analysis' as const; // FREE quota(5)
+const CAP = 'ai_enhanced_ats_analysis' as const;
+
+/**
+ * The Free allowance for CAP, read from the registry rather than written here.
+ *
+ * A hard-coded copy went stale the moment pricing moved (this suite assumed 5
+ * long after the registry said 1) and the tests then only failed when someone
+ * ran them against a real database. Deriving it means a limit change cannot
+ * silently invalidate the concurrency proofs below.
+ */
+const CAP_ENTITLEMENT = getPlanEntitlement('FREE', CAP);
+const CAP_LIMIT = CAP_ENTITLEMENT.mode === 'quota' ? CAP_ENTITLEMENT.limit : 0;
 const PERIOD = (() => {
   const now = new Date();
   return `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}`;
@@ -63,7 +75,7 @@ describe.skipIf(!isLocalDb)('capability reservation — real Postgres concurrenc
   }
 
   it('lets only one of two concurrent requests take the last unit', async () => {
-    await fillCommitted(4); // one unit left of five
+    await fillCommitted(CAP_LIMIT - 1); // one unit left
 
     const [a, b] = await Promise.all([
       reserveCapability({ userId, capability: CAP, operationId: `op_${randomUUID()}` }),
@@ -72,7 +84,7 @@ describe.skipIf(!isLocalDb)('capability reservation — real Postgres concurrenc
 
     const statuses = [a.status, b.status].sort();
     expect(statuses).toEqual(['exhausted', 'reserved']);
-    expect(await countActiveUsage(prisma, userId, CAP, PERIOD, new Date())).toBe(5);
+    expect(await countActiveUsage(prisma, userId, CAP, PERIOD, new Date())).toBe(CAP_LIMIT);
   });
 
   it('shares a single reservation for concurrent duplicate operation ids', async () => {
@@ -104,13 +116,13 @@ describe.skipIf(!isLocalDb)('capability reservation — real Postgres concurrenc
   });
 
   it('returns a released unit to the pool', async () => {
-    await fillCommitted(4);
+    await fillCommitted(CAP_LIMIT - 1);
     const op = `rel_${randomUUID()}`;
     await reserveCapability({ userId, capability: CAP, operationId: op });
-    expect(await countActiveUsage(prisma, userId, CAP, PERIOD, new Date())).toBe(5);
+    expect(await countActiveUsage(prisma, userId, CAP, PERIOD, new Date())).toBe(CAP_LIMIT);
 
     await releaseCapability({ userId, capability: CAP, operationId: op, reason: 'provider_unavailable' });
-    expect(await countActiveUsage(prisma, userId, CAP, PERIOD, new Date())).toBe(4);
+    expect(await countActiveUsage(prisma, userId, CAP, PERIOD, new Date())).toBe(CAP_LIMIT - 1);
 
     // The freed unit can be reserved again.
     const again = await reserveCapability({ userId, capability: CAP, operationId: `op_${randomUUID()}` });
@@ -118,7 +130,7 @@ describe.skipIf(!isLocalDb)('capability reservation — real Postgres concurrenc
   });
 
   it('stops counting an expired reservation and frees its unit', async () => {
-    await fillCommitted(4);
+    await fillCommitted(CAP_LIMIT - 1);
     const stale = `stale_${randomUUID()}`;
     await reserveCapability({ userId, capability: CAP, operationId: stale });
     // Force the hold to look abandoned.
@@ -127,7 +139,7 @@ describe.skipIf(!isLocalDb)('capability reservation — real Postgres concurrenc
       data: { expiresAt: new Date(Date.now() - 60_000) },
     });
 
-    // A fresh reserve triggers lazy expiry and succeeds despite five prior holds.
+    // A fresh reserve triggers lazy expiry and succeeds despite a full allowance.
     const fresh = await reserveCapability({ userId, capability: CAP, operationId: `op_${randomUUID()}` });
     expect(fresh.status).toBe('reserved');
     const staleRow = await prisma.capabilityReservation.findFirst({ where: { userId, operationId: stale } });

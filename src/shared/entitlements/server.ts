@@ -94,25 +94,32 @@ function upgradeTargetFor(
   return 'PRO';
 }
 
-async function countProfileEvidence(userId: string): Promise<number> {
-  const profiles = await prisma.profile.findMany({ where: { userId }, select: { id: true } });
-  const profileIds = profiles.map(({ id }) => id);
-  if (profileIds.length === 0) return 0;
-  const where = { profileId: { in: profileIds } };
-  const counts = await Promise.all([
-    prisma.experience.count({ where }),
-    prisma.projectEntry.count({ where }),
-    prisma.education.count({ where }),
-    prisma.skill.count({ where }),
-    prisma.certification.count({ where }),
-    prisma.training.count({ where }),
-    prisma.licence.count({ where }),
-    prisma.professionalRegistration.count({ where }),
-    prisma.language.count({ where }),
-    prisma.volunteering.count({ where }),
-    prisma.otherEvidence.count({ where }),
-  ]);
-  return counts.reduce((sum, count) => sum + count, 0);
+/** Any client that can count the reusable-evidence table (base or tx). */
+type StoredEvidenceCountClient = Pick<Prisma.TransactionClient, 'otherEvidence'>;
+
+/**
+ * THE authoritative reusable-evidence count for `profile_evidence_storage`.
+ *
+ * Canonical Career Profile records — Experience, ProjectEntry, Education, Skill,
+ * Certification, Training, Licence, ProfessionalRegistration, Language,
+ * Volunteering — describe the user's career history. They are not commercial
+ * evidence and must never consume this allowance merely by existing; adding one
+ * education row or one skill is ordinary profile completion.
+ *
+ * `OtherEvidence` is the one reusable-evidence entity: a free-form claim,
+ * achievement or supporting fact, which `validateStructuredEvidence` explicitly
+ * refuses to accept career-history content into. Nothing else is counted —
+ * not stored CVs, analyses, generated CVs, ProfileIdentity, application
+ * approvals (`ApplicationEvidenceContext` / `ProfileEvidenceApproval`, which
+ * have their own per-application limit), nor reconciliation output, which is
+ * never persisted. Referencing one evidence record from several applications
+ * still counts once, because only the record itself is counted.
+ */
+export async function countStoredEvidence(
+  userId: string,
+  client: StoredEvidenceCountClient = prisma
+): Promise<number> {
+  return client.otherEvidence.count({ where: { profile: { userId } } });
 }
 
 export async function getCapabilityUsage(
@@ -140,13 +147,16 @@ export async function getResourceCount(userId: string, capability: ProductCapabi
   if (capability === 'additional_career_profiles') {
     return prisma.profile.count({ where: { userId } });
   }
+  if (capability === 'stored_source_cvs') {
+    return countStoredSourceCvs(userId);
+  }
   if (capability === 'stored_generated_cvs') {
     return prisma.generatedCV.count({ where: { userId } });
   }
   if (capability === 'stored_analyses') {
     return prisma.analysis.count({ where: { userId } });
   }
-  if (capability === 'profile_evidence_storage') return countProfileEvidence(userId);
+  if (capability === 'profile_evidence_storage') return countStoredEvidence(userId);
   return 0;
 }
 
@@ -221,6 +231,131 @@ export async function assertCapability(userId: string, capability: ProductCapabi
   const decision = await getEntitlement(userId, capability);
   if (!decision.allowed) throw new EntitlementRequiredError(decision);
   return decision;
+}
+
+// ── Reusable stored-evidence limit ───────────────────────────────────────────
+
+const STORED_EVIDENCE_CAPABILITY: ProductCapability = 'profile_evidence_storage';
+
+function storedEvidenceDecision(plan: PlanId, limit: number, used: number): CapabilityDecision {
+  const remaining = Math.max(0, limit - used);
+  const allowed = remaining > 0;
+  return {
+    capability: STORED_EVIDENCE_CAPABILITY,
+    plan,
+    mode: 'resource_limit',
+    allowed,
+    limit,
+    used,
+    remaining,
+    reason: allowed ? 'allowed' : 'resource_limit_reached',
+    ...(!allowed && plan === 'FREE' ? { upgradeTarget: 'PRO' as const } : {}),
+  };
+}
+
+/**
+ * Enforce the reusable stored-evidence limit before a NEW qualifying evidence
+ * record is created. Call this INSIDE the transaction that creates the record:
+ * it takes the same per-(user, capability) Postgres advisory lock the
+ * reservation ledger uses, so two concurrent creations serialise here and the
+ * count-then-create can never exceed the limit.
+ *
+ * This is a resource count, not a metered AI operation, so it deliberately does
+ * not go through the reservation ledger — there is nothing to hold, release or
+ * refund. Deleting a record frees a slot on the next count; editing one never
+ * reaches this check, so users at (or above, after a downgrade) the limit keep
+ * full edit and delete access.
+ *
+ * Only canonical evidence kinds that create an `OtherEvidence` row qualify;
+ * ordinary Career Profile records must not call this.
+ */
+export async function assertStoredEvidenceLimit(
+  userId: string,
+  tx: Prisma.TransactionClient
+): Promise<void> {
+  const plan = await getUserPlan(userId);
+  const entitlement = getPlanEntitlement(plan, STORED_EVIDENCE_CAPABILITY);
+  if (entitlement.mode !== 'resource_limit') return;
+  // `hashtext` collisions only ever over-serialise unrelated pairs. Acquired
+  // after any reservation lock the caller already holds, never before, so the
+  // two lock orders cannot form a cycle.
+  await tx.$executeRawUnsafe(
+    'SELECT pg_advisory_xact_lock(hashtext($1), hashtext($2))',
+    userId,
+    STORED_EVIDENCE_CAPABILITY
+  );
+  const used = await countStoredEvidence(userId, tx);
+  const decision = storedEvidenceDecision(plan, entitlement.limit, used);
+  if (!decision.allowed) throw new EntitlementRequiredError(decision);
+}
+
+// ── Stored source-CV limit ───────────────────────────────────────────────────
+
+const STORED_SOURCE_CV_CAPABILITY: ProductCapability = 'stored_source_cvs';
+
+/** Any client that can count the stored-CV table (base or tx). */
+type StoredSourceCvCountClient = Pick<Prisma.TransactionClient, 'storedCv'>;
+
+/**
+ * THE authoritative count for `stored_source_cvs`: original uploaded CVs the
+ * user still holds. Soft-deleted rows are excluded — deleting a stored CV frees
+ * its slot immediately, while the row stays behind to carry the provenance of
+ * anything already imported from it.
+ *
+ * Nothing else is counted here: generated CVs have `stored_generated_cvs`,
+ * analyses have `stored_analyses`, and reusable evidence has its own allowance.
+ */
+export async function countStoredSourceCvs(
+  userId: string,
+  client: StoredSourceCvCountClient = prisma
+): Promise<number> {
+  return client.storedCv.count({ where: { userId, deletedAt: null } });
+}
+
+function storedSourceCvDecision(plan: PlanId, limit: number, used: number): CapabilityDecision {
+  const remaining = Math.max(0, limit - used);
+  const allowed = remaining > 0;
+  return {
+    capability: STORED_SOURCE_CV_CAPABILITY,
+    plan,
+    mode: 'resource_limit',
+    allowed,
+    limit,
+    used,
+    remaining,
+    reason: allowed ? 'allowed' : 'resource_limit_reached',
+    ...(!allowed && plan === 'FREE' ? { upgradeTarget: 'PRO' as const } : {}),
+  };
+}
+
+/**
+ * Enforce the stored source-CV limit before a NEW stored CV row is created. Call
+ * this INSIDE the transaction that creates the row and BEFORE any bytes are sent
+ * to object storage, so a user at their limit never starts a partial upload.
+ *
+ * Takes the same per-(user, capability) advisory lock the reservation ledger
+ * uses, so two concurrent uploads serialise here and the count-then-create can
+ * never exceed the limit. It is a resource count, not a metered AI operation, so
+ * it deliberately does not go through the reservation ledger.
+ *
+ * A downgraded user above the limit keeps full read, re-import and delete access;
+ * only creating another stored CV is blocked.
+ */
+export async function assertStoredSourceCvLimit(
+  userId: string,
+  tx: Prisma.TransactionClient
+): Promise<void> {
+  const plan = await getUserPlan(userId);
+  const entitlement = getPlanEntitlement(plan, STORED_SOURCE_CV_CAPABILITY);
+  if (entitlement.mode !== 'resource_limit') return;
+  await tx.$executeRawUnsafe(
+    'SELECT pg_advisory_xact_lock(hashtext($1), hashtext($2))',
+    userId,
+    STORED_SOURCE_CV_CAPABILITY
+  );
+  const used = await countStoredSourceCvs(userId, tx);
+  const decision = storedSourceCvDecision(plan, entitlement.limit, used);
+  if (!decision.allowed) throw new EntitlementRequiredError(decision);
 }
 
 // ── Per-application approval limit ───────────────────────────────────────────

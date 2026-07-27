@@ -12,6 +12,7 @@ export const PRODUCT_CAPABILITIES = [
   'view_rewrite_strategy',
   'view_eligibility_analysis',
   'profile_reconciliation',
+  'cv_import_reconciliation',
   'tailored_cv_generation',
   'cv_regeneration',
   'download_generated_cv',
@@ -22,6 +23,7 @@ export const PRODUCT_CAPABILITIES = [
   'approve_evidence_for_application',
   'reuse_evidence_across_applications',
   'application_history',
+  'stored_source_cvs',
   'stored_generated_cvs',
   'stored_analyses',
   'source_file_retention',
@@ -88,6 +90,36 @@ const partial = (accessLevel: string): CapabilityEntitlement => ({ mode: 'partia
  * AI-backed operations are never `unlimited`; only rule-based/deterministic ones
  * (e.g. `ats_analysis`) are `enabled()`.
  *
+ * `profile_evidence_storage` is a `resource_limit` on REUSABLE EVIDENCE ONLY —
+ * free-form claims, achievements and supporting facts the user stores to prove
+ * suitability (`OtherEvidence`). Canonical Career Profile records (Experience,
+ * Education, ProjectEntry, Skill, Certification, Training, Licence,
+ * ProfessionalRegistration, Language, Volunteering) describe the user's career
+ * history and must NEVER consume it: completing a profile is not a commercial
+ * allowance, and only technical/validation limits apply there. The single
+ * authoritative count is `countStoredEvidence` in ./server.ts; nothing else
+ * (stored CVs, analyses, application approvals, reconciliation output) is
+ * counted, and one evidence record referenced by several applications counts
+ * once. Enforce it via `assertStoredEvidenceLimit` inside the creating
+ * transaction — it is a resource count, not a metered AI operation, so it does
+ * not go through the reservation ledger.
+ *
+ * `stored_source_cvs` is a `resource_limit` on ORIGINAL UPLOADED CVs (`StoredCv`)
+ * — the archived source documents a user imports profile data from. It is not
+ * `stored_generated_cvs` (tailored CVs Align produced), not `stored_analyses`
+ * (scoring runs), and not `source_file_retention` (how LONG an archived object
+ * is kept, which is a duration, not a count). Enforce it with
+ * `assertStoredSourceCvLimit` inside the creating transaction: like reusable
+ * evidence it is a resource count, not a metered AI operation, so it does not go
+ * through the reservation ledger. Soft-deleted rows free a slot.
+ *
+ * `cv_import_reconciliation` is the AI comparison of an IMPORTED CV against an
+ * EXISTING Career Profile, run during CV import. It is deliberately separate from
+ * `profile_reconciliation`, which compares stored profile evidence against a
+ * job-match requirement ledger (/api/cv/profile-bridge) and requires a job-match
+ * analysis. Two different operations with two different inputs get two different
+ * capabilities so exhausting one never silently blocks the other.
+ *
  * `approve_evidence_for_application` is a `resource_limit` counted PER APPLICATION
  * (per analysis), not globally — Free may approve 2 evidence items per
  * application, Pro is effectively unrestricted. The count is enforced
@@ -106,6 +138,7 @@ export const PLAN_ENTITLEMENTS = {
     view_rewrite_strategy: disabled('Full rewrite strategy requires Pro.'),
     view_eligibility_analysis: partial('summary'),
     profile_reconciliation: quota(1, 'lifetime'),
+    cv_import_reconciliation: quota(1, 'lifetime'),
     tailored_cv_generation: enabled(),
     cv_regeneration: quota(1),
     download_generated_cv: enabled(),
@@ -116,6 +149,7 @@ export const PLAN_ENTITLEMENTS = {
     approve_evidence_for_application: resourceLimit(2),
     reuse_evidence_across_applications: partial('limited'),
     application_history: partial('recent'),
+    stored_source_cvs: resourceLimit(3),
     stored_generated_cvs: resourceLimit(3),
     stored_analyses: resourceLimit(10),
     source_file_retention: partial('30_days'),
@@ -132,6 +166,7 @@ export const PLAN_ENTITLEMENTS = {
     view_rewrite_strategy: enabled(),
     view_eligibility_analysis: partial('full'),
     profile_reconciliation: quota(10),
+    cv_import_reconciliation: quota(10),
     tailored_cv_generation: enabled(),
     cv_regeneration: quota(10),
     download_generated_cv: enabled(),
@@ -142,6 +177,7 @@ export const PLAN_ENTITLEMENTS = {
     approve_evidence_for_application: resourceLimit(1000),
     reuse_evidence_across_applications: enabled(),
     application_history: partial('full'),
+    stored_source_cvs: resourceLimit(25),
     stored_generated_cvs: resourceLimit(50),
     stored_analyses: resourceLimit(100),
     source_file_retention: partial('365_days'),
