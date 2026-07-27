@@ -17,18 +17,52 @@ vi.mock('@/shared/lib/prisma', () => ({
     user: { findUnique: vi.fn(async () => ({ subscriptionTier: null })) },
     analysis: { findUnique: vi.fn() },
     profileEvidenceApproval: { findMany: vi.fn() },
+    generatedCV: { findUnique: vi.fn() },
   },
+}));
+vi.mock('@/shared/lib/storage', () => ({
+  storage: { download: vi.fn(async () => Buffer.from('archived-docx-bytes')) },
 }));
 vi.mock('@/shared/lib/entitlements', () => ({
   entitlementsFor: vi.fn(() => ({ monthlyLimits: { cvGenerations: 10 } })),
 }));
-vi.mock('@/shared/services/usage-meter', () => ({
-  checkQuota: vi.fn(),
-  recordUsage: vi.fn(async () => {}),
+// The route gates on assertCapability and drives the reservation ledger
+// (reserve → commit / release). assertCapability is stubbed to allow by default;
+// the real EntitlementRequiredError is kept so an exhausted decision still maps to
+// 429. The ledger module is mocked so this route test exercises the route's own
+// control flow (canonical ordering, release-on-failure, commit-once); the ledger's
+// atomic behaviour is proven in capability-reservation's own suites.
+vi.mock('@/shared/entitlements/server', async (importActual) => {
+  const actual = await importActual<typeof import('@/shared/entitlements/server')>();
+  return {
+    ...actual,
+    assertCapability: vi.fn(async () => ({ allowed: true, capability: 'cv_regeneration', plan: 'FREE', mode: 'quota' })),
+  };
+});
+vi.mock('@/shared/services/capability-reservation', () => ({
+  reserveCapability: vi.fn(async () => ({ status: 'reserved', reservation: { operationStatus: 'PENDING', resultRef: null } })),
+  commitCapability: vi.fn(async () => ({ status: 'committed', reservation: { resultRef: 'cv-1' } })),
+  releaseCapability: vi.fn(async () => ({ status: 'released' })),
+  markOperation: vi.fn(async () => {}),
+  reservationFingerprint: vi.fn(() => 'fingerprint'),
+  hashContent: vi.fn(() => 'hash'),
+  checkRepairEligibility: vi.fn(async () => ({ status: 'not_committed' })),
+  commitRepair: vi.fn(async () => ({ status: 'committed', reservation: { resultRef: 'cv-1' } })),
 }));
-vi.mock('@/shared/services/cv-rewriter', () => ({
-  rewriteCV: vi.fn(),
-}));
+// The route calls rewriteCVWithProvenance; keep the `rewriteCV` spy the tests use
+// by having the provenance wrapper delegate to it and attach coarse provenance.
+vi.mock('@/shared/services/cv-rewriter', () => {
+  const rewriteCV = vi.fn();
+  return {
+    rewriteCV,
+    rewriteCVWithProvenance: vi.fn(async (input: unknown) => {
+      const output = await rewriteCV(input);
+      return output
+        ? { output, provenance: { provider: 'gemini', model: 'gemini-3.5-flash', attempt: 1, fallbackUsed: false } }
+        : null;
+    }),
+  };
+});
 vi.mock('@/shared/services/profile-reconciler', () => ({
   resolveApprovedProfileEvidence: vi.fn(() => []),
 }));
@@ -74,9 +108,18 @@ vi.mock('@/shared/schemas/analysis-result', () => ({
 import { POST } from '@/app/api/cv/regenerate/route';
 import { auth } from '@/shared/lib/auth';
 import { prisma } from '@/shared/lib/prisma';
-import { checkQuota, recordUsage } from '@/shared/services/usage-meter';
+import { assertCapability } from '@/shared/entitlements/server';
+import {
+  reserveCapability,
+  commitCapability,
+  releaseCapability,
+  checkRepairEligibility,
+} from '@/shared/services/capability-reservation';
+import { APIError } from '@/shared/utils/api-error';
 import { rewriteCV } from '@/shared/services/cv-rewriter';
 import { persistAndArchiveCv } from '@/shared/services/cv-generation';
+import { storage } from '@/shared/lib/storage';
+import { commitRepair } from '@/shared/services/capability-reservation';
 import { resolveApprovedProfileEvidence } from '@/shared/services/profile-reconciler';
 import { loadOwnedProfileData } from '@/features/dashboard/data/load-profile';
 import { ProfileEvidenceValidationError } from '@/shared/types/profile-reasoning';
@@ -166,7 +209,10 @@ beforeEach(() => {
   vi.mocked(prisma.user.findUnique).mockResolvedValue({ subscriptionTier: null } as never);
   vi.mocked(prisma.analysis.findUnique).mockResolvedValue(storedJobMatchAnalysis() as never);
   vi.mocked(prisma.profileEvidenceApproval.findMany).mockResolvedValue([] as never);
-  vi.mocked(checkQuota).mockResolvedValue({ allowed: true, used: 0, limit: 10, remaining: 10 });
+  vi.mocked(assertCapability).mockResolvedValue({ allowed: true, capability: 'cv_regeneration', plan: 'FREE', mode: 'quota' } as never);
+  vi.mocked(reserveCapability).mockResolvedValue({ status: 'reserved', reservation: { operationStatus: 'PENDING', resultRef: null } } as never);
+  vi.mocked(commitCapability).mockResolvedValue({ status: 'committed', reservation: { resultRef: 'cv-1' } } as never);
+  vi.mocked(releaseCapability).mockResolvedValue({ status: 'released' } as never);
   vi.mocked(rewriteCV).mockResolvedValue(makeStructuredRewriteOutput());
   vi.mocked(resolveApprovedProfileEvidence).mockReturnValue([]);
 });
@@ -178,13 +224,23 @@ describe('POST /api/cv/regenerate', () => {
     expect(res.status).toBe(200);
     expect(res.headers.get('Content-Type')).toContain('wordprocessingml');
 
-    // Exactly one generation counted, and only after the rewrite came back.
+    // Reserved before the provider, committed exactly once after it returned.
     expect(rewriteCV).toHaveBeenCalledTimes(1);
-    expect(recordUsage).toHaveBeenCalledTimes(1);
-    expect(recordUsage).toHaveBeenCalledWith(USER.id, 'cvGenerations');
-    expect(
+    expect(reserveCapability).toHaveBeenCalledTimes(1);
+    expect(commitCapability).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(commitCapability).mock.calls[0][0]).toMatchObject({
+      userId: USER.id,
+      capability: 'cv_regeneration',
+      resultRef: 'cv-1',
+    });
+    expect(releaseCapability).not.toHaveBeenCalled();
+    // reserve → provider → commit, in that order.
+    expect(vi.mocked(reserveCapability).mock.invocationCallOrder[0]).toBeLessThan(
       vi.mocked(rewriteCV).mock.invocationCallOrder[0]
-    ).toBeLessThan(vi.mocked(recordUsage).mock.invocationCallOrder[0]);
+    );
+    expect(vi.mocked(rewriteCV).mock.invocationCallOrder[0]).toBeLessThan(
+      vi.mocked(commitCapability).mock.invocationCallOrder[0]
+    );
   });
 
   it('feeds the rewriter a single ledger-native input object', async () => {
@@ -347,7 +403,7 @@ describe('POST /api/cv/regenerate', () => {
     expect(response.status).toBe(400);
     expect(rewriteCV).not.toHaveBeenCalled();
     expect(persistAndArchiveCv).not.toHaveBeenCalled();
-    expect(recordUsage).not.toHaveBeenCalled();
+    expect(commitCapability).not.toHaveBeenCalled();
   });
 
   it('does not consume a generation when the draft fails truthfulness validation', async () => {
@@ -364,7 +420,7 @@ describe('POST /api/cv/regenerate', () => {
     expect(res.status).toBe(422);
     const body = await res.json();
     expect(body.error).toBe(TRUTHFULNESS_FAILURE_MESSAGE);
-    expect(recordUsage).not.toHaveBeenCalled();
+    expect(commitCapability).not.toHaveBeenCalled();
     expect(persistAndArchiveCv).not.toHaveBeenCalled();
   });
 
@@ -384,7 +440,7 @@ describe('POST /api/cv/regenerate', () => {
     expect(res.status).toBe(422);
     // One controlled correction attempt was made, then it failed safely.
     expect(rewriteCV).toHaveBeenCalledTimes(2);
-    expect(recordUsage).not.toHaveBeenCalled();
+    expect(commitCapability).not.toHaveBeenCalled();
     expect(persistAndArchiveCv).not.toHaveBeenCalled();
   });
 
@@ -408,7 +464,7 @@ describe('POST /api/cv/regenerate', () => {
 
     expect(res.status).toBe(200);
     expect(rewriteCV).toHaveBeenCalledTimes(2);
-    expect(recordUsage).toHaveBeenCalledTimes(1);
+    expect(commitCapability).toHaveBeenCalledTimes(1);
     expect(vi.mocked(persistAndArchiveCv).mock.calls[0][0].provenance).toEqual(
       expect.objectContaining({
         correctionAttempts: 1,
@@ -455,23 +511,32 @@ describe('POST /api/cv/regenerate', () => {
   });
 
   it('refuses when the CV-generation quota is spent, without calling the model', async () => {
-    vi.mocked(checkQuota).mockResolvedValue({ allowed: false, used: 10, limit: 10, remaining: 0 });
+    // An exhausted quota surfaces as an entitlement error (429) from the gate,
+    // before any provider work — the reservation is never even created.
+    vi.mocked(assertCapability).mockRejectedValueOnce(
+      new APIError('Quota exhausted', 429, { code: 'ENTITLEMENT_REQUIRED', capability: 'cv_regeneration' })
+    );
 
     const res = await POST(regenRequest({ analysisId: 'an-1' }));
 
     expect(res.status).toBe(429);
     expect(rewriteCV).not.toHaveBeenCalled();
-    expect(recordUsage).not.toHaveBeenCalled();
+    expect(commitCapability).not.toHaveBeenCalled();
   });
 
-  it('does not consume a generation when the model returns nothing', async () => {
+  it('releases the reservation and returns a retryable provider error when the model returns nothing', async () => {
     vi.mocked(rewriteCV).mockResolvedValue(null as never);
 
     const res = await POST(regenRequest({ analysisId: 'an-1' }));
 
-    expect(res.status).toBe(500);
+    // Provider failure after reservation: 502, retryable, uncharged, released.
+    expect(res.status).toBe(502);
+    const body = await res.json();
+    expect(body).toMatchObject({ code: 'AI_OPERATION_FAILED', reason: 'provider_unavailable', charged: false });
     expect(rewriteCV).toHaveBeenCalledTimes(1);
-    expect(recordUsage).not.toHaveBeenCalled();
+    expect(reserveCapability).toHaveBeenCalledTimes(1);
+    expect(releaseCapability).toHaveBeenCalledTimes(1);
+    expect(commitCapability).not.toHaveBeenCalled();
     expect(persistAndArchiveCv).not.toHaveBeenCalled();
   });
 
@@ -491,7 +556,7 @@ describe('POST /api/cv/regenerate', () => {
     const response = await POST(regenRequest({ analysisId: 'an-1' }));
 
     expect(response.status).toBe(422);
-    expect(recordUsage).not.toHaveBeenCalled();
+    expect(commitCapability).not.toHaveBeenCalled();
     expect(persistAndArchiveCv).not.toHaveBeenCalled();
   });
 
@@ -506,7 +571,7 @@ describe('POST /api/cv/regenerate', () => {
     const response = await POST(regenRequest({ analysisId: 'an-1' }));
 
     expect(response.status).toBe(422);
-    expect(recordUsage).not.toHaveBeenCalled();
+    expect(commitCapability).not.toHaveBeenCalled();
     expect(persistAndArchiveCv).not.toHaveBeenCalled();
   });
 
@@ -516,9 +581,39 @@ describe('POST /api/cv/regenerate', () => {
     const response = await POST(regenRequest({ analysisId: 'an-1' }));
 
     expect(response.status).toBe(200);
-    expect(recordUsage).toHaveBeenCalledTimes(1);
+    expect(commitCapability).toHaveBeenCalledTimes(1);
     expect(persistAndArchiveCv).toHaveBeenCalledTimes(1);
   });
+
+  it('salvages a repairable provenance defect and still consumes exactly one generation', async () => {
+    // A draft whose skills group cites a comma-joined excerpt that is not
+    // contiguous in the CV (the observed failure). The mocked CV text is a run of
+    // "x"s, so "xx" is genuinely present while "kafka" is not: salvage keeps the
+    // grounded skill, drops the unsupported one, and the draft persists.
+    vi.mocked(rewriteCV).mockResolvedValue(
+      makeStructuredRewriteOutput({
+        skills: [
+          // Two groups grounded in the (all-"x") CV, so the defect ratio stays low.
+          { category: 'Core', text: 'xxx', sourceRefs: [sourceCvRef('xxx')] },
+          { category: 'More', text: 'xxxx', sourceRefs: [sourceCvRef('xxxx')] },
+          // The repairable defect: a comma-joined excerpt not contiguous in the CV.
+          // "xx" is genuinely present; "kafka" is not, so it is dropped.
+          { category: 'Data', text: 'xx, kafka', sourceRefs: [sourceCvRef('xx, kafka')] },
+        ],
+      })
+    );
+
+    const response = await POST(regenRequest({ analysisId: 'an-1' }));
+
+    expect(response.status).toBe(200);
+    // A repaired success charges exactly once — the same as a first-pass success.
+    expect(commitCapability).toHaveBeenCalledTimes(1);
+    expect(persistAndArchiveCv).toHaveBeenCalledTimes(1);
+    const provenance = vi.mocked(persistAndArchiveCv).mock.calls[0][0].provenance as Record<string, unknown>;
+    expect(provenance.generationOutcome).toBe('accepted_after_deterministic_repair');
+    expect((provenance.salvageReport as { removedClaims: string[] }).removedClaims).toContain('skills[2]:kafka');
+  });
+
   it('carries the analysis context into generation provenance (traceability only)', async () => {
     vi.mocked(parseStoredAnalysisResult).mockReturnValueOnce({
       result: {
@@ -571,6 +666,167 @@ describe('POST /api/cv/regenerate', () => {
 
     expect(res.status).toBe(404);
     expect(rewriteCV).not.toHaveBeenCalled();
-    expect(recordUsage).not.toHaveBeenCalled();
+    expect(commitCapability).not.toHaveBeenCalled();
+  });
+
+  // ── Stage 2: reservation lifecycle ────────────────────────────────────────
+
+  it('reserves before the provider is ever called', async () => {
+    await POST(regenRequest({ analysisId: 'an-1' }));
+    expect(vi.mocked(reserveCapability).mock.invocationCallOrder[0]).toBeLessThan(
+      vi.mocked(rewriteCV).mock.invocationCallOrder[0]
+    );
+  });
+
+  it('fails closed (503, uncharged) and never calls the provider when the ledger read fails', async () => {
+    vi.mocked(reserveCapability).mockRejectedValueOnce(new Error('db down'));
+
+    const res = await POST(regenRequest({ analysisId: 'an-1' }));
+
+    expect(res.status).toBe(503);
+    const body = await res.json();
+    expect(body).toMatchObject({ code: 'AI_OPERATION_FAILED', reason: 'reservation_failure', retryable: true, charged: false });
+    expect(rewriteCV).not.toHaveBeenCalled();
+    expect(commitCapability).not.toHaveBeenCalled();
+  });
+
+  it('returns 429 without provider work when the reservation is exhausted', async () => {
+    vi.mocked(reserveCapability).mockResolvedValueOnce({
+      status: 'exhausted',
+      decision: { capability: 'cv_regeneration', plan: 'FREE', mode: 'quota', allowed: false, reason: 'quota_exhausted', limit: 1, used: 1, remaining: 0, period: 'month' },
+    } as never);
+
+    const res = await POST(regenRequest({ analysisId: 'an-1' }));
+
+    expect(res.status).toBe(429);
+    expect(rewriteCV).not.toHaveBeenCalled();
+  });
+
+  it('rejects a reused operation id with conflicting content as 409', async () => {
+    vi.mocked(reserveCapability).mockResolvedValueOnce({
+      status: 'conflict',
+      reservation: { operationStatus: 'PENDING' },
+    } as never);
+
+    const res = await POST(regenRequest({ analysisId: 'an-1' }));
+
+    expect(res.status).toBe(409);
+    const body = await res.json();
+    expect(body.code).toBe('OPERATION_CONFLICT');
+    expect(rewriteCV).not.toHaveBeenCalled();
+  });
+
+  it('returns 409 OPERATION_IN_PROGRESS for a live duplicate, never rerunning the provider', async () => {
+    vi.mocked(reserveCapability).mockResolvedValueOnce({
+      status: 'reserved',
+      reservation: { operationStatus: 'RUNNING', resultRef: null },
+    } as never);
+
+    const res = await POST(regenRequest({ analysisId: 'an-1' }));
+
+    expect(res.status).toBe(409);
+    const body = await res.json();
+    expect(body.code).toBe('OPERATION_IN_PROGRESS');
+    expect(rewriteCV).not.toHaveBeenCalled();
+    expect(commitCapability).not.toHaveBeenCalled();
+  });
+
+  it('re-streams the stored DOCX for a committed retry without regenerating', async () => {
+    vi.mocked(reserveCapability).mockResolvedValueOnce({
+      status: 'recovered',
+      reservation: { resultRef: 'cv-1', operationStatus: 'SUCCEEDED' },
+    } as never);
+    vi.mocked(prisma.generatedCV.findUnique).mockResolvedValue({
+      userId: USER.id,
+      analysisId: 'an-1',
+      fileKey: 'users/u1/cv-1/Tailored_CV.docx',
+    } as never);
+
+    const res = await POST(regenRequest({ analysisId: 'an-1' }));
+
+    expect(res.status).toBe(200);
+    expect(res.headers.get('Content-Type')).toContain('wordprocessingml');
+    expect(storage.download).toHaveBeenCalledWith('rewrites', 'users/u1/cv-1/Tailored_CV.docx');
+    // Recovery reruns nothing and charges nothing further.
+    expect(rewriteCV).not.toHaveBeenCalled();
+    expect(commitCapability).not.toHaveBeenCalled();
+  });
+
+  it('returns RESULT_UNAVAILABLE (charged) when a committed result row is missing', async () => {
+    vi.mocked(reserveCapability).mockResolvedValueOnce({
+      status: 'recovered',
+      reservation: { resultRef: 'cv-1', operationStatus: 'SUCCEEDED' },
+    } as never);
+    vi.mocked(prisma.generatedCV.findUnique).mockResolvedValue(null as never);
+
+    const res = await POST(regenRequest({ analysisId: 'an-1' }));
+
+    expect(res.status).toBe(409);
+    const body = await res.json();
+    expect(body).toMatchObject({ code: 'RESULT_UNAVAILABLE', charged: true, repairable: true });
+    expect(rewriteCV).not.toHaveBeenCalled();
+  });
+
+  it('returns RESULT_UNAVAILABLE when the archived object is gone', async () => {
+    vi.mocked(reserveCapability).mockResolvedValueOnce({
+      status: 'recovered',
+      reservation: { resultRef: 'cv-1', operationStatus: 'SUCCEEDED' },
+    } as never);
+    vi.mocked(prisma.generatedCV.findUnique).mockResolvedValue({
+      userId: USER.id,
+      analysisId: 'an-1',
+      fileKey: 'users/u1/cv-1/Tailored_CV.docx',
+    } as never);
+    vi.mocked(storage.download).mockRejectedValueOnce(new Error('NoSuchKey'));
+
+    const res = await POST(regenRequest({ analysisId: 'an-1' }));
+
+    expect(res.status).toBe(409);
+    expect((await res.json()).code).toBe('RESULT_UNAVAILABLE');
+  });
+
+  it('runs a linked repair without consuming a second quota unit', async () => {
+    vi.mocked(checkRepairEligibility).mockResolvedValueOnce({
+      status: 'eligible',
+      original: { resultRef: 'cv-old', operationStatus: 'SUCCEEDED' },
+    } as never);
+
+    const req = new Request('http://test/api/cv/regenerate', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-operation-id': 'repair-op', 'x-repair-of': 'original-op' },
+      body: JSON.stringify({ analysisId: 'an-1', templateId: 'architect' }),
+    });
+    const res = await POST(req);
+
+    expect(res.status).toBe(200);
+    expect(res.headers.get('Content-Type')).toContain('wordprocessingml');
+    // Regenerated (all gates run) but recorded via commitRepair, never commitCapability.
+    expect(rewriteCV).toHaveBeenCalledTimes(1);
+    expect(persistAndArchiveCv).toHaveBeenCalledTimes(1);
+    expect(commitRepair).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(commitRepair).mock.calls[0][0]).toMatchObject({
+      originalOperationId: 'original-op',
+      repairOperationId: 'repair-op',
+      resultRef: 'cv-1',
+    });
+    expect(commitCapability).not.toHaveBeenCalled();
+    // A repair never asserts quota or reserves a fresh unit.
+    expect(assertCapability).not.toHaveBeenCalled();
+    expect(reserveCapability).not.toHaveBeenCalled();
+  });
+
+  it('rejects a repair whose original operation is not a committed charge', async () => {
+    vi.mocked(checkRepairEligibility).mockResolvedValueOnce({ status: 'not_committed' } as never);
+
+    const req = new Request('http://test/api/cv/regenerate', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-repair-of': 'original-op' },
+      body: JSON.stringify({ analysisId: 'an-1', templateId: 'architect' }),
+    });
+    const res = await POST(req);
+
+    expect(res.status).toBe(409);
+    expect(rewriteCV).not.toHaveBeenCalled();
+    expect(commitRepair).not.toHaveBeenCalled();
   });
 });

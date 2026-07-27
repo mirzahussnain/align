@@ -16,11 +16,27 @@ import { entitlementsFor, sourceExpiryFrom, type Entitlements } from '@/shared/l
 import { pruneAnalyses, sweepExpiredSources } from '@/shared/services/storage-quota';
 import {
   checkCapability,
-  consumeCapability,
   EntitlementRequiredError,
   assertCapability,
+  getUserPlan,
 } from '@/shared/entitlements/server';
+import {
+  reserveCapability,
+  commitCapability,
+  releaseCapability,
+  reservationFingerprint,
+  hashContent,
+} from '@/shared/services/capability-reservation';
+import {
+  AiOperationError,
+  OperationConflictError,
+  OperationInProgressError,
+  markOperationRunning,
+  reservationIsRunning,
+} from '@/shared/services/ai-failure';
 import { projectAnalysisReport } from '@/shared/entitlements/report-projection';
+import { loadCanonicalAnalysis } from '@/shared/services/canonical-analysis';
+import { logReservationEvent } from '@/shared/services/reservation-observability';
 import type { ProductCapability } from '@/shared/entitlements/registry';
 import { cleanJobTitle, cleanJobCompany, deriveJobTitleFromJd } from '@/shared/utils/job-title';
 import { loadProfileTarget, resolveProfileId } from '@/features/dashboard/data/load-profile';
@@ -120,6 +136,61 @@ async function persistAnalysis(
   }
 }
 
+/**
+ * Project a completed CVAnalysisResult into the plan-gated response shape. Shared
+ * by the fresh-analysis path and committed recovery so both return the identical
+ * projection for the same result.
+ */
+async function projectForUser(
+  userId: string,
+  result: CVAnalysisResult,
+  mode: 'ats' | 'job_match'
+): Promise<NextResponse> {
+  const [report, requirementLedger, rewriteStrategy, eligibility] = await Promise.all([
+    checkCapability(userId, mode === 'job_match' ? 'view_full_job_match_report' : 'view_full_ats_report'),
+    checkCapability(userId, 'view_requirement_ledger'),
+    checkCapability(userId, 'view_rewrite_strategy'),
+    checkCapability(userId, 'view_eligibility_analysis'),
+  ]);
+  return NextResponse.json(
+    projectAnalysisReport(result, { report, requirementLedger, rewriteStrategy, eligibility })
+  );
+}
+
+/**
+ * Recover a committed AI analysis without rerunning the model. The reservation
+ * for this operation already committed, so the persisted Analysis is the
+ * authoritative result: load it from canonical storage, verify it belongs to the
+ * user and matches the operation's mode, rehydrate the stored result and return
+ * its current plan projection. A missing/unreadable row means the committed
+ * result is unrecoverable — the reservation stays charged and the caller reports
+ * RESULT_UNAVAILABLE rather than silently re-billing a fresh run.
+ */
+async function recoverCommittedAnalysis(
+  userId: string,
+  mode: 'ats' | 'job_match',
+  resultRef: string | null
+): Promise<NextResponse | null> {
+  if (!resultRef) return null;
+  // Result recovery is an internal workflow: read the COMPLETE canonical analysis
+  // from trusted storage (ownership-checked, schema-validated), never the
+  // plan-projected report shape. Projection is applied afterwards by
+  // projectForUser for the user-facing response.
+  const canonical = await loadCanonicalAnalysis({
+    userId,
+    analysisId: resultRef,
+    requireJobMatch: mode === 'job_match',
+  });
+  if (!canonical.ok || canonical.analysis.mode !== mode) return null;
+
+  const result: CVAnalysisResult = {
+    ...canonical.analysis.result,
+    ...(canonical.analysis.jobMatchData ? { jobMatchData: canonical.analysis.jobMatchData } : {}),
+    analysisId: canonical.analysis.id,
+  };
+  return projectForUser(userId, result, mode);
+}
+
 export async function POST(request: NextRequest) {
   return withErrorHandler(async () => {
     // AI analysis is gated behind authentication so the LLM endpoints can't be
@@ -132,10 +203,9 @@ export async function POST(request: NextRequest) {
     const rateLimitResponse = await applyRateLimit(analysisLimiter, session.user.id);
     if (rateLimitResponse) return rateLimitResponse;
 
-    const tier = await prisma.user
-      .findUnique({ where: { id: session.user.id }, select: { subscriptionTier: true } })
-      .then((u) => u?.subscriptionTier ?? null);
-    const entitlements = entitlementsFor(tier);
+    // Storage/retention limits derive from the effective plan (resolveBillingAccess
+    // via getUserPlan), never the legacy subscriptionTier column.
+    const entitlements = entitlementsFor(await getUserPlan(session.user.id));
 
     const formData = await request.formData();
     
@@ -168,8 +238,6 @@ export async function POST(request: NextRequest) {
       evidenceSource,
       confirmProfileTarget,
     } = parsed.data;
-
-    if (mode === 'ats') await assertCapability(session.user.id, 'ats_analysis');
 
     if (mode === 'ats') await assertCapability(session.user.id, 'ats_analysis');
 
@@ -219,35 +287,112 @@ export async function POST(request: NextRequest) {
       mode === 'job_match' ? 'job_match_analysis' : 'ai_enhanced_ats_analysis';
     const operationId = request.headers.get('x-operation-id') ?? crypto.randomUUID();
 
-    let aiAllowed = true;
-    let aiSucceeded = false;
-    if (usesAI) {
-      const decision = await checkCapability(session.user.id, aiCapability);
-      aiAllowed = decision.allowed;
-
-      if (!aiAllowed) {
-        // A job match without the model isn't a degraded job match, it's an ATS
-        // score wearing the wrong label — there would be no match score, no
-        // skill gaps, no eligibility check. Refuse outright rather than hand
-        // back something that reads like a match and isn't one.
-        if (mode === 'job_match') {
-          throw new EntitlementRequiredError(decision);
-        }
-        // An ATS check degrades honestly: the rule-based score is the bulk of
-        // it, so serve that rather than nothing. `aiSkipped` tells the UI to say
-        // so instead of quietly showing a thinner report.
-        console.info(
-          `[analyze] AI quota exhausted for user ${session.user.id} (${decision.used}/${decision.limit}); serving rule-based result.`
-        );
-      }
-    }
-
-    // 1. Decoupled PDF Extraction
+    // 1. Decoupled PDF Extraction — deterministic and unmetered, done BEFORE any
+    // reservation so an unreadable file is rejected without ever holding a unit
+    // and so the cleaned text can seed the request fingerprint.
     const { text, pageCount } = await extractTextFromPDF(file);
 
     if (!text || text.trim().length < 50) {
       throw new APIError('Could not extract text from PDF. The file may be image-based or corrupted.', 400);
     }
+
+    // ── Atomic AI reservation (canonical ordering) ──────────────────────────
+    // A unit is held here, before the provider call, and released on any failure
+    // before commit. Deterministic ATS never reaches this block; a quota-exhausted
+    // ATS request degrades to the rule-based score with no reservation at all.
+    let aiAllowed = true;
+    let aiSucceeded = false;
+    let reservationHeld = false;
+    if (usesAI) {
+      logReservationEvent('operation_started', {
+        userId: session.user.id,
+        capability: aiCapability,
+        operationId,
+        resultType: 'analysis',
+      });
+      const fingerprint = reservationFingerprint([
+        aiCapability,
+        session.user.id,
+        mode,
+        hashContent(text),
+        mode === 'job_match' ? hashContent(jobDescription) : '',
+        scopedProfileId ?? '',
+        effectiveTargetSelection,
+      ]);
+
+      let reserve;
+      try {
+        reserve = await reserveCapability({
+          userId: session.user.id,
+          capability: aiCapability,
+          operationId,
+          fingerprint,
+        });
+      } catch (error) {
+        // Authoritative enforcement failure: fail closed. A ledger read/write
+        // error is never interpreted as zero usage, and no provider is called.
+        console.error(
+          '[analyze] Reservation ledger unavailable; failing closed:',
+          error instanceof Error ? error.message : error
+        );
+        throw new AiOperationError({ capability: aiCapability, operationId, reason: 'reservation_failure' });
+      }
+
+      if (reserve.status === 'conflict') {
+        logReservationEvent('fingerprint_conflict', { userId: session.user.id, capability: aiCapability, operationId });
+        throw new OperationConflictError(aiCapability, operationId);
+      }
+      if (reserve.status === 'recovered') {
+        // This operation already committed — return the stored analysis, never rerun.
+        const recovered = await recoverCommittedAnalysis(
+          session.user.id,
+          mode,
+          reserve.reservation.resultRef
+        );
+        if (recovered) {
+          logReservationEvent('committed_result_recovered', { userId: session.user.id, capability: aiCapability, operationId, resultType: 'analysis' });
+          return recovered;
+        }
+        // The committed result is gone. Stay charged; report unavailability.
+        logReservationEvent('result_unavailable', { userId: session.user.id, capability: aiCapability, operationId, charged: true, retryable: false });
+        throw new AiOperationError({
+          capability: aiCapability,
+          operationId,
+          reason: 'result_unavailable',
+          charged: true,
+        });
+      }
+      if (reserve.status === 'exhausted') {
+        // A job match without the model is not a degraded job match — refuse it.
+        if (mode === 'job_match') throw new EntitlementRequiredError(reserve.decision);
+        // ATS degrades honestly to the rule-based score; no unit is held.
+        aiAllowed = false;
+        console.info(
+          `[analyze] AI quota exhausted for user ${session.user.id}; serving rule-based result.`
+        );
+      } else if (reserve.status === 'reserved') {
+        if (reservationIsRunning(reserve.reservation)) {
+          logReservationEvent('duplicate_operation_detected', { userId: session.user.id, capability: aiCapability, operationId });
+          throw new OperationInProgressError(aiCapability, operationId);
+        }
+        await markOperationRunning(session.user.id, aiCapability, operationId);
+        reservationHeld = true;
+        logReservationEvent('operation_running', { userId: session.user.id, capability: aiCapability, operationId, resultType: 'analysis' });
+      }
+    }
+
+    /** Release the held unit for a safe reason; a no-op when nothing is held. */
+    const releaseAi = async (reason: string) => {
+      if (!reservationHeld) return;
+      reservationHeld = false;
+      await releaseCapability({
+        userId: session.user.id,
+        capability: aiCapability,
+        operationId,
+        reason,
+      });
+      logReservationEvent('reservation_released', { userId: session.user.id, capability: aiCapability, operationId, reason });
+    };
 
     // 2. Classification BEFORE scoring — the deterministic pass runs against
     // the right occupation profile and sector dictionary from the start.
@@ -337,30 +482,43 @@ export async function POST(request: NextRequest) {
     // 4. AI semantic analysis as a hybrid layer
     result.mode = mode as 'ats' | 'job_match';
 
-    try {
-      if (!aiAllowed) {
-        // Out of AI quota, ATS mode. The local scores above stand as the result.
-        result.aiSkipped = 'quota';
-      } else if (mode === 'job_match' && jobDescription.trim().length > 0) {
-        const jobMatchFeedback = await getJobMatchFeedback(text, jobDescription, occupationProfile, classification);
-        if (jobMatchFeedback) {
-          // Counted on return rather than before the call, so a provider outage
-          // doesn't bill the user for an analysis they never received.
-          aiSucceeded = true;
-          result.aiApplied = true;
-          result.jobMatchData = jobMatchFeedback;
-          result.jobDescription = jobDescription;
-          // In job-match mode the headline score IS the match score, so the saved
-          // overallScore (history table, trend, averages) agrees with the report's
-          // dial instead of showing the generic local ATS score.
-          result.overallScore = jobMatchFeedback.matchScore;
-        }
-      } else {
-        const aiFeedback = await getSemanticCVFeedback(text, result, occupationProfile, classification);
+    if (!aiAllowed) {
+      // Out of AI quota, ATS mode. The local scores above stand as the result.
+      result.aiSkipped = 'quota';
+    } else if (mode === 'job_match' && jobDescription.trim().length > 0) {
+      // Job match IS the AI output — a provider failure has no honest degraded
+      // form, so release the held unit and return a retryable operational error.
+      let jobMatchFeedback: Awaited<ReturnType<typeof getJobMatchFeedback>> = null;
+      try {
+        jobMatchFeedback = await getJobMatchFeedback(text, jobDescription, occupationProfile, classification);
+      } catch (aiError) {
+        console.warn('[analyze] Job-match provider failed:', aiError instanceof Error ? aiError.message : aiError);
+      }
+      if (!jobMatchFeedback) {
+        await releaseAi('provider_unavailable');
+        throw new AiOperationError({ capability: aiCapability, operationId, reason: 'provider_unavailable' });
+      }
+      aiSucceeded = true;
+      result.aiApplied = true;
+      result.jobMatchData = jobMatchFeedback;
+      result.jobDescription = jobDescription;
+      // In job-match mode the headline score IS the match score, so the saved
+      // overallScore (history table, trend, averages) agrees with the report's
+      // dial instead of showing the generic local ATS score.
+      result.overallScore = jobMatchFeedback.matchScore;
+    } else {
+      // ATS enrichment is optional: a provider failure keeps the deterministic
+      // score and degrades honestly rather than erroring.
+      let aiFeedback: Awaited<ReturnType<typeof getSemanticCVFeedback>> = null;
+      try {
+        aiFeedback = await getSemanticCVFeedback(text, result, occupationProfile, classification);
+      } catch (aiError) {
+        console.warn('AI semantic processing failed, falling back to local analysis results:', aiError instanceof Error ? aiError.message : aiError);
+      }
 
-        if (aiFeedback) {
-          aiSucceeded = true;
-          result.aiApplied = true;
+      if (aiFeedback) {
+        aiSucceeded = true;
+        result.aiApplied = true;
 
           const summaryCat = result.categories.find(c => c.id === 'professionalSummary');
           if (summaryCat) {
@@ -438,27 +596,31 @@ export async function POST(request: NextRequest) {
           result.aiRiskFlags = aiFeedback.riskFlags;
           result.aiClichés = aiFeedback.clichés;
 
-          result.overallScore = computeOverallScore(result.categories);
-        }
+        result.overallScore = computeOverallScore(result.categories);
+      } else {
+        // AI enrichment was allowed and reserved but produced nothing usable —
+        // keep the deterministic score and mark it so the UI says so. The held
+        // unit is released below since no AI result is being charged.
+        result.aiSkipped = 'error';
       }
-    } catch (aiError) {
-      console.warn('AI semantic processing failed, falling back to local analysis results:', aiError instanceof Error ? aiError.message : aiError);
     }
 
     // A job-match response without a valid v2 ledger is not a degraded match.
     // Refuse it before persistence so every new job-match row satisfies the
-    // canonical storage contract.
+    // canonical storage contract. A failure here releases the held unit.
     if (mode === 'job_match') {
       const canonicalJobMatch = JobMatchDataV2Schema.safeParse(result.jobMatchData);
       if (!canonicalJobMatch.success) {
-        throw new APIError('Job-match analysis failed integrity validation. Please try again.', 502);
+        await releaseAi('schema_failure');
+        throw new AiOperationError({ capability: aiCapability, operationId, reason: 'invalid_response' });
       }
       result.jobMatchData = canonicalJobMatch.data;
     }
 
-    // The provider output has now passed every schema/integrity check.
-    if (aiSucceeded) {
-      await consumeCapability(session.user.id, aiCapability, operationId);
+    // A held ATS unit that never produced an AI result (provider failure) returns
+    // to the pool — only successful, validated AI work is ever charged.
+    if (reservationHeld && !aiSucceeded) {
+      await releaseAi('provider_unavailable');
     }
 
     const sourceBuffer = Buffer.from(await file.arrayBuffer());
@@ -472,27 +634,43 @@ export async function POST(request: NextRequest) {
       file.type || 'application/pdf'
     );
 
+    // Commit exactly once, and only after the analysis is durably persisted so
+    // the reservation's resultRef points at a recoverable row. If persistence
+    // failed there is nothing to charge for — release and surface the failure.
+    if (aiSucceeded && reservationHeld) {
+      if (!analysisId) {
+        await releaseAi('persistence_failure');
+        throw new AiOperationError({ capability: aiCapability, operationId, reason: 'persistence_failure' });
+      }
+      let committed = false;
+      try {
+        const commit = await commitCapability({
+          userId: session.user.id,
+          capability: aiCapability,
+          operationId,
+          resultRef: analysisId,
+        });
+        committed = commit.status === 'committed';
+      } catch (error) {
+        console.error('[analyze] Commit failed after persistence:', error instanceof Error ? error.message : error);
+      }
+      if (!committed) {
+        // The result is persisted and safe; the usage commit did not land. Do not
+        // re-run the provider — surface a retryable finalisation error. A retry
+        // with the same operation id recovers the committed result if the commit
+        // in fact succeeded, or re-finalises otherwise.
+        logReservationEvent('finalisation_failed', { userId: session.user.id, capability: aiCapability, operationId });
+        throw new AiOperationError({ capability: aiCapability, operationId, reason: 'reservation_failure' });
+      }
+      reservationHeld = false;
+      logReservationEvent('reservation_committed', { userId: session.user.id, capability: aiCapability, operationId, resultType: 'analysis', charged: true });
+    }
+
     // Exposed only on the response, never persisted into the row's own blob.
     // The results screen threads this into the rewrite wizard so a fresh
     // analysis can be rebuilt into a CV without re-uploading the source.
     if (analysisId) result.analysisId = analysisId;
 
-    const [report, requirementLedger, rewriteStrategy, eligibility] = await Promise.all([
-      checkCapability(
-        session.user.id,
-        mode === 'job_match' ? 'view_full_job_match_report' : 'view_full_ats_report'
-      ),
-      checkCapability(session.user.id, 'view_requirement_ledger'),
-      checkCapability(session.user.id, 'view_rewrite_strategy'),
-      checkCapability(session.user.id, 'view_eligibility_analysis'),
-    ]);
-    return NextResponse.json(
-      projectAnalysisReport(result, {
-        report,
-        requirementLedger,
-        rewriteStrategy,
-        eligibility,
-      })
-    );
+    return projectForUser(session.user.id, result, mode);
   });
 }

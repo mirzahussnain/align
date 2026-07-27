@@ -4,23 +4,18 @@ const mocks = vi.hoisted(() => ({
   tier: 'free' as string,
   used: 0,
   profileCount: 0,
-  usageCreate: vi.fn(),
-  recordUsage: vi.fn(),
 }));
 
 vi.mock('@/shared/lib/prisma', () => ({
   prisma: {
-    user: { findUnique: vi.fn(async () => ({ subscriptionTier: mocks.tier })) },
+    // Plan is resolved from billing purchases; these tests all exercise FREE.
+    user: { findUnique: vi.fn(async () => ({ billingAccount: { purchases: [] } })) },
     profile: {
       count: vi.fn(async () => mocks.profileCount),
       findMany: vi.fn(async () => []),
     },
     generatedCV: { count: vi.fn(async () => 0) },
     analysis: { count: vi.fn(async () => 0) },
-    capabilityUsageEvent: {
-      count: vi.fn(async () => 0),
-      create: mocks.usageCreate,
-    },
     experience: { count: vi.fn(async () => 0) },
     projectEntry: { count: vi.fn(async () => 0) },
     education: { count: vi.fn(async () => 0) },
@@ -35,30 +30,21 @@ vi.mock('@/shared/lib/prisma', () => ({
   },
 }));
 
-vi.mock('@/shared/services/usage-meter', () => ({
-  checkQuota: vi.fn(async () => ({
-    allowed: true,
-    used: mocks.used,
-    limit: 100,
-    remaining: 100 - mocks.used,
-  })),
-  recordUsage: mocks.recordUsage,
+// The entitlement service reads quota usage from the reservation ledger. Its
+// atomic behaviour is proven in capability-reservation's own unit and real-DB
+// suites; here we only need the count it reports, so the ledger is mocked.
+vi.mock('@/shared/services/capability-reservation', () => ({
+  countActiveUsage: vi.fn(async () => mocks.used),
+  consumeCapability: vi.fn(async () => true),
 }));
 
-import {
-  assertCapability,
-  checkCapability,
-  consumeCapability,
-  EntitlementRequiredError,
-} from '../server';
+import { assertCapability, checkCapability, EntitlementRequiredError } from '../server';
 
 describe('server entitlement decisions', () => {
   beforeEach(() => {
     mocks.tier = 'free';
     mocks.used = 0;
     mocks.profileCount = 0;
-    mocks.usageCreate.mockReset().mockResolvedValue({ id: 'event-1' });
-    mocks.recordUsage.mockReset().mockResolvedValue(undefined);
   });
 
   it('allows enabled capabilities', async () => {
@@ -81,20 +67,39 @@ describe('server entitlement decisions', () => {
     );
   });
 
-  it('reports quota usage and remaining units', async () => {
-    mocks.used = 4;
-    await expect(checkCapability('u1', 'ai_enhanced_ats_analysis')).resolves.toMatchObject({
+  it('reports quota usage and remaining units from the reservation ledger', async () => {
+    // Free job-match analyses are 2/month at launch.
+    mocks.used = 1;
+    await expect(checkCapability('u1', 'job_match_analysis')).resolves.toMatchObject({
       allowed: true,
-      used: 4,
-      limit: 5,
+      used: 1,
+      limit: 2,
       remaining: 1,
       reason: 'quota_available',
     });
-    mocks.used = 5;
-    await expect(checkCapability('u1', 'ai_enhanced_ats_analysis')).resolves.toMatchObject({
+    mocks.used = 2;
+    await expect(checkCapability('u1', 'job_match_analysis')).resolves.toMatchObject({
       allowed: false,
       remaining: 0,
       reason: 'quota_exhausted',
+    });
+  });
+
+  it('counts each quota capability independently', async () => {
+    // AI-enhanced ATS and job-match are independent launch quotas (1 and 2/month);
+    // the reservation ledger counts each capability's own rows, so exhausting one
+    // must not affect the other. The mock returns the same used for both, but the
+    // per-capability limits still resolve from the registry.
+    mocks.used = 0;
+    await expect(checkCapability('u1', 'ai_enhanced_ats_analysis')).resolves.toMatchObject({
+      allowed: true,
+      limit: 1,
+      reason: 'quota_available',
+    });
+    await expect(checkCapability('u1', 'job_match_analysis')).resolves.toMatchObject({
+      allowed: true,
+      limit: 2,
+      reason: 'quota_available',
     });
   });
 
@@ -115,15 +120,4 @@ describe('server entitlement decisions', () => {
       accessLevel: 'preview',
     });
   });
-
-  it('consumes a successful operation once across retries', async () => {
-    mocks.usageCreate
-      .mockResolvedValueOnce({ id: 'event-1' })
-      .mockRejectedValueOnce({ code: 'P2002' });
-    await expect(consumeCapability('u1', 'cv_regeneration', 'op-1')).resolves.toBe(true);
-    await expect(consumeCapability('u1', 'cv_regeneration', 'op-1')).resolves.toBe(false);
-    expect(mocks.recordUsage).toHaveBeenCalledTimes(1);
-    expect(mocks.recordUsage).toHaveBeenCalledWith('u1', 'cvGenerations');
-  });
 });
-

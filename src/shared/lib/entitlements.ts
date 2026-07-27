@@ -51,9 +51,13 @@ function project(plan: PlanId): Omit<Entitlements, 'tier' | 'billedTier'> {
   };
 }
 
-/** Unknown or absent stored values safely resolve to FREE. */
-export function entitlementsFor(subscriptionTier: string | null | undefined): Entitlements {
-  const plan = normalizePlanId(subscriptionTier);
+/**
+ * Project entitlements for an effective plan. Accepts the resolver's `PlanId`
+ * (`FREE`/`PRO`); any unknown value safely resolves to FREE. Never fed the legacy
+ * `subscriptionTier` column — callers resolve the plan through billing first.
+ */
+export function entitlementsFor(effectivePlan: string | null | undefined): Entitlements {
+  const plan = normalizePlanId(effectivePlan);
   const tier: Tier = plan === 'PRO' ? 'pro' : 'free';
   return { tier, billedTier: tier, ...project(plan) };
 }

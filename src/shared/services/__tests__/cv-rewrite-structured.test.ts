@@ -89,7 +89,7 @@ describe('structured rewrite provenance', () => {
     };
     expect(validateStructuredRewriteProvenance(legacy, input)).toEqual({
       ok: false,
-      reasons: ['Structured rewrite response does not match the required contract.'],
+      reasons: ['Structured rewrite response does not match the required contract: identity is missing.'],
     });
   });
 
@@ -108,6 +108,52 @@ describe('structured rewrite provenance', () => {
           applicationContextRef(),
         ],
       },
+    });
+    expect(validateStructuredRewriteProvenance(output, input)).toEqual({
+      ok: true,
+      reasons: [],
+    });
+  });
+
+  it('accepts a source_cv citation that is reformatted but grounded, rejects a fabricated one', () => {
+    // The CV says "Built SQL pipelines and improved throughput by 30%." The
+    // provider re-cites it with different casing/punctuation — still grounded.
+    const grounded = makeStructuredRewriteOutput({
+      summary: {
+        text: 'Built SQL pipelines, improving throughput.',
+        sourceRefs: [sourceCvRef('built sql pipelines and improved throughput by 30%')],
+      },
+    });
+    expect(validateStructuredRewriteProvenance(grounded, input)).toEqual({
+      ok: true,
+      reasons: [],
+    });
+
+    const fabricated = makeStructuredRewriteOutput({
+      summary: {
+        text: 'Reduced latency by 50%.',
+        sourceRefs: [sourceCvRef('reduced latency by 50%')],
+      },
+    });
+    const result = validateStructuredRewriteProvenance(fabricated, input);
+    expect(result.ok).toBe(false);
+    expect(result.reasons).toContain('summary: Source CV reference does not point to supplied evidence.');
+  });
+
+  it('tolerates null for optional fields the provider emits instead of omitting', () => {
+    const output = makeStructuredRewriteOutput({
+      experience: [
+        makeExperience({
+          // Providers routinely send null for a not-applicable optional field
+          // (an open-ended role's endDate, a missing location) rather than
+          // omitting the key. A null asserts nothing and must not be rejected.
+          location: null as unknown as undefined,
+          type: null as unknown as undefined,
+          startDate: '2020',
+          endDate: null as unknown as undefined,
+          sourceRefs: [sourceCvRef()],
+        }),
+      ],
     });
     expect(validateStructuredRewriteProvenance(output, input)).toEqual({
       ok: true,

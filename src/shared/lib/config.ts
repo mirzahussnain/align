@@ -47,6 +47,49 @@ export const THINKING_BUDGETS = {
   classification: 0 as number | undefined,
 } as const;
 
+/**
+ * How long a quota reservation is held before it is treated as abandoned and
+ * stops counting against the user's quota. A process can crash after reserving
+ * but before committing or releasing; lazy expiry (checked on the next reserve
+ * for the same user+capability) reclaims those units without a background worker.
+ *
+ * Set comfortably above the longest expected metered operation — the rate
+ * limiters expect AI work to finish well inside a couple of minutes — so a
+ * legitimately in-flight operation is never expired out from under itself.
+ */
+export const RESERVATION_TTL_MS = 10 * 60 * 1000;
+
+/**
+ * Cost-protection limits for the claim-aware CV-generation salvage pipeline.
+ *
+ * When a generated draft's ONLY defects are repairable, provenance-level ones
+ * (e.g. a skills group whose excerpt does not contiguously match the CV), the
+ * salvage pass keeps the supported content and drops/prunes the rest instead of
+ * discarding the whole document and wasting the provider call. These limits keep
+ * that from becoming a way to launder untrustworthy output: too many invalid
+ * claims, or too high a defect ratio, rejects rather than repairs.
+ *
+ * - deterministicRepairEnabled: master switch for the deterministic salvage pass.
+ * - maxCorrectionCalls: how many constrained AI-correction rounds are allowed
+ *   (the deterministic-core phase uses 0 additional calls; reserved for the
+ *   follow-up constrained-correction phase).
+ * - maxRepairableClaims: absolute cap on defective claim slots that may be repaired.
+ * - maxRepairableClaimRatio: defective/total claim ratio above which the draft is
+ *   treated as generally untrustworthy and rejected outright.
+ *
+ * The ratio is set to one third after auditing the output structure: the common
+ * repairable defect is a skills group whose comma-joined excerpt does not
+ * contiguously match the CV, and a skills-heavy CV can legitimately carry several
+ * such groups without being untrustworthy. Below a third of all claims defective
+ * is treated as repairable; a third or more rejects.
+ */
+export const CV_GENERATION_REPAIR_POLICY = {
+  deterministicRepairEnabled: true,
+  maxCorrectionCalls: 1,
+  maxRepairableClaims: 6,
+  maxRepairableClaimRatio: 0.34,
+} as const;
+
 export const API_CONFIG = {
   adzuna: {
     appId: process.env.ADZUNA_APP_ID || '',

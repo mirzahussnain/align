@@ -294,13 +294,17 @@ Every factual block MUST include one or more sourceRefs. A sourceRef may point O
 Never invent an id. Build guidance is strategy, never evidence. not_met, contradicted, and unclear requirements cannot be written as possessed without approved evidence.
 Professional level, certification, registration, licence, visa or eligibility, language proficiency, seniority, and every metric remain strictly evidence-bound. Do not recalculate requirement scores or statuses.
 
+A source_cv "evidenceText" MUST be a short, EXACT contiguous excerpt copied from the SOURCE CV above — one phrase, never a reconstructed or concatenated list. It must appear verbatim (ignoring case/punctuation) in the CV.
+
+SKILLS PROVENANCE (important): give EACH skill its own reference through "items". For every skill, cite either the exact short CV excerpt that contains that one skill, or the ledger evidence that supports it. Do NOT put several skills into one evidenceText. OMIT any skill you cannot individually ground in supplied evidence — a shorter, fully-grounded skills list is correct. "text" must list exactly the skills named in "items", in the same order.
+
 {
  "identity":{"name":"string?","professionalTitle":"string?","location":"string?","contact":{"email":"string?","phone":"string?","website":"string?","linkedin":"string?","github":"string?","visaStatus":"string?"},"sourceRefs":[sourceRef]},
  "summary":{"text":"string","sourceRefs":[sourceRef]},
  "experience":[{"jobTitle":"string","company":"string","location":"string?","type":"string?","startDate":"string?","endDate":"string?","achievements":[{"label":"string?","text":"string","sourceRefs":[sourceRef]}],"sourceRefs":[sourceRef]}],
  "projects":[{"name":"string","skills":"string?","startDate":"string?","endDate":"string?","achievements":[{"label":"string?","text":"string","sourceRefs":[sourceRef]}],"sourceRefs":[sourceRef]}],
  "education":[{"degree":"string","university":"string","startDate":"string?","endDate":"string?","grade":"string?","description":"string?","sourceRefs":[sourceRef]}],
- "skills":[{"category":"string","text":"comma-separated verified skills","sourceRefs":[sourceRef]}],
+ "skills":[{"category":"string","text":"comma-separated verified skills","items":[{"skill":"one skill","sourceRefs":[sourceRef]}],"sourceRefs":[sourceRef]}],
  "certifications":[{"name":"string","issuer":"string?","year":"string?","sourceRefs":[sourceRef]}],
  "generationNotes":{"unsupportedRequirementsNotAdded":["requirement id"],"omittedLowPriorityContent":["optional explanation"]}
 }`;

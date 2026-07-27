@@ -7,8 +7,9 @@ import AnalyzeView from './views/AnalyzeView';
 import ProfileView from './views/ProfileView';
 import AnalysesView from './views/AnalysesView';
 import CvsView from './views/CvsView';
-import BillingView from './views/BillingView';
-import { useDashboardStore } from '@/shared/stores/dashboard-store';
+import { useEffect } from 'react';
+import BillingView, { type BillingStatusView } from './views/BillingView';
+import { useDashboardStore, type DashboardTab } from '@/shared/stores/dashboard-store';
 import type { ProfileData, ProfileSummary } from '@/features/dashboard/data/load-profile';
 import type { StorageUsage } from '@/shared/services/storage-quota';
 import type { UsageSnapshot } from '@/shared/services/usage-meter';
@@ -100,6 +101,8 @@ export interface DashboardData {
   reasoningRemaining: number | null;
   /** Live quota usage for the billing screen's meters. */
   storage: StorageUsage;
+  /** Server-resolved billing status for the billing screen. */
+  billing: BillingStatusView;
   /** This month's AI consumption, for the billing screen's meters. */
   usage: UsageSnapshot;
   /** Whether the profile is 100% complete — gates "Generate CV from profile". */
@@ -122,10 +125,20 @@ interface DashboardShellProps {
   tier: string;
   entitlementSnapshot: EntitlementSnapshot;
   data: DashboardData;
+  /** Deep-link the initial tab (e.g. checkout return → billing). Applied once. */
+  initialTab?: DashboardTab;
 }
 
-export default function DashboardShell({ user, tier, entitlementSnapshot, data }: DashboardShellProps) {
+export default function DashboardShell({ user, tier, entitlementSnapshot, data, initialTab }: DashboardShellProps) {
   const tab = useDashboardStore((s) => s.tab);
+  const setTab = useDashboardStore((s) => s.setTab);
+
+  // Honour a server-provided initial tab exactly once on mount (client tab state
+  // otherwise persists across soft navigations).
+  useEffect(() => {
+    if (initialTab) setTab(initialTab);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <EntitlementProvider initialSnapshot={entitlementSnapshot}>
@@ -166,7 +179,7 @@ export default function DashboardShell({ user, tier, entitlementSnapshot, data }
             reasoningRemaining={data.reasoningRemaining}
           />
         )}
-        {tab === 'billing' && <BillingView tier={tier} storage={data.storage} />}
+        {tab === 'billing' && <BillingView tier={tier} storage={data.storage} billing={data.billing} />}
       </div>
       </div>
     </EntitlementProvider>

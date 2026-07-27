@@ -27,7 +27,7 @@ import {
   TRUSTED_GENERATION_CONTEXT_VERSION,
   UNSUPPORTED_CLAIM_VALIDATION_VERSION,
 } from '@/shared/types/cv-rewrite';
-import { assertCapability } from '@/shared/entitlements/server';
+import { assertCapability, getUserPlan } from '@/shared/entitlements/server';
 
 const FromProfileSchema = z.object({
   templateId: TemplateIdSchema,
@@ -63,11 +63,8 @@ export async function POST(request: Request) {
       throw new APIError(parsed.error.message, 400);
     }
     const { templateId, profileId } = parsed.data;
-    const entitlements = entitlementsFor(
-      await prisma.user
-        .findUnique({ where: { id: session.user.id }, select: { subscriptionTier: true } })
-        .then((u) => u?.subscriptionTier ?? null)
-    );
+    // Pruning caps derive from the effective plan, never subscriptionTier.
+    const entitlements = entitlementsFor(await getUserPlan(session.user.id));
 
 
     // loadProfileData verifies the id belongs to this user before honouring it.

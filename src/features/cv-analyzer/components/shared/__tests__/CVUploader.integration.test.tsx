@@ -200,7 +200,9 @@ describe('CVUploader ATS flow — detect then target-select then analyze', () =>
     await screen.findByRole('heading', { name: /what is this cv intended for/i });
 
     await user.click(screen.getByRole('button', { name: /analyze cv/i }));
-    expect(await screen.findByRole('alert')).toHaveTextContent(/integrity validation/i);
+    // A retryable provider failure (502) is shown with the consistent, safe copy
+    // — the internal "integrity validation" wording is never leaked to the user.
+    expect(await screen.findByRole('alert')).toHaveTextContent(/you were not charged/i);
 
     // The step is still shown; the user can retry.
     await user.click(screen.getByRole('button', { name: /analyze cv/i }));

@@ -1,7 +1,8 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { ProfileCandidate, ProfileEvidenceRef, ProfileEvidenceRequirement } from '@/shared/types/profile-reasoning';
+import { interpretOperationalError } from '@/shared/entitlements/operational-errors';
 const STRUCTURED_EVIDENCE_KINDS = ['skill_tool', 'employment', 'project', 'education', 'training', 'certification', 'licence', 'registration', 'language', 'volunteering', 'other'] as const;
 type StructuredEvidenceKind = (typeof STRUCTURED_EVIDENCE_KINDS)[number];
 
@@ -32,6 +33,11 @@ export default function RequirementEvidenceCapture({ analysisId, profileId, requ
   const [confirmed, setConfirmed] = useState(false);
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
+  // Stable operation id per distinct submission, so a network retry of the SAME
+  // evidence is idempotent server-side (never a duplicate capture); editing the
+  // evidence mints a fresh id so it isn't rejected as a conflicting replay.
+  const operationIdRef = useRef(crypto.randomUUID());
+  const submissionKeyRef = useRef<string | null>(null);
 
   useEffect(() => { fetch(`/api/profile-evidence?profileId=${encodeURIComponent(profileId)}`).then(async (r) => r.ok ? r.json() : Promise.reject()).then((json) => setCandidates(json.candidates ?? [])).catch(() => setError('Could not load saved profile evidence.')); }, [profileId]);
   const details = Object.fromEntries(fieldSets[kind].map((field) => [field.key, field.list ? (values[field.key] ?? '').split(',').map((v) => v.trim()).filter(Boolean) : values[field.key] ?? '']));
@@ -43,8 +49,11 @@ export default function RequirementEvidenceCapture({ analysisId, profileId, requ
     if (!confirmed) return setError('Confirm that this evidence is accurate before approving it.');
     setSaving(true);
     try {
-      const response = await fetch('/api/profile-evidence', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ analysisId, profileId, requirementId: requirement.id, reuseInProfile, kind, details, confirmed }) });
-      const json = await response.json().catch(() => ({})); if (!response.ok) throw new Error(json.error || 'Could not save evidence.');
+      const submissionKey = JSON.stringify({ requirementId: requirement.id, reuseInProfile, kind, details });
+      if (submissionKeyRef.current !== submissionKey) { submissionKeyRef.current = submissionKey; operationIdRef.current = crypto.randomUUID(); }
+      const response = await fetch('/api/profile-evidence', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-operation-id': operationIdRef.current }, body: JSON.stringify({ analysisId, profileId, requirementId: requirement.id, reuseInProfile, kind, details, confirmed }) });
+      const json = await response.json().catch(() => ({}));
+      if (!response.ok) { const action = interpretOperationalError(response.status, json); throw new Error('message' in action ? action.message : 'Could not save evidence.'); }
       if (json.evidenceRef) onApproveRef(json.evidenceRef); else onApplicationContext(json.applicationEvidenceContextId);
       onClose();
     } catch (err) { setError(err instanceof Error ? err.message : 'Could not save evidence.'); } finally { setSaving(false); }

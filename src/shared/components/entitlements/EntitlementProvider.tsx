@@ -11,6 +11,10 @@ import {
   type ProductCapability,
 } from '@/shared/entitlements/registry';
 import { useDashboardStore } from '@/shared/stores/dashboard-store';
+import { offerPresentationForPlan } from '@/shared/billing/config';
+
+/** Pro Monthly price, read from the one authoritative billing configuration. */
+const PRO_OFFER = offerPresentationForPlan('PRO');
 
 export interface UpgradeModalContext {
   capability: ProductCapability;
@@ -33,6 +37,7 @@ const HEADLINES: Partial<Record<ProductCapability, string>> = {
   view_requirement_ledger: 'Unlock the full requirement report',
   cv_regeneration: 'Generate a truthful tailored CV',
   human_evidence_capture: 'Add and reuse verified Career Profile evidence',
+  approve_evidence_for_application: 'Approve more evidence for this application',
   reuse_evidence_across_applications: 'Add and reuse verified Career Profile evidence',
   additional_career_profiles: 'Create another Career Profile',
   advanced_tools: 'Access advanced application intelligence',
@@ -76,7 +81,15 @@ function UpgradeModal({ context, onClose }: { context: UpgradeModalContext; onCl
             <p className="mt-1 text-neutral-500">Core ATS checks and limited AI usage</p>
           </div>
           <div className="rounded-2xl bg-purple-50 p-3">
-            <p className="font-bold text-accent-purple">Pro</p>
+            <p className="flex items-baseline justify-between font-bold text-accent-purple">
+              Pro
+              {PRO_OFFER && (
+                <span className="text-[11px] font-semibold text-accent-purple">
+                  {PRO_OFFER.priceLabel}
+                  <span className="text-neutral-400">{PRO_OFFER.periodLabel}</span>
+                </span>
+              )}
+            </p>
             <p className="mt-1 text-neutral-600">Full reports, higher limits and advanced tools</p>
           </div>
         </div>
@@ -90,7 +103,6 @@ function UpgradeModal({ context, onClose }: { context: UpgradeModalContext; onCl
         >
           View plan options
         </button>
-        <p className="mt-2 text-center text-[11px] text-neutral-400">Checkout is not available in this phase.</p>
       </section>
     </div>
   );

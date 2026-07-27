@@ -37,6 +37,21 @@ vi.mock('@/shared/services/usage-meter', () => ({
   checkQuota: vi.fn(async () => ({ allowed: true, used: 0, limit: 10, remaining: 10 })),
   recordUsage: vi.fn(async () => {}),
 }));
+// The reservation ledger is the authoritative usage store. Mocked so this route
+// test drives the analyze control flow (reserve → provider → commit / release,
+// deterministic-ATS-unmetered) without a database; the ledger's own atomicity is
+// proven in capability-reservation's suites. countActiveUsage/consumeCapability
+// keep the real entitlement service (used for report projection) happy.
+vi.mock('@/shared/services/capability-reservation', () => ({
+  reserveCapability: vi.fn(async () => ({ status: 'reserved', reservation: { operationStatus: 'PENDING', resultRef: null } })),
+  commitCapability: vi.fn(async () => ({ status: 'committed', reservation: { resultRef: 'an-99' } })),
+  releaseCapability: vi.fn(async () => ({ status: 'released' })),
+  markOperation: vi.fn(async () => {}),
+  reservationFingerprint: vi.fn(() => 'fingerprint'),
+  hashContent: vi.fn(() => 'hash'),
+  countActiveUsage: vi.fn(async () => 0),
+  consumeCapability: vi.fn(async () => true),
+}));
 vi.mock('@/shared/utils/pdf-parser', () => ({
   extractTextFromPDF: vi.fn(async () => ({ text: 'A'.repeat(400), pageCount: 1 })),
 }));

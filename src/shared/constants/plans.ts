@@ -1,15 +1,19 @@
 import { limitsForTier, type Tier } from '@/shared/lib/entitlements';
+import { offerPresentationForPlan } from '@/shared/billing/config';
 
 export interface Plan {
   id: Tier;
   name: string;
-  /** Placeholder display only; pricing is deferred to the billing phase. */
+  /** Price label; sourced from the central billing configuration (§15). */
   price: string;
   period: string;
   tagline: string;
   features: string[];
   highlight?: boolean;
 }
+
+/** Pro Monthly price/period, read from the one authoritative billing config. */
+const proOffer = offerPresentationForPlan('PRO');
 
 function enforcedLimits(tier: Tier): string[] {
   const limits = limitsForTier(tier);
@@ -30,7 +34,7 @@ function enforcedLimits(tier: Tier): string[] {
   ];
 }
 
-/** Public amounts remain deliberately unset until pricing and billing work. */
+/** Public pricing comes from the central billing configuration, never a literal. */
 export const PLANS: Plan[] = [
   {
     id: 'free',
@@ -48,8 +52,8 @@ export const PLANS: Plan[] = [
   {
     id: 'pro',
     name: 'Pro',
-    price: 'Pricing TBC',
-    period: '',
+    price: proOffer?.priceLabel ?? 'Free',
+    period: proOffer?.periodLabel ?? '',
     tagline: 'For an active job search across multiple roles.',
     highlight: true,
     features: [

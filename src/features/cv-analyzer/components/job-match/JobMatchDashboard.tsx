@@ -1,10 +1,10 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { AnimatePresence } from 'framer-motion';
-import { Target, AlertCircle, FileEdit, Briefcase, BarChart2, ShieldAlert } from 'lucide-react';
+import { Target, AlertCircle, FileEdit, Briefcase, BarChart2, ShieldAlert, Lock } from 'lucide-react';
 import type { CVAnalysisResult } from '@/shared/types/cv';
-import type { JobMatchDataV2 } from '@/shared/types/ai';
+import type { JobMatchReportView } from '@/shared/types/job-match-report';
 import { SidebarNavItem } from '../shared/SidebarNavItem';
 import { JOB_MATCH_NAVIGATION } from '../../constants/dashboard-navigation';
 
@@ -18,14 +18,6 @@ import TailoredRewritesPanel from './panels/TailoredRewritesPanel';
 import RewriteStrategyPanel from './panels/RewriteStrategyPanel';
 import RewriteWizardModal from '@/features/cv-rewrite/components/RewriteWizardModal';
 import { Sparkles, LayoutList } from 'lucide-react';
-import {
-  getEligibilityRequirements,
-  getPersonSpecificationRequirements,
-  getMandatoryRequirementGaps,
-  getRequirementSummary,
-  getScoringRows,
-} from '@/shared/utils/job-match-view';
-import { groundJobMatchForDisplay } from '@/shared/services/cv-recommendation-grounding';
 
 interface JobMatchDashboardProps {
   result: CVAnalysisResult;
@@ -36,21 +28,27 @@ type TabKey = 'summary' | 'criteria' | 'skills' | 'domain' | 'scoring' | 'rewrit
 export default function JobMatchDashboard({ result }: JobMatchDashboardProps) {
   const [activeTab, setActiveTab] = useState<TabKey>('summary');
   const [isWizardOpen, setIsWizardOpen] = useState(false);
-  // Ground AI-authored recommendation text against verified evidence at read
-  // time, non-mutatingly. This makes every panel below safe — including
-  // historical analyses saved before recommendation grounding existed — without
-  // touching the stored `Analysis.jobMatchData` blob.
-  const data = useMemo(
-    () =>
-      result.jobMatchData
-        ? groundJobMatchForDisplay(result.jobMatchData, result.rawText)
-        : undefined,
-    [result.jobMatchData, result.rawText]
-  );
+
+  // The server builds the authoritative, plan-aware report view model from the
+  // canonical ledger (report-projection → buildJobMatchReportView). The UI never
+  // recomputes totals or the score from the projected subset — it renders this.
+  const view = result.jobMatchReport;
+
+  if (!view) {
+    return (
+      <div className="w-full p-8 text-center bg-rose-50 border border-rose-100 rounded-3xl text-rose-800">
+        <AlertCircle className="mx-auto mb-3" size={32} />
+        <h3 className="text-lg font-bold">Analysis Incomplete</h3>
+        <p className="text-sm">
+          We could not assemble the Job Match report for this analysis. Please re-run it for a current report.
+        </p>
+      </div>
+    );
+  }
 
   // Person-spec criteria only exist when the JD contained an explicit
   // essential/desirable list (NHS/council-style adverts).
-  const hasCriteria = data ? getPersonSpecificationRequirements(data).length > 0 : false;
+  const hasCriteria = view.requirements.hasPersonSpecification;
   const navigation = hasCriteria
     ? [
         ...JOB_MATCH_NAVIGATION.slice(0, 1),
@@ -58,16 +56,6 @@ export default function JobMatchDashboard({ result }: JobMatchDashboardProps) {
         ...JOB_MATCH_NAVIGATION.slice(1),
       ]
     : [...JOB_MATCH_NAVIGATION];
-
-  if (!data) {
-    return (
-      <div className="w-full p-8 text-center bg-rose-50 border border-rose-100 rounded-3xl text-rose-800">
-        <AlertCircle className="mx-auto mb-3" size={32} />
-        <h3 className="text-lg font-bold">Analysis Failed</h3>
-        <p className="text-sm">We could not generate the Job Match data. Please try again.</p>
-      </div>
-    );
-  }
 
   // Animation variants
   const contentVariants = {
@@ -78,62 +66,70 @@ export default function JobMatchDashboard({ result }: JobMatchDashboardProps) {
 
   type NavItemStatus = 'success' | 'error' | 'warning' | 'info' | 'premium';
 
-  const getNavItemProps = (id: string, data: JobMatchDataV2): { status: NavItemStatus; badgeText: string; icon: React.ReactNode } => {
-    const summary = getRequirementSummary(data);
-    const criteria = getPersonSpecificationRequirements(data);
-    const eligibility = getEligibilityRequirements(data);
+  const getNavItemProps = (
+    id: string,
+    v: JobMatchReportView
+  ): { status: NavItemStatus; badgeText: string; icon: React.ReactNode } => {
+    const totals = v.requirements.totals;
+    const score = v.overview.score;
     switch (id) {
       case 'summary':
         return {
-          status: data.matchScore >= 80 ? 'success' : data.matchScore >= 60 ? 'warning' : 'error' as const,
-          badgeText: `${data.matchScore}/100`,
+          status: score >= 80 ? 'success' : score >= 60 ? 'warning' : 'error' as const,
+          badgeText: `${score}/100`,
           icon: <Target size={12} />
         };
       case 'criteria':
         return {
           status: 'info' as const,
-          badgeText: `${criteria.length} Criteria`,
+          badgeText: `${v.requirements.items.filter((r) => r.sourceSection === 'person_specification').length} Criteria`,
           icon: <ShieldAlert size={12} />
         };
       case 'skills':
         return {
-          status: summary.essentialMatched === summary.essentialTotal ? 'success' : 'error' as const,
-          badgeText: `${summary.essentialMatched}/${summary.essentialTotal} Essential`,
+          status: totals.mandatory > 0 && totals.mandatoryMet === totals.mandatory ? 'success' : 'error' as const,
+          badgeText: `${totals.mandatoryMet}/${totals.mandatory} Essential`,
           icon: <Target size={12} />
         };
       case 'domain':
         return {
           status:
-            summary.domainStatus === 'mismatch'
+            v.assessments.domainFit.status === 'mismatch' || v.assessments.eligibility.hardBlocker
               ? 'error'
-              : summary.domainStatus === 'partial' || eligibility.some((item) => item.status !== 'met')
+              : v.assessments.domainFit.status === 'partial' || v.assessments.eligibility.locked
                 ? 'warning'
                 : 'success' as const,
           badgeText:
-            summary.domainStatus === 'mismatch'
+            v.assessments.domainFit.status === 'mismatch'
               ? 'Mismatch'
-              : summary.domainStatus === 'partial'
+              : v.assessments.domainFit.status === 'partial'
                 ? 'Partial'
                 : 'Aligned',
           icon: <Briefcase size={12} />
         };
-      case 'scoring':
-        return {
-          status: 'info' as const,
-          badgeText: `${getScoringRows(data).length} Items`,
-          icon: <BarChart2 size={12} />
-        };
+      case 'scoring': {
+        const rows =
+          v.scoreExplanation.visibleDeductions.length +
+          (v.scoreExplanation.domainDeduction ? 1 : 0) +
+          (v.scoreExplanation.lockedDeductionCount > 0 ? 1 : 0);
+        return { status: 'info' as const, badgeText: `${rows} Items`, icon: <BarChart2 size={12} /> };
+      }
       case 'rewrites':
         return {
           status: 'info' as const,
-          badgeText: `${data.tailoredRewrites.length} Bullets`,
-          icon: <FileEdit size={12} />
+          badgeText:
+            v.rewrites.availability === 'available'
+              ? `${v.rewrites.items.length} Bullets`
+              : v.rewrites.availability === 'plan_restricted'
+                ? 'Locked'
+                : 'None',
+          icon: v.rewrites.availability === 'plan_restricted' ? <Lock size={12} /> : <FileEdit size={12} />
         };
       case 'strategy':
         return {
           status: 'info' as const,
-          badgeText: `Blueprint`,
-          icon: <LayoutList size={12} />
+          badgeText: v.strategy.locked ? 'Locked' : 'Blueprint',
+          icon: v.strategy.locked ? <Lock size={12} /> : <LayoutList size={12} />
         };
       default:
         return { status: 'info' as const, badgeText: '', icon: <Target size={12} /> };
@@ -144,7 +140,7 @@ export default function JobMatchDashboard({ result }: JobMatchDashboardProps) {
     return (
       <>
         {navigation.map((item) => {
-          const props = getNavItemProps(item.id, data);
+          const props = getNavItemProps(item.id, view);
           return (
             <SidebarNavItem
               key={item.id}
@@ -157,10 +153,10 @@ export default function JobMatchDashboard({ result }: JobMatchDashboardProps) {
             />
           );
         })}
-        
+
         {/* Rewrite Button - Desktop */}
         <div className="mt-6">
-          <button 
+          <button
             onClick={() => setIsWizardOpen(true)}
             className="w-full relative group overflow-hidden rounded-2xl p-[1px] font-semibold"
           >
@@ -180,19 +176,19 @@ export default function JobMatchDashboard({ result }: JobMatchDashboardProps) {
   const renderContent = () => {
     switch (activeTab) {
       case 'summary':
-        return <MatchSummaryPanel data={data} contentVariants={contentVariants} />;
+        return <MatchSummaryPanel view={view} contentVariants={contentVariants} />;
       case 'criteria':
-        return <CriterionMappingPanel data={data} contentVariants={contentVariants} />;
+        return <CriterionMappingPanel view={view} contentVariants={contentVariants} />;
       case 'skills':
-        return <SkillAlignmentPanel data={data} contentVariants={contentVariants} />;
+        return <SkillAlignmentPanel view={view} contentVariants={contentVariants} />;
       case 'domain':
-        return <DomainFitPanel data={data} contentVariants={contentVariants} />;
+        return <DomainFitPanel view={view} contentVariants={contentVariants} />;
       case 'scoring':
-        return <ScoringBreakdownPanel data={data} contentVariants={contentVariants} />;
+        return <ScoringBreakdownPanel view={view} contentVariants={contentVariants} />;
       case 'rewrites':
-        return <TailoredRewritesPanel data={data} contentVariants={contentVariants} />;
+        return <TailoredRewritesPanel view={view} contentVariants={contentVariants} />;
       case 'strategy':
-        return <RewriteStrategyPanel data={data} contentVariants={contentVariants} />;
+        return <RewriteStrategyPanel view={view} contentVariants={contentVariants} />;
     }
   };
 
@@ -209,7 +205,7 @@ export default function JobMatchDashboard({ result }: JobMatchDashboardProps) {
         <div className="lg:hidden overflow-x-auto pb-2 scrollbar-hide -mx-4 px-4">
           <div className="flex flex-row gap-2 min-w-max">
             {navigation.map((item) => {
-              const props = getNavItemProps(item.id, data);
+              const props = getNavItemProps(item.id, view);
               const widthClass = item.id === 'domain' ? 'w-56' : 'w-48';
               return (
                 <div key={`mobile-${item.id}`} className={widthClass}>
@@ -224,10 +220,10 @@ export default function JobMatchDashboard({ result }: JobMatchDashboardProps) {
                 </div>
               );
             })}
-            
+
             {/* Rewrite Button - Mobile */}
             <div className="w-48 flex items-center pl-2">
-              <button 
+              <button
                 onClick={() => setIsWizardOpen(true)}
                 className="w-full relative group overflow-hidden rounded-2xl p-[1px] font-semibold"
               >
@@ -242,7 +238,7 @@ export default function JobMatchDashboard({ result }: JobMatchDashboardProps) {
             </div>
           </div>
         </div>
-        
+
         {/* Right Content Area */}
         <div className="lg:col-span-3">
           <AnimatePresence mode="wait">
@@ -256,7 +252,7 @@ export default function JobMatchDashboard({ result }: JobMatchDashboardProps) {
         isOpen={isWizardOpen}
         onClose={() => setIsWizardOpen(false)}
         analysisId={result.analysisId}
-        missingSkills={getMandatoryRequirementGaps(data).missing}
+        missingSkills={view.mandatoryGaps.missing}
       />
     </div>
   );

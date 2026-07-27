@@ -225,6 +225,12 @@ Internal consistency rules — enforce before finalising:
 - Every deduction must explain the exact evidence or absence behind it
 - Do NOT calculate or return matchScore. The server owns the final arithmetic.
 - Do NOT generate requirement ids. The server assigns them after validation.
+- Do NOT assign the candidate a seniority label (e.g. "entry-level", "junior",
+  "senior") that the CV does not explicitly evidence. Describe demonstrated
+  experience in grounded terms. Independent or self-employed delivery is real
+  experience — do not dismiss it as a hobby, and do not treat it as equivalent
+  to senior commercial ownership either. When seniority is not evidenced, say
+  it is "not fully evidenced" rather than asserting a level.
 
 Produce the following JSON:
 

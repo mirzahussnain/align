@@ -1,5 +1,6 @@
 // CV Analysis Types
 import type { JobMatchDataV2 } from './ai';
+import type { JobMatchReportView } from './job-match-report';
 import type { Sector } from '@/shared/constants/sector-keywords';
 import type { Classification } from './classification';
 import type { AnalysisContext } from './analysis-context';
@@ -56,11 +57,21 @@ export interface CVAnalysisResult {
    * it is thinner than usual instead of quietly omitting half its sections.
    * Currently only `'quota'` — the user's monthly AI allowance is spent.
    */
-  aiSkipped?: 'quota';
+  // Why the optional AI enrichment layer did not run, for honest UI provenance:
+  // 'quota' — the user's AI allowance is exhausted (rule-based score served);
+  // 'error' — the provider was unavailable (rule-based score served, retryable).
+  aiSkipped?: 'quota' | 'error';
   
   // Job Matcher specific fields
   mode?: 'ats' | 'job_match';
   jobMatchData?: JobMatchDataV2;
+  /**
+   * Plan-aware, server-derived report view model for the job-match UI. Presentation
+   * only — attached at projection (read) time, NEVER persisted into the stored
+   * `rawResult` blob. The report UI renders this and never recomputes authoritative
+   * values (totals, score reconciliation) from the projected `jobMatchData` subset.
+   */
+  jobMatchReport?: JobMatchReportView;
   jobDescription?: string;
 
   /**

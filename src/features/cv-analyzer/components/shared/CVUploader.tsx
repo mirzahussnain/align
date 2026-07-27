@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { useDropzone } from 'react-dropzone';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Upload, FileText, X, Sparkles, Loader2 } from 'lucide-react';
@@ -13,6 +13,15 @@ import {
   ENTITLEMENT_REQUIRED_EVENT,
   ENTITLEMENTS_REFRESH_EVENT,
 } from '@/shared/entitlements/registry';
+import {
+  interpretOperationalError,
+  type OperationalClientAction,
+} from '@/shared/entitlements/operational-errors';
+
+/** Message for any non-upgrade operational action; upgrade is handled by the modal. */
+function operationalMessage(action: OperationalClientAction, fallback: string): string {
+  return 'message' in action ? action.message : fallback;
+}
 
 interface CVUploaderProps {
   mode?: 'ats' | 'job_match';
@@ -36,6 +45,29 @@ export default function CVUploader({ mode = 'ats', onAnalysisComplete, profileId
   const [isDetecting, setIsDetecting] = useState(false);
   // Errors raised by the analyze call while on the target step, shown in-place.
   const [targetError, setTargetError] = useState<string | null>(null);
+
+  // A stable operation id for the CURRENT logical submission, so a network retry
+  // of the same analysis reuses it (the server treats the retry idempotently) and
+  // only a materially different request — a new file, JD, mode or target — mints a
+  // fresh one. Generating a new UUID inside every fetch, as the old code did, made
+  // retries look like brand-new operations and defeated idempotent reservation.
+  const operationIdRef = useRef<string>(crypto.randomUUID());
+  const submissionKeyRef = useRef<string | null>(null);
+  const operationIdFor = (target?: TargetSelectionPayload): string => {
+    const key = JSON.stringify({
+      name: file?.name ?? null,
+      size: file?.size ?? null,
+      lastModified: file?.lastModified ?? null,
+      jd: mode === 'job_match' ? jobDescription : '',
+      mode,
+      target: target ?? null,
+    });
+    if (submissionKeyRef.current !== key) {
+      submissionKeyRef.current = key;
+      operationIdRef.current = crypto.randomUUID();
+    }
+    return operationIdRef.current;
+  };
 
   const onDrop = useCallback((acceptedFiles: File[]) => {
     setError(null);
@@ -89,18 +121,22 @@ export default function CVUploader({ mode = 'ats', onAnalysisComplete, profileId
 
       const response = await fetch('/api/analyze', {
         method: 'POST',
-        headers: { 'x-operation-id': crypto.randomUUID() },
+        headers: { 'x-operation-id': operationIdFor(target) },
         body: formData,
       });
 
       if (!response.ok) {
         const data = await response.json().catch(() => ({}));
-        if (data.code === 'ENTITLEMENT_REQUIRED') {
+        // Single shared interpretation for every operational failure, so the
+        // "you were not charged" reassurance and in-progress/retry wording stay
+        // consistent with the other metered flows.
+        const action = interpretOperationalError(response.status, data);
+        if (action.type === 'upgrade') {
           window.dispatchEvent(new CustomEvent(ENTITLEMENT_REQUIRED_EVENT, {
-            detail: { capability: data.capability, source: 'analysis' },
+            detail: { capability: action.capability, source: 'analysis' },
           }));
         }
-        throw new Error(data.error || 'Analysis failed. Please try again.');
+        throw new Error(operationalMessage(action, 'Analysis failed. Please try again.'));
       }
 
       const result = await response.json();

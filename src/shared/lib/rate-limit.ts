@@ -33,6 +33,9 @@ const createRateLimiter = (requests: number, window: `${number} s` | `${number} 
 export const analysisLimiter = createRateLimiter(5, '1 m');  // 5 analyses per minute
 export const rewriteLimiter  = createRateLimiter(3, '1 m');  // 3 rewrites per minute
 
+// 🟡 Billing — user-initiated checkout/portal actions (webhooks are NOT limited)
+export const billingLimiter  = createRateLimiter(10, '1 m'); // 10 billing actions per minute
+
 // 🟡 Data fetching — relaxed limits
 export const jobsLimiter     = createRateLimiter(30, '1 m'); // 30 job fetches per minute
 export const sponsorsLimiter = createRateLimiter(20, '1 m'); // 20 sponsor lookups per minute

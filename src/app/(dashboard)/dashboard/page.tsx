@@ -18,6 +18,7 @@ import { parseStoredJobMatchData } from '@/shared/schemas/ai-output';
 import { getRequirementSummary } from '@/shared/utils/job-match-view';
 import type { CategoryScore } from '@/shared/types/cv';
 import { getEntitlementSnapshot } from '@/shared/entitlements/server';
+import { resolveBillingAccess } from '@/shared/billing/access';
 
 /** Best-scoring non-excellent-only pick — direction flips which end of the sort wins. */
 function pickCategory(categories: CategoryScore[], direction: 'weakest' | 'strongest') {
@@ -42,8 +43,13 @@ export default async function DashboardPage({
 
   // Switching career track is a soft navigation to ?profile=<id>, so the
   // server reloads that profile's content while client tab state survives.
-  const requestedProfile = (await searchParams).profile;
+  const resolvedSearchParams = await searchParams;
+  const requestedProfile = resolvedSearchParams.profile;
   const activeProfileId = Array.isArray(requestedProfile) ? requestedProfile[0] : requestedProfile;
+
+  // A checkout return (or the upgrade CTA) deep-links straight to the billing tab.
+  const requestedTab = Array.isArray(resolvedSearchParams.tab) ? resolvedSearchParams.tab[0] : resolvedSearchParams.tab;
+  const initialTab = requestedTab === 'billing' ? ('billing' as const) : undefined;
 
   // Resolved before the queries because everything below is scoped to it, and
   // because an id belonging to another user must be rejected rather than used.
@@ -104,9 +110,10 @@ export default async function DashboardPage({
   ]);
 
   const entitlementSnapshot = await getEntitlementSnapshot(userId);
-  const [storage, usage] = await Promise.all([
+  const [storage, usage, billingAccess] = await Promise.all([
     getStorageUsage(userId, entitlementSnapshot.plan),
     getUsage(userId),
+    resolveBillingAccess(userId),
   ]);
 
   // Surfaced in the wizard so the reasoning opt-in can say how many runs are
@@ -215,6 +222,7 @@ export default async function DashboardPage({
       user={{ name: session.user.name, email: session.user.email, image: session.user.image }}
       tier={entitlementSnapshot.plan.toLowerCase()}
       entitlementSnapshot={entitlementSnapshot}
+      initialTab={initialTab}
       data={{
         analyses: analyses.map((a) => ({ ...a, createdAt: a.createdAt.toISOString() })),
         totalAnalyses: scoreAgg._count._all,
@@ -237,6 +245,15 @@ export default async function DashboardPage({
         profileCompleteness: profileCompleteness(profileData),
         aiAnalysesLimit: entitlementSnapshot.capabilities.ai_enhanced_ats_analysis.limit ?? null,
         storage,
+        billing: {
+          plan: billingAccess.effectivePlan,
+          status: billingAccess.status,
+          cancelAtPeriodEnd: billingAccess.cancelAtPeriodEnd,
+          accessEndsAt: billingAccess.accessEndsAt?.toISOString() ?? null,
+          graceEndsAt: billingAccess.graceEndsAt?.toISOString() ?? null,
+          checkoutAvailable: billingAccess.checkoutAvailable,
+          portalAvailable: billingAccess.portalAvailable,
+        },
         heroAnalysis: heroAnalysis
           ? { ...heroAnalysis, createdAt: heroAnalysis.createdAt.toISOString() }
           : null,

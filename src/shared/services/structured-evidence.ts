@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { prisma } from '@/shared/lib/prisma';
+import type { Prisma } from '../../generated/prisma/client';
 import type { JobRequirementLedgerEntry } from '@/shared/types/ai';
 import type { UserProvidedContext } from '@/shared/types/cv-rewrite';
 import type { ProfileEvidenceRef } from '@/shared/types/profile-reasoning';
@@ -66,8 +67,20 @@ export function validateStructuredEvidence(kind: unknown, details: unknown) {
   return { kind: kind as StructuredEvidenceKind, details: result.data };
 }
 
-/** Canonical persistence adapter shared by HITL capture and Profile Management. */
-export async function createCanonicalEvidence(profileId: string, kind: unknown, raw: unknown): Promise<ProfileEvidenceRef> {
+/**
+ * Canonical persistence adapter shared by HITL capture and Profile Management.
+ *
+ * Accepts an optional transaction client so the caller can create the evidence
+ * record and record its reference on a reservation ATOMICALLY (the HITL
+ * create-then-commit idempotency guarantee). Defaults to the top-level client.
+ */
+export async function createCanonicalEvidence(
+  profileId: string,
+  kind: unknown,
+  raw: unknown,
+  client: Prisma.TransactionClient = prisma
+): Promise<ProfileEvidenceRef> {
+  const prisma = client;
   const { kind: parsedKind, details } = validateStructuredEvidence(kind, raw);
   const d = details as Record<string, unknown>;
   const text = (key: string) => String(d[key] ?? '').trim();

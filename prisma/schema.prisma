@@ -20,7 +20,6 @@ model User {
   image            String?
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
-  subscriptionTier String?   @default("free")
   onboardedAt      DateTime?
   sessions         Session[]
   accounts         Account[]
@@ -30,12 +29,146 @@ model User {
   analyses                    Analysis[]
   generatedCVs                GeneratedCV[]
   usage                       UsageCounter[]
-  capabilityUsageEvents      CapabilityUsageEvent[]
+  capabilityReservations     CapabilityReservation[]
   applicationEvidenceContexts ApplicationEvidenceContext[]
   profileEvidenceApprovals   ProfileEvidenceApproval[]
+  billingAccount              BillingAccount?
 
   @@unique([email])
   @@map("user")
+}
+
+// ── Billing domain ────────────────────────────────────────────────────────────
+// Provider-neutral. Stripe (or any future provider) writes rows here through an
+// adapter; the effective-access resolver reads them to derive a product plan. No
+// card data, no raw payment method data — only references and access/period dates.
+
+enum BillingProvider {
+  STRIPE
+  MANUAL
+}
+
+enum BillingArrangement {
+  RECURRING
+  FIXED_TERM
+  ONE_TIME
+  MANUAL
+}
+
+enum BillingPurchaseStatus {
+  PENDING
+  TRIALING
+  ACTIVE
+  PAST_DUE
+  UNPAID
+  CANCELLED
+  EXPIRED
+  REFUNDED
+  INCOMPLETE
+  INCOMPLETE_EXPIRED
+}
+
+// One per user; groups all of a user's access-granting purchases so a provider
+// customer maps to an Align account rather than to a single subscription.
+model BillingAccount {
+  id     String @id @default(cuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // The provider customer bound to this account, established at first checkout so
+  // the portal and repeat checkouts reuse it before any purchase completes. The
+  // customer is owned by the account, never accepted from client input.
+  provider           BillingProvider?
+  providerCustomerId String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  purchases BillingPurchase[]
+
+  @@index([provider, providerCustomerId])
+  @@map("billing_account")
+}
+
+// A single access-granting purchase. Recurring subscriptions, fixed-term passes,
+// one-time buys and manual grants are all represented here — access dates are
+// kept separate from billing-period dates so a fixed-term pass is never forced
+// into recurring fields.
+model BillingPurchase {
+  id               String         @id @default(cuid())
+  billingAccountId String
+  billingAccount   BillingAccount @relation(fields: [billingAccountId], references: [id], onDelete: Cascade)
+
+  provider    BillingProvider
+  arrangement BillingArrangement
+
+  offerId String
+  planId  String
+  status  BillingPurchaseStatus
+
+  providerCustomerId     String?
+  providerPurchaseId     String?
+  providerSubscriptionId String?
+  providerPriceId        String?
+
+  // Access window (authoritative for whether the plan is granted right now).
+  accessStartsAt DateTime?
+  accessEndsAt   DateTime?
+
+  // Billing-period window (recurring subscriptions), separate from access.
+  currentPeriodStart DateTime?
+  currentPeriodEnd   DateTime?
+  cancelAtPeriodEnd  Boolean   @default(false)
+
+  trialEndsAt DateTime?
+  graceEndsAt DateTime?
+  cancelledAt DateTime?
+  expiredAt   DateTime?
+  refundedAt  DateTime?
+
+  // Provider timestamp of the most recent event applied to this purchase. Used to
+  // reject stale/out-of-order webhook deliveries: an event older than this never
+  // overwrites newer state (see purchase-sync). Null until the first sync.
+  lastEventAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([provider, providerPurchaseId])
+  @@unique([provider, providerSubscriptionId])
+  @@index([billingAccountId, status])
+  @@index([planId, status])
+  @@index([accessEndsAt])
+  @@map("billing_purchase")
+}
+
+// Idempotency + audit ledger for verified provider webhook events. A verified
+// event is processed exactly once: the unique (provider, providerEventId) makes a
+// duplicate delivery a safe no-op, and the receipt row records the outcome so a
+// provider retry of a previously-failed event can be reprocessed while a
+// successful/ignored one is not. No raw payloads, secrets or PII are stored —
+// only opaque provider references and a safe outcome/error code.
+model BillingEventReceipt {
+  id              String          @id @default(cuid())
+  provider        BillingProvider
+  providerEventId String
+  eventType       String
+  occurredAt      DateTime
+  processedAt     DateTime        @default(now())
+
+  // 'processed' | 'ignored' | 'failed'. 'failed' is the only re-processable
+  // outcome; the others are terminal and short-circuit a duplicate delivery.
+  outcome    String
+  purchaseId String?
+  errorCode  String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([provider, providerEventId])
+  @@index([purchaseId])
+  @@index([processedAt])
+  @@map("billing_event_receipt")
 }
 
 // UK right-to-work statuses. The three permanent ones (British/Irish citizen,
@@ -626,19 +759,81 @@ model UsageCounter {
   @@map("usage_counter")
 }
 
-/** Successful metered operations with caller-stable retry idempotency. */
-model CapabilityUsageEvent {
-  id          String   @id @default(cuid())
-  userId      String
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  capability String
-  period      String
-  operationId String
-  createdAt   DateTime @default(now())
+/**
+ * Quota lifecycle state of a reservation. RESERVED holds a unit against a
+ * concurrent request; COMMITTED is immutable consumed usage; RELEASED returns
+ * the unit after a failed/abandoned attempt; EXPIRED is a reservation that timed
+ * out before commit and no longer counts against quota. Only RESERVED and
+ * COMMITTED rows count toward a user's usage.
+ */
+enum UsageReservationStatus {
+  RESERVED
+  COMMITTED
+  RELEASED
+  EXPIRED
+}
+
+/**
+ * Diagnostic lifecycle of the underlying expensive operation, carried on the
+ * same row so operation state can be inspected without a parallel table.
+ */
+enum CapabilityOperationStatus {
+  PENDING
+  RUNNING
+  SUCCEEDED
+  FAILED_RETRYABLE
+  FAILED_TERMINAL
+}
+
+/**
+ * The authoritative usage ledger for quota-controlled capabilities. Replaces the
+ * former append-only CapabilityUsageEvent: a reservation is created atomically
+ * (under a per-user+capability advisory lock) BEFORE the expensive work so two
+ * concurrent requests cannot both take the last unit, and is committed only once
+ * the work has succeeded and persisted. Quota is `COMMITTED + active RESERVED`.
+ *
+ * `(userId, capability, operationId)` is unique, which is what makes a retry with
+ * the same operation id idempotent — it resolves to the same row rather than a
+ * second charge. UsageCounter remains as a derived compatibility aggregate,
+ * updated inside the same transaction as the commit.
+ */
+model CapabilityReservation {
+  id                  String                    @id @default(cuid())
+  userId              String
+  user                User                      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  capability          String
+  operationId         String
+  /** Quota bucket key at reserve time (periodKey), e.g. "2026-07". */
+  period              String
+  status              UsageReservationStatus    @default(RESERVED)
+  operationStatus     CapabilityOperationStatus @default(PENDING)
+  /**
+   * SHA-256 of the request's stable identity (ids, mode, hashes of large text) —
+   * NEVER raw CV or job-description content. Lets a retry with the same operation
+   * id but conflicting content be rejected rather than silently reused.
+   */
+  fingerprint         String?
+  /** Safe AiFailureReason code recorded when a reservation is released. */
+  failureReason       String?
+  /** Reference to the persisted result (analysisId / generatedCvId) for recovery. */
+  resultRef           String?
+  /**
+   * Links a later repair attempt to the original COMMITTED reservation whose
+   * result went missing, so a repair does not double-charge. Unused today;
+   * present so the Stage-2 RESULT_UNAVAILABLE flow needs no further migration.
+   */
+  repairOfOperationId String?
+  reservedAt          DateTime                  @default(now())
+  /** reservedAt + RESERVATION_TTL_MS. A RESERVED row past this no longer counts. */
+  expiresAt           DateTime
+  committedAt         DateTime?
+  releasedAt          DateTime?
+  createdAt           DateTime                  @default(now())
+  updatedAt           DateTime                  @updatedAt
 
   @@unique([userId, capability, operationId])
-  @@index([userId, capability, period])
-  @@map("capability_usage_event")
+  @@index([userId, capability, period, status])
+  @@map("capability_reservation")
 }
 
 // Persisted output of cv-rewriter.ts. Optionally linked to the Analysis it

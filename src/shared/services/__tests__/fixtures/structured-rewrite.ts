@@ -3,6 +3,7 @@ import type {
   ProvenancedExperienceEntry,
   ProvenancedProjectEntry,
   ProvenancedSkillGroup,
+  ProvenancedSkillItem,
   RewriteSourceRef,
   StructuredCvRewriteOutput,
 } from '@/shared/types/cv-rewrite';
@@ -106,6 +107,13 @@ export function makeSkillGroup(
     sourceRefs: [sourceCvRef()],
     ...overrides,
   };
+}
+
+export function makeSkillItem(
+  skill: string,
+  sourceRefs: RewriteSourceRef[] = [sourceCvRef(skill)]
+): ProvenancedSkillItem {
+  return { skill, sourceRefs };
 }
 
 export const invalidStructuredVariants = {

@@ -3,13 +3,25 @@ import { z } from 'zod';
 import { withErrorHandler, APIError } from '@/shared/utils/api-error';
 import { applyRateLimit, rewriteLimiter } from '@/shared/lib/rate-limit';
 import { auth } from '@/shared/lib/auth';
-import { prisma } from '@/shared/lib/prisma';
 import { loadOwnedProfileData } from '@/features/dashboard/data/load-profile';
 import { reconcileProfileWithCv } from '@/shared/services/profile-reconciler';
 import { ProfileEvidenceValidationError } from '@/shared/types/profile-reasoning';
-import { assertCapability, consumeCapability } from '@/shared/entitlements/server';
-import { parseStoredAnalysisResult } from '@/shared/schemas/analysis-result';
-import { parseStoredJobMatchData } from '@/shared/schemas/ai-output';
+import { assertCapability, EntitlementRequiredError } from '@/shared/entitlements/server';
+import {
+  reserveCapability,
+  commitCapability,
+  releaseCapability,
+  reservationFingerprint,
+} from '@/shared/services/capability-reservation';
+import {
+  AiOperationError,
+  OperationConflictError,
+  OperationInProgressError,
+  markOperationRunning,
+  reservationIsRunning,
+} from '@/shared/services/ai-failure';
+import { loadCanonicalAnalysis } from '@/shared/services/canonical-analysis';
+import { logReservationEvent } from '@/shared/services/reservation-observability';
 
 const ProfileBridgeSchema = z.object({
   analysisId: z.string().min(1, 'analysisId is required'),
@@ -46,33 +58,30 @@ export async function POST(request: Request) {
     }
     const { analysisId, profileId } = parsed.data;
 
-    const analysis = await prisma.analysis.findUnique({
-      where: { id: analysisId },
-      select: {
-        userId: true,
-        mode: true,
-        rawResult: true,
-        jobDescription: true,
-        jobMatchData: true,
-      },
+    // Canonical, unprojected read from trusted storage — never the plan-projected
+    // report shape. Ownership-checked and schema-validated inside the loader.
+    const canonical = await loadCanonicalAnalysis({
+      userId: session.user.id,
+      analysisId,
+      requireJobMatch: true,
     });
-
-    if (!analysis || analysis.userId !== session.user.id) {
-      throw new APIError('Analysis not found.', 404);
+    if (!canonical.ok) {
+      switch (canonical.error) {
+        case 'not_found':
+          throw new APIError('Analysis not found.', 404);
+        case 'wrong_mode':
+          throw new APIError('Profile reasoning only applies to job-match analyses.', 400);
+        case 'invalid_result':
+          throw new APIError('This analysis is missing the data needed to compare your profile.', 400);
+        case 'invalid_job_match':
+          throw new APIError(
+            'Stored job-match data failed integrity validation: schemaVersion 2 is required.',
+            409
+          );
+      }
     }
-    if (analysis.mode !== 'job_match') {
-      throw new APIError('Profile reasoning only applies to job-match analyses.', 400);
-    }
-
-    // Validated, not cast — an unparseable stored blob fails with a clear
-    // message instead of feeding the reconciler undefined fields.
-    const storedResult = parseStoredAnalysisResult(analysis.rawResult);
-    if (!storedResult) {
-      throw new APIError('This analysis is missing the data needed to compare your profile.', 400);
-    }
-    const rawResult = storedResult.result;
-    const cvText = rawResult.rawText ?? '';
-    const jobDescription = analysis.jobDescription ?? rawResult.jobDescription ?? '';
+    const cvText = canonical.analysis.cvText;
+    const jobDescription = canonical.analysis.jobDescription;
 
     if (cvText.trim().length < 50 || jobDescription.trim().length < 10) {
       throw new APIError('This analysis is missing the data needed to compare your profile.', 400);
@@ -82,13 +91,62 @@ export async function POST(request: Request) {
     if (!profile) {
       throw new APIError('Profile not found.', 404);
     }
-    const jobMatch = parseStoredJobMatchData(analysis.jobMatchData);
+    const jobMatch = canonical.analysis.jobMatchData;
     if (!jobMatch) {
       throw new APIError(
         'Stored job-match data failed integrity validation: schemaVersion 2 is required.',
         409
       );
     }
+
+    // ── Atomic reservation (canonical ordering) ─────────────────────────────
+    // Held before the reconciler runs; committed only if the run actually reached
+    // a provider (usedAI), released untouched otherwise so merely re-opening
+    // existing suggestions never costs a unit.
+    const operationId = request.headers.get('x-operation-id') ?? crypto.randomUUID();
+    const capability = 'profile_reconciliation' as const;
+    const fingerprint = reservationFingerprint([capability, session.user.id, analysisId, profile.profileId]);
+
+    let reserve;
+    try {
+      reserve = await reserveCapability({ userId: session.user.id, capability, operationId, fingerprint });
+    } catch (error) {
+      console.error(
+        '[profile-bridge] Reservation ledger unavailable; failing closed:',
+        error instanceof Error ? error.message : error
+      );
+      throw new AiOperationError({ capability, operationId, reason: 'reservation_failure' });
+    }
+    if (reserve.status === 'conflict') {
+      logReservationEvent('fingerprint_conflict', { userId: session.user.id, capability, operationId });
+      throw new OperationConflictError(capability, operationId);
+    }
+    if (reserve.status === 'exhausted') throw new EntitlementRequiredError(reserve.decision);
+
+    // A committed operation is already charged. Reconciliation is not persisted,
+    // so recovery re-derives the suggestions but never commits (charges) again.
+    const recovered = reserve.status === 'recovered';
+    if (recovered) {
+      logReservationEvent('committed_result_recovered', { userId: session.user.id, capability, operationId });
+    }
+    let reservationHeld = false;
+    if (reserve.status === 'reserved') {
+      if (reservationIsRunning(reserve.reservation)) {
+        logReservationEvent('duplicate_operation_detected', { userId: session.user.id, capability, operationId });
+        throw new OperationInProgressError(capability, operationId);
+      }
+      await markOperationRunning(session.user.id, capability, operationId);
+      reservationHeld = true;
+      logReservationEvent('operation_running', { userId: session.user.id, capability, operationId });
+    }
+
+    const releaseRecon = async (reason: string) => {
+      if (!reservationHeld) return;
+      reservationHeld = false;
+      await releaseCapability({ userId: session.user.id, capability, operationId, reason });
+      logReservationEvent('reservation_released', { userId: session.user.id, capability, operationId, reason });
+    };
+
     let reconciliation: Awaited<ReturnType<typeof reconcileProfileWithCv>>;
     try {
       reconciliation = await reconcileProfileWithCv({
@@ -99,15 +157,28 @@ export async function POST(request: Request) {
       });
     } catch (error) {
       if (error instanceof ProfileEvidenceValidationError) {
+        await releaseRecon('invalid_response');
         throw new APIError('The profile comparison returned an invalid evidence reference.', 502);
       }
+      await releaseRecon('provider_unavailable');
       throw error;
     }
 
-    // Only a run that actually reached a provider consumes the allowance.
-    if (reconciliation.usedAI) {
-      const operationId = request.headers.get('x-operation-id') ?? crypto.randomUUID();
-      await consumeCapability(session.user.id, 'profile_reconciliation', operationId);
+    // Commit exactly once, only for a fresh run that actually used the provider.
+    // A no-AI run releases the held unit without charge.
+    if (!recovered) {
+      if (reconciliation.usedAI) {
+        const commit = await commitCapability({ userId: session.user.id, capability, operationId });
+        if (commit.status !== 'committed') {
+          logReservationEvent('finalisation_failed', { userId: session.user.id, capability, operationId });
+          throw new AiOperationError({ capability, operationId, reason: 'reservation_failure' });
+        }
+        reservationHeld = false;
+        logReservationEvent('reservation_committed', { userId: session.user.id, capability, operationId, charged: true });
+      } else {
+        // No provider was reached (cached/no-op reconcile) — free the held unit.
+        await releaseRecon('unknown');
+      }
     }
 
     return NextResponse.json({

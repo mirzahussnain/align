@@ -1,8 +1,9 @@
 import { prisma } from '@/shared/lib/prisma';
+import type { Prisma } from '@/generated/prisma/client';
 import { APIError } from '@/shared/utils/api-error';
 import {
   getPlanEntitlement,
-  normalizePlanId,
+  periodKey,
   PLAN_ENTITLEMENTS,
   PRODUCT_CAPABILITIES,
   type CapabilityDecision,
@@ -11,15 +12,13 @@ import {
   type PlanId,
   type ProductCapability,
 } from './registry';
-import { checkQuota, recordUsage, type MeteredAction } from '@/shared/services/usage-meter';
-import { entitlementsFor } from '@/shared/lib/entitlements';
+import { countActiveUsage } from '@/shared/services/capability-reservation';
+import { resolveBillingAccess } from '@/shared/billing/access';
 
-const LEGACY_METER: Partial<Record<ProductCapability, MeteredAction>> = {
-  ai_enhanced_ats_analysis: 'aiAnalyses',
-  job_match_analysis: 'aiAnalyses',
-  profile_reconciliation: 'profileReasoning',
-  cv_regeneration: 'cvGenerations',
-};
+// The reservation ledger is the authoritative usage store. `consumeCapability`
+// (post-success charge) is re-exported from it so existing call sites keep their
+// import path while the atomic lifecycle lives in one module.
+export { consumeCapability } from '@/shared/services/capability-reservation';
 
 export interface EntitlementSnapshot {
   plan: PlanId;
@@ -68,13 +67,16 @@ export class EntitlementRequiredError extends APIError {
   }
 }
 
+/**
+ * The user's effective product plan — obtained ONLY through the billing resolver
+ * (§9). Provider status, raw price ids and the legacy `subscriptionTier` never
+ * decide capability limits here; the resolver establishes access to a product
+ * plan, and the entitlement registry alone maps that plan to limits.
+ */
 export async function getUserPlan(userId: string): Promise<PlanId> {
   try {
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-      select: { subscriptionTier: true },
-    });
-    return normalizePlanId(user?.subscriptionTier);
+    const { effectivePlan } = await resolveBillingAccess(userId);
+    return effectivePlan;
   } catch (error) {
     console.warn('[entitlements] Failed to resolve user plan; defaulting to FREE:', error instanceof Error ? error.message : error);
     return 'FREE';
@@ -118,22 +120,20 @@ export async function getCapabilityUsage(
   capability: ProductCapability,
   plan?: PlanId
 ): Promise<number> {
-  const action = LEGACY_METER[capability];
-  if (action) {
-    const resolvedPlan = plan ?? (await getUserPlan(userId));
-    const check = await checkQuota(userId, action, entitlementsFor(resolvedPlan));
-    return check.used;
+  const resolvedPlan = plan ?? (await getUserPlan(userId));
+  const entitlement = getPlanEntitlement(resolvedPlan, capability);
+  if (entitlement.mode !== 'quota') return 0;
+  try {
+    // Committed usage plus still-active reservations, per capability. Counting
+    // reservations (not a shared aggregate column) keeps ai_enhanced_ats_analysis
+    // and job_match_analysis on independent quotas, and reflects in-flight holds.
+    return await countActiveUsage(prisma, userId, capability, periodKey(entitlement.period), new Date());
+  } catch (error) {
+    // A read failure must not hard-fail the request; under-reporting is the safe
+    // direction here, matching the prior meter's lenient read behaviour.
+    console.warn('[entitlements] Failed to read capability usage:', error instanceof Error ? error.message : error);
+    return 0;
   }
-  if (capability === 'human_evidence_capture') {
-    try {
-      return await prisma.capabilityUsageEvent.count({
-        where: { userId, capability, period: periodKey('month') },
-      });
-    } catch (error) {
-      console.warn('[entitlements] Failed to read capability usage:', error instanceof Error ? error.message : error);
-    }
-  }
-  return 0;
 }
 
 export async function getResourceCount(userId: string, capability: ProductCapability): Promise<number> {
@@ -223,43 +223,87 @@ export async function assertCapability(userId: string, capability: ProductCapabi
   return decision;
 }
 
-export function periodKey(period: EntitlementPeriod, now = new Date()): string {
-  const year = now.getUTCFullYear();
-  const month = String(now.getUTCMonth() + 1).padStart(2, '0');
-  const day = String(now.getUTCDate()).padStart(2, '0');
-  if (period === 'lifetime') return 'lifetime';
-  if (period === 'month') return `${year}-${month}`;
-  if (period === 'day') return `${year}-${month}-${day}`;
-  const date = new Date(Date.UTC(year, now.getUTCMonth(), now.getUTCDate()));
-  const weekday = date.getUTCDay() || 7;
-  date.setUTCDate(date.getUTCDate() + 4 - weekday);
-  const first = new Date(Date.UTC(date.getUTCFullYear(), 0, 1));
-  const week = Math.ceil(((date.getTime() - first.getTime()) / 86_400_000 + 1) / 7);
-  return `${date.getUTCFullYear()}-W${String(week).padStart(2, '0')}`;
+// ── Per-application approval limit ───────────────────────────────────────────
+//
+// `approve_evidence_for_application` is a resource limit counted PER APPLICATION
+// (per analysis), so it cannot use the generic global resource-limit path. The
+// count of "approved evidence items for an application" is every active,
+// application-scoped approval for that analysis: captured application evidence
+// (ApplicationEvidenceContext) plus approved profile-evidence snapshots
+// (ProfileEvidenceApproval). Withdrawing/deleting an approval removes its row and
+// frees a slot; editing an approval never changes the count.
+
+const APPROVAL_CAPABILITY: ProductCapability = 'approve_evidence_for_application';
+
+/** Any client that can count the two application-approval tables (base or tx). */
+type ApprovalCountClient = Pick<
+  Prisma.TransactionClient,
+  'applicationEvidenceContext' | 'profileEvidenceApproval'
+>;
+
+async function countApplicationApprovals(
+  client: ApprovalCountClient,
+  userId: string,
+  analysisId: string
+): Promise<number> {
+  const [contexts, approvals] = await Promise.all([
+    client.applicationEvidenceContext.count({ where: { userId, analysisId } }),
+    client.profileEvidenceApproval.count({ where: { userId, analysisId } }),
+  ]);
+  return contexts + approvals;
 }
 
-/** Consume after success. The unique operation key makes retries a no-op. */
-export async function consumeCapability(
+function approvalDecision(plan: PlanId, limit: number, used: number): CapabilityDecision {
+  const remaining = Math.max(0, limit - used);
+  const allowed = remaining > 0;
+  return {
+    capability: APPROVAL_CAPABILITY,
+    plan,
+    mode: 'resource_limit',
+    allowed,
+    limit,
+    used,
+    remaining,
+    reason: allowed ? 'allowed' : 'resource_limit_reached',
+    ...(!allowed && plan === 'FREE' ? { upgradeTarget: 'PRO' as const } : {}),
+  };
+}
+
+function approvalLimitFor(plan: PlanId): number {
+  const entitlement = getPlanEntitlement(plan, APPROVAL_CAPABILITY);
+  return entitlement.mode === 'resource_limit' ? entitlement.limit : Number.POSITIVE_INFINITY;
+}
+
+/**
+ * The per-application approval decision for the UI (e.g. "1 of 2 approved"). Reads
+ * the effective plan and the live count of active approvals for the analysis.
+ */
+export async function getApplicationApprovalDecision(
   userId: string,
-  capability: ProductCapability,
-  operationId: string,
-  now = new Date()
-): Promise<boolean> {
+  analysisId: string
+): Promise<CapabilityDecision> {
   const plan = await getUserPlan(userId);
-  const entitlement = getPlanEntitlement(plan, capability);
-  if (entitlement.mode !== 'quota') return false;
-  try {
-    await prisma.capabilityUsageEvent.create({
-      data: { userId, capability, period: periodKey(entitlement.period, now), operationId },
-    });
-  } catch (error) {
-    if (typeof error === 'object' && error !== null && 'code' in error && error.code === 'P2002') return false;
-    // Keep the established aggregate counter available while this ledger is deployed.
-    console.warn('[entitlements] Failed to record idempotency event:', error instanceof Error ? error.message : error);
-  }
-  const action = LEGACY_METER[capability];
-  if (action) await recordUsage(userId, action);
-  return true;
+  const used = await countApplicationApprovals(prisma, userId, analysisId);
+  return approvalDecision(plan, approvalLimitFor(plan), used);
+}
+
+/**
+ * Enforce the per-application approval cap before a NEW application-scoped
+ * approval is created. Throws {@link EntitlementRequiredError} with the canonical
+ * decision when the limit is reached; the caller must not mutate approval state.
+ * Pass the surrounding transaction client so the count is consistent with the
+ * create it guards.
+ */
+export async function assertApplicationApprovalLimit(
+  userId: string,
+  analysisId: string,
+  client: ApprovalCountClient = prisma
+): Promise<void> {
+  const plan = await getUserPlan(userId);
+  const limit = approvalLimitFor(plan);
+  if (!Number.isFinite(limit)) return;
+  const used = await countApplicationApprovals(client, userId, analysisId);
+  if (used >= limit) throw new EntitlementRequiredError(approvalDecision(plan, limit, used));
 }
 
 export async function getEntitlementSnapshot(userId: string): Promise<EntitlementSnapshot> {

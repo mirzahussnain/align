@@ -80,18 +80,32 @@ const quota = (limit: number, period: EntitlementPeriod = 'month'): CapabilityEn
 const resourceLimit = (limit: number): CapabilityEntitlement => ({ mode: 'resource_limit', limit });
 const partial = (accessLevel: string): CapabilityEntitlement => ({ mode: 'partial', accessLevel });
 
-/** PROVISIONAL DEVELOPMENT CONFIGURATION — not final public packaging. */
+/**
+ * LAUNCH ENTITLEMENT CONFIGURATION.
+ *
+ * These are the agreed launch limits — the single place they live (§2). Do not
+ * scatter them through UI or routes; read them from the entitlement service.
+ * AI-backed operations are never `unlimited`; only rule-based/deterministic ones
+ * (e.g. `ats_analysis`) are `enabled()`.
+ *
+ * `approve_evidence_for_application` is a `resource_limit` counted PER APPLICATION
+ * (per analysis), not globally — Free may approve 2 evidence items per
+ * application, Pro is effectively unrestricted. The count is enforced
+ * server-side over active approvals for the analysis; the generic snapshot
+ * decision for this capability is descriptive only (its per-application `used`
+ * is computed by {@link getApplicationApprovalDecision}).
+ */
 export const PLAN_ENTITLEMENTS = {
   FREE: {
     ats_analysis: enabled(),
-    ai_enhanced_ats_analysis: quota(5),
-    job_match_analysis: quota(5),
+    ai_enhanced_ats_analysis: quota(1),
+    job_match_analysis: quota(2),
     view_full_ats_report: partial('summary'),
     view_full_job_match_report: partial('preview'),
     view_requirement_ledger: partial('limited'),
     view_rewrite_strategy: disabled('Full rewrite strategy requires Pro.'),
     view_eligibility_analysis: partial('summary'),
-    profile_reconciliation: disabled('Profile reconciliation requires Pro.'),
+    profile_reconciliation: quota(1, 'lifetime'),
     tailored_cv_generation: enabled(),
     cv_regeneration: quota(1),
     download_generated_cv: enabled(),
@@ -99,7 +113,7 @@ export const PLAN_ENTITLEMENTS = {
     additional_career_profiles: resourceLimit(1),
     profile_evidence_storage: resourceLimit(25),
     human_evidence_capture: quota(5),
-    approve_evidence_for_application: enabled(),
+    approve_evidence_for_application: resourceLimit(2),
     reuse_evidence_across_applications: partial('limited'),
     application_history: partial('recent'),
     stored_generated_cvs: resourceLimit(3),
@@ -110,26 +124,26 @@ export const PLAN_ENTITLEMENTS = {
   },
   PRO: {
     ats_analysis: enabled(),
-    ai_enhanced_ats_analysis: quota(100),
-    job_match_analysis: quota(100),
+    ai_enhanced_ats_analysis: quota(15),
+    job_match_analysis: quota(30),
     view_full_ats_report: partial('full'),
     view_full_job_match_report: partial('full'),
     view_requirement_ledger: partial('full'),
     view_rewrite_strategy: enabled(),
     view_eligibility_analysis: partial('full'),
-    profile_reconciliation: quota(50),
+    profile_reconciliation: quota(10),
     tailored_cv_generation: enabled(),
-    cv_regeneration: quota(50),
+    cv_regeneration: quota(10),
     download_generated_cv: enabled(),
     career_profile: enabled(),
     additional_career_profiles: resourceLimit(3),
     profile_evidence_storage: resourceLimit(500),
     human_evidence_capture: quota(100),
-    approve_evidence_for_application: enabled(),
+    approve_evidence_for_application: resourceLimit(1000),
     reuse_evidence_across_applications: enabled(),
     application_history: partial('full'),
     stored_generated_cvs: resourceLimit(50),
-    stored_analyses: enabled(),
+    stored_analyses: resourceLimit(100),
     source_file_retention: partial('365_days'),
     advanced_tools: enabled(),
     supporting_statement_generation: disabled('Supporting statements are not available yet.'),
@@ -146,4 +160,26 @@ export function normalizePlanId(value: string | null | undefined): PlanId {
 
 export function getPlanEntitlement(plan: PlanId, capability: ProductCapability): CapabilityEntitlement {
   return PLAN_ENTITLEMENTS[plan][capability];
+}
+
+/**
+ * The quota-bucket key for a period, in UTC. Storing the bucket ("2026-07")
+ * rather than a timestamp keeps usage counting a single indexed equality filter
+ * and makes the month/day/week boundary identical for every user regardless of
+ * their timezone. Lives here (the lowest entitlement layer) so both the
+ * entitlement service and the reservation ledger can share it without a cycle.
+ */
+export function periodKey(period: EntitlementPeriod, now = new Date()): string {
+  const year = now.getUTCFullYear();
+  const month = String(now.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(now.getUTCDate()).padStart(2, '0');
+  if (period === 'lifetime') return 'lifetime';
+  if (period === 'month') return `${year}-${month}`;
+  if (period === 'day') return `${year}-${month}-${day}`;
+  const date = new Date(Date.UTC(year, now.getUTCMonth(), now.getUTCDate()));
+  const weekday = date.getUTCDay() || 7;
+  date.setUTCDate(date.getUTCDate() + 4 - weekday);
+  const first = new Date(Date.UTC(date.getUTCFullYear(), 0, 1));
+  const week = Math.ceil(((date.getTime() - first.getTime()) / 86_400_000 + 1) / 7);
+  return `${date.getUTCFullYear()}-W${String(week).padStart(2, '0')}`;
 }

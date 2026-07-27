@@ -22,6 +22,20 @@ vi.mock('@/shared/services/usage-meter', () => ({
   checkQuota: vi.fn(async () => ({ allowed: true, used: 0, limit: null, remaining: null })),
   recordUsage: vi.fn(async () => {}),
 }));
+// Regression guard: the deterministic profile build must NEVER touch the
+// reservation ledger. These are mocked so that if a future change silently wires
+// metering into this route, the "never reserves/commits" assertion below fails
+// instead of the route quietly becoming AI-metered.
+vi.mock('@/shared/services/capability-reservation', () => ({
+  reserveCapability: vi.fn(async () => ({ status: 'unmetered' })),
+  commitCapability: vi.fn(async () => ({ status: 'committed' })),
+  releaseCapability: vi.fn(async () => ({ status: 'noop' })),
+  consumeCapability: vi.fn(async () => false),
+  markOperation: vi.fn(async () => {}),
+  reservationFingerprint: vi.fn(() => 'fingerprint'),
+  hashContent: vi.fn(() => 'hash'),
+  countActiveUsage: vi.fn(async () => 0),
+}));
 vi.mock('@/features/dashboard/data/load-profile', () => ({
   // A structurally-complete ProfileData so the trusted-context builder and the
   // deterministic safety scan have the arrays they iterate.
@@ -64,6 +78,11 @@ import { auth } from '@/shared/lib/auth';
 import { checkQuota, recordUsage } from '@/shared/services/usage-meter';
 import { isProfileComplete } from '@/features/dashboard/data/load-profile';
 import { persistAndArchiveCv, profileToRewrittenData } from '@/shared/services/cv-generation';
+import {
+  reserveCapability,
+  commitCapability,
+  consumeCapability,
+} from '@/shared/services/capability-reservation';
 
 function fromProfileRequest(body: Record<string, unknown> = {}) {
   return new Request('http://test/api/cv/from-profile', {
@@ -87,6 +106,10 @@ describe('POST /api/cv/from-profile', () => {
     // Deterministic render — no AI CV-generation allowance is checked or spent.
     expect(checkQuota).not.toHaveBeenCalledWith(expect.anything(), 'cvGenerations', expect.anything());
     expect(recordUsage).not.toHaveBeenCalledWith(expect.anything(), 'cvGenerations');
+    // Regression guard: this deterministic path never touches the reservation ledger.
+    expect(reserveCapability).not.toHaveBeenCalled();
+    expect(commitCapability).not.toHaveBeenCalled();
+    expect(consumeCapability).not.toHaveBeenCalled();
   });
 
   it('labels the CV as profile-derived: persists a profileId, no analysisId, and safety provenance', async () => {

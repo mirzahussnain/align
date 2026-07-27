@@ -37,6 +37,30 @@ interface AIOrchestratorOptionsWithSchema<T> extends AIOrchestratorOptions {
 }
 
 /**
+ * Coarse, non-sensitive provenance for the provider attempt that actually
+ * produced a result. Contains only labels — never a key, prompt, or output.
+ * Threaded up so a successful AI-backed operation can persist WHICH provider and
+ * model produced it, and whether a fallback was needed, for observability and
+ * audit. One logical operation still consumes exactly one user unit regardless of
+ * how many attempts the chain made.
+ */
+export interface ProviderProvenance {
+  /** Coarse provider family: "gemini" | "groq". */
+  provider: string;
+  /** Model label of the winning attempt. */
+  model: string;
+  /** 1-based index of the winning attempt within the fallback chain. */
+  attempt: number;
+  /** True when the primary attempt failed and a later provider/model won. */
+  fallbackUsed: boolean;
+}
+
+export interface AIResultWithProvenance<T> {
+  data: T;
+  provenance: ProviderProvenance;
+}
+
+/**
  * Ask every configured provider in turn until one returns parseable JSON.
  *
  * An unparseable response counts as a FAILURE and falls through to the next
@@ -47,14 +71,29 @@ interface AIOrchestratorOptionsWithSchema<T> extends AIOrchestratorOptions {
  * ran for by far the most common failure mode.
  */
 export async function generateJSONFromAI<T>(options: AIOrchestratorOptionsWithSchema<T>): Promise<T | null> {
+  const result = await generateJSONFromAIWithProvenance(options);
+  return result ? result.data : null;
+}
+
+/**
+ * As {@link generateJSONFromAI}, but also returns coarse {@link ProviderProvenance}
+ * for the attempt that succeeded, so callers that persist audit/provenance can
+ * record the ACTUAL winning provider/model (not the configured primary) and
+ * whether a fallback was used. Returns null when every provider is exhausted.
+ */
+export async function generateJSONFromAIWithProvenance<T>(
+  options: AIOrchestratorOptionsWithSchema<T>
+): Promise<AIResultWithProvenance<T> | null> {
   const { prompt, temperature = 0.1, thinkingBudget, schema } = options;
 
-  const attempts: { label: string; run: () => Promise<string> }[] = [];
+  const attempts: { label: string; provider: string; model: string; run: () => Promise<string> }[] = [];
 
   if (geminiClient) {
     for (const model of [AI_CONFIG.gemini.model, AI_CONFIG.gemini.fallbackModel]) {
       attempts.push({
         label: `Gemini ${model}`,
+        provider: 'gemini',
+        model,
         run: async () => {
           const response = await geminiClient.models.generateContent({
             model,
@@ -74,6 +113,8 @@ export async function generateJSONFromAI<T>(options: AIOrchestratorOptionsWithSc
   if (groqClient) {
     attempts.push({
       label: `Groq ${AI_CONFIG.groq.model}`,
+      provider: 'groq',
+      model: AI_CONFIG.groq.model,
       run: async () => {
         const chatCompletion = await groqClient.chat.completions.create({
           messages: [{ role: 'user', content: prompt }],
@@ -93,15 +134,21 @@ export async function generateJSONFromAI<T>(options: AIOrchestratorOptionsWithSc
 
   for (const [index, attempt] of attempts.entries()) {
     const isLast = index === attempts.length - 1;
+    const provenance: ProviderProvenance = {
+      provider: attempt.provider,
+      model: attempt.model,
+      attempt: index + 1,
+      fallbackUsed: index > 0,
+    };
 
     try {
       console.info(`[ai-orchestrator] Querying ${attempt.label} (attempt ${index + 1}/${attempts.length}).`);
       const parsed = parseJSONContent<T>(await attempt.run());
       if (parsed !== null) {
-        if (!schema) return parsed;
+        if (!schema) return { data: parsed, provenance };
 
         const validated = schema.safeParse(parsed);
-        if (validated.success) return validated.data;
+        if (validated.success) return { data: validated.data, provenance };
 
         console.warn(
           `[ai-orchestrator] ${attempt.label} returned JSON that failed schema validation: ${validated.error.issues

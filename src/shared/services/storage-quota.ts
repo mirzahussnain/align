@@ -32,9 +32,9 @@ export interface StorageUsage {
 /** Current usage against the caps, for the billing screen's meters. */
 export async function getStorageUsage(
   userId: string,
-  subscriptionTier: string | null | undefined
+  effectivePlan: string | null | undefined
 ): Promise<StorageUsage> {
-  const entitlements = entitlementsFor(subscriptionTier);
+  const entitlements = entitlementsFor(effectivePlan);
 
   const [cvCount, analysisCount, cvBytes, uploadBytes] = await Promise.all([
     prisma.generatedCV.count({ where: { userId } }),

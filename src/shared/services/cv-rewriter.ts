@@ -1,8 +1,19 @@
 import type { StructuredCvRewriteOutput } from '@/shared/types/cv-rewrite';
 import type { LedgerNativeRewriteInput } from '@/shared/types/cv-rewrite';
-import { generateJSONFromAI } from './ai-orchestrator';
+import {
+  generateJSONFromAIWithProvenance,
+  type ProviderProvenance,
+} from './ai-orchestrator';
 import { composeRewritePrompt } from './cv-rewrite-prompt';
 import { THINKING_BUDGETS } from '@/shared/lib/config';
+
+export type { ProviderProvenance } from './ai-orchestrator';
+
+export interface RewriteWithProvenance {
+  output: StructuredCvRewriteOutput;
+  /** Which provider/model actually produced this rewrite (for audit provenance). */
+  provenance: ProviderProvenance;
+}
 
 /**
  * Rewrite a CV into the structured template shape, tailored to one job.
@@ -20,9 +31,23 @@ import { THINKING_BUDGETS } from '@/shared/lib/config';
 export async function rewriteCV(
   input: LedgerNativeRewriteInput
 ): Promise<StructuredCvRewriteOutput | null> {
-  return generateJSONFromAI<StructuredCvRewriteOutput>({
+  const result = await rewriteCVWithProvenance(input);
+  return result ? result.output : null;
+}
+
+/**
+ * As {@link rewriteCV}, but also returns the coarse provider/model provenance for
+ * the winning attempt, so the generation route can persist WHICH provider and
+ * model produced the CV (and whether a fallback was used). One route request is
+ * still one logical operation charged once, regardless of provider attempts.
+ */
+export async function rewriteCVWithProvenance(
+  input: LedgerNativeRewriteInput
+): Promise<RewriteWithProvenance | null> {
+  const result = await generateJSONFromAIWithProvenance<StructuredCvRewriteOutput>({
     prompt: composeRewritePrompt(input),
     temperature: 0.2,
     thinkingBudget: THINKING_BUDGETS.rewrite,
   });
+  return result ? { output: result.data, provenance: result.provenance } : null;
 }

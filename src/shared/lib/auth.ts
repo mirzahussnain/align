@@ -15,13 +15,4 @@ export const auth = betterAuth({
       clientSecret: process.env.GOOGLE_CLIENT_SECRET || '',
     },
   },
-  user: {
-    additionalFields: {
-      subscriptionTier: {
-        type: 'string',
-        defaultValue: 'free',
-        input: false,
-      },
-    },
-  },
 });

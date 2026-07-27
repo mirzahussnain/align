@@ -25,8 +25,16 @@ import type { ExperienceDuration } from '@/shared/services/derived-facts';
  */
 export const REWRITE_PROMPT_CONTEXT_VERSION = 1;
 
-/** The model-output and source-reference contract for Stage 3 tailored rewrites. */
-export const STRUCTURED_REWRITE_CONTRACT_VERSION = 1;
+/**
+ * The model-output and source-reference contract for Stage 3 tailored rewrites.
+ *
+ * v2 adds optional per-skill provenance (`ProvenancedSkillGroup.items`). It is
+ * additive and backward compatible: a v1 draft that carries only group-level
+ * `sourceRefs` still validates exactly as before, while a v2 draft lets the
+ * deterministic salvage pass keep the supported skills in a group and drop only
+ * the unsupported ones instead of discarding the whole document.
+ */
+export const STRUCTURED_REWRITE_CONTRACT_VERSION = 2;
 export const REWRITE_SOURCE_REFERENCE_SCHEMA_VERSION = 1;
 
 /** Bumped whenever the post-generation truthfulness checks change. */
@@ -108,7 +116,13 @@ export interface ProvenancedBullet extends ProvenancedTextBlock { label?: string
 export interface ProvenancedExperienceEntry { jobTitle: string; company: string; location?: string; type?: string; startDate?: string; endDate?: string; achievements: ProvenancedBullet[]; sourceRefs: RewriteSourceRef[]; }
 export interface ProvenancedProjectEntry { name: string; skills?: string; startDate?: string; endDate?: string; achievements: ProvenancedBullet[]; sourceRefs: RewriteSourceRef[]; }
 export interface ProvenancedEducationEntry { degree: string; university: string; startDate?: string; endDate?: string; grade?: string; description?: string; sourceRefs: RewriteSourceRef[]; }
-export interface ProvenancedSkillGroup extends ProvenancedTextBlock { category: string; }
+/**
+ * One skill inside a grouped skills block, carrying its own provenance. Optional
+ * and additive (contract v2): when present it lets salvage validate and keep
+ * skills individually; when absent the group falls back to group-level refs.
+ */
+export interface ProvenancedSkillItem { skill: string; sourceRefs: RewriteSourceRef[]; }
+export interface ProvenancedSkillGroup extends ProvenancedTextBlock { category: string; items?: ProvenancedSkillItem[]; }
 export interface ProvenancedCertificationEntry { name: string; issuer?: string; year?: string; sourceRefs: RewriteSourceRef[]; }
 /** Raw model response. It contains content plus evidence references, never layout instructions. */
 export interface StructuredCvRewriteOutput {

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, UserRound, FileSearch, Lock, ChevronRight, Loader2 } from 'lucide-react';
 import Button from '@/shared/components/ui/Button';
@@ -29,6 +29,15 @@ import SuccessStep from './steps/SuccessStep';
 import { triggerBrowserDownload } from '../utils/download';
 import { DEFAULT_TEMPLATE_ID, type TemplateId } from '@/shared/constants/templates';
 import type { ExportFormat } from './RewriteWizardModal';
+import {
+  interpretOperationalError,
+  type OperationalClientAction,
+} from '@/shared/entitlements/operational-errors';
+
+/** Message for any non-upgrade operational action; upgrade opens the modal instead. */
+function operationalMessage(action: OperationalClientAction, fallback: string): string {
+  return 'message' in action ? action.message : fallback;
+}
 
 type Source = 'profile' | 'analysis';
 type Step =
@@ -112,7 +121,36 @@ export default function GenerateCvWizardModal({
 
   const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [operationId, setOperationId] = useState(() => crypto.randomUUID());
+  // When a committed generation's document went missing, the server offers a
+  // linked, non-double-charged repair. We hold the original operation id so the
+  // user can trigger the repair explicitly from the error state.
+  const [repairOf, setRepairOf] = useState<string | null>(null);
+  // Keep the operation id stable across network retries of the SAME logical
+  // generation, but mint a fresh one whenever the material request identity
+  // changes — a different source, analysis, template, approved evidence set or
+  // ATS toggle — so a changed request never collides with an earlier committed
+  // one on the server's fingerprint. Resolved at fetch time (not in an effect) so
+  // the CV generation wizard's submission always carries a correctly stable id.
+  const operationIdRef = useRef<string>(crypto.randomUUID());
+  const submissionKeyRef = useRef<string | null>(null);
+  const currentOperationId = () => {
+    const key = JSON.stringify({
+      source,
+      selectedAnalysisId,
+      activeProfileId,
+      selectedTemplate,
+      includeAts,
+      approvals: [...approvedProfileEvidence]
+        .map((approval) => approval.approvalId ?? requirementEvidencePairKey(approval.requirementId, approval.evidenceRef))
+        .sort(),
+      appContext: [...applicationEvidenceContextIds].sort(),
+    });
+    if (submissionKeyRef.current !== key) {
+      submissionKeyRef.current = key;
+      operationIdRef.current = crypto.randomUUID();
+    }
+    return operationIdRef.current;
+  };
 
   if (!isOpen) return null;
 
@@ -137,7 +175,8 @@ export default function GenerateCvWizardModal({
     setIncludeReasoning(true);
     setDownloadUrl(null);
     setError(null);
-    setOperationId(crypto.randomUUID());
+    submissionKeyRef.current = null;
+    operationIdRef.current = crypto.randomUUID();
     onClose();
   }
 
@@ -241,7 +280,13 @@ export default function GenerateCvWizardModal({
         body: JSON.stringify({ analysisId: selectedAnalysisId, profileId: activeProfileId }),
       });
       const json = await res.json();
-      if (!res.ok) throw new Error(json.error || 'Failed to compare your profile.');
+      if (!res.ok) {
+        const action = interpretOperationalError(res.status, json);
+        if (action.type === 'upgrade') {
+          openUpgrade({ capability: 'profile_reconciliation', decision: decisionFor('profile_reconciliation'), source: 'generation' });
+        }
+        throw new Error(operationalMessage(action, 'Failed to compare your profile.'));
+      }
 
       const found: ProfileEvidenceSuggestion[] = Array.isArray(json.suggestions)
         ? json.suggestions
@@ -269,14 +314,36 @@ export default function GenerateCvWizardModal({
     try {
       if (!selectedAnalysisId || !activeProfileId) throw new Error('Choose an analysis and profile before approving evidence.');
       const saved = await approveProfileEvidenceSnapshot({ analysisId: selectedAnalysisId, profileId: activeProfileId, requirementId: suggestion.requirementId, evidenceRef: suggestion.evidenceRef, rationale: suggestion.rationale });
+      if (!saved.ok) {
+        // Per-application approval cap reached — open the central upgrade surface;
+        // approval state is left untouched.
+        openUpgrade({ capability: 'approve_evidence_for_application', decision: saved.decision, source: 'evidence' });
+        return;
+      }
       setApprovedProfileEvidence((items) => [...items, { requirementId: suggestion.requirementId, evidenceRef: suggestion.evidenceRef, approvalId: saved.id }]);
     } catch (error) { setError(error instanceof Error ? error.message : 'Could not approve profile evidence.'); }
   }
 
-  async function handleSubmit() {
+  function handleSubmit() {
+    return submitGeneration();
+  }
+
+  /**
+   * Submit a CV generation. Pass `repairOf` to run a linked, non-double-charged
+   * repair of a committed generation whose document went missing — it carries a
+   * fresh operation id plus the original operation id in `x-repair-of`.
+   */
+  async function submitGeneration(repairOf?: string) {
     setStep('loading');
     setError(null);
+    if (!repairOf) setRepairOf(null);
     try {
+      const operationId = repairOf ? crypto.randomUUID() : currentOperationId();
+      const regenerateHeaders: Record<string, string> = {
+        'Content-Type': 'application/json',
+        'x-operation-id': operationId,
+        ...(repairOf ? { 'x-repair-of': repairOf } : {}),
+      };
       const response =
         source === 'profile'
           ? await fetch('/api/cv/from-profile', {
@@ -290,7 +357,7 @@ export default function GenerateCvWizardModal({
             })
           : await fetch('/api/cv/regenerate', {
               method: 'POST',
-              headers: { 'Content-Type': 'application/json', 'x-operation-id': operationId },
+              headers: regenerateHeaders,
               body: JSON.stringify({
                 analysisId: selectedAnalysisId,
                 templateId: selectedTemplate,
@@ -314,17 +381,23 @@ export default function GenerateCvWizardModal({
 
       if (!response.ok) {
         const err = await response.json().catch(() => ({}));
-        if (err.code === 'ENTITLEMENT_REQUIRED' && typeof err.capability === 'string') {
-          const capability = err.capability as 'cv_regeneration';
+        // One shared interpretation for every generation failure mode.
+        const action = interpretOperationalError(response.status, err);
+        if (action.type === 'upgrade') {
+          const capability = (action.capability as 'cv_regeneration') ?? 'cv_regeneration';
           openUpgrade({ capability, decision: decisionFor(capability), source: 'generation' });
+        } else if (action.type === 'repair' && source === 'analysis') {
+          // Offer an explicit, non-double-charged repair from the error state.
+          setRepairOf(action.operationId);
         }
-        throw new Error(err.error || 'Failed to generate CV');
+        throw new Error(operationalMessage(action, 'Failed to generate CV'));
       }
 
       const blob = await response.blob();
       const fileName = source === 'profile' ? 'Profile_CV.docx' : 'Tailored_CV.docx';
       const url = triggerBrowserDownload(blob, fileName);
       setDownloadUrl(url);
+      setRepairOf(null);
 
       setStep('success');
       await refreshEntitlements();
@@ -358,7 +431,18 @@ export default function GenerateCvWizardModal({
         {/* Body */}
         <div className="flex-1 overflow-y-auto p-6 relative">
           {error && (
-            <div className="mb-4 p-3 bg-red-50 text-red-700 rounded-lg text-sm">{error}</div>
+            <div className="mb-4 p-3 bg-red-50 text-red-700 rounded-lg text-sm flex items-center justify-between gap-3">
+              <span>{error}</span>
+              {repairOf && (
+                <button
+                  type="button"
+                  onClick={() => submitGeneration(repairOf)}
+                  className="shrink-0 rounded-md bg-red-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-700"
+                >
+                  Recover my CV
+                </button>
+              )}
+            </div>
           )}
 
           <AnimatePresence mode="wait">

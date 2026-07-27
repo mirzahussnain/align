@@ -2,11 +2,22 @@ import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 import type { JobMatchDataV2 } from '@/shared/types/ai';
+import {
+  buildJobMatchReportView,
+  type ReportViewAccess,
+} from '@/shared/services/job-match-report-view';
 
 vi.mock('framer-motion', () => ({ motion: { div: 'div' } }));
 
 import CriterionMappingPanel from '../CriterionMappingPanel';
 import DomainFitPanel from '../DomainFitPanel';
+
+const FULL_ACCESS: ReportViewAccess = {
+  fullReport: true,
+  requirementLedger: true,
+  rewriteStrategy: true,
+  eligibility: true,
+};
 
 const cvBuildSpec = {
   recommended_template: 'sharp_minimal',
@@ -55,6 +66,9 @@ function v2(status: 'aligned' | 'partial' | 'mismatch'): JobMatchDataV2 {
   };
 }
 
+const view = (status: 'aligned' | 'partial' | 'mismatch') =>
+  buildJobMatchReportView(v2(status), FULL_ACCESS);
+
 describe('v2 job-match panels', () => {
   it.each([
     ['aligned', 'Aligned'],
@@ -62,7 +76,7 @@ describe('v2 job-match panels', () => {
     ['mismatch', 'Mismatch'],
   ] as const)('renders the %s domain state distinctly', (status, label) => {
     const html = renderToStaticMarkup(
-      createElement(DomainFitPanel, { data: v2(status), contentVariants: {} })
+      createElement(DomainFitPanel, { view: view(status), contentVariants: {} })
     );
 
     expect(html).toContain(label);
@@ -70,7 +84,7 @@ describe('v2 job-match panels', () => {
 
   it('renders exact v2 criterion evidence from the ledger', () => {
     const html = renderToStaticMarkup(
-      createElement(CriterionMappingPanel, { data: v2('aligned'), contentVariants: {} })
+      createElement(CriterionMappingPanel, { view: view('aligned'), contentVariants: {} })
     );
 
     expect(html).toContain('Evidence found');

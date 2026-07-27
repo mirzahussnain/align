@@ -39,11 +39,21 @@ describe('report projection', () => {
     expect(canonical.jobMatchData?.requirements).toHaveLength(5);
   });
 
-  it('returns the complete authorised object for full access', () => {
+  it('returns the complete authorised ledger plus the report view for full access', () => {
     const projected = projectAnalysisReport(canonical, {
       report: decision('view_full_job_match_report', 'full'),
     });
-    expect(projected).toBe(canonical);
+    // Canonical analysis fields pass through unchanged (same ledger reference).
+    expect(projected.jobMatchData).toBe(canonical.jobMatchData);
+    expect(projected.overallScore).toBe(canonical.overallScore);
+    // The plan-aware report view model is attached for every plan, so the UI has
+    // one contract to render. It reflects the FULL ledger for full access.
+    expect(projected.jobMatchReport).toBeDefined();
+    expect(projected.jobMatchReport?.requirements.totals.total).toBe(5);
+    expect(projected.jobMatchReport?.requirements.totals.visible).toBe(5);
+    expect(projected.jobMatchReport?.scoreExplanation.reconciles).toBe(true);
+    // The input object is never mutated.
+    expect(canonical.jobMatchReport).toBeUndefined();
   });
 });
 

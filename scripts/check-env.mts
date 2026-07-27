@@ -104,6 +104,41 @@ const CHECKS: Check[] = [
     note: 'Rate limiting — NO-OPS ENTIRELY IF UNSET, so production really wants this',
   },
   { name: 'UPSTASH_REDIS_REST_TOKEN', required: false, note: 'Rate limiting' },
+
+  // ── Billing (Stripe) ─────────────────────────────────────────────────────────
+  // Optional in Stage 1: the app runs without them; only Stripe-specific paths
+  // (checkout/webhooks/portal, none of which are live yet) require them. The
+  // secret and webhook secret are server-only and must NEVER be NEXT_PUBLIC_*.
+  {
+    name: 'STRIPE_SECRET_KEY',
+    required: false,
+    note: 'Stripe server secret (server-only) — needed only once checkout goes live',
+    validate: (v) => (v.startsWith('sk_') ? undefined : "must start with 'sk_'"),
+  },
+  {
+    name: 'STRIPE_WEBHOOK_SECRET',
+    required: false,
+    note: 'Stripe webhook signing secret (server-only)',
+    validate: (v) => (v.startsWith('whsec_') ? undefined : "must start with 'whsec_'"),
+  },
+  {
+    name: 'NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY',
+    required: false,
+    note: 'Stripe publishable key (safe on the client)',
+    validate: (v) => (v.startsWith('pk_') ? undefined : "must start with 'pk_'"),
+  },
+  {
+    name: 'STRIPE_PRO_MONTHLY_PRICE_ID',
+    required: false,
+    note: 'Stripe price id for the Pro Monthly offer (server-only)',
+    validate: (v) => (v.startsWith('price_') ? undefined : "must start with 'price_'"),
+  },
+  {
+    name: 'NEXT_PUBLIC_APP_URL',
+    required: false,
+    note: 'Public origin used to build checkout return URLs (defaults to localhost)',
+    validate: url,
+  },
 ];
 
 const errors: string[] = [];
@@ -138,6 +173,30 @@ if (isR2 && region && region !== 'auto') {
 if (!isR2 && endpoint.includes('localhost') && pathStyle === 'false') {
   errors.push('S3_FORCE_PATH_STYLE must be true for MinIO (no wildcard DNS for virtual-host buckets)');
 }
+// Stripe is all-or-nothing: once the secret key is present the app is expected to
+// transact, so the webhook secret and the Pro price id must be present too — a
+// half-configured Stripe is worse than none (checkout or webhook verification
+// fails at runtime instead of at deploy). Absent entirely is fine (billing is
+// simply not live).
+if (process.env.STRIPE_SECRET_KEY) {
+  if (!process.env.STRIPE_WEBHOOK_SECRET) {
+    errors.push('STRIPE_SECRET_KEY is set but STRIPE_WEBHOOK_SECRET is not — webhooks cannot be verified');
+  }
+  if (!process.env.STRIPE_PRO_MONTHLY_PRICE_ID) {
+    errors.push('STRIPE_SECRET_KEY is set but STRIPE_PRO_MONTHLY_PRICE_ID is not — checkout has no price to sell');
+  }
+  const secret = process.env.STRIPE_SECRET_KEY;
+  const publishable = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY;
+  // Live/test key mismatch is a classic footgun: a live secret with a test
+  // publishable key (or vice-versa) silently talks to the wrong Stripe mode.
+  if (publishable && secret.startsWith('sk_live_') && !publishable.startsWith('pk_live_')) {
+    errors.push('STRIPE_SECRET_KEY is a live key but NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY is not — Stripe mode mismatch');
+  }
+  if (publishable && secret.startsWith('sk_test_') && publishable.startsWith('pk_live_')) {
+    errors.push('STRIPE_SECRET_KEY is a test key but NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY is live — Stripe mode mismatch');
+  }
+}
+
 if (process.env.NODE_ENV === 'production') {
   if (endpoint.includes('localhost')) {
     errors.push('S3_ENDPOINT points at localhost in a production build');

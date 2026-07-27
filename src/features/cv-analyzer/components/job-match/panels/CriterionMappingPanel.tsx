@@ -3,11 +3,8 @@
 import { motion, type Variants } from 'framer-motion';
 import { ClipboardList, CheckCircle2, AlertCircle, HelpCircle } from 'lucide-react';
 import GlassCard from '@/shared/components/ui/GlassCard';
-import type { JobMatchDataV2, RequirementStatus } from '@/shared/types/ai';
-import {
-  getPersonSpecificationRequirements,
-  type RequirementDisplayRow,
-} from '@/shared/utils/job-match-view';
+import type { JobRequirementLedgerEntry, RequirementStatus } from '@/shared/types/ai';
+import type { JobMatchReportView } from '@/shared/types/job-match-report';
 
 /**
  * Person-specification mapping for supporting-statement-led applications
@@ -16,13 +13,15 @@ import {
  * statement that addresses every essential criterion explicitly.
  */
 export default function CriterionMappingPanel({
-  data,
+  view,
   contentVariants,
 }: {
-  data: JobMatchDataV2;
+  view: JobMatchReportView;
   contentVariants: Variants;
 }) {
-  const criteria = getPersonSpecificationRequirements(data);
+  const criteria = view.requirements.items.filter(
+    (requirement) => requirement.sourceSection === 'person_specification'
+  );
   const essential = criteria.filter((criterion) => criterion.importance === 'mandatory');
   const desirable = criteria.filter((criterion) => criterion.importance === 'desirable');
 
@@ -56,7 +55,7 @@ export default function CriterionMappingPanel({
     }
   };
 
-  const renderGroup = (title: string, items: RequirementDisplayRow[]) =>
+  const renderGroup = (title: string, items: JobRequirementLedgerEntry[]) =>
     items.length > 0 && (
       <div className="space-y-2">
         <h3 className="text-sm font-bold text-text-primary">{title}</h3>
