@@ -802,8 +802,11 @@ model JobSnapshot {
   descriptionAvailability   JobDescriptionAvailability
   selectedDescriptionSource JobDescriptionSource?
   selectedDescriptionHash   String?
+  descriptionAssessment     Json?
+  employerSponsorEvidence   Json?
   vacancySponsorshipSignal  Json?
   requirementEvidence       Json?
+  intelligenceAssessedAt    DateTime?
   dedupeFingerprint         String
   status                    JobSnapshotStatus          @default(ACTIVE)
   postedAt                  DateTime?

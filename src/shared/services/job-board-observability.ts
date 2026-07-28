@@ -40,7 +40,9 @@ export type JobBoardEvent =
   | 'session_missing'
   | 'session_rejected'
   | 'sponsor_match_cached'
-  | 'sponsor_match_computed';
+  | 'sponsor_match_computed'
+  | 'vacancy_intelligence_stage'
+  | 'vacancy_intelligence_completed';
 
 /** Where a cached value came from, for honest hit-rate accounting. */
 export type CacheHitKind = 'FRESH' | 'STALE' | 'MISS';

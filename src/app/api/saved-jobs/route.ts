@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { auth } from '@/shared/lib/auth';
 import { checkCapability, EntitlementRequiredError } from '@/shared/entitlements/server';
 import { getOrCreateSnapshotFromNormalisedJob, removeSavedJob, saveSnapshotForUser } from '@/shared/services/job-snapshot';
+import { assessAndPersistJobIntelligence } from '@/shared/services/job-intelligence-store';
 import { APIError, withErrorHandler } from '@/shared/utils/api-error';
 
 const SavedJobInput = z.object({ profileId: z.string().optional(), job: z.object({ source: z.enum(['ADZUNA', 'REED', 'JOOBLE']), sourceJobId: z.string().min(1), canonicalUrl: z.string().url(), dedupeFingerprint: z.string().min(1), title: z.string().min(1).max(500), company: z.string().min(1).max(500), locationText: z.string().max(500) }).passthrough() });
@@ -38,6 +39,7 @@ export async function POST(request: NextRequest) {
       const decision = await checkCapability(session.user.id, 'saved_jobs');
       if (!decision.allowed) throw new EntitlementRequiredError(decision);
     }
+    await assessAndPersistJobIntelligence({ jobSnapshotId: snapshot.id });
     const saved = await saveSnapshotForUser({ userId: session.user.id, jobSnapshotId: snapshot.id, profileId: parsed.data.profileId });
     return NextResponse.json({ saved: { id: saved.id, jobSnapshotId: saved.jobSnapshotId, canonicalIdentity: saved.jobSnapshot.dedupeFingerprint } }, { status: existing ? 200 : 201 });
   });

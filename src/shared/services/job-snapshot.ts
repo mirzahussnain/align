@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { Prisma } from '@/generated/prisma/client';
 import { prisma } from '@/shared/lib/prisma';
 import { normaliseTitle } from '@/shared/services/job-normalisation';
 import type { NormalisedJob } from '@/shared/types/job';
@@ -80,7 +81,7 @@ export async function attachUserDescription(input: { userId: string; jobSnapshot
   const selected = { text: description, source: 'USER_PASTED' as const, hash: descriptionHash(description) };
   return prisma.jobSnapshot.update({
     where: { id: snapshot.id },
-    data: { userSuppliedDescription: selected.text, selectedDescriptionSource: selected.source, selectedDescriptionHash: selected.hash },
+    data: { userSuppliedDescription: selected.text, selectedDescriptionSource: selected.source, selectedDescriptionHash: selected.hash, descriptionAssessment: Prisma.JsonNull, vacancySponsorshipSignal: Prisma.JsonNull, requirementEvidence: Prisma.JsonNull, intelligenceAssessedAt: null },
     include: { providerReferences: true },
   });
 }
