@@ -49,14 +49,26 @@ export async function getOrCreateSnapshotFromNormalisedJob(job: NormalisedJob) {
     lastSeenAt: now,
     fetchedAt: asDate(job.fetchedAt) ?? now,
   };
-  const snapshot = existing
-    ? await prisma.jobSnapshot.update({ where: { id: existing.id }, data })
-    : await prisma.jobSnapshot.create({ data: { canonicalJobId, ...data, firstSeenAt: now } });
+  let snapshot;
+  if (existing) {
+    snapshot = await prisma.jobSnapshot.update({ where: { id: existing.id }, data });
+  } else {
+    try {
+      snapshot = await prisma.jobSnapshot.create({ data: { canonicalJobId, ...data, firstSeenAt: now } });
+    } catch (error) {
+      // Concurrent board batches can discover the same vacancy simultaneously.
+      // The unique canonical key remains authoritative; reload then update it.
+      if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== 'P2002') throw error;
+      const concurrent = await prisma.jobSnapshot.findUnique({ where: { canonicalJobId } });
+      if (!concurrent) throw error;
+      snapshot = await prisma.jobSnapshot.update({ where: { id: concurrent.id }, data });
+    }
+  }
 
   await Promise.all(job.providerReferences.map((reference) => prisma.jobProviderReference.upsert({
     where: { provider_providerJobId: { provider: reference.provider, providerJobId: reference.sourceJobId } },
-    create: { jobSnapshotId: snapshot.id, provider: reference.provider, providerJobId: reference.sourceJobId, providerUrl: reference.sourceUrl, firstSeenAt: now, lastSeenAt: now },
-    update: { jobSnapshotId: snapshot.id, providerUrl: reference.sourceUrl, lastSeenAt: now },
+    create: { jobSnapshotId: snapshot.id, provider: reference.provider, providerJobId: reference.sourceJobId, providerUrl: reference.sourceUrl, applicationUrl: reference.applicationUrl ?? null, firstSeenAt: now, lastSeenAt: now },
+    update: { jobSnapshotId: snapshot.id, providerUrl: reference.sourceUrl, applicationUrl: reference.applicationUrl ?? null, lastSeenAt: now },
   })));
   return getSnapshotDetails(snapshot.id);
 }

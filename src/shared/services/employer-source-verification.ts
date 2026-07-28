@@ -43,7 +43,9 @@ export function parseEmployerBoardPayload(provider: EmployerAtsProvider, payload
     ?? stringAt(root?.meta, ['name', 'companyName']);
   const sample = jobs[0];
   const sampleJobUrl = stringAt(sample, ['absolute_url', 'applyUrl', 'apply_url', 'hostedUrl', 'jobUrl', 'url']);
-  return { employerName: employerName ?? stringAt(sample, ['company_name', 'companyName', 'organizationName']), jobs, sampleJobUrl };
+  // Lever's public API does not expose a board-level organisation field. Its published postings commonly include the employer identity in the provider-returned opening/description; use that as identity evidence rather than guessing from the site name.
+  const leverIdentityEvidence = provider === 'LEVER' ? stringAt(sample, ['company_name', 'companyName', 'organizationName', 'openingPlain', 'descriptionPlain', 'additionalPlain']) : undefined;
+  return { employerName: employerName ?? stringAt(sample, ['company_name', 'companyName', 'organizationName']) ?? leverIdentityEvidence, jobs, sampleJobUrl };
 }
 
 /** A strong match requires equal normalised names or at least two meaningful shared tokens. */
@@ -62,6 +64,17 @@ export function employerIdentityMatches(expected: string, observed: string | und
 
 function failed(input: VerifyEmployerSourceInput, code: EmployerSourceFailureCode, reason: string): EmployerSourceVerificationResult {
   return { provider: input.provider, providerIdentifier: input.providerIdentifier, status: 'FAILED', failureCode: code, failureReason: reason, verifiedAt: new Date().toISOString() };
+}
+/** Lever's public board title is provider-hosted organisation identity evidence.
+ * The API lacks a board-level company field, so never infer identity from the
+ * site identifier alone. */
+async function readLeverBoardIdentity(request: FetchLike, boardUrl: string, signal: AbortSignal): Promise<string | undefined> {
+  try {
+    const response = await request(boardUrl, { signal, redirect: 'error', headers: { accept: 'text/html', 'user-agent': 'Align employer-source verifier' } });
+    if (!response.ok || typeof response.text !== 'function') return undefined;
+    const html = await response.text();
+    return html.match(/<title[^>]*>\s*([^<]+?)\s*<\/title>/i)?.[1]?.trim();
+  } catch { return undefined; }
 }
 
 export async function verifyEmployerSourceRequest(
@@ -89,11 +102,12 @@ export async function verifyEmployerSourceRequest(
     if (parsed.jobs.length > 0 && (!parsed.sampleJobUrl || !isSafePublicApplicationUrl(parsed.sampleJobUrl))) {
       return failed(input, 'INVALID_JOB_URL', 'A sample vacancy did not provide a safe public HTTPS application URL.');
     }
+    const leverBoardIdentity = input.provider === 'LEVER' ? await readLeverBoardIdentity(dependencies.fetch ?? fetch, boardUrl, controller.signal) : undefined;
     return {
       provider: input.provider,
       providerIdentifier: input.providerIdentifier,
       status: 'VERIFIED',
-      employerName: parsed.employerName,
+      employerName: leverBoardIdentity ?? parsed.employerName,
       jobsFound: parsed.jobs.length,
       sampleJobUrl: parsed.sampleJobUrl,
       boardUrl,

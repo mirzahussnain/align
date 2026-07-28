@@ -16,7 +16,7 @@ describe('Greenhouse employer adapter', () => {
     const empty = createGreenhouseAdapter({ fetch: async () => response(200, { jobs: [] }) });
     await expect(empty.fetchBoard(source)).resolves.toMatchObject({ jobs: [], rawReceived: 0 });
     const unsafe = createGreenhouseAdapter({ fetch: async () => response(200, { jobs: [{ id: 1, title: 'Nope', absolute_url: 'https://169.254.169.254/job' }] }) });
-    await expect(unsafe.fetchBoard(source)).resolves.toMatchObject({ jobs: [], invalidUrls: 1 });
+    await expect(unsafe.fetchBoard(source)).resolves.toMatchObject({ jobs: [{ source: 'GREENHOUSE', canonicalUrl: 'https://boards.greenhouse.io/acme/jobs/1' }], invalidUrls: 1, urlRejections: { EMPLOYER_HOST_MISMATCH: 1 } });
   });
   it('refuses disabled and unverified sources, malformed responses, and timeouts', async () => {
     const adapter = createGreenhouseAdapter({ fetch: async () => response(200, { nope: [] }) });

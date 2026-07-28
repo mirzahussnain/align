@@ -117,7 +117,7 @@ export function normaliseProviderJob(raw: ProviderJob): NormalisedJob {
   const dedupeFingerprint = createHash('sha256').update(`${normaliseTitle(raw.title)}|${companyNormalised}|${normaliseLocationKey(raw.location)}`).digest('hex').slice(0, 24);
   const sourceJobId = raw.id.replace(/^[a-z]+-/, '');
   return {
-    source, sourceJobId, providerReferences: [{ provider: source, sourceJobId, sourceUrl: raw.url }],
+    source, sourceJobId, providerReferences: [{ provider: source, sourceJobId, sourceUrl: raw.hostedUrl ?? raw.url, ...(raw.applicationUrl ? { applicationUrl: raw.applicationUrl } : {}) }],
     canonicalUrl: raw.url, title: clean(raw.title), company: clean(raw.company), companyNormalised: companyNormalised || undefined,
     ...location, description: description || undefined,
     descriptionAvailability: classifyDescriptionAvailability(source, description),

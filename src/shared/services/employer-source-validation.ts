@@ -48,6 +48,7 @@ const ALLOWED_HOSTS = new Set([
   'api.lever.co',
   'api.eu.lever.co',
   'jobs.lever.co',
+  'jobs.eu.lever.co',
   'api.smartrecruiters.com',
   'jobs.smartrecruiters.com',
   'api.ashbyhq.com',
@@ -57,6 +58,10 @@ const ALLOWED_HOSTS = new Set([
 const LEVER_API_HOST: Record<LeverRegion, string> = {
   GLOBAL: 'api.lever.co',
   EU: 'api.eu.lever.co',
+};
+const LEVER_PUBLIC_HOST: Record<LeverRegion, string> = {
+  GLOBAL: 'jobs.lever.co',
+  EU: 'jobs.eu.lever.co',
 };
 
 export type IdentifierValidation =
@@ -143,7 +148,7 @@ export function buildPublicBoardUrl(source: EmployerJobSourceRef): string {
     case 'GREENHOUSE':
       return assertAllowedUrl(`https://boards.greenhouse.io/${id}`, id);
     case 'LEVER':
-      return assertAllowedUrl(`https://jobs.lever.co/${id}`, id);
+      return assertAllowedUrl(`https://${LEVER_PUBLIC_HOST[source.leverRegion ?? 'GLOBAL']}/${id}`, id);
     case 'SMARTRECRUITERS':
       return assertAllowedUrl(`https://jobs.smartrecruiters.com/${id}`, id);
     case 'ASHBY':

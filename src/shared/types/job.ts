@@ -50,7 +50,14 @@ export interface SponsorSignal {
   explanation: string;
 }
 
-export interface ProviderReference { provider: JobProvider; sourceJobId: string; sourceUrl: string; }
+export interface ProviderReference {
+  provider: JobProvider;
+  sourceJobId: string;
+  /** The provider-hosted posting page, used for provenance and re-verification. */
+  sourceUrl: string;
+  /** A separately validated direct application URL, when the provider supplies one. */
+  applicationUrl?: string;
+}
 
 export interface NormalisedJob {
   source: JobProvider; sourceJobId: string; providerReferences: ProviderReference[];
@@ -79,6 +86,10 @@ export interface ProviderJob {
   salaryMin: number | null; salaryMax: number | null; description: string; url: string; postedDate: string;
   source: Lowercase<JobProvider>; contractType: string | null; isRemote: boolean; hasSponsorship: boolean;
   employerSourceId?: string; companyRecordId?: string; departments?: string[]; offices?: string[];
+  /** Provider-hosted job detail page, when `url` is the direct application page. */
+  hostedUrl?: string;
+  /** Strictly validated direct application page, separate from hosted provenance. */
+  applicationUrl?: string;
 }
 export interface JobSearchResult { jobs: ProviderJob[]; total: number; page: number; perPage: number; source: string; }
 /**

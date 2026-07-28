@@ -932,6 +932,7 @@ model JobProviderReference {
   provider      JobProvider
   providerJobId String
   providerUrl   String
+  applicationUrl String?
   firstSeenAt   DateTime    @default(now())
   lastSeenAt    DateTime    @default(now())
   jobSnapshot   JobSnapshot @relation(fields: [jobSnapshotId], references: [id], onDelete: Cascade)

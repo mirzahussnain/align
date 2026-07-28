@@ -1,9 +1,14 @@
 import { prisma } from '../src/shared/lib/prisma.ts';
 import { verifyAndPersistEmployerSource } from '../src/shared/services/employer-source-verification.ts';
+import { isEmployerAtsProvider } from '../src/shared/types/job.ts';
 
 const all = process.argv.includes('--all');
 const requestedId = process.argv.find((value) => value.startsWith('--source='))?.slice('--source='.length);
-const where = requestedId ? { id: requestedId } : all ? {} : { verificationStatus: 'PENDING' as const };
+const providerArgument = process.argv.find((value) => value.startsWith('--provider='))?.slice('--provider='.length);
+const requestedProvider = providerArgument && isEmployerAtsProvider(providerArgument) ? providerArgument : undefined;
+if (providerArgument && !requestedProvider) throw new Error('Unknown employer ATS provider.');
+const providerFilter = requestedProvider ? { provider: requestedProvider } : {};
+const where = requestedId ? { id: requestedId } : all ? providerFilter : { verificationStatus: 'PENDING' as const, ...providerFilter };
 const sources = await prisma.employerJobSource.findMany({ where, select: { id: true, companyRecordId: true, provider: true, providerIdentifier: true, providerRegion: true } });
 const concurrency = 3;
 let cursor = 0;

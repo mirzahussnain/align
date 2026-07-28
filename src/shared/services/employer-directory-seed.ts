@@ -3,6 +3,7 @@ import type { EmployerDirectorySeed } from '../types/employer-source.ts';
 
 type SeedCompany = Omit<EmployerDirectorySeed, 'normalisedName' | 'country'>;
 const source = (providerIdentifier: string) => ({ provider: 'GREENHOUSE' as const, providerIdentifier, sourceOrigin: 'CURATED_SEED' as const });
+const leverSource = (providerIdentifier: string, leverRegion: 'GLOBAL' | 'EU' = 'GLOBAL') => ({ provider: 'LEVER' as const, providerIdentifier, leverRegion, sourceOrigin: 'CURATED_SEED' as const });
 const company = (entry: SeedCompany): EmployerDirectorySeed => ({ ...entry, country: 'GB', normalisedName: normaliseEmployerName(entry.displayName) });
 
 /**
@@ -65,4 +66,20 @@ export const EMPLOYER_DIRECTORY_SEED: readonly EmployerDirectorySeed[] = [
   company({ displayName: 'Toast', industry: 'Retail technology', websiteUrl: 'https://pos.toasttab.com', sources: [source('toast')] }),
   company({ displayName: 'Workday', industry: 'Professional services', websiteUrl: 'https://www.workday.com', sources: [source('workday')] }),
   company({ displayName: 'Yelp', industry: 'Retail technology', websiteUrl: 'https://www.yelp.com', sources: [source('yelp')] }),
-] as const;
+  // Public Lever boards manually checked for current UK roles. Identifiers come
+  // from the provider URLs, never from lowercasing the company names.
+  company({ displayName: 'Adlook', industry: 'Advertising technology', websiteUrl: 'https://adlook.com', sources: [leverSource('adlook')] }),
+  company({ displayName: 'Airalo', industry: 'Travel technology', websiteUrl: 'https://www.airalo.com', sources: [leverSource('airalo')] }),
+  company({ displayName: 'Capital.com', industry: 'Financial services', websiteUrl: 'https://capital.com', sources: [leverSource('capital')] }),
+  company({ displayName: 'Cority', industry: 'Environmental health software', websiteUrl: 'https://www.cority.com', sources: [leverSource('cority')] }),
+  company({ displayName: 'Crypto.com', industry: 'Financial services', websiteUrl: 'https://crypto.com', sources: [leverSource('crypto')] }),
+  company({ displayName: 'Gearset', industry: 'Software', websiteUrl: 'https://gearset.com', sources: [leverSource('gearset')] }),
+  company({ displayName: 'ghSMART', industry: 'Leadership advisory', websiteUrl: 'https://ghsmart.com', sources: [leverSource('ghsmartjobs')] }),
+  company({ displayName: 'Legend', industry: 'Digital marketing', websiteUrl: 'https://www.legend.inc', sources: [leverSource('Legend')] }),
+  company({ displayName: 'Matillion', industry: 'Data and AI', websiteUrl: 'https://www.matillion.com', sources: [leverSource('matillion')] }),
+  company({ displayName: 'MoonPay', industry: 'Financial technology', websiteUrl: 'https://www.moonpay.com', sources: [leverSource('moonpay')] }),
+  company({ displayName: 'Palantir Technologies', industry: 'Data and AI', websiteUrl: 'https://www.palantir.com', sources: [leverSource('palantir')] }),
+  company({ displayName: 'Pattern', industry: 'E-commerce', websiteUrl: 'https://pattern.com', sources: [leverSource('pattern')] }),
+  company({ displayName: 'Safe Security', industry: 'Cybersecurity', websiteUrl: 'https://www.safe.security', sources: [leverSource('safe')] }),
+  company({ displayName: 'Serverfarm', industry: 'Data centres', websiteUrl: 'https://www.serverfarmllc.com', sources: [leverSource('serverfarm')] }),
+  company({ displayName: 'Veeva Systems', industry: 'Life sciences software', websiteUrl: 'https://www.veeva.com', sources: [leverSource('veeva')] }),] as const;
