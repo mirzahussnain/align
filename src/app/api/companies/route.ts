@@ -1,0 +1,6 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { z } from 'zod';
+import { listCompanies } from '@/shared/services/job-board-api';
+import { APIError, withErrorHandler } from '@/shared/utils/api-error';
+const Query = z.object({ search: z.string().trim().max(200).optional(), provider: z.enum(['GREENHOUSE', 'LEVER', 'ASHBY']).optional(), industry: z.string().trim().max(120).optional(), sponsorStatus: z.enum(['MATCHED', 'AMBIGUOUS', 'NONE', 'NOT_CHECKED']).optional(), activeJobsOnly: z.enum(['true', 'false']).optional(), sort: z.enum(['NAME', 'ACTIVE_JOBS', 'RECENTLY_REFRESHED']).default('NAME'), cursor: z.string().max(500).optional(), limit: z.coerce.number().int().min(1).max(50).default(20) });
+export async function GET(request: NextRequest) { return withErrorHandler(async () => { const parsed = Query.safeParse(Object.fromEntries(request.nextUrl.searchParams)); if (!parsed.success) throw new APIError('Invalid company filters.', 400, { field: parsed.error.issues[0]?.path.join('.') }, 'INVALID_REQUEST'); try { return NextResponse.json(await listCompanies({ ...parsed.data, activeJobsOnly: parsed.data.activeJobsOnly === 'true' })); } catch { throw new APIError('Invalid pagination cursor.', 400, { field: 'cursor' }, 'INVALID_REQUEST'); } }); }

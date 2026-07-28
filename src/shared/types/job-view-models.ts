@@ -320,3 +320,36 @@ export interface JobSearchResponseView {
   jobs: JobListItemView[];
   meta: JobSearchMetaView;
 }
+
+// Phase 10 stable Job Board API contract. These lightweight views deliberately
+// omit provider payloads, raw Prisma shapes, descriptions and private evidence.
+export type JobCardViewModel = {
+  id: string;
+  title: string;
+  company: { id?: string; displayName: string };
+  location?: string;
+  workplaceType?: string;
+  employmentType?: string;
+  salary?: { text?: string; min?: number; max?: number; period?: string; currency?: string };
+  postedAt?: string;
+  freshness: 'FRESH' | 'STALE';
+  sourceSummary: { preferredProvider: string; providerCount: number; employerDirect: boolean };
+  sponsorEvidenceSummary?: { status: 'MATCHED' | 'AMBIGUOUS' | 'NONE' | 'NOT_CHECKED' };
+  careerTrackRelevance?: 'HIGH' | 'MEDIUM' | 'LOW';
+  saved: boolean;
+};
+
+export type CompanyCardViewModel = {
+  id: string;
+  displayName: string;
+  industry?: string;
+  websiteUrl?: string;
+  careersUrl?: string;
+  sponsorEvidenceSummary: { status: 'MATCHED' | 'AMBIGUOUS' | 'NONE' | 'NOT_CHECKED' };
+  verifiedSourceCount: number;
+  activeJobCount: number;
+  providers: string[];
+  lastRefreshedAt?: string;
+};
+
+export type ApiPaginationView = { hasMore: boolean; nextCursor?: string };
