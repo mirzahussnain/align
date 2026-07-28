@@ -1,152 +1,17 @@
 'use client';
-
-import { useState, useEffect, useRef, useCallback } from 'react';
-import type { Job } from '@/shared/types/job';
-
+import { useCallback, useEffect, useRef, useState } from 'react';
+import type { NormalisedJob, ProviderCount } from '@/shared/types/job';
+type Track = { profileId: string; label: string; isDefault: boolean; targetRoleTitle: string; targetOccupation: string; targetIndustry: string; targetSeniority: string };
+type SearchOverride = { query?: string; location?: string; profileId?: string };
 export function useJobs() {
-  // Seeded from the URL so a shared /jobs?query=... link searches on load
-  // without an effect having to set state after mount.
-  const [query, setQuery] = useState(() =>
-    typeof window !== 'undefined'
-      ? new URLSearchParams(window.location.search).get('query') ?? ''
-      : ''
-  );
-  const [location, setLocation] = useState('');
-  const [source, setSource] = useState('all');
-  const [contractType, setContractType] = useState('all');
-  const [techFilter, setTechFilter] = useState('all');
-  const [salaryMin, setSalaryMin] = useState('');
-  const [sponsorshipFilter, setSponsorshipFilter] = useState('all');
-  const [experienceLevel, setExperienceLevel] = useState('all');
-  const [sortBy, setSortBy] = useState('relevance');
-  const [jobs, setJobs] = useState<Job[]>([]);
-  const [total, setTotal] = useState(0);
-  const [isLoading, setIsLoading] = useState(false);
-  const [hasSearched, setHasSearched] = useState(false);
-  const [sources, setSources] = useState<{ name: string; count: number; error?: string }[]>([]);
-  const [page, setPage] = useState(1);
-  const [error, setError] = useState<string | null>(null);
-  const isFirstMount = useRef(true);
-
-  const searchJobs = useCallback(async (pageNumber: number = 1, overrideQuery?: string) => {
-    const activeQuery = overrideQuery !== undefined ? overrideQuery : query;
-    if (!activeQuery.trim()) return;
-
-    setIsLoading(true);
-    setError(null);
-    setHasSearched(true);
-    setPage(pageNumber);
-
-    try {
-      const params = new URLSearchParams({
-        query: activeQuery.trim(),
-        tech: techFilter !== 'all' ? techFilter : '',
-        location: location.trim(),
-        source,
-        contractType,
-        page: String(pageNumber),
-        perPage: '50',
-        sponsorship: sponsorshipFilter,
-        experience: experienceLevel,
-        sortBy: sortBy,
-      });
-
-      if (salaryMin) {
-        params.set('salaryMin', salaryMin);
-      }
-
-      const response = await fetch(`/api/jobs?${params}`);
-      
-      if (!response.ok) {
-        throw new Error('Failed to query job listings');
-      }
-
-      const data = await response.json();
-
-      if (pageNumber === 1) {
-        setJobs(data.jobs || []);
-        setSources(data.sources || []);
-      } else {
-        setJobs(prev => {
-          const newJobs = (data.jobs || []).filter((j: Job) => !prev.some(p => p.id === j.id));
-          return [...prev, ...newJobs];
-        });
-        setSources(prev => {
-          const newSources = [...prev];
-          (data.sources || []).forEach((s: { name: string; count: number; error?: string }) => {
-            const existing = newSources.find(x => x.name === s.name);
-            if (existing) {
-              existing.count += s.count;
-            } else {
-              newSources.push(s);
-            }
-          });
-          return newSources;
-        });
-      }
-      setTotal(data.total || 0);
-    } catch (err) {
-      console.error(err);
-      setError(err instanceof Error ? err.message : 'An error occurred during search');
-      setJobs([]);
-      setTotal(0);
-      setSources([]);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [query, location, source, contractType, techFilter, salaryMin, sponsorshipFilter, experienceLevel, sortBy]);
-
-  // Auto-search when filters change (debounced); skipped on first mount so
-  // landing on the page never fires an empty search.
-  useEffect(() => {
-    if (isFirstMount.current) {
-      isFirstMount.current = false;
-      return;
-    }
-    if (hasSearched) {
-      const timer = setTimeout(() => {
-        searchJobs(1);
-      }, 300);
-      return () => clearTimeout(timer);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- deliberately excludes `query`: typing must not auto-search
-  }, [source, contractType, techFilter, salaryMin, sponsorshipFilter, experienceLevel, sortBy]);
-
-  // A URL-seeded query searches immediately on load. Deferred a tick so the
-  // search's own state updates never run synchronously inside the effect.
-  useEffect(() => {
-    if (!query.trim()) return;
-    const timer = setTimeout(() => searchJobs(1, query), 0);
-    return () => clearTimeout(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- mount-only by design
-  }, []);
-
-  return {
-    query,
-    setQuery,
-    location,
-    setLocation,
-    source,
-    setSource,
-    contractType,
-    setContractType,
-    techFilter,
-    setTechFilter,
-    salaryMin,
-    setSalaryMin,
-    sponsorshipFilter,
-    setSponsorshipFilter,
-    experienceLevel,
-    setExperienceLevel,
-    sortBy,
-    setSortBy,
-    jobs,
-    total,
-    isLoading,
-    hasSearched,
-    sources,
-    error,
-    page,
-    searchJobs,
-  };
+  const [query, setQuery] = useState(''); const [location, setLocation] = useState(''); const [source, setSource] = useState('all'); const [contractType, setContractType] = useState('all'); const [salaryMin, setSalaryMin] = useState(''); const [sponsorshipFilter, setSponsorshipFilter] = useState('all'); const [experienceLevel, setExperienceLevel] = useState('all'); const [remoteType, setRemoteType] = useState('all'); const [postedWithinDays, setPostedWithinDays] = useState(''); const [sortBy, setSortBy] = useState('relevance');
+  const [jobs, setJobs] = useState<NormalisedJob[]>([]); const [isLoading, setIsLoading] = useState(false); const [hasSearched, setHasSearched] = useState(false); const [initialising, setInitialising] = useState(true); const [profiles, setProfiles] = useState<Track[]>([]); const [selectedProfile, setSelectedProfile] = useState<Track | null>(null); const [providerCounts, setProviderCounts] = useState<ProviderCount[]>([]); const [sessionId, setSessionId] = useState<string | null>(null); const [hasMore, setHasMore] = useState(false); const [partialMessage, setPartialMessage] = useState<string | null>(null); const [error, setError] = useState<string | null>(null); const searchRef = useRef<AbortController | null>(null);
+  const searchJobs = useCallback(async (loadMore = false, override: SearchOverride = {}) => {
+    const activeQuery = override.query ?? query; const activeLocation = override.location ?? location; if (!activeQuery.trim()) return;
+    searchRef.current?.abort(); const controller = new AbortController(); searchRef.current = controller; setIsLoading(true); setError(null); setHasSearched(true);
+    try { const params = new URLSearchParams({ query: activeQuery.trim(), location: activeLocation.trim(), source, contractType, perPage: '15', sponsorship: sponsorshipFilter, experience: experienceLevel, remoteType, sortBy }); if (salaryMin) params.set('salaryMin', salaryMin); if (postedWithinDays) params.set('postedWithinDays', postedWithinDays); if (loadMore && sessionId) params.set('sessionId', sessionId); const response = await fetch(`/api/jobs?${params}`, { signal: controller.signal }); if (!response.ok) throw new Error('Unable to search job sources right now.'); const data = await response.json(); const incoming = data.jobs as NormalisedJob[]; setSessionId(data.sessionId); setProviderCounts(data.meta?.providerCounts ?? []); setPartialMessage(data.meta?.message ?? null); setHasMore(incoming.length === 15); setJobs((previous) => loadMore ? [...previous, ...incoming.filter((job) => !previous.some((existing) => existing.canonicalJobId === job.canonicalJobId))] : incoming); if (!loadMore) window.history.replaceState(null, '', `/jobs?${params}`); } catch (caught) { if ((caught as Error).name !== 'AbortError') { setError(caught instanceof Error ? caught.message : 'Unable to search jobs.'); if (!loadMore) setJobs([]); } } finally { if (!controller.signal.aborted) setIsLoading(false); }
+  }, [query, location, source, contractType, salaryMin, sponsorshipFilter, experienceLevel, remoteType, postedWithinDays, sortBy, sessionId]);
+  useEffect(() => { (async () => { try { const response = await fetch('/api/jobs/bootstrap'); const data = await response.json(); const track = data.selectedProfile as Track | null; setProfiles(data.profiles ?? []); setSelectedProfile(track); const initial = new URLSearchParams(window.location.search); const urlQuery = initial.get('query'); const nextQuery = urlQuery || data.defaultSearch.query; const nextLocation = initial.get('location') ?? data.defaultSearch.location; setQuery(nextQuery); setLocation(nextLocation); await searchJobs(false, { query: nextQuery, location: nextLocation, profileId: track?.profileId }); } catch { setError('Unable to prepare your Job Board search.'); } finally { setInitialising(false); } })(); }, []);
+  const selectProfile = useCallback((profileId: string) => { const track = profiles.find((profile) => profile.profileId === profileId) ?? null; if (!track) return; setSelectedProfile(track); setQuery(track.targetRoleTitle || track.targetOccupation || track.targetIndustry || 'jobs'); setSessionId(null); searchJobs(false, { query: track.targetRoleTitle || track.targetOccupation || track.targetIndustry || 'jobs', profileId }); }, [profiles, searchJobs]);
+  return { query, setQuery, location, setLocation, source, setSource, contractType, setContractType, salaryMin, setSalaryMin, sponsorshipFilter, setSponsorshipFilter, experienceLevel, setExperienceLevel, remoteType, setRemoteType, postedWithinDays, setPostedWithinDays, sortBy, setSortBy, jobs, isLoading, hasSearched, initialising, profiles, selectedProfile, selectProfile, providerCounts, error, hasMore, partialMessage, searchJobs };
 }

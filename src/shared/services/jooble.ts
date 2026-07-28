@@ -1,6 +1,6 @@
 // Jooble API Service
 
-import type { Job, JobSearchParams, JobSearchResult } from '@/shared/types/job';
+import type { ProviderJob, JobSearchParams, JobSearchResult } from '@/shared/types/job';
 import { API_CONFIG } from '@/shared/lib/config';
 
 interface JoobleJob {
@@ -54,7 +54,7 @@ export async function searchJoobleJobs(params: JobSearchParams): Promise<JobSear
 
   const data: JoobleResponse = await response.json();
 
-  const jobs: Job[] = (data.jobs || []).map((job, index) => ({
+  const jobs: ProviderJob[] = (data.jobs || []).map((job, index) => ({
     id: `jooble-${job.id || index}`,
     title: job.title,
     company: job.company || 'Company not specified',

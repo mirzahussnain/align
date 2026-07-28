@@ -1,6 +1,6 @@
 // Adzuna API Service
 
-import type { Job, JobSearchParams, JobSearchResult } from '@/shared/types/job';
+import type { ProviderJob, JobSearchParams, JobSearchResult } from '@/shared/types/job';
 import { API_CONFIG } from '@/shared/lib/config';
 
 interface AdzunaJob {
@@ -74,7 +74,7 @@ export async function searchAdzunaJobs(params: JobSearchParams): Promise<JobSear
 
   const data: AdzunaResponse = await response.json();
 
-  const jobs: Job[] = data.results.map((job) => ({
+  const jobs: ProviderJob[] = data.results.map((job) => ({
     id: `adzuna-${job.id}`,
     title: job.title,
     company: job.company.display_name,

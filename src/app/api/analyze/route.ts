@@ -43,6 +43,7 @@ import { loadProfileTarget, resolveProfileId } from '@/features/dashboard/data/l
 import { recordFirstValueIfOnboarding } from '@/shared/services/onboarding';
 import type { CVAnalysisResult } from '@/shared/types/cv';
 import { JobMatchDataV2Schema } from '@/shared/schemas/ai-output';
+import { resolveJobMatchHandoff } from '@/shared/services/job-handoff';
 
 /**
  * Persist a completed analysis and archive the original upload to object storage.
@@ -61,7 +62,8 @@ async function persistAnalysis(
   result: CVAnalysisResult,
   sourceFileName: string,
   sourceFile: Buffer,
-  sourceContentType: string
+  sourceContentType: string,
+  jobSourceProvenance?: unknown
 ): Promise<string | null> {
   try {
     // Analysis.jobMatchData is the canonical job-match payload. New writes do
@@ -76,7 +78,7 @@ async function persistAnalysis(
         profileId,
         mode: result.mode ?? 'ats',
         overallScore: result.overallScore,
-        rawResult: JSON.parse(JSON.stringify(rawResultWithoutJobMatch)),
+        rawResult: JSON.parse(JSON.stringify(jobSourceProvenance ? { ...rawResultWithoutJobMatch, jobSourceProvenance } : rawResultWithoutJobMatch)),
         jobDescription: result.jobDescription ?? null,
         jobMatchData: canonicalJobMatchData
           ? JSON.parse(JSON.stringify(canonicalJobMatchData))
@@ -215,6 +217,7 @@ export async function POST(request: NextRequest) {
       mode: formData.get('mode') || 'ats',
       jobDescription: formData.get('jobDescription') || '',
       profileId: formData.get('profileId') || undefined,
+      jobHandoffToken: formData.get('jobHandoffToken') || undefined,
       targetSelection: formData.get('targetSelection') || undefined,
       savedProfileId: formData.get('savedProfileId') || undefined,
       targetRole: formData.get('targetRole') || undefined,
@@ -232,6 +235,7 @@ export async function POST(request: NextRequest) {
       mode,
       jobDescription,
       profileId,
+      jobHandoffToken,
       targetSelection,
       savedProfileId,
       targetRole,
@@ -278,7 +282,9 @@ export async function POST(request: NextRequest) {
 
     // Which career track this run belongs to. Resolved before the AI call so an
     // analysis is never left unfiled after the expensive part has already run.
-    const scopedProfileId = await resolveProfileId(session.user.id, profileId);
+    const jobHandoff = jobHandoffToken ? resolveJobMatchHandoff(jobHandoffToken, session.user.id) : null;
+    if (jobHandoffToken && (!jobHandoff || mode !== 'job_match')) throw new APIError('This Job Board vacancy handoff is invalid or has expired.', 400);
+    const scopedProfileId = jobHandoff?.profileId ?? await resolveProfileId(session.user.id, profileId);
 
     // Whether this request will actually invoke a model. Rule-based ATS scoring
     // is free and uncapped; only the AI layer is metered, so a user out of AI
@@ -317,6 +323,7 @@ export async function POST(request: NextRequest) {
         mode,
         hashContent(text),
         mode === 'job_match' ? hashContent(jobDescription) : '',
+        jobHandoff?.job.canonicalJobId ?? '',
         scopedProfileId ?? '',
         effectiveTargetSelection,
       ]);
@@ -632,7 +639,8 @@ export async function POST(request: NextRequest) {
       result,
       file.name || 'CV.pdf',
       sourceBuffer,
-      file.type || 'application/pdf'
+      file.type || 'application/pdf',
+      jobHandoff ? { canonicalJobId: jobHandoff.job.canonicalJobId, jobSnapshot: jobHandoff.job, descriptionAvailability: jobHandoff.job.descriptionAvailability, descriptionHash: hashContent(jobDescription), profileId: scopedProfileId } : undefined
     );
 
     // Commit exactly once, and only after the analysis is durably persisted so

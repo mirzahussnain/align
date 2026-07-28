@@ -1,0 +1,11 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { z } from 'zod';
+import { auth } from '@/shared/lib/auth';
+import { resolveProfileId } from '@/features/dashboard/data/load-profile';
+import { createJobMatchHandoff, resolveJobMatchHandoff } from '@/shared/services/job-handoff';
+import { APIError, withErrorHandler } from '@/shared/utils/api-error';
+
+const JobSchema = z.object({ source: z.enum(['ADZUNA', 'REED', 'JOOBLE']), sourceJobId: z.string().min(1), canonicalJobId: z.string().min(1), canonicalUrl: z.string().url(), title: z.string().min(1), company: z.string().min(1), locationText: z.string(), description: z.string().optional(), descriptionAvailability: z.enum(['FULL', 'PARTIAL', 'EXTERNAL_ONLY']), dedupeFingerprint: z.string().min(1), fetchedAt: z.string() }).passthrough();
+const Input = z.object({ profileId: z.string().optional(), job: JobSchema });
+export async function POST(request: NextRequest) { return withErrorHandler(async () => { const session = await auth.api.getSession({ headers: request.headers }); if (!session) throw new APIError('Please sign in to match a vacancy.', 401); const parsed = Input.safeParse(await request.json().catch(() => null)); if (!parsed.success) throw new APIError(parsed.error.message, 400); const profileId = await resolveProfileId(session.user.id, parsed.data.profileId); if (!profileId) throw new APIError('Choose a Career Track before matching a vacancy.', 400); const handoff = createJobMatchHandoff({ userId: session.user.id, profileId, job: parsed.data.job as never }); return NextResponse.json({ token: handoff.token }); }); }
+export async function GET(request: NextRequest) { return withErrorHandler(async () => { const session = await auth.api.getSession({ headers: request.headers }); if (!session) throw new APIError('Please sign in to view this vacancy.', 401); const handoff = resolveJobMatchHandoff(new URL(request.url).searchParams.get('token') ?? undefined, session.user.id); if (!handoff) throw new APIError('This vacancy link has expired. Return to the Job Board and select it again.', 404); return NextResponse.json({ profileId: handoff.profileId, job: handoff.job }); }); }

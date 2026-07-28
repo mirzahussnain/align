@@ -62,6 +62,8 @@ export const AnalyzeRequestSchema = z
      * history the result lands in, NOT the occupation the CV is analysed against.
      */
     profileId: z.string().optional(),
+    /** Server-owned Job Board handoff token; never carries a description in the URL. */
+    jobHandoffToken: z.string().uuid().optional(),
     /**
      * The post-upload target choice (ATS only). Absent behaves as `detected`,
      * which keeps the leak closed — the active Profile never sets the target

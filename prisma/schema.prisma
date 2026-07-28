@@ -37,6 +37,7 @@ model User {
   cvImportSessions            CvImportSession[]
   cvImportCandidates          CvImportCandidate[]
   onboardingState             OnboardingState?
+  savedJobs                   SavedJob[]
 
   @@unique([email])
   @@map("user")
@@ -281,6 +282,7 @@ model Profile {
   profileEvidenceApprovals   ProfileEvidenceApproval[]
   generatedCVs                GeneratedCV[]
   analyses                    Analysis[]
+  savedJobs                   SavedJob[]
   cvImportSessions            CvImportSession[]
 
   @@unique([userId, label])
@@ -725,6 +727,42 @@ model Analysis {
   @@map("analysis")
 }
 
+enum SavedJobAvailability {
+  ACTIVE
+  EXPIRED
+  REMOVED
+  UNKNOWN
+}
+
+/// A validated, provider-neutral listing snapshot. It survives source removal
+/// and remains independent of a Career Track so it can be matched later.
+model SavedJob {
+  id                 String   @id @default(cuid())
+  userId             String
+  user               User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  profileId          String?
+  profile            Profile? @relation(fields: [profileId], references: [id], onDelete: SetNull)
+  primaryProvider    String
+  sourceJobId        String
+  canonicalUrl       String
+  canonicalIdentity  String
+  title              String
+  company            String
+  locationText       String
+  jobSnapshot        Json
+  snapshotVersion    Int      @default(1)
+  availabilityStatus SavedJobAvailability @default(UNKNOWN)
+  savedAt            DateTime @default(now())
+  lastCheckedAt      DateTime?
+  removedAt          DateTime?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@unique([userId, canonicalIdentity])
+  @@index([userId, savedAt])
+  @@index([profileId])
+  @@map("saved_job")
+}
 // Monthly AI usage, one row per user per calendar month.
 //
 // This exists because usage CANNOT be derived by counting Analysis rows: the

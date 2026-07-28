@@ -1,80 +1,47 @@
 'use client';
 
-import { Building2, MapPin, PoundSterling, Briefcase, Clock, ExternalLink, CheckCircle2, Minus } from 'lucide-react';
-import { cn } from '@/shared/utils/cn';
-import type { Job } from '@/shared/types/job';
+import { useState } from 'react';
+import { Building2, MapPin, PoundSterling, Briefcase, Clock, ExternalLink, CheckCircle2, AlertTriangle, Bookmark } from 'lucide-react';
+import type { NormalisedJob } from '@/shared/types/job';
 import { getTimeAgo } from '@/shared/utils/date';
 import Badge from '@/shared/components/ui/Badge';
 
-interface JobCardProps {
-  job: Job;
-}
-
-export default function JobCard({ job }: JobCardProps) {
-  return (
-    <a
-      href={job.url}
-      target="_blank"
-      rel="noopener noreferrer"
-      className="block glass-card p-5 hover:border-accent-purple/30 transition-all group"
-    >
-      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
-        <div className="flex-1 min-w-0">
-          <div className="flex items-start gap-3 mb-2">
-            <h3 className="text-sm font-semibold text-text-primary group-hover:text-accent-purple transition-colors line-clamp-1">
-              {job.title}
-            </h3>
-            <ExternalLink size={14} className="text-text-tertiary flex-shrink-0 mt-0.5 opacity-0 group-hover:opacity-100 transition-opacity" />
-          </div>
-
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-text-secondary mb-2">
-            <span className="flex items-center gap-1">
-              <Building2 size={12} /> {job.company}
-            </span>
-            <span className="flex items-center gap-1">
-              <MapPin size={12} /> {job.location}
-            </span>
-            {job.salary && (
-              <span className="flex items-center gap-1 text-accent-cyan font-medium">
-                <PoundSterling size={12} /> {job.salary}
-              </span>
-            )}
-            {job.contractType && (
-              <span className="flex items-center gap-1">
-                <Briefcase size={12} /> {job.contractType}
-              </span>
-            )}
-            <span className="flex items-center gap-1 text-text-tertiary">
-              <Clock size={12} /> {getTimeAgo(job.postedDate)}
-            </span>
-          </div>
-
-          <p className="text-xs text-text-tertiary line-clamp-2 leading-relaxed">
-            {job.description.slice(0, 200)}...
-          </p>
+export default function JobCard({ job, profileId }: { job: NormalisedJob; profileId?: string }) {
+  const [saved, setSaved] = useState(false);
+  const save = async () => {
+    const response = await fetch('/api/saved-jobs', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ job }) });
+    if (response.ok) setSaved(true);
+  };
+  const startMatch = async () => { const response = await fetch('/api/jobs/handoff', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ job, profileId }) }); if (response.ok) { const { token } = await response.json(); window.location.assign('/analyze?mode=job_match&handoff=' + encodeURIComponent(token)); } };
+  const register = job.sponsorSignal.registerMatchStatus;
+  const viewDetails = () => { if (job.jobReference) window.location.assign(`/jobs/${encodeURIComponent(job.jobReference)}`); };
+  const wording = job.sponsorSignal.jobWording;
+  return <article className="glass-card p-5 border-border-subtle">
+    <div className="flex flex-col gap-4">
+      <div className="flex-1 min-w-0">
+        <h3 className="text-sm font-semibold text-text-primary line-clamp-1">{job.title}</h3>
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-text-secondary my-2">
+          <span className="flex items-center gap-1"><Building2 size={12} /> {job.company}</span><span className="flex items-center gap-1"><MapPin size={12} /> {job.locationText}</span>
+          {job.salaryText && <span className="flex items-center gap-1 text-accent-cyan font-medium"><PoundSterling size={12} /> {job.salaryText}</span>}
+          {job.contractType && <span className="flex items-center gap-1"><Briefcase size={12} /> {job.contractType}</span>}
+          {job.postedAt && <span className="flex items-center gap-1 text-text-tertiary"><Clock size={12} /> {getTimeAgo(job.postedAt)}</span>}
         </div>
-
-        {/* Badges */}
-        <div className="flex flex-wrap sm:flex-col items-start gap-2 flex-shrink-0">
-          {/* Source badge */}
-          <Badge variant="default">
-            {job.source}
-          </Badge>
-
-          {/* Sponsor badge */}
-          {job.hasSponsorship ? (
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold bg-success/10 text-success border border-success/30 shadow-[0_0_10px_hsla(150,80%,40%,0.1)]">
-              <CheckCircle2 size={12} />
-              Verified Sponsor
-            </span>
-          ) : (
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-semibold bg-bg-tertiary text-text-tertiary border border-border-subtle">
-              <Minus size={12} />
-              No Sponsorship
-            </span>
-          )}
+        {job.description && <p className="text-xs text-text-tertiary line-clamp-2 leading-relaxed">{job.description}</p>}
+        <div className="mt-3 flex flex-wrap gap-2 text-[10px]">
+          <span className="rounded-full border border-border-subtle bg-bg-tertiary px-2 py-1 text-text-secondary">Career Track relevance: Strong title alignment</span>
+          {register !== 'NONE' && <span className="inline-flex items-center gap-1 rounded-full px-2 py-1 bg-success/10 text-success border border-success/30"><CheckCircle2 size={11} /> {register === 'EXACT' ? 'Employer on sponsor register' : 'Similar sponsor-register name'}</span>}
+          {wording !== 'NOT_MENTIONED' && <span className="inline-flex items-center gap-1 rounded-full px-2 py-1 bg-warning/10 text-warning border border-warning/20"><AlertTriangle size={11} /> {job.sponsorSignal.explanation}</span>}
+          {job.eligibilityHints.slice(0, 2).map((hint) => <span key={hint.type} className="rounded-full px-2 py-1 bg-bg-tertiary text-text-secondary">{hint.label}</span>)}
         </div>
       </div>
-    </a>
-  );
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-border-subtle pt-3 text-xs">
+        <Badge variant="default">{job.providerReferences.map((reference) => reference.provider).join(' · ')}</Badge>
+        <a href={job.canonicalUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs text-text-secondary hover:text-accent-purple"><ExternalLink size={13} /> Open original</a>
+        <button type="button" onClick={viewDetails} className="text-xs font-semibold text-accent-purple hover:text-accent-cyan">View details</button>
+        <button type="button" onClick={save} className="inline-flex items-center gap-1 text-xs text-text-secondary hover:text-accent-purple"><Bookmark size={13} /> {saved ? 'Saved' : 'Save job'}</button>
+        <button type="button" onClick={viewDetails} className="text-xs font-semibold text-accent-purple hover:text-accent-cyan">Check match</button>
+      </div>
+    </div>
+    {job.descriptionAvailability !== 'FULL' && <p className="mt-3 text-xs text-warning">This source provides only a partial description. Open the original listing and paste the full description for a reliable match.</p>}
+  </article>;
 }

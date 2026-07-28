@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Sparkles, ShieldCheck, RefreshCw } from 'lucide-react';
 import CVUploader from '@/features/cv-analyzer/components/shared/CVUploader';
@@ -39,6 +40,13 @@ export default function AnalyzeWorkspace({
   const setResult = useAnalysisStore((s) => s.setResult);
   const setMode = useAnalysisStore((s) => s.setMode);
   const reset = useAnalysisStore((s) => s.reset);
+  const [handoff, setHandoff] = useState<{ profileId: string; job: { title: string; company: string; description?: string; descriptionAvailability: string } } | null>(null);
+  const handoffToken = new URLSearchParams(typeof window === 'undefined' ? '' : window.location.search).get('handoff');
+
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get('mode') === 'job_match') setMode('job_match');
+    if (handoffToken) fetch('/api/jobs/handoff?token=' + encodeURIComponent(handoffToken)).then((response) => response.ok ? response.json() : null).then(setHandoff).catch(() => setHandoff(null));
+  }, [setMode, handoffToken]);
 
   return (
     <AnimatePresence mode="wait">
@@ -80,7 +88,9 @@ export default function AnalyzeWorkspace({
 
           <CVUploader
             mode={mode}
-            profileId={profileId}
+            profileId={handoff?.profileId ?? profileId}
+            jobHandoffToken={handoffToken ?? undefined}
+            handoffJob={handoff?.job}
             onAnalysisComplete={(r) => setResult(r as CVAnalysisResult)}
           />
         </motion.div>

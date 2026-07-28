@@ -199,3 +199,27 @@ export async function batchCheckSponsors(companyNames: string[]): Promise<Map<st
   }
   return result;
 }
+
+/**
+ * Conservative registry matching for job-board signals. A register appearance is
+ * employer-level evidence only; it never asserts this vacancy offers sponsorship.
+ */
+export async function matchSponsorCompanies(companyNames: string[]): Promise<Map<string, { status: 'EXACT' | 'LIKELY' | 'AMBIGUOUS' | 'NONE'; organisationName?: string }>> {
+  const result = new Map<string, { status: 'EXACT' | 'LIKELY' | 'AMBIGUOUS' | 'NONE'; organisationName?: string }>();
+  if (!companyNames.length) return result;
+  const sponsors = await getSponsors();
+  const byName = new Map(sponsors.map((s) => [standardizeCompanyName(s.organisationName), s.organisationName]));
+  for (const company of companyNames) {
+    const normalised = standardizeCompanyName(company);
+    const exact = byName.get(normalised);
+    if (exact) { result.set(company, { status: 'EXACT', organisationName: exact }); continue; }
+    const words = normalised.split(' ').filter((word) => word.length > 2);
+    const candidates = sponsors.filter((s) => {
+      const sponsorWords = standardizeCompanyName(s.organisationName).split(' ').filter((word) => word.length > 2);
+      const shared = words.filter((word) => sponsorWords.includes(word)).length;
+      return words.length >= 2 && sponsorWords.length >= 2 && shared / Math.max(words.length, sponsorWords.length) >= .8;
+    }).slice(0, 2);
+    result.set(company, candidates.length === 1 ? { status: 'LIKELY', organisationName: candidates[0].organisationName } : candidates.length > 1 ? { status: 'AMBIGUOUS' } : { status: 'NONE' });
+  }
+  return result;
+}

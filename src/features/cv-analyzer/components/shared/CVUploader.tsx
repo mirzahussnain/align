@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useDropzone } from 'react-dropzone';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Upload, FileText, X, Sparkles, Loader2 } from 'lucide-react';
@@ -32,9 +32,11 @@ interface CVUploaderProps {
    * user's default profile.
    */
   profileId?: string;
+  jobHandoffToken?: string;
+  handoffJob?: { title: string; company: string; description?: string; descriptionAvailability: string } | null;
 }
 
-export default function CVUploader({ mode = 'ats', onAnalysisComplete, profileId }: CVUploaderProps) {
+export default function CVUploader({ mode = 'ats', onAnalysisComplete, profileId, jobHandoffToken, handoffJob }: CVUploaderProps) {
   const [file, setFile] = useState<File | null>(null);
   const [jobDescription, setJobDescription] = useState('');
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -45,6 +47,18 @@ export default function CVUploader({ mode = 'ats', onAnalysisComplete, profileId
   const [isDetecting, setIsDetecting] = useState(false);
   // Errors raised by the analyze call while on the target step, shown in-place.
   const [targetError, setTargetError] = useState<string | null>(null);
+
+  // Only a provider-supplied FULL description can prefill canonical job matching.
+  useEffect(() => {
+    if (mode !== 'job_match' || jobDescription) return;
+    try {
+      if (handoffJob?.descriptionAvailability === 'FULL' && handoffJob.description) { setJobDescription(handoffJob.description); return; }
+      const raw = window.sessionStorage.getItem('align:job-match-prefill');
+      if (!raw) return;
+      const job = JSON.parse(raw) as { description?: string; descriptionAvailability?: string };
+      if (job.descriptionAvailability === 'FULL' && job.description) setJobDescription(job.description);
+    } catch { /* stale browser data is non-authoritative */ }
+  }, [mode, jobDescription]);
 
   // A stable operation id for the CURRENT logical submission, so a network retry
   // of the same analysis reuses it (the server treats the retry idempotently) and
@@ -107,6 +121,7 @@ export default function CVUploader({ mode = 'ats', onAnalysisComplete, profileId
       formData.append('file', file);
       formData.append('mode', mode);
       if (profileId) formData.append('profileId', profileId);
+      if (jobHandoffToken) formData.append('jobHandoffToken', jobHandoffToken);
       if (mode === 'job_match') {
         if (!jobDescription.trim()) {
           throw new Error('Please provide a Job Description to match against.');
@@ -166,6 +181,7 @@ export default function CVUploader({ mode = 'ats', onAnalysisComplete, profileId
       const formData = new FormData();
       formData.append('file', file);
       if (profileId) formData.append('profileId', profileId);
+      if (jobHandoffToken) formData.append('jobHandoffToken', jobHandoffToken);
 
       const response = await fetch('/api/analyze/detect', {
         method: 'POST',

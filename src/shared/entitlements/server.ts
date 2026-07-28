@@ -156,6 +156,7 @@ export async function getResourceCount(userId: string, capability: ProductCapabi
   if (capability === 'stored_analyses') {
     return prisma.analysis.count({ where: { userId } });
   }
+  if (capability === 'saved_jobs') return prisma.savedJob.count({ where: { userId } });
   if (capability === 'profile_evidence_storage') return countStoredEvidence(userId);
   return 0;
 }

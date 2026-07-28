@@ -13,9 +13,7 @@ export default function Navbar() {
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   // Initialised lazily so no effect needs to set state on mount; off-home
   // pages force the solid style by derivation rather than by setState.
-  const [scrolledPastTop, setScrolledPastTop] = useState(
-    () => typeof window !== 'undefined' && window.scrollY > 20
-  );
+  const [scrolledPastTop, setScrolledPastTop] = useState(false);
   const { data: session, isPending: sessionPending } = authClient.useSession();
   const isAuthed = Boolean(session);
 
@@ -29,6 +27,7 @@ export default function Navbar() {
   const isScrolled = pathname !== '/' || scrolledPastTop;
 
   useEffect(() => {
+    setScrolledPastTop(window.scrollY > 20);
     if (pathname !== '/') return;
 
     const handleScroll = () => {
