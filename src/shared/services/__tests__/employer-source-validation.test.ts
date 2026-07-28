@@ -135,3 +135,13 @@ describe('canQueryEmployerSource', () => {
     expect(canQueryEmployerSource({ enabled: false, verificationStatus: 'VERIFIED' })).toBe(false);
   });
 });
+
+describe('additional hostile identifier inputs', () => {
+  it('rejects Unicode, controls, and private-host-shaped identifiers for every provider', () => {
+    for (const identifier of ['acmé', 'acme' + String.fromCharCode(0) + 'corp', 'localhost', '127001']) {
+      for (const provider of EMPLOYER_ATS_PROVIDERS) {
+        expect(validateProviderIdentifier(provider, identifier).valid).toBe(false);
+      }
+    }
+  });
+});

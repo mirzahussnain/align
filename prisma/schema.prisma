@@ -742,6 +742,45 @@ enum JobProvider {
   ASHBY
 }
 
+// Employer-direct boards are a separate directory concern from the general
+// JobProvider enum. Keeping this enum scoped to the directory prevents a
+// provider identifier from being mistaken for a market-wide search provider.
+enum EmployerAtsProvider {
+  GREENHOUSE
+  LEVER
+  SMARTRECRUITERS
+  ASHBY
+}
+
+enum EmployerSourceOrigin {
+  CURATED_SEED
+  MANUAL_ADMIN
+  VERIFIED_COMPANY_URL
+  USER_SUGGESTED_UNVERIFIED
+}
+
+enum EmployerSourceVerificationStatus {
+  PENDING
+  VERIFIED
+  FAILED
+  DISABLED
+}
+
+enum EmployerSourceRegion {
+  GLOBAL
+  EU
+}
+
+// Sponsor-register matching is employer-level evidence. It is intentionally
+// not a source-verification status and never implies a vacancy has sponsorship.
+enum SponsorMatchStatus {
+  NOT_CHECKED
+  EXACT
+  LIKELY
+  AMBIGUOUS
+  NONE
+}
+
 enum JobDescriptionAvailability {
   FULL
   PARTIAL
@@ -784,6 +823,7 @@ model JobSnapshot {
   normalisedTitle           String
   employerName              String
   normalisedEmployerName    String
+  companyRecordId           String?
   locationText              String?
   city                      String?
   region                    String?
@@ -817,11 +857,69 @@ model JobSnapshot {
   createdAt                 DateTime                   @default(now())
   updatedAt                 DateTime                   @updatedAt
   providerReferences        JobProviderReference[]
+  companyRecord             CompanyRecord?             @relation(fields: [companyRecordId], references: [id], onDelete: SetNull)
   savedJobs                 SavedJob[]
   matchRequests             JobMatchRequest[]
 
   @@index([dedupeFingerprint])
+  @@index([companyRecordId])
   @@map("job_snapshot")
+}
+
+// Canonical employer identity. Sponsor-register evidence belongs here, while
+// ATS identity and verification belong on EmployerJobSource below.
+model CompanyRecord {
+  id                      String             @id @default(cuid())
+  displayName             String
+  normalisedName          String
+  websiteUrl              String?
+  careersUrl              String?
+  country                 String?
+  industry                String?
+  sponsorMatchStatus      SponsorMatchStatus @default(NOT_CHECKED)
+  sponsorOrganisationName String?
+  sponsorRegisterVersion  String?
+  sponsorCheckedAt        DateTime?
+  sponsorEvidence         Json?
+  createdAt               DateTime           @default(now())
+  updatedAt               DateTime           @updatedAt
+
+  jobSources   EmployerJobSource[]
+  jobSnapshots JobSnapshot[]
+
+  @@unique([normalisedName])
+  @@index([sponsorMatchStatus])
+  @@map("company_record")
+}
+
+// A public ATS board candidate for one canonical company. A source remains
+// non-queryable until both verification and explicit enablement are present.
+model EmployerJobSource {
+  id                   String                           @id @default(cuid())
+  companyRecordId      String
+  provider             EmployerAtsProvider
+  providerIdentifier   String
+  providerRegion       EmployerSourceRegion?
+  careersUrl           String?
+  boardUrl             String?
+  sourceOrigin         EmployerSourceOrigin
+  verificationStatus   EmployerSourceVerificationStatus @default(PENDING)
+  enabled              Boolean                          @default(false)
+  lastAttemptedAt      DateTime?
+  lastVerifiedAt       DateTime?
+  lastVerifiedJobCount Int?
+  lastSuccessfulSyncAt DateTime?
+  lastErrorCode        String?
+  lastErrorAt          DateTime?
+  createdAt            DateTime                         @default(now())
+  updatedAt            DateTime                         @updatedAt
+
+  companyRecord CompanyRecord @relation(fields: [companyRecordId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerIdentifier])
+  @@index([companyRecordId, enabled])
+  @@index([provider, verificationStatus])
+  @@map("employer_job_source")
 }
 
 model JobProviderReference {

@@ -17,12 +17,12 @@
  * real, only that it is safe to try.
  */
 
-import type { EmployerAtsProvider } from '@/shared/types/job';
+import type { EmployerAtsProvider } from '../types/job.ts';
 import type {
   EmployerJobSourceRef,
   EmployerSourceFailureCode,
   LeverRegion,
-} from '@/shared/types/employer-source';
+} from '../types/employer-source.ts';
 
 /**
  * Charset each provider's identifier is permitted to use. Deliberately narrower
@@ -84,6 +84,11 @@ export function validateProviderIdentifier(
   if (identifier !== identifier.trim()) return reject('Identifier has leading or trailing whitespace.');
   if (!identifier) return reject('Identifier is empty.');
   if (identifier.length > 60) return reject('Identifier is longer than 60 characters.');
+  // Even though identifiers only fill a path segment, reject host-like private
+  // names defensively so a future URL-template change cannot turn one into SSRF.
+  if (/^(?:localhost|0+|127(?:\d{0,9})?|10(?:\d{0,9})?|169254\d*|192168\d*|172(?:1[6-9]|2\d|3[01])\d*)$/i.test(identifier)) {
+    return reject('Identifier resembles a localhost or private-network address.');
+  }
   // Dot segments would escape the intended path even inside an allowed host.
   if (identifier.includes('..')) return reject('Identifier contains a dot segment.');
   if (!IDENTIFIER_PATTERNS[provider].test(identifier)) {
@@ -155,6 +160,26 @@ export function isAllowedBoardHost(url: string): boolean {
   try {
     const parsed = new URL(url);
     return parsed.protocol === 'https:' && ALLOWED_HOSTS.has(parsed.hostname);
+  } catch {
+    return false;
+  }
+}
+
+/** A returned application URL is never fetched by Phase 7. It may legitimately
+ * use an employer careers domain (for example Greenhouse custom domains), so its
+ * validation is a public-link safety check rather than a provider-host check. */
+export function isSafePublicApplicationUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    const host = parsed.hostname.toLowerCase();
+    return parsed.protocol === 'https:'
+      && host !== 'localhost'
+      && !host.endsWith('.localhost')
+      && !/^127\./.test(host)
+      && !/^10\./.test(host)
+      && !/^192\.168\./.test(host)
+      && !/^169\.254\./.test(host)
+      && !/^172\.(?:1[6-9]|2\d|3[01])\./.test(host);
   } catch {
     return false;
   }
