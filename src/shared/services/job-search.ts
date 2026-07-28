@@ -4,23 +4,23 @@ import { searchAdzunaJobs } from '@/shared/services/adzuna';
 import { searchReedJobs } from '@/shared/services/reed';
 import { searchJoobleJobs } from '@/shared/services/jooble';
 import { normaliseProviderJob } from '@/shared/services/job-normalisation';
-import type { JobProvider, JobSearchParams, NormalisedJob, ProviderSearchResult } from '@/shared/types/job';
+import type { JobSearchParams, NormalisedJob, ProviderSearchResult, SearchJobProvider } from '@/shared/types/job';
 
 const TIMEOUT_MS = 5_000;
 const CACHE_TTL_MS = 5 * 60_000;
 type Adapter = (params: JobSearchParams) => ReturnType<typeof searchAdzunaJobs>;
 type Cached = { expiresAt: number; result: ProviderSearchResult };
 const providerCache = new Map<string, Cached>();
-const providers: Record<JobProvider, { configured: () => boolean; search: Adapter }> = {
+const providers: Record<SearchJobProvider, { configured: () => boolean; search: Adapter }> = {
   ADZUNA: { configured: () => Boolean(API_CONFIG.adzuna.appId && API_CONFIG.adzuna.appKey), search: searchAdzunaJobs },
   REED: { configured: () => Boolean(API_CONFIG.reed.apiKey), search: searchReedJobs },
   JOOBLE: { configured: () => Boolean(API_CONFIG.jooble.apiKey), search: searchJoobleJobs },
 };
-const cacheKey = (provider: JobProvider, params: JobSearchParams) => `${provider}:${createHash('sha256').update(JSON.stringify(params)).digest('hex')}`;
+const cacheKey = (provider: SearchJobProvider, params: JobSearchParams) => `${provider}:${createHash('sha256').update(JSON.stringify(params)).digest('hex')}`;
 function timeout<T>(promise: Promise<T>): Promise<T> { return Promise.race([promise, new Promise<T>((_, reject) => setTimeout(() => reject(new Error('timeout')), TIMEOUT_MS))]); }
 function clone(result: ProviderSearchResult, cacheHit = false): ProviderSearchResult { return { ...result, jobs: result.jobs.map((job) => ({ ...job, providerReferences: [...job.providerReferences] })), cacheHit }; }
 
-export async function searchProvider(provider: JobProvider, params: JobSearchParams): Promise<ProviderSearchResult> {
+export async function searchProvider(provider: SearchJobProvider, params: JobSearchParams): Promise<ProviderSearchResult> {
   const started = Date.now(); const definition = providers[provider];
   if (!definition.configured()) return { provider, status: 'NOT_CONFIGURED', jobs: [], rawReceived: 0, validNormalised: 0, durationMs: 0 };
   const key = cacheKey(provider, params); const cached = providerCache.get(key);
@@ -36,7 +36,7 @@ export async function searchProvider(provider: JobProvider, params: JobSearchPar
     return { provider, status: timedOut ? 'TIMED_OUT' : 'FAILED', jobs: [], rawReceived: 0, validNormalised: 0, errorCode: timedOut ? 'TIMEOUT' : 'UNAVAILABLE', durationMs: Date.now() - started };
   }
 }
-export async function searchProviders(params: JobSearchParams, selected: JobProvider[]) { return Promise.all(selected.map((provider) => searchProvider(provider, params))); }
+export async function searchProviders(params: JobSearchParams, selected: SearchJobProvider[]) { return Promise.all(selected.map((provider) => searchProvider(provider, params))); }
 const similarity = (a: string, b: string) => a === b ? 1 : !a || !b ? 0 : (a.split(' ').filter((word) => b.split(' ').includes(word)).length / Math.max(a.split(' ').length, b.split(' ').length));
 export function areDuplicates(a: NormalisedJob, b: NormalisedJob) {
   if (a.canonicalUrl === b.canonicalUrl) return true;

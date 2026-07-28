@@ -2,7 +2,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { matchSponsorCompanies } from '@/shared/services/sponsor-registry';
 import { deduplicateJobs, searchProviders } from '@/shared/services/job-search';
-import type { JobProvider, JobSearchParams, NormalisedJob, ProviderCount } from '@/shared/types/job';
+import type { JobSearchParams, NormalisedJob, ProviderCount, SearchJobProvider } from '@/shared/types/job';
 import { withErrorHandler, APIError } from '@/shared/utils/api-error';
 import { JobsQuerySchema } from './schema';
 import { applyRateLimit, jobsLimiter } from '@/shared/lib/rate-limit';
@@ -15,7 +15,9 @@ const sessions = new Map<string, SearchSession>();
 const canonicalHash = (input: object) => createHash('sha256').update(JSON.stringify(input)).digest('hex');
 type CachedResponse = { expiresAt: number; jobs: NormalisedJob[]; providerCounts: ProviderCount[]; partialMessage?: string };
 const responseCache = new Map<string, CachedResponse>();
-const selectedProviders = (source: string): JobProvider[] => source === 'all' ? ['ADZUNA', 'REED', 'JOOBLE'] : [source.toUpperCase() as JobProvider];
+// Only the market-wide search providers are fanned out per request. Employer-ATS
+// providers answer per-board, never per-query, so they are orchestrated separately.
+const selectedProviders = (source: string): SearchJobProvider[] => source === 'all' ? ['ADZUNA', 'REED', 'JOOBLE'] : [source.toUpperCase() as SearchJobProvider];
 const elapsed = (from: number) => Date.now() - from;
 function relevance(job: NormalisedJob, query: string) { const tokens = query.toLowerCase().split(/\s+/).filter(Boolean); return tokens.filter((token) => job.title.toLowerCase().includes(token)).length * 100 + (job.descriptionAvailability === 'FULL' ? 10 : 0); }
 function applyFilters(jobs: NormalisedJob[], data: { sponsorship: string; experience: string; remoteType: string; postedWithinDays?: number }) {

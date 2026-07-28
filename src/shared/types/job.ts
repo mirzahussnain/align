@@ -1,6 +1,33 @@
 // Provider-neutral job-board contracts. Provider payloads do not leave services.
 
-export type JobProvider = 'ADZUNA' | 'REED' | 'JOOBLE';
+/**
+ * Providers that answer a free-text keyword/location query across the whole
+ * market. These are the three integrations that exist today and their behaviour
+ * is unchanged.
+ */
+export type SearchJobProvider = 'ADZUNA' | 'REED' | 'JOOBLE';
+
+/**
+ * Employer-direct applicant-tracking systems. These are NOT market-wide search
+ * APIs: each one answers "what is on THIS employer's board", so a query is only
+ * meaningful with a verified board identifier (see `EmployerJobSource`). No
+ * network integration exists yet — the union is declared here so snapshots,
+ * provider references and capability metadata can be modelled ahead of it.
+ */
+export type EmployerAtsProvider = 'GREENHOUSE' | 'LEVER' | 'SMARTRECRUITERS' | 'ASHBY';
+
+export type JobProvider = SearchJobProvider | EmployerAtsProvider;
+
+export const SEARCH_JOB_PROVIDERS = ['ADZUNA', 'REED', 'JOOBLE'] as const satisfies readonly SearchJobProvider[];
+export const EMPLOYER_ATS_PROVIDERS = ['GREENHOUSE', 'LEVER', 'SMARTRECRUITERS', 'ASHBY'] as const satisfies readonly EmployerAtsProvider[];
+
+export function isSearchJobProvider(value: string): value is SearchJobProvider {
+  return (SEARCH_JOB_PROVIDERS as readonly string[]).includes(value);
+}
+
+export function isEmployerAtsProvider(value: string): value is EmployerAtsProvider {
+  return (EMPLOYER_ATS_PROVIDERS as readonly string[]).includes(value);
+}
 export type JobDescriptionAvailability = 'FULL' | 'PARTIAL' | 'EXTERNAL_ONLY';
 export type JobRemoteType = 'ONSITE' | 'HYBRID' | 'REMOTE' | 'UNKNOWN';
 export type JobSalaryPeriod = 'HOUR' | 'DAY' | 'WEEK' | 'MONTH' | 'YEAR' | 'UNKNOWN';
