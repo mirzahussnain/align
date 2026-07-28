@@ -18,9 +18,10 @@ import {
 import type { EmployerAtsProviderAdapter, JobProviderKind, SearchJobProviderAdapter } from '@/shared/types/job-provider';
 import { JOB_PROVIDER_CAPABILITIES } from './capabilities';
 import { SEARCH_PROVIDER_ADAPTERS } from './search-adapters';
+import { greenhouseAdapter } from './greenhouse-adapter';
 
 /** Employer-ATS adapters, registered per provider as each integration lands. */
-const EMPLOYER_ATS_ADAPTERS: Partial<Record<EmployerAtsProvider, EmployerAtsProviderAdapter>> = {};
+const EMPLOYER_ATS_ADAPTERS: Partial<Record<EmployerAtsProvider, EmployerAtsProviderAdapter>> = { GREENHOUSE: greenhouseAdapter as unknown as EmployerAtsProviderAdapter };
 
 export function getProviderKind(provider: JobProvider): JobProviderKind {
   return JOB_PROVIDER_CAPABILITIES[provider].kind;

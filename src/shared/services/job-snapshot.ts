@@ -26,6 +26,8 @@ export async function getOrCreateSnapshotFromNormalisedJob(job: NormalisedJob) {
     normalisedTitle: normaliseTitle(job.title),
     employerName: job.company,
     normalisedEmployerName: job.companyNormalised ?? job.company.toLowerCase(),
+    ...(job.companyRecordId ? { companyRecordId: job.companyRecordId } : {}),
+    ...(job.employerSourceId ? { employerSourceId: job.employerSourceId } : {}),
     locationText: job.locationText || null,
     city: job.city ?? null,
     region: job.region ?? null,

@@ -61,6 +61,7 @@ export interface NormalisedJob {
   employmentType?: string; contractType?: string; remoteType: JobRemoteType;
   postedAt?: string; expiresAt?: string; sponsorSignal: SponsorSignal; eligibilityHints: EligibilityHint[];
   dedupeFingerprint: string; canonicalJobId: string; fetchedAt: string;
+  employerSourceId?: string; companyRecordId?: string; departments?: string[]; offices?: string[];
 }
 
 export interface JobSearchParams {
@@ -76,7 +77,8 @@ export type SponsorStatus = 'confirmed-sponsor' | 'likely-sponsor' | 'sponsorshi
 export interface ProviderJob {
   id: string; title: string; company: string; location: string; salary: string | null;
   salaryMin: number | null; salaryMax: number | null; description: string; url: string; postedDate: string;
-  source: 'adzuna' | 'reed' | 'jooble'; contractType: string | null; isRemote: boolean; hasSponsorship: boolean;
+  source: Lowercase<JobProvider>; contractType: string | null; isRemote: boolean; hasSponsorship: boolean;
+  employerSourceId?: string; companyRecordId?: string; departments?: string[]; offices?: string[];
 }
 export interface JobSearchResult { jobs: ProviderJob[]; total: number; page: number; perPage: number; source: string; }
 /**

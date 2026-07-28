@@ -824,6 +824,7 @@ model JobSnapshot {
   employerName              String
   normalisedEmployerName    String
   companyRecordId           String?
+  employerSourceId          String?
   locationText              String?
   city                      String?
   region                    String?
@@ -858,11 +859,13 @@ model JobSnapshot {
   updatedAt                 DateTime                   @updatedAt
   providerReferences        JobProviderReference[]
   companyRecord             CompanyRecord?             @relation(fields: [companyRecordId], references: [id], onDelete: SetNull)
+  employerSource            EmployerJobSource?         @relation("EmployerSourceSnapshots", fields: [employerSourceId], references: [id], onDelete: SetNull)
   savedJobs                 SavedJob[]
   matchRequests             JobMatchRequest[]
 
   @@index([dedupeFingerprint])
   @@index([companyRecordId])
+  @@index([employerSourceId])
   @@map("job_snapshot")
 }
 
@@ -915,6 +918,7 @@ model EmployerJobSource {
   updatedAt            DateTime                         @updatedAt
 
   companyRecord CompanyRecord @relation(fields: [companyRecordId], references: [id], onDelete: Cascade)
+  jobSnapshots  JobSnapshot[] @relation("EmployerSourceSnapshots")
 
   @@unique([provider, providerIdentifier])
   @@index([companyRecordId, enabled])

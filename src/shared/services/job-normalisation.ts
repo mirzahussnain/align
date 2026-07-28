@@ -40,10 +40,10 @@ export function parseSalary(text: string | null, min: number | null, max: number
   const salaryText = clean(text) || undefined;
   const lower = salaryText?.toLowerCase() ?? '';
   const salaryPeriod: JobSalaryPeriod = /\b(hour|hourly|p\/?h)\b/.test(lower) ? 'HOUR' : /\b(day|daily|p\/?d)\b/.test(lower) ? 'DAY' : /\bweek(ly)?\b/.test(lower) ? 'WEEK' : /\bmonth(ly)?\b/.test(lower) ? 'MONTH' : /\b(year|annum|annual|p\.?a\.)\b/.test(lower) || min || max ? 'YEAR' : 'UNKNOWN';
-  const values = [...(salaryText?.matchAll(/£\s*(\d+(?:,\d{3})*(?:\.\d+)?)(k)?/gi) ?? [])].map((m) => Number(m[1].replace(/,/g, '')) * (m[2] ? 1000 : 1));
+  const values = [...(salaryText?.matchAll(/Â£\s*(\d+(?:,\d{3})*(?:\.\d+)?)(k)?/gi) ?? [])].map((m) => Number(m[1].replace(/,/g, '')) * (m[2] ? 1000 : 1));
   const parsedMin = min ?? (values.length ? Math.min(...values) : undefined);
   const parsedMax = max ?? (values.length > 1 ? Math.max(...values) : undefined);
-  return { salaryText, salaryMin: parsedMin ?? undefined, salaryMax: parsedMax ?? undefined, salaryPeriod: salaryPeriod === 'UNKNOWN' ? undefined : salaryPeriod, currency: salaryText?.includes('£') || min || max ? 'GBP' as const : undefined };
+  return { salaryText, salaryMin: parsedMin ?? undefined, salaryMax: parsedMax ?? undefined, salaryPeriod: salaryPeriod === 'UNKNOWN' ? undefined : salaryPeriod, currency: salaryText?.includes('Â£') || min || max ? 'GBP' as const : undefined };
 }
 
 function wording(description: string): { jobWording: JobSponsorshipWording; sourceExcerpts?: string[] } {
@@ -84,15 +84,15 @@ export function extractEligibilityHints(description: string, remoteType: JobRemo
  * DECLARED contract rather than from its name.
  *
  * This used to read `source === 'JOOBLE' || isTruncated ? 'PARTIAL' : 'FULL'`.
- * The outcome for Jooble is the same — its field is literally named `snippet`,
+ * The outcome for Jooble is the same â€” its field is literally named `snippet`,
  * so a teaser is what the integration is contractually promised and no Jooble
- * record can honestly be called FULL — but the reason is now a declared,
+ * record can honestly be called FULL â€” but the reason is now a declared,
  * testable capability instead of a hardcoded provider name, and adding a
  * provider no longer means remembering to edit this expression.
  *
  * This is a coarse ceiling, not the full classifier: richer per-record signals
  * (ellipsis variants, sentence completeness, length, truncation markers) are a
- * later phase. Defaults stay conservative — an unestablished contract is treated
+ * later phase. Defaults stay conservative â€” an unestablished contract is treated
  * as partial, because over-claiming completeness is what produces a confident
  * analysis of half an advert.
  */
@@ -115,15 +115,18 @@ export function normaliseProviderJob(raw: ProviderJob): NormalisedJob {
   const extractedWording = wording(description);
   const companyNormalised = normaliseCompanyName(raw.company);
   const dedupeFingerprint = createHash('sha256').update(`${normaliseTitle(raw.title)}|${companyNormalised}|${normaliseLocationKey(raw.location)}`).digest('hex').slice(0, 24);
+  const sourceJobId = raw.id.replace(/^[a-z]+-/, '');
   return {
-    source, sourceJobId: raw.id.replace(/^(adzuna|reed|jooble)-/, ''), providerReferences: [{ provider: source, sourceJobId: raw.id.replace(/^(adzuna|reed|jooble)-/, ''), sourceUrl: raw.url }],
+    source, sourceJobId, providerReferences: [{ provider: source, sourceJobId, sourceUrl: raw.url }],
     canonicalUrl: raw.url, title: clean(raw.title), company: clean(raw.company), companyNormalised: companyNormalised || undefined,
     ...location, description: description || undefined,
     descriptionAvailability: classifyDescriptionAvailability(source, description),
     ...salary, employmentType: raw.contractType ?? undefined, contractType: raw.contractType ?? undefined,
     postedAt: validDate(raw.postedDate), remoteType: raw.isRemote && location.remoteType === 'UNKNOWN' ? 'REMOTE' : location.remoteType,
     sponsorSignal: { ...blankSponsorSignal(), ...extractedWording, explanation: wordingExplanation(extractedWording.jobWording) },
-    eligibilityHints: extractEligibilityHints(description, location.remoteType), dedupeFingerprint, canonicalJobId: createHash('sha256').update(`${source}|${raw.id}|${raw.url}`).digest('hex').slice(0, 32), fetchedAt: new Date().toISOString(),
+    ...(raw.employerSourceId ? { employerSourceId: raw.employerSourceId } : {}), ...(raw.companyRecordId ? { companyRecordId: raw.companyRecordId } : {}),
+    ...(raw.departments?.length ? { departments: raw.departments } : {}), ...(raw.offices?.length ? { offices: raw.offices } : {}),
+    eligibilityHints: extractEligibilityHints(description, location.remoteType), dedupeFingerprint, canonicalJobId: createHash('sha256').update(`${source}|${raw.employerSourceId ?? ''}|${sourceJobId}`).digest('hex').slice(0, 32), fetchedAt: new Date().toISOString(),
   };
 }
 
