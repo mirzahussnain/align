@@ -17,7 +17,20 @@ export async function GET(request: NextRequest) {
   return withErrorHandler(async () => {
     const session = await auth.api.getSession({ headers: request.headers });
     if (!session) throw new APIError('Please sign in to view saved jobs.', 401);
-    const jobs = await prisma.savedJob.findMany({ where: { userId: session.user.id }, orderBy: { savedAt: 'desc' } });
+    // The stored `jobSnapshot` blob is deliberately not selected. Every caller
+    // wants "which of these results have I saved, and under which id" — the
+    // board reconciles its own already-loaded jobs by `canonicalIdentity` — so
+    // returning a full vacancy payload per row would ship the whole saved list's
+    // descriptions on every Job Board load to answer a set-membership question.
+    const jobs = await prisma.savedJob.findMany({
+      where: { userId: session.user.id },
+      orderBy: { savedAt: 'desc' },
+      select: {
+        id: true, profileId: true, primaryProvider: true, sourceJobId: true,
+        canonicalUrl: true, canonicalIdentity: true, title: true, company: true,
+        locationText: true, availabilityStatus: true, savedAt: true,
+      },
+    });
     return NextResponse.json({ jobs });
   });
 }

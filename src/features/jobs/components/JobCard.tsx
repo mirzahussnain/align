@@ -1,21 +1,22 @@
 'use client';
 
-import { useState } from 'react';
-import { Building2, MapPin, PoundSterling, Briefcase, Clock, ExternalLink, CheckCircle2, AlertTriangle, Bookmark } from 'lucide-react';
+import { Building2, MapPin, PoundSterling, Briefcase, Clock, ExternalLink, CheckCircle2, AlertTriangle, Bookmark, BookmarkCheck, Loader2 } from 'lucide-react';
 import type { NormalisedJob } from '@/shared/types/job';
 import { getTimeAgo } from '@/shared/utils/date';
 import Badge from '@/shared/components/ui/Badge';
 
-export default function JobCard({ job, profileId }: { job: NormalisedJob; profileId?: string }) {
-  const [saved, setSaved] = useState(false);
-  const save = async () => {
-    const response = await fetch('/api/saved-jobs', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ job }) });
-    if (response.ok) setSaved(true);
-  };
-  const startMatch = async () => { const response = await fetch('/api/jobs/handoff', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ job, profileId }) }); if (response.ok) { const { token } = await response.json(); window.location.assign('/analyze?mode=job_match&handoff=' + encodeURIComponent(token)); } };
+interface JobCardProps {
+  job: NormalisedJob;
+  saved: boolean;
+  saving: boolean;
+  onToggleSave: (job: NormalisedJob) => void;
+}
+
+export default function JobCard({ job, saved, saving, onToggleSave }: JobCardProps) {
   const register = job.sponsorSignal.registerMatchStatus;
-  const viewDetails = () => { if (job.jobReference) window.location.assign(`/jobs/${encodeURIComponent(job.jobReference)}`); };
   const wording = job.sponsorSignal.jobWording;
+  const viewDetails = () => { if (job.jobReference) window.location.assign(`/jobs/${encodeURIComponent(job.jobReference)}`); };
+
   return <article className="glass-card p-5 border-border-subtle">
     <div className="flex flex-col gap-4">
       <div className="flex-1 min-w-0">
@@ -27,21 +28,37 @@ export default function JobCard({ job, profileId }: { job: NormalisedJob; profil
           {job.postedAt && <span className="flex items-center gap-1 text-text-tertiary"><Clock size={12} /> {getTimeAgo(job.postedAt)}</span>}
         </div>
         {job.description && <p className="text-xs text-text-tertiary line-clamp-2 leading-relaxed">{job.description}</p>}
+        {/*
+          No Career Track relevance badge is rendered. This carried the fixed
+          string "Career Track relevance: Strong title alignment" on every card,
+          which was never computed from anything — it made the same claim about a
+          perfectly matched vacancy and a completely unrelated one. Showing
+          nothing is honest; the deterministic HIGH/MEDIUM/LOW calculation that
+          replaces it lands with the relevance phase.
+        */}
         <div className="mt-3 flex flex-wrap gap-2 text-[10px]">
-          <span className="rounded-full border border-border-subtle bg-bg-tertiary px-2 py-1 text-text-secondary">Career Track relevance: Strong title alignment</span>
-          {register !== 'NONE' && <span className="inline-flex items-center gap-1 rounded-full px-2 py-1 bg-success/10 text-success border border-success/30"><CheckCircle2 size={11} /> {register === 'EXACT' ? 'Employer on sponsor register' : 'Similar sponsor-register name'}</span>}
+          {register !== 'NONE' && <span className="inline-flex items-center gap-1 rounded-full px-2 py-1 bg-success/10 text-success border border-success/30"><CheckCircle2 size={11} /> {register === 'EXACT' ? 'Appears on sponsor register' : 'Possible sponsor-register match'}</span>}
           {wording !== 'NOT_MENTIONED' && <span className="inline-flex items-center gap-1 rounded-full px-2 py-1 bg-warning/10 text-warning border border-warning/20"><AlertTriangle size={11} /> {job.sponsorSignal.explanation}</span>}
           {job.eligibilityHints.slice(0, 2).map((hint) => <span key={hint.type} className="rounded-full px-2 py-1 bg-bg-tertiary text-text-secondary">{hint.label}</span>)}
         </div>
       </div>
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-border-subtle pt-3 text-xs">
         <Badge variant="default">{job.providerReferences.map((reference) => reference.provider).join(' · ')}</Badge>
-        <a href={job.canonicalUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs text-text-secondary hover:text-accent-purple"><ExternalLink size={13} /> Open original</a>
+        <a href={job.canonicalUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs text-text-secondary hover:text-accent-purple"><ExternalLink size={13} /> Open original listing</a>
         <button type="button" onClick={viewDetails} className="text-xs font-semibold text-accent-purple hover:text-accent-cyan">View details</button>
-        <button type="button" onClick={save} className="inline-flex items-center gap-1 text-xs text-text-secondary hover:text-accent-purple"><Bookmark size={13} /> {saved ? 'Saved' : 'Save job'}</button>
+        <button
+          type="button"
+          onClick={() => onToggleSave(job)}
+          disabled={saving}
+          aria-pressed={saved}
+          className="inline-flex items-center gap-1 text-xs text-text-secondary hover:text-accent-purple disabled:opacity-60"
+        >
+          {saving ? <Loader2 size={13} className="animate-spin" /> : saved ? <BookmarkCheck size={13} /> : <Bookmark size={13} />}
+          {saving ? 'Saving…' : saved ? 'Saved' : 'Save job'}
+        </button>
         <button type="button" onClick={viewDetails} className="text-xs font-semibold text-accent-purple hover:text-accent-cyan">Check match</button>
       </div>
     </div>
-    {job.descriptionAvailability !== 'FULL' && <p className="mt-3 text-xs text-warning">This source provides only a partial description. Open the original listing and paste the full description for a reliable match.</p>}
+    {job.descriptionAvailability !== 'FULL' && <p className="mt-3 text-xs text-warning">This provider supplied only part of the vacancy description. Paste the full description from the original listing for a more reliable match.</p>}
   </article>;
 }

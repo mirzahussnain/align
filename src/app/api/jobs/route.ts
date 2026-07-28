@@ -15,6 +15,22 @@ const sessions = new Map<string, SearchSession>();
 const canonicalHash = (input: object) => createHash('sha256').update(JSON.stringify(input)).digest('hex');
 type CachedResponse = { expiresAt: number; jobs: NormalisedJob[]; providerCounts: ProviderCount[]; partialMessage?: string };
 const responseCache = new Map<string, CachedResponse>();
+/**
+ * Only page 1 is cached, and the key says so.
+ *
+ * The cache is read exactly once — by a request with no `sessionId`, which is by
+ * definition the first page of a new search. Writing later pages under the same
+ * key made "Load more" overwrite the page-1 entry, so the next fresh search for
+ * that query was served page 2's jobs as its first page. Keying by page makes
+ * that impossible to express, and page 2+ is simply not cached: it is only
+ * meaningful alongside the session's `seenJobIds`, which the cache does not hold.
+ *
+ * The display sort is part of the key for the same reason. `queryHash` covers
+ * only what the providers are asked for, which maps both salary directions onto
+ * one request — but the cached payload is stored already sorted, so a
+ * salary-ascending request could be served the descending page verbatim.
+ */
+const pageCacheKey = (queryHash: string, sortBy: string, page: number) => `${queryHash}:sort:${sortBy}:page:${page}`;
 // Only the market-wide search providers are fanned out per request. Employer-ATS
 // providers answer per-board, never per-query, so they are orchestrated separately.
 const selectedProviders = (source: string): SearchJobProvider[] => source === 'all' ? ['ADZUNA', 'REED', 'JOOBLE'] : [source.toUpperCase() as SearchJobProvider];
@@ -52,7 +68,7 @@ export async function GET(request: NextRequest) {
     const parsed = JobsQuerySchema.safeParse(Object.fromEntries(new URL(request.url).searchParams.entries())); if (!parsed.success) throw new APIError(parsed.error.message, 400); const data = parsed.data;
     const params: JobSearchParams = { query: data.query, location: data.location, page: 1, perPage: data.perPage, contractType: data.contractType, salaryMin: data.salaryMin, sortBy: data.sortBy === 'date' ? 'date' : data.sortBy.startsWith('salary') ? 'salary' : 'relevance', sponsorship: 'all', experience: data.experience };
     const hash = canonicalHash({ ...params, source: data.source, sponsorship: data.sponsorship, remoteType: data.remoteType, postedWithinDays: data.postedWithinDays }); const now = Date.now(); for (const [id, session] of sessions) if (session.expiresAt < now) sessions.delete(id);
-    const cached = responseCache.get(hash);
+    const cached = responseCache.get(pageCacheKey(hash, data.sortBy, 1));
     if (cached && cached.expiresAt > now && !data.sessionId) {
       const cachedJobs = cached.jobs.map((job) => ({ ...job, providerReferences: [...job.providerReferences], jobReference: createJobReference(job, authenticated?.user.id ?? null) }));
       const cachedSessionId = randomUUID();
@@ -62,12 +78,19 @@ export async function GET(request: NextRequest) {
     let sessionId = data.sessionId; let session = sessionId ? sessions.get(sessionId) : undefined; if (session && session.queryHash !== hash) throw new APIError('Search session does not match these filters. Start a new search.', 400); if (!session) { sessionId = randomUUID(); session = { queryHash: hash, page: 0, seenJobIds: new Set(), expiresAt: now + SESSION_TTL_MS }; sessions.set(sessionId, session); } params.page = ++session.page;
     const providerStarted = Date.now(); const providerResults = await searchProviders(params, selectedProviders(data.source)); const providerMs = elapsed(providerStarted);
     const normaliseStarted = Date.now(); let jobs = deduplicateJobs(providerResults.flatMap((result) => result.jobs)); const normaliseMs = elapsed(normaliseStarted);
-    const counts: ProviderCount[] = providerResults.map((result) => ({ provider: result.provider, status: result.status, rawReceived: result.rawReceived, validNormalised: result.validNormalised, uniqueContributed: jobs.filter((job) => job.providerReferences.some((reference) => reference.provider === result.provider)).length }));
     const sponsorStarted = Date.now(); try { const matches = await matchSponsorCompanies([...new Set(jobs.map((job) => job.company))]); jobs = jobs.map((job) => { const match = matches.get(job.company) ?? { status: 'NONE' as const }; return { ...job, sponsorSignal: { ...job.sponsorSignal, registerMatchStatus: match.status, matchedOrganisationName: match.organisationName, explanation: match.status === 'EXACT' ? 'This employer appears on the UK register of licensed sponsors. This does not confirm sponsorship for this vacancy.' : match.status === 'LIKELY' || match.status === 'AMBIGUOUS' ? 'A similar organisation name appears on the sponsor register. Verify the employer’s legal entity.' : job.sponsorSignal.explanation } }; }); } catch { /* source register is supplementary, never a search blocker */ } const sponsorMs = elapsed(sponsorStarted);
     const dedupeStarted = Date.now(); jobs = sortJobs(applyFilters(jobs, data), data.sortBy, params.query).filter((job) => !session.seenJobIds.has(job.canonicalJobId)).slice(0, data.perPage); jobs.forEach((job) => session.seenJobIds.add(job.canonicalJobId)); session.expiresAt = now + SESSION_TTL_MS; const dedupeMs = elapsed(dedupeStarted);
+    // Counted AFTER filtering, the seen-id drop and the page slice, so
+    // `uniqueContributed` describes the jobs the user is actually shown. Counting
+    // it off the full deduplicated set (as this previously did) advertised
+    // contributions from results that filtering had already removed, and the
+    // provider chips added up to more than the list beneath them. `rawReceived`
+    // and `validNormalised` stay provider-level truths about the fetch itself —
+    // they are deliberately a different figure, not the same one.
+    const counts: ProviderCount[] = providerResults.map((result) => ({ provider: result.provider, status: result.status, rawReceived: result.rawReceived, validNormalised: result.validNormalised, uniqueContributed: jobs.filter((job) => job.providerReferences.some((reference) => reference.provider === result.provider)).length }));
     jobs = jobs.map((job) => ({ ...job, jobReference: createJobReference(job, authenticated?.user.id ?? null) }));
     const unavailable = providerResults.filter((result) => result.status === 'FAILED' || result.status === 'TIMED_OUT');
-    responseCache.set(hash, { expiresAt: now + 5 * 60_000, jobs: jobs.map(({ jobReference: _reference, ...job }) => job), providerCounts: counts, partialMessage: unavailable.length ? 'Some job sources are temporarily unavailable. Showing results from the available sources.' : undefined });
+    if (session.page === 1) responseCache.set(pageCacheKey(hash, data.sortBy, 1), { expiresAt: now + 5 * 60_000, jobs: jobs.map(({ jobReference: _reference, ...job }) => job), providerCounts: counts, partialMessage: unavailable.length ? 'Some job sources are temporarily unavailable. Showing results from the available sources.' : undefined });
     return NextResponse.json({ jobs, sessionId, meta: { currentPage: session.page, providerCounts: counts, partialResults: unavailable.length > 0, message: unavailable.length ? 'Some job sources are temporarily unavailable. Showing results from the available sources.' : undefined, timings: { rateLimitMs: elapsed(rateStarted) - providerMs - normaliseMs - sponsorMs - dedupeMs, providerMs, normaliseMs, sponsorMs, dedupeMs, totalMs: elapsed(started) }, providerResults: providerResults.map(({ provider, status, durationMs, cacheHit }) => ({ provider, status, durationMs, cacheHit })) } });
   });
 }

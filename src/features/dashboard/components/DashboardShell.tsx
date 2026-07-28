@@ -127,16 +127,22 @@ interface DashboardShellProps {
   data: DashboardData;
   /** Deep-link the initial tab (e.g. checkout return → billing). Applied once. */
   initialTab?: DashboardTab;
+  /** Deep-link straight into one stored analysis's report (e.g. from the Job Board). */
+  initialAnalysisId?: string;
 }
 
-export default function DashboardShell({ user, tier, entitlementSnapshot, data, initialTab }: DashboardShellProps) {
+export default function DashboardShell({ user, tier, entitlementSnapshot, data, initialTab, initialAnalysisId }: DashboardShellProps) {
   const tab = useDashboardStore((s) => s.tab);
   const setTab = useDashboardStore((s) => s.setTab);
+  const openAnalysis = useDashboardStore((s) => s.openAnalysis);
 
   // Honour a server-provided initial tab exactly once on mount (client tab state
-  // otherwise persists across soft navigations).
+  // otherwise persists across soft navigations). `openAnalysis` already switches
+  // to the analyses tab, so it supersedes `setTab` rather than following it —
+  // calling both would have setTab's `selectedAnalysisId: null` win.
   useEffect(() => {
-    if (initialTab) setTab(initialTab);
+    if (initialAnalysisId) openAnalysis(initialAnalysisId);
+    else if (initialTab) setTab(initialTab);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

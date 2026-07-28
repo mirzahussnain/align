@@ -1,6 +1,8 @@
 import { createHash } from 'node:crypto';
+import { getProviderCapabilities } from '@/shared/services/job-providers/capabilities';
 import type {
   EligibilityHint,
+  JobDescriptionAvailability,
   JobProvider,
   JobRemoteType,
   JobSalaryPeriod,
@@ -77,6 +79,30 @@ export function extractEligibilityHints(description: string, remoteType: JobRemo
   return hints;
 }
 
+/**
+ * How complete a provider's description is, derived from that provider's
+ * DECLARED contract rather than from its name.
+ *
+ * This used to read `source === 'JOOBLE' || isTruncated ? 'PARTIAL' : 'FULL'`.
+ * The outcome for Jooble is the same — its field is literally named `snippet`,
+ * so a teaser is what the integration is contractually promised and no Jooble
+ * record can honestly be called FULL — but the reason is now a declared,
+ * testable capability instead of a hardcoded provider name, and adding a
+ * provider no longer means remembering to edit this expression.
+ *
+ * This is a coarse ceiling, not the full classifier: richer per-record signals
+ * (ellipsis variants, sentence completeness, length, truncation markers) are a
+ * later phase. Defaults stay conservative — an unestablished contract is treated
+ * as partial, because over-claiming completeness is what produces a confident
+ * analysis of half an advert.
+ */
+export function classifyDescriptionAvailability(provider: JobProvider, description: string): JobDescriptionAvailability {
+  if (!description) return 'EXTERNAL_ONLY';
+  const semantics = getProviderCapabilities(provider).descriptionSemantics;
+  if (semantics === 'SNIPPET' || semantics === 'UNKNOWN') return 'PARTIAL';
+  return /\.\.\.$/.test(description) ? 'PARTIAL' : 'FULL';
+}
+
 export function blankSponsorSignal(): SponsorSignal {
   return { registerMatchStatus: 'NONE', jobWording: 'NOT_MENTIONED', explanation: 'The employer was not matched to the sponsor register. This is not a sponsorship decision for this vacancy.' };
 }
@@ -89,12 +115,11 @@ export function normaliseProviderJob(raw: ProviderJob): NormalisedJob {
   const extractedWording = wording(description);
   const companyNormalised = normaliseCompanyName(raw.company);
   const dedupeFingerprint = createHash('sha256').update(`${normaliseTitle(raw.title)}|${companyNormalised}|${normaliseLocationKey(raw.location)}`).digest('hex').slice(0, 24);
-  const isTruncated = /\.\.\.$/.test(description);
   return {
     source, sourceJobId: raw.id.replace(/^(adzuna|reed|jooble)-/, ''), providerReferences: [{ provider: source, sourceJobId: raw.id.replace(/^(adzuna|reed|jooble)-/, ''), sourceUrl: raw.url }],
     canonicalUrl: raw.url, title: clean(raw.title), company: clean(raw.company), companyNormalised: companyNormalised || undefined,
     ...location, description: description || undefined,
-    descriptionAvailability: description ? (source === 'JOOBLE' || isTruncated ? 'PARTIAL' : 'FULL') : 'EXTERNAL_ONLY',
+    descriptionAvailability: classifyDescriptionAvailability(source, description),
     ...salary, employmentType: raw.contractType ?? undefined, contractType: raw.contractType ?? undefined,
     postedAt: validDate(raw.postedDate), remoteType: raw.isRemote && location.remoteType === 'UNKNOWN' ? 'REMOTE' : location.remoteType,
     sponsorSignal: { ...blankSponsorSignal(), ...extractedWording, explanation: wordingExplanation(extractedWording.jobWording) },

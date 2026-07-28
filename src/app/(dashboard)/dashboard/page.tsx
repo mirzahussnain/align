@@ -47,9 +47,19 @@ export default async function DashboardPage({
   const requestedProfile = resolvedSearchParams.profile;
   const activeProfileId = Array.isArray(requestedProfile) ? requestedProfile[0] : requestedProfile;
 
-  // A checkout return (or the upgrade CTA) deep-links straight to the billing tab.
+  // A checkout return (or the upgrade CTA) deep-links straight to the billing
+  // tab; the Job Board deep-links to a stored analysis it found for a vacancy.
   const requestedTab = Array.isArray(resolvedSearchParams.tab) ? resolvedSearchParams.tab[0] : resolvedSearchParams.tab;
-  const initialTab = requestedTab === 'billing' ? ('billing' as const) : undefined;
+  const initialTab = requestedTab === 'billing' ? ('billing' as const) : requestedTab === 'analyses' ? ('analyses' as const) : undefined;
+
+  /**
+   * A specific stored analysis to open on arrival. Only the id travels in the
+   * URL — the report itself is loaded by the existing analyses view, which is
+   * ownership-checked server-side, so an id belonging to someone else opens
+   * nothing rather than leaking a row.
+   */
+  const requestedAnalysis = Array.isArray(resolvedSearchParams.analysis) ? resolvedSearchParams.analysis[0] : resolvedSearchParams.analysis;
+  const initialAnalysisId = initialTab === 'analyses' && requestedAnalysis ? requestedAnalysis : undefined;
 
   // Resolved before the queries because everything below is scoped to it, and
   // because an id belonging to another user must be rejected rather than used.
@@ -223,6 +233,7 @@ export default async function DashboardPage({
       tier={entitlementSnapshot.plan.toLowerCase()}
       entitlementSnapshot={entitlementSnapshot}
       initialTab={initialTab}
+      initialAnalysisId={initialAnalysisId}
       data={{
         analyses: analyses.map((a) => ({ ...a, createdAt: a.createdAt.toISOString() })),
         totalAnalyses: scoreAgg._count._all,
