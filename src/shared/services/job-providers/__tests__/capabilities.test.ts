@@ -47,9 +47,9 @@ describe('provider taxonomy', () => {
 
   it('declares the four employer-ATS providers ahead of their integrations', () => {
     expect(listEmployerAtsProviders()).toEqual(['GREENHOUSE', 'LEVER', 'SMARTRECRUITERS', 'ASHBY']);
-    // The contract exists; no adapter is registered yet.
-    expect(listImplementedEmployerAtsProviders()).toEqual([]);
-    expect(getEmployerAtsAdapter('GREENHOUSE')).toBeNull();
+    // Phase 8A registers Greenhouse; the remaining ATS providers remain declarations only.
+    expect(listImplementedEmployerAtsProviders()).toEqual(['GREENHOUSE']);
+    expect(getEmployerAtsAdapter('GREENHOUSE')).not.toBeNull();
   });
 });
 
@@ -120,7 +120,7 @@ describe('employer-ATS capabilities', () => {
     }
   });
 
-  it('records that employer boards give the employer’s own application URL', () => {
+  it('records that employer boards give the employerâ€™s own application URL', () => {
     for (const provider of EMPLOYER_ATS_PROVIDERS) {
       expect(getProviderCapabilities(provider).employerDirectUrl).toBe(true);
     }
