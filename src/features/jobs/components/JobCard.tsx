@@ -15,7 +15,11 @@ interface JobCardProps {
 export default function JobCard({ job, saved, saving, onToggleSave }: JobCardProps) {
   const register = job.sponsorSignal.registerMatchStatus;
   const wording = job.sponsorSignal.jobWording;
-  const viewDetails = () => { if (job.jobReference) window.location.assign(`/jobs/${encodeURIComponent(job.jobReference)}`); };
+  const viewDetails = async () => {
+    const response = await fetch('/api/jobs/snapshots', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ job }) });
+    const body = await response.json().catch(() => null);
+    if (response.ok && body?.jobSnapshotId) window.location.assign(`/dashboard/jobs/${encodeURIComponent(body.jobSnapshotId)}`);
+  };
 
   return <article className="glass-card p-5 border-border-subtle">
     <div className="flex flex-col gap-4">

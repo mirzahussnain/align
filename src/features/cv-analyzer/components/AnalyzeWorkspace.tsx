@@ -40,13 +40,13 @@ export default function AnalyzeWorkspace({
   const setResult = useAnalysisStore((s) => s.setResult);
   const setMode = useAnalysisStore((s) => s.setMode);
   const reset = useAnalysisStore((s) => s.reset);
-  const [handoff, setHandoff] = useState<{ profileId: string; job: { title: string; company: string; description?: string; descriptionAvailability: string } } | null>(null);
-  const handoffToken = new URLSearchParams(typeof window === 'undefined' ? '' : window.location.search).get('handoff');
+  const [matchRequest, setMatchRequest] = useState<{ profileId: string; description: string; descriptionAvailability: string } | null>(null);
+  const matchRequestId = new URLSearchParams(typeof window === 'undefined' ? '' : window.location.search).get('matchRequest');
 
   useEffect(() => {
     if (new URLSearchParams(window.location.search).get('mode') === 'job_match') setMode('job_match');
-    if (handoffToken) fetch('/api/jobs/handoff?token=' + encodeURIComponent(handoffToken)).then((response) => response.ok ? response.json() : null).then(setHandoff).catch(() => setHandoff(null));
-  }, [setMode, handoffToken]);
+    if (matchRequestId) fetch('/api/job-match-requests/' + encodeURIComponent(matchRequestId)).then((response) => response.ok ? response.json() : null).then(setMatchRequest).catch(() => setMatchRequest(null));
+  }, [setMode, matchRequestId]);
 
   return (
     <AnimatePresence mode="wait">
@@ -88,9 +88,9 @@ export default function AnalyzeWorkspace({
 
           <CVUploader
             mode={mode}
-            profileId={handoff?.profileId ?? profileId}
-            jobHandoffToken={handoffToken ?? undefined}
-            handoffJob={handoff?.job}
+            profileId={matchRequest?.profileId ?? profileId}
+            jobMatchRequestId={matchRequestId ?? undefined}
+            matchRequest={matchRequest}
             onAnalysisComplete={(r) => setResult(r as CVAnalysisResult)}
           />
         </motion.div>

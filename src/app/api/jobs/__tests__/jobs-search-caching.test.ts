@@ -137,18 +137,6 @@ describe('merged search-response cache', () => {
     expect(fresh.body.jobs[0].title).toBe('Page one');
   });
 
-  it('does not put a per-user job reference into the shared cache', async () => {
-    getSession.mockResolvedValue({ user: { id: 'user-1' } });
-    searchProvidersInteractive.mockResolvedValue(fanOut([providerResult([job()])]));
-
-    const first = await call('query=refs&location=Leeds');
-    expect(first.body.jobs[0].jobReference).toBeTruthy();
-
-    // A reference token is minted per user; a cached one would be handed to the
-    // next requester. It must be attached on the way out, never stored.
-    const serialised = JSON.stringify([...(cache as unknown as { entries: Map<string, unknown> }).entries]);
-    expect(serialised).not.toContain(first.body.jobs[0].jobReference);
-  });
 });
 
 describe('stale-while-revalidate', () => {

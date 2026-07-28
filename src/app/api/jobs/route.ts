@@ -47,7 +47,6 @@ import {
 } from '@/shared/services/job-search-session';
 import { readProviderHealthMap } from '@/shared/services/provider-health';
 import { matchSponsorCompaniesCached } from '@/shared/services/sponsor-match-cache';
-import { createJobReference } from '@/shared/services/job-reference';
 import type {
   JobSearchParams,
   NormalisedJob,
@@ -118,8 +117,7 @@ type CachedSearchPage = Pick<SearchOutcome, 'jobs' | 'counts' | 'partialMessage'
  *
  * Shared verbatim by the interactive path and the post-response refresh, so a
  * refreshed cache entry cannot drift from what a live search would have
- * produced. No `jobReference` is attached here — those are per-user and must
- * never enter a shared cache.
+ * produced. It remains free of user state and is safe for the shared cache.
  */
 async function runSearch(
   data: Query,
@@ -212,14 +210,6 @@ async function runSearch(
     abandon: fanOut.abandon,
   };
 }
-
-/** Per-user reference tokens, attached only on the way out of the route. */
-const withReferences = (jobs: NormalisedJob[], userId: string | null) =>
-  jobs.map((job) => ({
-    ...job,
-    providerReferences: [...job.providerReferences],
-    jobReference: createJobReference(job, userId),
-  }));
 
 export async function GET(request: NextRequest) {
   return withErrorHandler(async () => {
@@ -323,7 +313,7 @@ export async function GET(request: NextRequest) {
         await timings.measure('sessionWriteMs', () => saveSession(store, seeded));
 
         return respond({
-          jobs: withReferences(cached.value.jobs, userId),
+          jobs: cached.value.jobs,
           sessionId: seeded.id,
           currentPage: 1,
           counts: cached.value.counts,
@@ -395,7 +385,7 @@ export async function GET(request: NextRequest) {
     }
 
     return respond({
-      jobs: withReferences(outcome.jobs, userId),
+      jobs: outcome.jobs,
       sessionId: updated.id,
       currentPage: servedPageCount(updated),
       counts: outcome.counts,

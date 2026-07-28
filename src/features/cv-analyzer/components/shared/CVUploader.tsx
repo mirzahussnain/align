@@ -32,11 +32,11 @@ interface CVUploaderProps {
    * user's default profile.
    */
   profileId?: string;
-  jobHandoffToken?: string;
-  handoffJob?: { title: string; company: string; description?: string; descriptionAvailability: string } | null;
+  jobMatchRequestId?: string;
+  matchRequest?: { description: string; descriptionAvailability: string } | null;
 }
 
-export default function CVUploader({ mode = 'ats', onAnalysisComplete, profileId, jobHandoffToken, handoffJob }: CVUploaderProps) {
+export default function CVUploader({ mode = 'ats', onAnalysisComplete, profileId, jobMatchRequestId, matchRequest }: CVUploaderProps) {
   const [file, setFile] = useState<File | null>(null);
   const [jobDescription, setJobDescription] = useState('');
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -52,7 +52,7 @@ export default function CVUploader({ mode = 'ats', onAnalysisComplete, profileId
   useEffect(() => {
     if (mode !== 'job_match' || jobDescription) return;
     try {
-      if (handoffJob?.descriptionAvailability === 'FULL' && handoffJob.description) { setJobDescription(handoffJob.description); return; }
+      if (matchRequest?.description) { setJobDescription(matchRequest.description); return; }
       const raw = window.sessionStorage.getItem('align:job-match-prefill');
       if (!raw) return;
       const job = JSON.parse(raw) as { description?: string; descriptionAvailability?: string };
@@ -121,7 +121,7 @@ export default function CVUploader({ mode = 'ats', onAnalysisComplete, profileId
       formData.append('file', file);
       formData.append('mode', mode);
       if (profileId) formData.append('profileId', profileId);
-      if (jobHandoffToken) formData.append('jobHandoffToken', jobHandoffToken);
+      if (jobMatchRequestId) formData.append('jobMatchRequestId', jobMatchRequestId);
       if (mode === 'job_match') {
         if (!jobDescription.trim()) {
           throw new Error('Please provide a Job Description to match against.');
@@ -181,7 +181,7 @@ export default function CVUploader({ mode = 'ats', onAnalysisComplete, profileId
       const formData = new FormData();
       formData.append('file', file);
       if (profileId) formData.append('profileId', profileId);
-      if (jobHandoffToken) formData.append('jobHandoffToken', jobHandoffToken);
+      if (jobMatchRequestId) formData.append('jobMatchRequestId', jobMatchRequestId);
 
       const response = await fetch('/api/analyze/detect', {
         method: 'POST',

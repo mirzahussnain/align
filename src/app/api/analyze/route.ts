@@ -43,7 +43,7 @@ import { loadProfileTarget, resolveProfileId } from '@/features/dashboard/data/l
 import { recordFirstValueIfOnboarding } from '@/shared/services/onboarding';
 import type { CVAnalysisResult } from '@/shared/types/cv';
 import { JobMatchDataV2Schema } from '@/shared/schemas/ai-output';
-import { resolveJobMatchHandoff } from '@/shared/services/job-handoff';
+import { consumeMatchRequest, resolveMatchRequest } from '@/shared/services/job-snapshot';
 
 /**
  * Persist a completed analysis and archive the original upload to object storage.
@@ -217,7 +217,7 @@ export async function POST(request: NextRequest) {
       mode: formData.get('mode') || 'ats',
       jobDescription: formData.get('jobDescription') || '',
       profileId: formData.get('profileId') || undefined,
-      jobHandoffToken: formData.get('jobHandoffToken') || undefined,
+      jobMatchRequestId: formData.get('jobMatchRequestId') || undefined,
       targetSelection: formData.get('targetSelection') || undefined,
       savedProfileId: formData.get('savedProfileId') || undefined,
       targetRole: formData.get('targetRole') || undefined,
@@ -233,9 +233,9 @@ export async function POST(request: NextRequest) {
     const {
       file,
       mode,
-      jobDescription,
+      jobDescription: submittedJobDescription,
       profileId,
-      jobHandoffToken,
+      jobMatchRequestId,
       targetSelection,
       savedProfileId,
       targetRole,
@@ -280,11 +280,12 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Which career track this run belongs to. Resolved before the AI call so an
-    // analysis is never left unfiled after the expensive part has already run.
-    const jobHandoff = jobHandoffToken ? resolveJobMatchHandoff(jobHandoffToken, session.user.id) : null;
-    if (jobHandoffToken && (!jobHandoff || mode !== 'job_match')) throw new APIError('This Job Board vacancy handoff is invalid or has expired.', 400);
-    const scopedProfileId = jobHandoff?.profileId ?? await resolveProfileId(session.user.id, profileId);
+    // A durable match request owns the selected description and profile. It is
+    // resolved before any quota reservation; creating or viewing it is free.
+    const jobMatchRequest = jobMatchRequestId ? await resolveMatchRequest(session.user.id, jobMatchRequestId) : null;
+    if (jobMatchRequestId && (!jobMatchRequest || mode !== 'job_match')) throw new APIError('This Job Board match request is invalid or has expired.', 400);
+    const jobDescription = jobMatchRequest?.selected.text ?? submittedJobDescription;
+    const scopedProfileId = jobMatchRequest?.request.profileId ?? await resolveProfileId(session.user.id, profileId);
 
     // Whether this request will actually invoke a model. Rule-based ATS scoring
     // is free and uncapped; only the AI layer is metered, so a user out of AI
@@ -323,7 +324,7 @@ export async function POST(request: NextRequest) {
         mode,
         hashContent(text),
         mode === 'job_match' ? hashContent(jobDescription) : '',
-        jobHandoff?.job.canonicalJobId ?? '',
+        jobMatchRequest?.request.jobSnapshotId ?? '',
         scopedProfileId ?? '',
         effectiveTargetSelection,
       ]);
@@ -640,7 +641,7 @@ export async function POST(request: NextRequest) {
       file.name || 'CV.pdf',
       sourceBuffer,
       file.type || 'application/pdf',
-      jobHandoff ? { canonicalJobId: jobHandoff.job.canonicalJobId, jobSnapshot: jobHandoff.job, descriptionAvailability: jobHandoff.job.descriptionAvailability, descriptionHash: hashContent(jobDescription), profileId: scopedProfileId } : undefined
+      jobMatchRequest ? { jobSnapshotId: jobMatchRequest.request.jobSnapshotId, providerReferences: jobMatchRequest.request.jobSnapshot.providerReferences, selectedDescriptionSource: jobMatchRequest.request.selectedDescriptionSource, selectedDescriptionHash: jobMatchRequest.request.selectedDescriptionHash, descriptionAvailability: jobMatchRequest.selected.partial ? 'PARTIAL' : 'FULL', partialDescriptionAccepted: jobMatchRequest.request.partialDescriptionAccepted, profileId: scopedProfileId } : undefined
     );
 
     // Commit exactly once, and only after the analysis is durably persisted so
@@ -679,6 +680,7 @@ export async function POST(request: NextRequest) {
     // The results screen threads this into the rewrite wizard so a fresh
     // analysis can be rebuilt into a CV without re-uploading the source.
     if (analysisId) result.analysisId = analysisId;
+    if (analysisId && jobMatchRequestId) await consumeMatchRequest(session.user.id, jobMatchRequestId);
 
     // First value, recorded server-side from what actually happened rather than
     // from anything the client claims. A deterministic ATS result counts: a Free

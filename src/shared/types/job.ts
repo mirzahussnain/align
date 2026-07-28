@@ -61,8 +61,6 @@ export interface NormalisedJob {
   employmentType?: string; contractType?: string; remoteType: JobRemoteType;
   postedAt?: string; expiresAt?: string; sponsorSignal: SponsorSignal; eligibilityHints: EligibilityHint[];
   dedupeFingerprint: string; canonicalJobId: string; fetchedAt: string;
-  /** Ephemeral server-owned reference for details/match handoff. */
-  jobReference?: string;
 }
 
 export interface JobSearchParams {

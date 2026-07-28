@@ -31,7 +31,8 @@
     "db:studio": "prisma studio",
     "db:reset": "prisma migrate reset --force",
     "db:setup": "npm run dev:up && prisma migrate deploy && prisma generate",
-    "esco:import": "node --env-file=.env.local --experimental-strip-types --no-warnings scripts/esco-import.mts"
+    "esco:import": "node --env-file=.env.local --experimental-strip-types --no-warnings scripts/esco-import.mts",
+    "db:seed": "node --env-file=.env.local --experimental-strip-types --no-warnings prisma/seed.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1089.0",
