@@ -73,7 +73,7 @@ describe('board URL construction', () => {
     expect(buildBoardApiUrl({ provider: 'SMARTRECRUITERS', providerIdentifier: 'acme' }))
       .toBe('https://api.smartrecruiters.com/v1/companies/acme/postings');
     expect(buildBoardApiUrl({ provider: 'ASHBY', providerIdentifier: 'acme' }))
-      .toBe('https://api.ashbyhq.com/posting-api/job-board/acme');
+      .toBe('https://api.ashbyhq.com/posting-api/job-board/acme?includeCompensation=true');
   });
 
   it('routes Lever to the region’s host, defaulting to global', () => {

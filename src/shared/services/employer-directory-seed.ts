@@ -4,6 +4,7 @@ import type { EmployerDirectorySeed } from '../types/employer-source.ts';
 type SeedCompany = Omit<EmployerDirectorySeed, 'normalisedName' | 'country'>;
 const source = (providerIdentifier: string) => ({ provider: 'GREENHOUSE' as const, providerIdentifier, sourceOrigin: 'CURATED_SEED' as const });
 const leverSource = (providerIdentifier: string, leverRegion: 'GLOBAL' | 'EU' = 'GLOBAL') => ({ provider: 'LEVER' as const, providerIdentifier, leverRegion, sourceOrigin: 'CURATED_SEED' as const });
+const ashbySource = (providerIdentifier: string) => ({ provider: 'ASHBY' as const, providerIdentifier, sourceOrigin: 'CURATED_SEED' as const });
 const company = (entry: SeedCompany): EmployerDirectorySeed => ({ ...entry, country: 'GB', normalisedName: normaliseEmployerName(entry.displayName) });
 
 /**
@@ -82,4 +83,15 @@ export const EMPLOYER_DIRECTORY_SEED: readonly EmployerDirectorySeed[] = [
   company({ displayName: 'Pattern', industry: 'E-commerce', websiteUrl: 'https://pattern.com', sources: [leverSource('pattern')] }),
   company({ displayName: 'Safe Security', industry: 'Cybersecurity', websiteUrl: 'https://www.safe.security', sources: [leverSource('safe')] }),
   company({ displayName: 'Serverfarm', industry: 'Data centres', websiteUrl: 'https://www.serverfarmllc.com', sources: [leverSource('serverfarm')] }),
-  company({ displayName: 'Veeva Systems', industry: 'Life sciences software', websiteUrl: 'https://www.veeva.com', sources: [leverSource('veeva')] }),] as const;
+  company({ displayName: 'Veeva Systems', industry: 'Life sciences software', websiteUrl: 'https://www.veeva.com', sources: [leverSource('veeva')] }),
+  // Public Ashby boards manually evidenced from the hosted board and live UK-relevant postings.
+  // These identifiers are copied from jobs.ashbyhq.com paths, never derived from company names.
+  company({ displayName: 'Ashby', industry: 'Recruiting software', websiteUrl: 'https://www.ashbyhq.com', careersUrl: 'https://jobs.ashbyhq.com/Ashby', sources: [ashbySource('Ashby')] }),
+  company({ displayName: 'Aptura', industry: 'Data and AI', careersUrl: 'https://jobs.ashbyhq.com/aptura', sources: [ashbySource('aptura')] }),
+  company({ displayName: 'Lovable', industry: 'Data and AI', websiteUrl: 'https://lovable.dev', careersUrl: 'https://jobs.ashbyhq.com/lovable', sources: [ashbySource('lovable')] }),
+  company({ displayName: 'Tessl', industry: 'Data and AI', websiteUrl: 'https://tessl.io', careersUrl: 'https://jobs.ashbyhq.com/tesslcareers', sources: [ashbySource('tesslcareers')] }),
+  company({ displayName: 'Axle Energy', industry: 'Energy technology', websiteUrl: 'https://www.axle.energy', careersUrl: 'https://jobs.ashbyhq.com/axle-careers', sources: [ashbySource('axle-careers')] }),
+  company({ displayName: 'Condukt', industry: 'Financial technology', websiteUrl: 'https://condukt.com', careersUrl: 'https://jobs.ashbyhq.com/condukt', sources: [ashbySource('condukt')] }),
+  company({ displayName: 'CUBE', industry: 'Regulatory technology', websiteUrl: 'https://www.cube.global', careersUrl: 'https://jobs.ashbyhq.com/CUBE', sources: [ashbySource('CUBE')] }),
+  company({ displayName: 'WRITER', industry: 'Data and AI', websiteUrl: 'https://writer.com', careersUrl: 'https://jobs.ashbyhq.com/WRITER', sources: [ashbySource('WRITER')] }),
+  company({ displayName: 'Rogo', industry: 'Financial technology', websiteUrl: 'https://www.rogo.ai', careersUrl: 'https://jobs.ashbyhq.com/Rogo', sources: [ashbySource('Rogo')] }),] as const;

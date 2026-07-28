@@ -134,7 +134,9 @@ export function buildBoardApiUrl(source: EmployerJobSourceRef): string {
     case 'SMARTRECRUITERS':
       return assertAllowedUrl(`https://api.smartrecruiters.com/v1/companies/${id}/postings`, id);
     case 'ASHBY':
-      return assertAllowedUrl(`https://api.ashbyhq.com/posting-api/job-board/${id}`, id);
+      // `includeCompensation` is the documented opt-in on Ashby's public
+      // posting endpoint. It never changes which public jobs are returned.
+      return assertAllowedUrl(`https://api.ashbyhq.com/posting-api/job-board/${id}?includeCompensation=true`, id);
   }
 }
 

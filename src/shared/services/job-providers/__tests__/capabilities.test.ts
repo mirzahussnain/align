@@ -48,9 +48,10 @@ describe('provider taxonomy', () => {
   it('declares the four employer-ATS providers ahead of their integrations', () => {
     expect(listEmployerAtsProviders()).toEqual(['GREENHOUSE', 'LEVER', 'SMARTRECRUITERS', 'ASHBY']);
     // Phase 8B registers Lever as the second live employer-ATS adapter.
-    expect(listImplementedEmployerAtsProviders()).toEqual(['GREENHOUSE', 'LEVER']);
+    expect(listImplementedEmployerAtsProviders()).toEqual(['GREENHOUSE', 'LEVER', 'ASHBY']);
     expect(getEmployerAtsAdapter('GREENHOUSE')).not.toBeNull();
     expect(getEmployerAtsAdapter('LEVER')).not.toBeNull();
+    expect(getEmployerAtsAdapter('ASHBY')).not.toBeNull();
   });
 });
 

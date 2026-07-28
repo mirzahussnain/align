@@ -1,6 +1,7 @@
 import { prisma } from '../lib/prisma.ts';
 import { buildBoardApiUrl, buildPublicBoardUrl, isSafePublicApplicationUrl, validateProviderIdentifier } from './employer-source-validation.ts';
 import { normaliseEmployerName } from './employer-name.ts';
+import { validateHostedJobUrl } from './employer-job-url-validation.ts';
 import type { EmployerAtsProvider } from '../types/job.ts';
 import type { EmployerSourceFailureCode, EmployerSourceVerificationResult, LeverRegion } from '../types/employer-source.ts';
 
@@ -68,12 +69,12 @@ function failed(input: VerifyEmployerSourceInput, code: EmployerSourceFailureCod
 /** Lever's public board title is provider-hosted organisation identity evidence.
  * The API lacks a board-level company field, so never infer identity from the
  * site identifier alone. */
-async function readLeverBoardIdentity(request: FetchLike, boardUrl: string, signal: AbortSignal): Promise<string | undefined> {
+async function readProviderBoardIdentity(request: FetchLike, boardUrl: string, signal: AbortSignal): Promise<string | undefined> {
   try {
     const response = await request(boardUrl, { signal, redirect: 'error', headers: { accept: 'text/html', 'user-agent': 'Align employer-source verifier' } });
     if (!response.ok || typeof response.text !== 'function') return undefined;
     const html = await response.text();
-    return html.match(/<title[^>]*>\s*([^<]+?)\s*<\/title>/i)?.[1]?.trim();
+    return html.match(/<title[^>]*>\s*([^<]+?)\s*<\/title>/i)?.[1]?.trim().replace(/\s+(?:jobs?|careers?|job board)\s*$/i, '');
   } catch { return undefined; }
 }
 
@@ -102,12 +103,15 @@ export async function verifyEmployerSourceRequest(
     if (parsed.jobs.length > 0 && (!parsed.sampleJobUrl || !isSafePublicApplicationUrl(parsed.sampleJobUrl))) {
       return failed(input, 'INVALID_JOB_URL', 'A sample vacancy did not provide a safe public HTTPS application URL.');
     }
-    const leverBoardIdentity = input.provider === 'LEVER' ? await readLeverBoardIdentity(dependencies.fetch ?? fetch, boardUrl, controller.signal) : undefined;
+    if (input.provider === 'ASHBY' && parsed.sampleJobUrl && !validateHostedJobUrl(parsed.sampleJobUrl, ['jobs.ashbyhq.com'], input.providerIdentifier).valid) {
+      return failed(input, 'INVALID_JOB_URL', 'A sample vacancy did not provide a valid Ashby-hosted job URL.');
+    }
+    const providerBoardIdentity = input.provider === 'LEVER' || input.provider === 'ASHBY' ? await readProviderBoardIdentity(dependencies.fetch ?? fetch, boardUrl, controller.signal) : undefined;
     return {
       provider: input.provider,
       providerIdentifier: input.providerIdentifier,
       status: 'VERIFIED',
-      employerName: leverBoardIdentity ?? parsed.employerName,
+      employerName: providerBoardIdentity ?? parsed.employerName,
       jobsFound: parsed.jobs.length,
       sampleJobUrl: parsed.sampleJobUrl,
       boardUrl,

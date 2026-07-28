@@ -31,6 +31,18 @@ describe('JobSnapshot service', () => {
     expect(prisma.jobProviderReference.upsert).toHaveBeenCalledWith(expect.objectContaining({ where: { provider_providerJobId: { provider: 'REED', providerJobId: 'two' } } }));
   });
 
+  it('preserves reliable canonical salary and richer provider intelligence on a weaker refresh', async () => {
+    prisma.jobSnapshot.findUnique
+      .mockResolvedValueOnce({ id: 'snapshot-1', salaryMin: 90000, salaryMax: 110000, salaryCurrency: 'GBP', salaryPeriod: 'YEAR', salaryText: '£90K–£110K', providerDescription: 'A substantially richer existing provider description.', descriptionAvailability: 'FULL', vacancySponsorshipSignal: { preserved: true } })
+      .mockResolvedValueOnce({ id: 'snapshot-1', providerReferences: [] });
+    prisma.jobSnapshot.update.mockResolvedValue({ id: 'snapshot-1' });
+    prisma.jobProviderReference.upsert.mockResolvedValue({});
+
+    await getOrCreateSnapshotFromNormalisedJob({ ...job, description: 'Short refresh' } as never);
+
+    expect(prisma.jobSnapshot.update).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ salaryMin: 90000, salaryMax: 110000, salaryText: '£90K–£110K', providerDescription: 'A substantially richer existing provider description.', descriptionAvailability: 'FULL', vacancySponsorshipSignal: { preserved: true } }) }));
+  });
+
   it('keeps provider and user descriptions separate and hashes the selected pasted text', async () => {
     const snapshot = { id: 'snapshot-1', providerDescription: 'Provider text', userSuppliedDescription: null, descriptionAvailability: 'PARTIAL', providerReferences: [] };
     prisma.jobSnapshot.findUnique.mockResolvedValue(snapshot);
