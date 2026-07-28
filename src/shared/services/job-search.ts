@@ -39,6 +39,7 @@ import { searchAdzunaJobs } from '@/shared/services/adzuna';
 import { searchReedJobs } from '@/shared/services/reed';
 import { searchJoobleJobs } from '@/shared/services/jooble';
 import { normaliseProviderJob } from '@/shared/services/job-normalisation';
+import { areCanonicalDuplicates, mergeCanonicalJobs } from '@/shared/services/job-discovery';
 import { getProviderCapabilities, pushdownFilters } from '@/shared/services/job-providers/capabilities';
 import { logJobBoardEvent, type SearchTimings } from '@/shared/services/job-board-observability';
 import { recordProviderOutcome } from '@/shared/services/provider-health';
@@ -424,22 +425,11 @@ export async function searchProvidersInteractive(
   };
 }
 
-const similarity = (a: string, b: string) => a === b ? 1 : !a || !b ? 0 : (a.split(' ').filter((word) => b.split(' ').includes(word)).length / Math.max(a.split(' ').length, b.split(' ').length));
 export function areDuplicates(a: NormalisedJob, b: NormalisedJob) {
-  if (a.canonicalUrl === b.canonicalUrl) return true;
-  const title = similarity(a.title.toLowerCase(), b.title.toLowerCase()); const company = similarity(a.companyNormalised ?? '', b.companyNormalised ?? ''); const location = similarity(a.locationText.toLowerCase(), b.locationText.toLowerCase());
-  const postedDistance = a.postedAt && b.postedAt ? Math.abs(Date.parse(a.postedAt) - Date.parse(b.postedAt)) / 86_400_000 : undefined;
-  return title >= .8 && company >= .8 && location >= .6 && (postedDistance === undefined || postedDistance <= 14);
+  return areCanonicalDuplicates(a, b);
 }
-function richer(a: NormalisedJob, b: NormalisedJob) { return (a.description?.length ?? 0) >= (b.description?.length ?? 0) ? a : b; }
 export function deduplicateJobs(jobs: NormalisedJob[]) {
-  const merged: NormalisedJob[] = [];
-  for (const job of jobs) {
-    const index = merged.findIndex((existing) => areDuplicates(existing, job));
-    if (index < 0) { merged.push(job); continue; }
-    const existing = merged[index]; const primary = richer(existing, job); const secondary = primary === existing ? job : existing;
-    merged[index] = { ...primary, providerReferences: [...primary.providerReferences, ...secondary.providerReferences], salaryMin: primary.salaryMin ?? secondary.salaryMin, salaryMax: primary.salaryMax ?? secondary.salaryMax, sponsorSignal: primary.sponsorSignal.jobWording !== 'NOT_MENTIONED' ? primary.sponsorSignal : secondary.sponsorSignal };
-  }
+  const merged = mergeCanonicalJobs(jobs);
   const ids = new Set<string>();
   return merged.map((job) => {
     let canonicalJobId = job.canonicalJobId; let suffix = 2;

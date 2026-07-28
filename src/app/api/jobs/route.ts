@@ -36,6 +36,7 @@ import type { CacheStore } from '@/shared/lib/cache/cache-store';
 import { acquireRefreshLock } from '@/shared/lib/cache/refresh-lock';
 import { applyRateLimit, jobsLimiter } from '@/shared/lib/rate-limit';
 import { deduplicateJobs, searchProvidersInteractive } from '@/shared/services/job-search';
+import { getAtsSnapshotProviderResults } from '@/shared/services/job-discovery';
 import { logJobBoardEvent, SearchTimings } from '@/shared/services/job-board-observability';
 import {
   activeProviders,
@@ -144,7 +145,10 @@ async function runSearch(
     ...(input.interactive ? {} : { interactiveDeadlineMs: Number.MAX_SAFE_INTEGER }),
   });
 
-  const providerResults = fanOut.results;
+  // ATS is deliberately a single durable-snapshot query. No Greenhouse, Lever
+  // or Ashby board endpoint is ever called on this interactive search path.
+  const atsResults = await timings.measure('atsSnapshotMs', () => getAtsSnapshotProviderResults());
+  const providerResults: ProviderSearchResult[] = [...fanOut.results, ...atsResults];
 
   let jobs = timings.measureSync('dedupeMs', () => deduplicateJobs(providerResults.flatMap((result) => result.jobs)));
 
@@ -189,7 +193,7 @@ async function runSearch(
     uniqueContributed: page.filter((job) => job.providerReferences.some((reference) => reference.provider === result.provider)).length,
   }));
 
-  const unavailable = providerResults.filter((result) => result.status === 'FAILED' || result.status === 'TIMED_OUT');
+  const unavailable = providerResults.filter((result) => ['FAILED', 'TIMED_OUT', 'TIMEOUT', 'RATE_LIMITED', 'UNAVAILABLE'].includes(result.status));
 
   return {
     outcome: {

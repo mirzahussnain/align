@@ -99,7 +99,7 @@ export interface JobSearchResult { jobs: ProviderJob[]; total: number; page: num
  * was still healthy and in flight — its result will populate the cache for the
  * next search. Collapsing the two would report a working source as broken.
  */
-export type ProviderSearchStatus = 'SUCCESS' | 'EMPTY' | 'FAILED' | 'TIMED_OUT' | 'NOT_CONFIGURED' | 'PENDING';
+export type ProviderSearchStatus = 'SUCCESS' | 'EMPTY' | 'STALE_CACHE' | 'TIMEOUT' | 'RATE_LIMITED' | 'UNAVAILABLE' | 'FAILED' | 'TIMED_OUT' | 'NOT_CONFIGURED' | 'PENDING';
 export interface ProviderSearchResult { provider: JobProvider; status: ProviderSearchStatus; jobs: NormalisedJob[]; rawReceived: number; validNormalised: number; nextCursor?: string; errorCode?: string; durationMs: number; cacheHit?: boolean; }
 export interface ProviderCount { provider: JobProvider; rawReceived: number; validNormalised: number; uniqueContributed: number; status: ProviderSearchStatus; }
 export interface Sponsor { organisationName: string; townCity: string; county: string; rating: string; route: string; industry?: string; }
