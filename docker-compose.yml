@@ -1,4 +1,4 @@
-# Local development backing services: Postgres and object storage.
+# Local development backing services: Postgres, object storage and Redis.
 #
 # Exists so day-to-day work — running migrations, breaking things, resetting —
 # never touches the Neon instance. Neon is where real user data lives; a dev
@@ -86,6 +86,40 @@ services:
       mc anonymous set download local/align-users
       "
 
+  # Redis backs the Job Board cache: provider results, merged search pages,
+  # search sessions and refresh locks. It holds nothing durable — every key is
+  # reconstructable by re-querying the providers, and losing all of them costs
+  # latency and nothing else (see src/shared/lib/cache/cache-store.ts).
+  #
+  # It exists as a container for the same reason the database does: the
+  # deployment target is serverless, so the module-level Maps this replaces were
+  # per-lambda-instance and vanished on every cold start and scale-out. A local
+  # Redis is the only way to develop and test cross-instance behaviour —
+  # refresh-lock contention, shared sessions, stale-while-revalidate — at all.
+  redis:
+    image: redis:7-alpine
+    container_name: align-redis
+    restart: unless-stopped
+    # Append-only persistence so a restart does not silently empty the cache
+    # mid-session. The DATA is still disposable; this only keeps the local dev
+    # loop from looking like a cache bug every time the container bounces.
+    command: redis-server --appendonly yes
+    ports:
+      # 6379 is the default and there is no collision risk worth the confusion of
+      # remapping it — unlike Postgres, a stray local Redis holding job-search
+      # cache entries is harmless.
+      - '6379:6379'
+    volumes:
+      - align-redisdata:/data
+    healthcheck:
+      # `npm run redis:up` waits on this, so the first search after a cold start
+      # does not race the server accepting connections.
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
 volumes:
   align-pgdata:
   align-miniodata:
+  align-redisdata:

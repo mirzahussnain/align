@@ -104,6 +104,15 @@ const CHECKS: Check[] = [
     note: 'Rate limiting — NO-OPS ENTIRELY IF UNSET, so production really wants this',
   },
   { name: 'UPSTASH_REDIS_REST_TOKEN', required: false, note: 'Rate limiting' },
+  {
+    name: 'REDIS_URL',
+    required: false,
+    note: 'Job Board cache — searches still work if unset, but nothing is cached or shared across instances',
+    validate: (v) =>
+      v.startsWith('redis://') || v.startsWith('rediss://')
+        ? undefined
+        : 'must be a redis:// or rediss:// URL (this is NOT the Upstash REST URL)',
+  },
 
   // ── Billing (Stripe) ─────────────────────────────────────────────────────────
   // Optional in Stage 1: the app runs without them; only Stripe-specific paths

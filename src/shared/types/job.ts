@@ -81,7 +81,14 @@ export interface ProviderJob {
   source: 'adzuna' | 'reed' | 'jooble'; contractType: string | null; isRemote: boolean; hasSponsorship: boolean;
 }
 export interface JobSearchResult { jobs: ProviderJob[]; total: number; page: number; perPage: number; source: string; }
-export type ProviderSearchStatus = 'SUCCESS' | 'EMPTY' | 'FAILED' | 'TIMED_OUT' | 'NOT_CONFIGURED';
+/**
+ * `PENDING` is distinct from `TIMED_OUT` and the difference is user-visible.
+ * TIMED_OUT means the provider was given its full budget and did not answer.
+ * PENDING means WE stopped waiting at the interactive deadline while the request
+ * was still healthy and in flight — its result will populate the cache for the
+ * next search. Collapsing the two would report a working source as broken.
+ */
+export type ProviderSearchStatus = 'SUCCESS' | 'EMPTY' | 'FAILED' | 'TIMED_OUT' | 'NOT_CONFIGURED' | 'PENDING';
 export interface ProviderSearchResult { provider: JobProvider; status: ProviderSearchStatus; jobs: NormalisedJob[]; rawReceived: number; validNormalised: number; nextCursor?: string; errorCode?: string; durationMs: number; cacheHit?: boolean; }
 export interface ProviderCount { provider: JobProvider; rawReceived: number; validNormalised: number; uniqueContributed: number; status: ProviderSearchStatus; }
 export interface Sponsor { organisationName: string; townCity: string; county: string; rating: string; route: string; industry?: string; }

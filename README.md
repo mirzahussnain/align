@@ -131,7 +131,49 @@ DATABASE_URL="postgresql://align:align@localhost:5433/align?schema=public"
 > not reliably support; the app keeps using the pooled URL. Treat `db:reset` and
 > `db:nuke` as local-only commands.
 
-### 5. Run the Development Server
+### 5. Start Redis (Job Board cache)
+
+The Job Board caches provider results, merged search pages, search sessions and
+its refresh lock in Redis. It holds **nothing durable** — every key can be
+rebuilt by searching again, so losing the lot costs latency and nothing else.
+
+```bash
+npm run redis:up   # starts Redis and waits for it to answer PING
+```
+
+Set in `.env.local`:
+
+```env
+REDIS_URL=redis://localhost:6379
+```
+
+> **Leaving `REDIS_URL` unset is supported.** Search still queries the providers
+> and still returns results; a structured warning is logged once. What you lose
+> is caching, cross-instance sessions and the shared refresh lock — so searches
+> are slower and **Load more** reports an expired session (HTTP 409) rather than
+> silently repeating page one. Note this is a *different* variable from
+> `UPSTASH_REDIS_REST_URL`, which is Upstash's REST endpoint used only by rate
+> limiting.
+
+| Command | What it does |
+| --- | --- |
+| `npm run redis:up` | Start the container and wait until it answers `PING` |
+| `npm run redis:down` | Stop it, **keeping** the append-only data |
+| `npm run redis:ping` | Health check — prints `PONG` |
+| `npm run redis:keys` | Inspect: list every `align:*` key currently cached |
+| `npm run redis:flush` | Empty local Redis — the safe way to force a cold search |
+| `npm run test:redis` | Run the Redis integration tests against the container |
+| `npm run dev:up` | Start Postgres, MinIO **and** Redis together |
+| `npm run dev:nuke` | Stop everything and delete all volumes, Redis included |
+
+Inspect a single cached value while debugging:
+
+```bash
+docker compose exec redis redis-cli get "align:v1:jobs:session:<sessionId>"
+docker compose exec redis redis-cli ttl "align:v1:jobs:search:<queryHash>:1"
+```
+
+### 6. Run the Development Server
 ```bash
 npm run dev
 ```

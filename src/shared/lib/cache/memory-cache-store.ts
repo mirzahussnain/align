@@ -19,7 +19,14 @@ interface Entry {
 export class MemoryCacheStore implements CacheStore {
   private readonly entries = new Map<string, Entry>();
 
-  constructor(private readonly now: () => number = Date.now) {}
+  /**
+   * The clock is called through a thunk rather than defaulting to the bare
+   * `Date.now` reference. Capturing the reference at construction pins the store
+   * to whatever `Date.now` was THEN, so a test that installs a fake clock after
+   * building the store gets a store that silently ignores it — entries never
+   * expire and a TTL test passes for the wrong reason.
+   */
+  constructor(private readonly now: () => number = () => Date.now()) {}
 
   private live(key: string): Entry | null {
     const entry = this.entries.get(key);
@@ -54,6 +61,19 @@ export class MemoryCacheStore implements CacheStore {
     if (this.live(key)) return false;
     if (ttlSeconds <= 0) return false;
     this.entries.set(key, { value, expiresAt: this.now() + ttlSeconds * 1000 });
+    return true;
+  }
+
+  /**
+   * Single-threaded JavaScript makes this trivially atomic: nothing can run
+   * between the read and the delete. Implementing it means the refresh-lock
+   * tests exercise the same compare-and-delete branch production takes, rather
+   * than only the "store cannot do it" fallback.
+   */
+  async deleteIfValueMatches(key: string, expected: string): Promise<boolean> {
+    const entry = this.live(key);
+    if (!entry || entry.value !== expected) return false;
+    this.entries.delete(key);
     return true;
   }
 

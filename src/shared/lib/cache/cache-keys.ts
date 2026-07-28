@@ -74,7 +74,15 @@ export const cacheKeys = {
  * timestamp comparison against the stored metadata, not a second expiry.
  */
 export const CACHE_TTL_SECONDS = {
+  /** Fresh window for a provider page: served straight back, no refresh. */
   providerResponse: 5 * 60,
+  /**
+   * Stale window for a provider page, and therefore the KEY's actual TTL.
+   * Between `providerResponse` and here a cached page is still usable — a
+   * fifteen-minute-old vacancy list is a far better answer than a spinner or an
+   * empty page when the provider is slow or down.
+   */
+  providerStale: 30 * 60,
   providerNormalised: 5 * 60,
   searchFresh: 5 * 60,
   searchStale: 45 * 60,

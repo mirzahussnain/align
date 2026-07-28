@@ -21,7 +21,11 @@ interface JoobleResponse {
   jobs: JoobleJob[];
 }
 
-export async function searchJoobleJobs(params: JobSearchParams): Promise<JobSearchResult> {
+/** `signal` — see the note on `searchAdzunaJobs`. Optional; callers are unaffected. */
+export async function searchJoobleJobs(
+  params: JobSearchParams,
+  options: { signal?: AbortSignal } = {}
+): Promise<JobSearchResult> {
   const { apiKey, baseUrl } = API_CONFIG.jooble;
 
   if (!apiKey) {
@@ -45,6 +49,7 @@ export async function searchJoobleJobs(params: JobSearchParams): Promise<JobSear
     },
     body: JSON.stringify(body),
     next: { revalidate: 300 },
+    signal: options.signal,
   });
 
   if (!response.ok) {

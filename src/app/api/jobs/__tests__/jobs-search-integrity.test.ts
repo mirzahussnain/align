@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import type { NormalisedJob, ProviderSearchResult, SearchJobProvider } from '@/shared/types/job';
 import { blankSponsorSignal } from '@/shared/services/job-normalisation';
 
@@ -8,15 +8,31 @@ import { blankSponsorSignal } from '@/shared/services/job-normalisation';
 // rather than any upstream integration.
 vi.mock('@/shared/lib/auth', () => ({ auth: { api: { getSession: vi.fn(async () => null) } } }));
 vi.mock('@/shared/lib/rate-limit', () => ({ applyRateLimit: vi.fn(async () => null), jobsLimiter: {} }));
-vi.mock('@/shared/services/sponsor-registry', () => ({ matchSponsorCompanies: vi.fn(async () => new Map()) }));
+vi.mock('@/shared/services/sponsor-registry', () => ({
+  matchSponsorCompanies: vi.fn(async () => new Map()),
+  getSponsorRegisterVersion: vi.fn(async () => 'test-register'),
+  standardizeCompanyName: (name: string) => name.toLowerCase().trim(),
+}));
 
-const searchProviders = vi.fn();
+const searchProvidersInteractive = vi.fn();
 vi.mock('@/shared/services/job-search', async () => {
   const actual = await vi.importActual<typeof import('@/shared/services/job-search')>('@/shared/services/job-search');
-  return { ...actual, searchProviders: (...args: unknown[]) => searchProviders(...args) };
+  return { ...actual, searchProvidersInteractive: (...args: unknown[]) => searchProvidersInteractive(...args) };
 });
 
+const { MemoryCacheStore } = await import('@/shared/lib/cache/memory-cache-store');
+const { __setCacheStore } = await import('@/shared/lib/cache/cache-provider');
 const { GET } = await import('../route');
+
+/**
+ * Phase 3 replaced the route's module-level Maps with an injected CacheStore.
+ * A fresh MemoryCacheStore per test gives each case a genuinely cold cache, so
+ * cases no longer have to use a distinct query string to avoid inheriting the
+ * previous test's cached page — and the caching behaviour itself is now
+ * directly assertable rather than something to work around.
+ */
+let cache: InstanceType<typeof MemoryCacheStore>;
+let restoreCache: () => void;
 
 let counter = 0;
 
@@ -45,8 +61,19 @@ function job(overrides: Partial<NormalisedJob> & { provider: SearchJobProvider }
 }
 
 function providerResult(provider: SearchJobProvider, jobs: NormalisedJob[]): ProviderSearchResult {
-  return { provider, status: jobs.length ? 'SUCCESS' : 'EMPTY', jobs, rawReceived: jobs.length, validNormalised: jobs.length, durationMs: 10 };
+  // `nextCursor` present means "there is probably another page", which keeps the
+  // provider out of the session's exhausted list so Load more still asks it.
+  return { provider, status: jobs.length ? 'SUCCESS' : 'EMPTY', jobs, rawReceived: jobs.length, validNormalised: jobs.length, nextCursor: '2', durationMs: 10 };
 }
+
+/** The shape the route now consumes: results plus explicit lifecycle handles. */
+const fanOut = (results: ProviderSearchResult[], pendingProviders: SearchJobProvider[] = []) => ({
+  results,
+  pendingProviders,
+  firstUsefulMs: 5,
+  settle: vi.fn(async () => {}),
+  abandon: vi.fn(),
+});
 
 const call = async (query: string) => {
   const response = await GET(new Request(`https://align.test/api/jobs?${query}`) as never);
@@ -55,7 +82,13 @@ const call = async (query: string) => {
 
 beforeEach(() => {
   counter = 0;
-  searchProviders.mockReset();
+  searchProvidersInteractive.mockReset();
+  cache = new MemoryCacheStore();
+  restoreCache = __setCacheStore(cache);
+});
+
+afterEach(() => {
+  restoreCache();
 });
 
 describe('provider counts describe the jobs actually shown', () => {
@@ -63,14 +96,14 @@ describe('provider counts describe the jobs actually shown', () => {
     // Reed returns three vacancies, only one of which survives the remote filter.
     // Adzuna returns one, which does. Counting before filtering credited Reed
     // with all three, so the chips totalled more jobs than the list held.
-    searchProviders.mockResolvedValue([
+    searchProvidersInteractive.mockResolvedValue(fanOut([
       providerResult('REED', [
         job({ provider: 'REED', remoteType: 'REMOTE' }),
         job({ provider: 'REED', remoteType: 'ONSITE' }),
         job({ provider: 'REED', remoteType: 'ONSITE' }),
       ]),
       providerResult('ADZUNA', [job({ provider: 'ADZUNA', remoteType: 'REMOTE' })]),
-    ]);
+    ]));
 
     const { body } = await call('query=countcheck&remoteType=REMOTE');
     const counts = body.meta.providerCounts as { provider: string; uniqueContributed: number; rawReceived: number }[];
@@ -86,14 +119,11 @@ describe('provider counts describe the jobs actually shown', () => {
   });
 
   it('credits no contribution to a provider whose results were all filtered out', async () => {
-    searchProviders.mockResolvedValue([
+    searchProvidersInteractive.mockResolvedValue(fanOut([
       providerResult('REED', [job({ provider: 'REED', remoteType: 'ONSITE' })]),
       providerResult('ADZUNA', [job({ provider: 'ADZUNA', remoteType: 'REMOTE' })]),
-    ]);
+    ]));
 
-    // A distinct query per test: the route's response cache is module-level and
-    // has no reset hook, so reusing a query would serve the previous test's
-    // cached counts. Phase 3 replaces it with the injectable CacheStore.
     const { body } = await call('query=zerocheck&remoteType=REMOTE');
     const counts = body.meta.providerCounts as { provider: string; uniqueContributed: number }[];
     expect(counts.find((count) => count.provider === 'REED')!.uniqueContributed).toBe(0);
@@ -104,14 +134,14 @@ describe('response cache is keyed by the page and the order it holds', () => {
   it('does not let Load more overwrite the first page', async () => {
     const pageOne = [job({ provider: 'REED', title: 'First page role' })];
     const pageTwo = [job({ provider: 'REED', title: 'Second page role' })];
-    searchProviders.mockResolvedValueOnce([providerResult('REED', pageOne)]);
+    searchProvidersInteractive.mockResolvedValueOnce(fanOut([providerResult('REED', pageOne)]));
 
     const first = await call('query=cachecheck&location=Leeds');
     expect(first.body.jobs[0].title).toBe('First page role');
 
     // Load more, in the same session. This previously wrote page two's slice
     // under the bare query hash, replacing the cached first page.
-    searchProviders.mockResolvedValueOnce([providerResult('REED', pageTwo)]);
+    searchProvidersInteractive.mockResolvedValueOnce(fanOut([providerResult('REED', pageTwo)]));
     const more = await call(`query=cachecheck&location=Leeds&sessionId=${first.body.sessionId}`);
     expect(more.body.jobs[0].title).toBe('Second page role');
 
@@ -129,7 +159,7 @@ describe('response cache is keyed by the page and the order it holds', () => {
       job({ provider: 'REED', title: 'Lower paid', salaryMin: 20000, salaryMax: 20000, salaryPeriod: 'YEAR' }),
       job({ provider: 'REED', title: 'Higher paid', salaryMin: 90000, salaryMax: 90000, salaryPeriod: 'YEAR' }),
     ];
-    searchProviders.mockResolvedValue([providerResult('REED', jobs)]);
+    searchProvidersInteractive.mockResolvedValue(fanOut([providerResult('REED', jobs)]));
 
     const descending = await call('query=sortcheck&location=Hull&sortBy=salary_desc');
     expect(descending.body.jobs[0].title).toBe('Higher paid');
@@ -142,12 +172,12 @@ describe('response cache is keyed by the page and the order it holds', () => {
 describe('load more', () => {
   it('does not repeat jobs the session has already shown', async () => {
     const shared = job({ provider: 'REED', title: 'Already seen' });
-    searchProviders.mockResolvedValueOnce([providerResult('REED', [shared])]);
+    searchProvidersInteractive.mockResolvedValueOnce(fanOut([providerResult('REED', [shared])]));
     const first = await call('query=repeatcheck&location=Derby');
     expect(first.body.jobs).toHaveLength(1);
 
     // The provider hands back the same vacancy on page two, as aggregators do.
-    searchProviders.mockResolvedValueOnce([providerResult('REED', [shared, job({ provider: 'REED', title: 'Genuinely new' })])]);
+    searchProvidersInteractive.mockResolvedValueOnce(fanOut([providerResult('REED', [shared, job({ provider: 'REED', title: 'Genuinely new' })])]));
     const more = await call(`query=repeatcheck&location=Derby&sessionId=${first.body.sessionId}`);
 
     expect(more.body.jobs.map((entry: NormalisedJob) => entry.title)).toEqual(['Genuinely new']);

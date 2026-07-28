@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import Papa from 'papaparse';
 import { API_CONFIG } from '@/shared/lib/config';
 import type { Sponsor } from '@/shared/types/job';
@@ -159,6 +160,29 @@ export async function getSponsors(): Promise<Sponsor[]> {
   })();
 
   return fetchPromise;
+}
+
+/**
+ * A token identifying the register currently loaded.
+ *
+ * Cached sponsor evidence must never outlive the register it was derived from,
+ * and a TTL cannot promise that: a new CSV can land at any point inside the
+ * window. Putting this version in the cache KEY means a new register does not
+ * race an expiry — it simply addresses different keys, and the previous
+ * generation's entries age out unread.
+ *
+ * Derived from the row count plus a sample of organisation names rather than a
+ * hash of the whole file: the register is ~100k rows, and re-hashing all of it
+ * on every call would reintroduce the cost this memoisation exists to remove.
+ * It changes whenever the register meaningfully changes, which is what the key
+ * needs; it is not a cryptographic commitment to the file's contents.
+ */
+export async function getSponsorRegisterVersion(): Promise<string> {
+  const sponsors = await getSponsors();
+  const sample = [0, Math.floor(sponsors.length / 2), sponsors.length - 1]
+    .map((index) => sponsors[index]?.organisationName ?? '')
+    .join('|');
+  return createHash('sha256').update(`${sponsors.length}:${sample}`).digest('hex').slice(0, 16);
 }
 
 /**

@@ -32,6 +32,21 @@ export interface CacheStore {
    * wrong result, so no caller may depend on it for exclusivity.
    */
   setIfAbsent(key: string, value: string, ttlSeconds: number): Promise<boolean>;
+
+  /**
+   * OPTIONAL. Atomically delete `key` only if it currently holds `expected`.
+   *
+   * This is the release half of the refresh lock, and it is optional because it
+   * is the one operation a backend may genuinely be unable to do atomically.
+   * A store that omits it is still a valid `CacheStore`; `refresh-lock.ts`
+   * feature-detects and falls back to letting the lock's TTL lapse, which is
+   * safe. It is declared here rather than reached through an `instanceof` check
+   * because the live store is always a WRAPPER (see {@link resilientCache}), so
+   * an identity test against a concrete class silently never matches.
+   *
+   * Returns whether a key was removed.
+   */
+  deleteIfValueMatches?(key: string, expected: string): Promise<boolean>;
 }
 
 /**
@@ -44,7 +59,16 @@ export function resilientCache(store: CacheStore, onError?: (operation: string, 
     onError?.(operation, error);
     return undefined;
   };
+  // Forwarded only when the wrapped store actually provides it, so the wrapper
+  // advertises exactly the capabilities of what it wraps — a wrapper that always
+  // exposed the method would make every store look CAS-capable.
+  const compareAndDelete = store.deleteIfValueMatches
+    ? async (key: string, expected: string) =>
+        (await store.deleteIfValueMatches!(key, expected).catch(swallow('deleteIfValueMatches'))) ?? false
+    : undefined;
+
   return {
+    ...(compareAndDelete ? { deleteIfValueMatches: compareAndDelete } : {}),
     async get<T>(key: string) {
       return (await store.get<T>(key).catch(swallow('get'))) ?? null;
     },
