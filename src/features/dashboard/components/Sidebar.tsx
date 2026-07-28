@@ -55,7 +55,7 @@ const TAB_GROUPS: { label: string; items: TabItem[] }[] = [
 
 // These leave the dashboard on purpose (public tools), so they stay real links.
 const EXTERNAL_LINKS: LinkItem[] = [
-  { href: '/jobs', label: 'Job search', icon: Briefcase },
+  { href: '/dashboard/jobs', label: 'Job search', icon: Briefcase },
   { href: '/immigration', label: 'Sponsorship', icon: Stamp },
 ];
 
