@@ -40,7 +40,8 @@
     "employers:fetch:lever": "npx tsx --env-file=.env.local scripts/employers-fetch-lever.mts",
     "employers:fetch:ashby": "npx tsx --env-file=.env.local scripts/employers-fetch-ashby.mts",
     "jobs:reassess-descriptions": "node --env-file=.env.local --experimental-strip-types --no-warnings --import ./scripts/register-alias.mts scripts/jobs-reassess-descriptions.mts",
-    "jobs:audit-locations": "node --env-file=.env.local --experimental-strip-types --no-warnings --import ./scripts/register-alias.mts scripts/jobs-audit-locations.mts"
+    "jobs:audit-locations": "node --env-file=.env.local --experimental-strip-types --no-warnings --import ./scripts/register-alias.mts scripts/jobs-audit-locations.mts",
+    "sponsors:enrich-jobs": "npx tsx --env-file=.env.local scripts/sponsors-enrich-jobs.mts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1089.0",

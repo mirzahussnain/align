@@ -1,6 +1,7 @@
 import { prisma } from '../lib/prisma.ts';
 import { greenhouseAdapter } from './job-providers/greenhouse-adapter.ts';
 import { getOrCreateSnapshotFromNormalisedJob } from './job-snapshot.ts';
+import { ensureCompanySponsorEvidence } from './company-sponsor-evidence.ts';
 
 export type GreenhouseRefreshSummary = { attempted: number; successful: number; empty: number; failed: number; timedOut: number; jobsRetrieved: number; uniqueJobsPersisted: number; duplicateJobsMerged: number; invalidUrls: number; invalidJobRecords: number; invalidUrlReasons: Record<string, number>; malformedPayloads: number; durationMs: number; perSourceFailures: Record<string, number>; sources: Array<{ sourceId: string; identifier: string; status: 'SUCCESS' | 'EMPTY' | 'FAILED'; jobs: number; errorCode?: string; durationMs: number }> };
 const chunks = <T>(values: T[], size: number) => Array.from({ length: Math.ceil(values.length / size) }, (_, index) => values.slice(index * size, (index + 1) * size));
@@ -19,6 +20,11 @@ export async function refreshGreenhouseEmployerSources(input: { sourceIds?: stri
       const result = await greenhouseAdapter.fetchBoard(source);
       for (const batch of chunks(result.jobs, 20)) await Promise.all(batch.map(async (job) => { const existed = persisted.has(job.canonicalJobId); persisted.add(job.canonicalJobId); await getOrCreateSnapshotFromNormalisedJob(job); if (existed) summary.duplicateJobsMerged += 1; else summary.uniqueJobsPersisted += 1; }));
       await prisma.employerJobSource.update({ where: { id: source.id }, data: { lastAttemptedAt: attemptedAt, lastSuccessfulSyncAt: new Date(), lastErrorCode: null, lastErrorAt: null } });
+      // Employer-direct ingestion is the cheapest moment to keep register
+      // evidence current: the company is already known and the check is a no-op
+      // when it was last run against this register version. Awaited, never a
+      // detached background task, and a failure here never fails the refresh.
+      try { await ensureCompanySponsorEvidence(source.companyRecordId); } catch { /* enrichment is advisory; ingestion outcome stands */ }
       summary.successful += 1; summary.jobsRetrieved += result.jobs.length; summary.invalidUrls += result.invalidUrls; summary.invalidJobRecords += result.invalidJobRecords; summary.duplicateJobsMerged += result.duplicateProviderJobIds; for (const [reason, count] of Object.entries(result.urlRejections)) summary.invalidUrlReasons[reason] = (summary.invalidUrlReasons[reason] ?? 0) + count;
       const status = result.jobs.length ? 'SUCCESS' as const : 'EMPTY' as const; if (!result.jobs.length) summary.empty += 1;
       summary.sources.push({ sourceId: source.id, identifier: source.providerIdentifier, status, jobs: result.jobs.length, durationMs: Date.now() - itemStarted });

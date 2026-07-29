@@ -9,7 +9,44 @@ export const JOB_BOARD_ROUTES = {
 } as const;
 
 export type SponsorStatus = "MATCHED" | "AMBIGUOUS" | "NONE" | "NOT_CHECKED";
+/**
+ * Why a NOT_CHECKED is NOT_CHECKED. "The register was unreachable" and "nobody
+ * has looked yet" read identically without this, and neither is "no match found".
+ */
+export type SponsorCheckState =
+  | "NEVER_CHECKED"
+  | "CHECK_UNAVAILABLE"
+  | "EMPLOYER_UNIDENTIFIABLE"
+  | "COMPANY_UNRESOLVED";
 export type Relevance = "HIGH" | "MEDIUM" | "LOW";
+
+/** One candidate ↔ vacancy practical comparison. Never a score, never advice. */
+export type CandidateFactState =
+  | "CONFIRMED"
+  | "CONFLICT"
+  | "UNKNOWN"
+  | "NOT_APPLICABLE";
+
+export interface PracticalCompatibilityItemViewModel {
+  category: string;
+  state: CandidateFactState;
+  vacancyRequirement?: string;
+  confirmedProfileFact?: string;
+  explanation: string;
+  source: "PROFILE" | "VACANCY" | "BOTH";
+}
+
+export interface PracticalCompatibilityViewModel {
+  items: PracticalCompatibilityItemViewModel[];
+  summary: {
+    confirmed: number;
+    conflicts: number;
+    unknown: number;
+    notApplicable: number;
+  };
+  updatableCategories?: string[];
+  disclaimer: string;
+}
 
 export type DescriptionAvailability = "FULL" | "PARTIAL" | "EXTERNAL_ONLY";
 export type DescriptionSource =
@@ -121,13 +158,28 @@ export interface JobDetailsViewModel {
     source?: string | null;
   };
   assessedAt?: string;
+  /**
+   * BLOCK 1 of the sponsorship story: evidence about the EMPLOYER's name against
+   * the UK register. Rendered separately from `vacancySponsorship` below, which
+   * is what this specific advert says. The two are never combined.
+   */
   sponsorEvidence: {
+    status?: SponsorStatus;
+    /** Retained for older clients; identical to `status`. */
     summary: { status: SponsorStatus };
     disclaimer: string;
     matchedOrganisationName?: string;
     checkedAt?: string;
     registerVersion?: string;
+    checkState?: SponsorCheckState;
+    /** Evidence belongs to a superseded register generation. */
+    stale?: boolean;
+    confidenceBand?: "EXACT" | "STRONG" | "AMBIGUOUS";
+    reasons?: string[];
   };
+  /** BLOCK 3: the signed-in user's own confirmed facts against this vacancy. */
+  practicalCompatibility?: PracticalCompatibilityViewModel;
+  practicalCompatibilityProfileId?: string;
   sourceProvenance: Array<{
     provider: string;
     providerJobId?: string;

@@ -1,9 +1,12 @@
 import { createHash } from 'node:crypto';
 import { Prisma } from '@/generated/prisma/client';
 import { prisma } from '@/shared/lib/prisma';
+import { resolveCompaniesForEmployers } from '@/shared/services/company-resolution';
 import { assessDescriptionCompleteness, classifyDescriptionAvailability } from '@/shared/services/job-description-completeness';
+import { logJobBoardEvent } from '@/shared/services/job-board-observability';
 import { normaliseTitle } from '@/shared/services/job-normalisation';
 import type { NormalisedJob } from '@/shared/types/job';
+import type { CompanyResolutionResult } from '@/shared/types/sponsor-evidence';
 
 const MATCH_REQUEST_TTL_MS = 30 * 60_000;
 const descriptionHash = (value: string) => createHash('sha256').update(value).digest('hex');
@@ -34,10 +37,63 @@ type ExistingSnapshot = {
   salaryPeriod: string | null;
   salaryText: string | null;
   vacancySponsorshipSignal: unknown;
+  companyRecordId: string | null;
+  companyLinkStatus: string;
 };
 
+const EXISTING_SNAPSHOT_SELECT = {
+  id: true, providerDescription: true, salaryMin: true, salaryMax: true,
+  salaryCurrency: true, salaryPeriod: true, salaryText: true,
+  vacancySponsorshipSignal: true, companyRecordId: true, companyLinkStatus: true,
+} as const;
+
+/**
+ * Whether this snapshot still needs a company-identity attempt.
+ *
+ * Employer-direct ATS vacancies arrive with a company through EmployerJobSource
+ * and are already done. Everything else — the aggregator half of the board — has
+ * only employer TEXT, and before this it was persisted with `companyRecordId`
+ * permanently null. That is the root of "Sponsor-register evidence not checked":
+ * the register matcher is keyed on CompanyRecord, and these vacancies never had
+ * one, so there was nothing for it to check.
+ *
+ * A previous AMBIGUOUS or NO_MATCH outcome is not retried on every refresh: the
+ * employer text has not changed, so neither would the answer. The backfill
+ * command re-runs those deliberately, when the company directory has grown.
+ */
+function needsCompanyLink(job: NormalisedJob, existing: ExistingSnapshot | null): boolean {
+  if (job.companyRecordId || job.employerSourceId) return false;
+  if (existing?.companyRecordId) return false;
+  return !existing || existing.companyLinkStatus === 'NOT_ATTEMPTED';
+}
+
+/** Resolution outcome → the columns that record it. Never invents a link. */
+function companyLinkFields(resolution: CompanyResolutionResult | undefined) {
+  if (!resolution) return {};
+  return {
+    companyLinkStatus: resolution.outcome,
+    companyLinkedAt: new Date(),
+    companyLinkEvidence: json({
+      method: resolution.method,
+      candidateCount: resolution.candidateCount,
+      reasons: resolution.reasons,
+      ...(resolution.matchedDisplayName ? { matchedDisplayName: resolution.matchedDisplayName } : {}),
+    }),
+    // ONLY a confident match writes the foreign key. AMBIGUOUS_COMPANY and
+    // NO_COMPANY_MATCH record why and leave the vacancy unlinked, because a
+    // wrong link would attach one employer's sponsor evidence to another's advert.
+    ...(resolution.outcome === 'MATCHED_COMPANY' && resolution.companyRecordId
+      ? { companyRecordId: resolution.companyRecordId }
+      : {}),
+  };
+}
+
 /** The single write path. Shared by the per-job and batch entry points. */
-async function persistSnapshot(job: NormalisedJob, existing: ExistingSnapshot | null) {
+async function persistSnapshot(
+  job: NormalisedJob,
+  existing: ExistingSnapshot | null,
+  resolution?: CompanyResolutionResult,
+) {
   const now = new Date();
   const canonicalJobId = job.dedupeFingerprint;
   const retainedDescription =
@@ -51,6 +107,7 @@ async function persistSnapshot(job: NormalisedJob, existing: ExistingSnapshot | 
     normalisedEmployerName: job.companyNormalised ?? job.company.toLowerCase(),
     ...(job.companyRecordId ? { companyRecordId: job.companyRecordId } : {}),
     ...(job.employerSourceId ? { employerSourceId: job.employerSourceId } : {}),
+    ...companyLinkFields(resolution),
     locationText: job.locationText || null,
     city: job.city ?? null,
     region: job.region ?? null,
@@ -120,9 +177,16 @@ async function persistSnapshot(job: NormalisedJob, existing: ExistingSnapshot | 
 export async function getOrCreateSnapshotFromNormalisedJob(job: NormalisedJob) {
   const existing = await prisma.jobSnapshot.findUnique({
     where: { canonicalJobId: job.dedupeFingerprint },
-    select: { id: true, providerDescription: true, salaryMin: true, salaryMax: true, salaryCurrency: true, salaryPeriod: true, salaryText: true, vacancySponsorshipSignal: true },
+    select: EXISTING_SNAPSHOT_SELECT,
   });
-  const snapshot = await persistSnapshot(job, existing);
+  const resolution = needsCompanyLink(job, existing)
+    // No provider adapter currently returns an employer website, so name
+    // identity is the only signal available at ingestion. The domain signal
+    // stays implemented for the directory and backfill paths, which do have URLs.
+    ? (await resolveCompaniesForEmployers([{ employerName: job.company }])).get(job.company)
+    : undefined;
+  const snapshot = await persistSnapshot(job, existing, resolution);
+  if (resolution) logJobBoardEvent('company_link_resolved', { reason: resolution.outcome, count: 1 });
   return getSnapshotDetails(snapshot.id);
 }
 
@@ -147,13 +211,37 @@ export async function materialiseSnapshotIds(jobs: readonly NormalisedJob[]): Pr
   const existing = new Map(
     (await prisma.jobSnapshot.findMany({
       where: { canonicalJobId: { in: fingerprints } },
-      select: { id: true, canonicalJobId: true, providerDescription: true, salaryMin: true, salaryMax: true, salaryCurrency: true, salaryPeriod: true, salaryText: true, vacancySponsorshipSignal: true },
+      select: { canonicalJobId: true, ...EXISTING_SNAPSHOT_SELECT },
     })).map((row) => [row.canonicalJobId, row]),
   );
 
+  /**
+   * Company identity for the whole page, in ONE deduplicated pass.
+   *
+   * This is a cheap indexed lookup per distinct employer name, not sponsor
+   * matching — search cards read persisted register evidence only and are never
+   * blocked on the matcher. Linking here is what makes the evidence exist to be
+   * read later, for the aggregator vacancies that dominate the board.
+   */
+  const unlinked = jobs.filter((job) => needsCompanyLink(job, existing.get(job.dedupeFingerprint) ?? null));
+  const resolutions = unlinked.length
+    ? await resolveCompaniesForEmployers(unlinked.map((job) => ({ employerName: job.company })))
+    : new Map<string, CompanyResolutionResult>();
+  if (resolutions.size) {
+    logJobBoardEvent('company_link_resolved', {
+      count: [...resolutions.values()].filter((item) => item.outcome === 'MATCHED_COMPANY').length,
+      reason: 'INGESTION_BATCH',
+    });
+  }
+
   const ids = new Map<string, string>();
   await Promise.all(jobs.map(async (job) => {
-    const snapshot = await persistSnapshot(job, existing.get(job.dedupeFingerprint) ?? null);
+    const previous = existing.get(job.dedupeFingerprint) ?? null;
+    const snapshot = await persistSnapshot(
+      job,
+      previous,
+      needsCompanyLink(job, previous) ? resolutions.get(job.company) : undefined,
+    );
     if (snapshot) ids.set(job.canonicalJobId, snapshot.id);
   }));
   return ids;

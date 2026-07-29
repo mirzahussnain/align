@@ -1,13 +1,15 @@
 import type {
+  CandidateFactState,
   Confidence,
   JobCardViewModel,
+  SponsorCheckState,
   SponsorStatus,
 } from "@/features/job-board/lib/job-board";
 
 export const sponsorLabels: Record<SponsorStatus, string> = {
   MATCHED: "Employer on UK register",
   AMBIGUOUS: "Possible sponsor-register match",
-  NONE: "No evidence detected",
+  NONE: "No sponsor-register match found",
   NOT_CHECKED: "Sponsor-register evidence not checked",
 };
 
@@ -15,9 +17,59 @@ export const sponsorLabels: Record<SponsorStatus, string> = {
 export const sponsorStatements: Record<SponsorStatus, string> = {
   MATCHED:
     "This organisation name matches an organisation on the UK sponsor register.",
-  AMBIGUOUS: "This organisation may appear on the UK sponsor register.",
-  NONE: "No matching organisation was found on the UK sponsor register.",
-  NOT_CHECKED: "Sponsor-register evidence has not been checked for this employer.",
+  AMBIGUOUS:
+    "The employer name could correspond to more than one organisation on the UK sponsor register.",
+  NONE: "This employer was checked against the current register and no sufficiently reliable match was found.",
+  NOT_CHECKED: "Sponsor-register evidence has not yet been checked for this employer.",
+};
+
+/**
+ * NOT_CHECKED is four different situations, and users act differently on each.
+ * "The register is temporarily unavailable" invites a retry; "this employer
+ * could not be identified" does not. None of them means "no match found".
+ */
+export const sponsorCheckStateLabels: Record<SponsorCheckState, string> = {
+  NEVER_CHECKED: "Not checked yet",
+  CHECK_UNAVAILABLE: "Check unavailable",
+  EMPLOYER_UNIDENTIFIABLE: "Employer name cannot be checked",
+  COMPANY_UNRESOLVED: "Employer not yet identified",
+};
+
+export const sponsorCheckStateStatements: Record<SponsorCheckState, string> = {
+  NEVER_CHECKED:
+    "This employer has not yet been checked against the UK sponsor register.",
+  CHECK_UNAVAILABLE:
+    "The sponsor register could not be reached, so no check has been completed. This is not a statement that the employer is absent from it.",
+  EMPLOYER_UNIDENTIFIABLE:
+    "The employer name supplied by the job source cannot be matched to an organisation, so no register check was made.",
+  COMPANY_UNRESOLVED:
+    "This vacancy is not yet linked to a confirmed employer record, so no register check has been made.",
+};
+
+/** Deliberately word-based, never colour-only: each state carries its own label. */
+export const factStateLabels: Record<CandidateFactState, string> = {
+  CONFIRMED: "Confirmed",
+  CONFLICT: "Potential conflict",
+  UNKNOWN: "Not confirmed",
+  NOT_APPLICABLE: "Not applicable",
+};
+
+export const practicalCategoryLabels: Record<string, string> = {
+  RIGHT_TO_WORK: "Right to work",
+  SPONSORSHIP: "Sponsorship",
+  VISA_DURATION: "Work permission duration",
+  LOCATION: "Location",
+  RELOCATION: "Relocation",
+  COMMUTE: "Commute",
+  REMOTE_ONSITE: "Remote, hybrid or on-site",
+  DRIVING_LICENCE: "Driving licence",
+  VEHICLE: "Access to a vehicle",
+  DBS: "DBS check",
+  SECURITY_CLEARANCE: "Security clearance",
+  UK_RESIDENCY: "UK residency",
+  PROFESSIONAL_REGISTRATION: "Professional registration",
+  SHIFT_AVAILABILITY: "Shift availability",
+  TRAVEL: "Travel",
 };
 
 export const sourceHealthLabels: Record<string, string> = {

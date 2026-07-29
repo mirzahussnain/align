@@ -21,6 +21,7 @@ import {
   ShieldCheck,
   ShieldOff,
   Sparkles,
+  TriangleAlert,
 } from "lucide-react";
 import {
   Card,
@@ -30,9 +31,13 @@ import {
 } from "@/features/job-board/components/board-chrome";
 import {
   confidenceLabels,
+  factStateLabels,
   humanise,
+  practicalCategoryLabels,
   relativeDay,
   salaryLabel,
+  sponsorCheckStateLabels,
+  sponsorCheckStateStatements,
   sponsorLabels,
   sponsorStatements,
   sponsorshipSignalLabels,
@@ -278,11 +283,22 @@ function MatchPreparationPanel({
   );
 }
 
+/**
+ * BLOCK 1 — employer sponsor-register evidence.
+ *
+ * This card makes a claim about an ORGANISATION NAME and the current UK
+ * register. It deliberately shows nothing about this vacancy: the advert's own
+ * sponsorship wording is a separate card, because an employer holding a licence
+ * and this job offering sponsorship are different facts and readers conflate
+ * them the moment they share a box.
+ */
 function SponsorEvidenceCard({ data }: { data: JobDetailsViewModel }) {
-  const status = data.sponsorEvidence.summary.status;
+  const evidence = data.sponsorEvidence;
+  const status = evidence.status ?? evidence.summary.status;
   const Icon = sponsorIcons[status];
+  const checkState = status === "NOT_CHECKED" ? evidence.checkState : undefined;
   return (
-    <Card title="Sponsor-register evidence">
+    <Card title="Employer sponsor-register evidence">
       <p
         className={`inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-semibold ${
           status === "MATCHED"
@@ -292,27 +308,148 @@ function SponsorEvidenceCard({ data }: { data: JobDetailsViewModel }) {
               : "bg-neutral-100 text-neutral-500 dark:bg-bg-tertiary dark:text-text-tertiary"
         }`}
       >
-        <Icon className="h-3.5 w-3.5" />
-        {sponsorLabels[status]}
+        <Icon className="h-3.5 w-3.5" aria-hidden />
+        {checkState
+          ? sponsorCheckStateLabels[checkState]
+          : sponsorLabels[status]}
       </p>
       <p className="mt-2.5 text-xs leading-5 text-neutral-600 dark:text-text-secondary">
-        {sponsorStatements[status]}
+        {checkState
+          ? sponsorCheckStateStatements[checkState]
+          : sponsorStatements[status]}
       </p>
+      {evidence.stale && (
+        <p className="mt-2 rounded-lg bg-amber-50 px-2.5 py-1.5 text-xs leading-5 text-amber-900 dark:bg-amber-950/40 dark:text-amber-200">
+          A newer version of the sponsor register has been published. This result
+          is from an earlier version and is being re-checked.
+        </p>
+      )}
       <dl className="mt-3 divide-y divide-neutral-100 border-t border-neutral-100 dark:divide-border-subtle dark:border-border-subtle">
-        {data.sponsorEvidence.matchedOrganisationName && (
+        {evidence.matchedOrganisationName && (
           <DataRow label="Matched organisation">
-            {data.sponsorEvidence.matchedOrganisationName}
+            {evidence.matchedOrganisationName}
           </DataRow>
         )}
-        {data.sponsorEvidence.registerVersion && (
-          <DataRow label="Register version">
-            {data.sponsorEvidence.registerVersion}
-          </DataRow>
+        {evidence.registerVersion && (
+          <DataRow label="Register version">{evidence.registerVersion}</DataRow>
         )}
         <DataRow label="Last checked">
-          {relativeDay(data.sponsorEvidence.checkedAt) ?? "Not recorded"}
+          {relativeDay(evidence.checkedAt) ?? "Not recorded"}
         </DataRow>
       </dl>
+    </Card>
+  );
+}
+
+const factStateStyles: Record<string, string> = {
+  CONFIRMED: "bg-success/10 text-success",
+  CONFLICT: "bg-amber-100 text-amber-900 dark:bg-amber-950/50 dark:text-amber-200",
+  UNKNOWN: "bg-neutral-100 text-neutral-600 dark:bg-bg-tertiary dark:text-text-secondary",
+  NOT_APPLICABLE: "bg-neutral-100 text-neutral-500 dark:bg-bg-tertiary dark:text-text-tertiary",
+};
+
+const factStateIcons: Record<string, typeof Shield> = {
+  CONFIRMED: CircleCheck,
+  CONFLICT: TriangleAlert,
+  UNKNOWN: Circle,
+  NOT_APPLICABLE: Circle,
+};
+
+/**
+ * BLOCK 3 — candidate practical compatibility.
+ *
+ * Deliberately has no headline number. Every row states what the vacancy said,
+ * what the profile records, and which of the two is missing. Colour is never the
+ * only signal: each row carries its state as a word and an icon, so the
+ * distinction survives greyscale, colour-blindness and a screen reader.
+ */
+function PracticalCompatibilityCard({
+  data,
+  profileHref = "/dashboard/profile",
+}: {
+  data: JobDetailsViewModel;
+  profileHref?: string;
+}) {
+  const compatibility = data.practicalCompatibility;
+  if (!compatibility) {
+    return (
+      <Card title="Your practical compatibility">
+        <p className="text-xs leading-5 text-neutral-600 dark:text-text-secondary">
+          Choose a Career Track to compare this vacancy against the practical
+          facts recorded in your profile.
+        </p>
+      </Card>
+    );
+  }
+  if (!compatibility.items.length) {
+    return (
+      <Card title="Your practical compatibility">
+        <p className="text-xs leading-5 text-neutral-600 dark:text-text-secondary">
+          This vacancy does not state practical requirements that can be compared
+          with your recorded profile facts.
+        </p>
+        <p className="mt-3 text-xs leading-5 text-neutral-500 dark:text-text-tertiary">
+          {compatibility.disclaimer}
+        </p>
+      </Card>
+    );
+  }
+  return (
+    <Card title="Your practical compatibility">
+      <p className="text-xs leading-5 text-neutral-600 dark:text-text-secondary">
+        {compatibility.summary.confirmed} confirmed •{" "}
+        {compatibility.summary.conflicts} potential conflict
+        {compatibility.summary.conflicts === 1 ? "" : "s"} •{" "}
+        {compatibility.summary.unknown} not confirmed
+      </p>
+      <ul className="mt-3 space-y-2">
+        {compatibility.items.map((item, index) => {
+          const StateIcon = factStateIcons[item.state] ?? Circle;
+          return (
+            <li
+              key={`${item.category}-${index}`}
+              className="rounded-xl border border-neutral-200 p-3 dark:border-border-subtle"
+            >
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="text-sm font-semibold text-neutral-900 dark:text-text-primary">
+                  {practicalCategoryLabels[item.category] ??
+                    humanise(item.category)}
+                </p>
+                <span
+                  className={`inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-semibold ${factStateStyles[item.state] ?? factStateStyles.UNKNOWN}`}
+                >
+                  <StateIcon className="h-3.5 w-3.5" aria-hidden />
+                  {factStateLabels[item.state]}
+                </span>
+              </div>
+              <p className="mt-1.5 text-xs leading-5 text-neutral-600 dark:text-text-secondary">
+                {item.explanation}
+              </p>
+              {item.confirmedProfileFact && (
+                <p className="mt-1.5 text-xs text-neutral-500 dark:text-text-tertiary">
+                  From your profile: {item.confirmedProfileFact}
+                </p>
+              )}
+              {item.vacancyRequirement && (
+                <p className="mt-1 text-xs text-neutral-500 dark:text-text-tertiary">
+                  From the vacancy: {item.vacancyRequirement}
+                </p>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+      {compatibility.summary.unknown > 0 && (
+        <a
+          href={profileHref}
+          className="mt-3 inline-flex min-h-11 items-center rounded-lg border border-neutral-200 px-3 text-sm font-semibold text-accent-purple transition hover:bg-neutral-50 dark:border-border-subtle dark:hover:bg-bg-tertiary"
+        >
+          Update profile
+        </a>
+      )}
+      <p className="mt-3 text-xs leading-5 text-neutral-500 dark:text-text-tertiary">
+        {compatibility.disclaimer}
+      </p>
     </Card>
   );
 }
@@ -554,6 +691,7 @@ function OverviewTab({
 
       <aside className="space-y-4">
         <SponsorEvidenceCard data={data} />
+        <PracticalCompatibilityCard data={data} />
         <SourceCard data={data} />
         <div className="flex items-start gap-2.5 rounded-xl border border-sky-200/80 bg-sky-50/90 p-3.5 text-xs leading-5 text-sky-900 dark:border-sky-900/40 dark:bg-sky-950/40 dark:text-sky-200">
           <Info className="mt-0.5 h-4 w-4 shrink-0 text-sky-600" />
@@ -602,6 +740,14 @@ function RequirementsTab({ data }: { data: JobDetailsViewModel }) {
   );
 }
 
+/**
+ * Two blocks, always separate, never merged.
+ *
+ * Left: what the REGISTER says about the employer's name. Right: what THIS
+ * ADVERT says about sponsorship. Nothing infers one from the other — a licensed
+ * sponsor may advertise a role it will not sponsor, and an advert offering
+ * sponsorship is not evidence of a register entry.
+ */
 function SponsorshipTab({ data }: { data: JobDetailsViewModel }) {
   const signal = data.vacancySponsorship?.signal;
   return (
@@ -611,6 +757,10 @@ function SponsorshipTab({ data }: { data: JobDetailsViewModel }) {
         <p className="text-sm font-semibold text-neutral-900 dark:text-text-primary">
           {(signal && sponsorshipSignalLabels[signal]) ??
             "No sponsorship wording was assessed."}
+        </p>
+        <p className="mt-1.5 text-xs leading-5 text-neutral-500 dark:text-text-tertiary">
+          Detected from this advert&apos;s own text. It is not derived from the
+          employer&apos;s sponsor-register evidence.
         </p>
         {data.vacancySponsorship?.reasons?.[0] && (
           <p className="mt-2 text-xs leading-5 text-neutral-600 dark:text-text-secondary">
@@ -632,6 +782,9 @@ function SponsorshipTab({ data }: { data: JobDetailsViewModel }) {
       </Card>
       <div className="lg:col-span-2">
         <Notice>{data.sponsorEvidence.disclaimer}</Notice>
+      </div>
+      <div className="lg:col-span-2">
+        <PracticalCompatibilityCard data={data} />
       </div>
     </div>
   );

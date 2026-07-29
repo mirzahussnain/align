@@ -1,14 +1,29 @@
 /* eslint-disable @typescript-eslint/no-explicit-any -- This boundary accepts several Prisma relation payloads and emits typed public views. */
 import { createHash } from "node:crypto";
 import { prisma } from "@/shared/lib/prisma";
+import {
+  ensureCompanySponsorEvidence,
+  isSponsorEvidenceStale,
+  sponsorStatusToEvidenceStatus,
+  toSponsorEvidenceViewModel,
+} from "@/shared/services/company-sponsor-evidence";
 import { assessDescriptionCompleteness } from "@/shared/services/job-description-completeness";
+import { logJobBoardEvent } from "@/shared/services/job-board-observability";
 import {
   ATS_FRESHNESS,
   DISCOVERY_ATS_PROVIDERS,
 } from "@/shared/services/job-discovery";
+import { comparePracticalCompatibility } from "@/shared/services/practical-compatibility";
+import { buildConfirmedCandidateFacts } from "@/shared/services/practical-compatibility-store";
+import { getSponsorRegisterVersion } from "@/shared/services/sponsor-registry";
+import type { VacancyRequirementEvidence } from "@/shared/types/job-intelligence";
+import type { PracticalCompatibilityViewModel } from "@/shared/types/practical-compatibility";
+import {
+  SPONSOR_REGISTER_DISCLAIMER,
+  type SponsorEvidenceViewModel,
+} from "@/shared/types/sponsor-evidence";
 
-export const SPONSOR_REGISTER_DISCLAIMER =
-  "Sponsor-register evidence indicates that an organisation name may appear on the UK register. It does not confirm sponsorship for a particular vacancy or candidate.";
+export { SPONSOR_REGISTER_DISCLAIMER };
 const ATS = new Set<string>(DISCOVERY_ATS_PROVIDERS);
 const toJson = <T>(value: unknown): T | undefined =>
   value && typeof value === "object" ? (value as T) : undefined;
@@ -62,11 +77,28 @@ export type SponsorEvidenceSummary = {
 export function sponsorSummary(
   status: string | null | undefined,
 ): SponsorEvidenceSummary {
-  if (status === "EXACT") return { status: "MATCHED" };
-  if (status === "LIKELY" || status === "AMBIGUOUS")
-    return { status: "AMBIGUOUS" };
-  if (status === "NONE") return { status: "NONE" };
-  return { status: "NOT_CHECKED" };
+  return { status: sponsorStatusToEvidenceStatus(status) };
+}
+
+/**
+ * Which sponsor status a snapshot should show.
+ *
+ * WHAT WAS WRONG. This was `company?.sponsorMatchStatus ?? snapshotBlob?.status`.
+ * `sponsorMatchStatus` is a non-null enum column that DEFAULTS to NOT_CHECKED,
+ * so `??` never fell through: the instant a vacancy was linked to a company, an
+ * un-enriched company's NOT_CHECKED masked whatever evidence the snapshot's own
+ * blob had already recorded. Every ATS vacancy on the board therefore read
+ * "Sponsor-register evidence not checked" even where a check had been done.
+ *
+ * The canonical company remains authoritative when it has actually been checked;
+ * the snapshot blob is the fallback for employers that never resolved to one.
+ */
+function effectiveSponsorStatus(snapshot: any): string | null | undefined {
+  const company = snapshot.companyRecord?.sponsorMatchStatus;
+  if (company && company !== "NOT_CHECKED") return company;
+  const blob = toJson<any>(snapshot.employerSponsorEvidence)?.status;
+  if (blob && blob !== "NOT_CHECKED") return blob;
+  return company ?? blob;
 }
 function sourceHealth(source: any, now = new Date()) {
   if (!source.enabled || source.verificationStatus === "DISABLED")
@@ -218,15 +250,57 @@ export function jobCard(snapshot: any, saved = false) {
       providerCount: (snapshot.providerReferences ?? []).length,
       employerDirect,
     },
-    sponsorEvidenceSummary: sponsorSummary(
-      snapshot.companyRecord?.sponsorMatchStatus ??
-        toJson<any>(snapshot.employerSponsorEvidence)?.status,
-    ),
+    // Cards read PERSISTED evidence only. Sponsor matching is never run on the
+    // interactive search path; ingestion and the backfill command populate it.
+    sponsorEvidenceSummary: sponsorSummary(effectiveSponsorStatus(snapshot)),
     saved,
   };
 }
-export async function getJobDetailsView(jobSnapshotId: string, userId: string) {
-  const snapshot = await prisma.jobSnapshot.findUnique({
+/**
+ * Bounded, awaited sponsor enrichment for ONE opened vacancy.
+ *
+ * The preferred path is that ingestion and the backfill command have already
+ * persisted evidence, in which case `ensureCompanySponsorEvidence` sees a
+ * current register version and returns without doing any work. This exists for
+ * the remainder: a company linked since the last backfill, or evidence that a
+ * newly published register has made stale.
+ *
+ * It is deliberately awaited inside the request. There is no detached background
+ * task here — an unawaited promise in a serverless request can be killed
+ * mid-write, which is how half-written evidence and phantom NOT_CHECKED rows
+ * appear. A register outage costs the caller nothing: the check reports
+ * CHECK_UNAVAILABLE and the stored state is left untouched.
+ */
+async function enrichOnDetailsOpen(
+  companyRecordId: string | null,
+  company: { sponsorMatchStatus?: string | null; sponsorRegisterVersion?: string | null } | null,
+) {
+  if (!companyRecordId) return undefined;
+  let currentRegisterVersion: string | undefined;
+  try {
+    currentRegisterVersion = await getSponsorRegisterVersion();
+  } catch {
+    // Cannot establish the current generation, so cannot judge staleness. Show
+    // what is stored rather than claiming anything about it.
+    return undefined;
+  }
+  if (!isSponsorEvidenceStale(company ?? {}, currentRegisterVersion)) return currentRegisterVersion;
+  const started = Date.now();
+  const result = await ensureCompanySponsorEvidence(companyRecordId);
+  logJobBoardEvent("sponsor_company_enriched", {
+    durationMs: Date.now() - started,
+    reason: result.outcome,
+    cacheLayer: "job-details",
+  });
+  return currentRegisterVersion;
+}
+
+export async function getJobDetailsView(
+  jobSnapshotId: string,
+  userId: string,
+  options: { profileId?: string } = {},
+) {
+  let snapshot = await prisma.jobSnapshot.findUnique({
     where: { id: jobSnapshotId },
     include: {
       providerReferences: true,
@@ -236,22 +310,116 @@ export async function getJobDetailsView(jobSnapshotId: string, userId: string) {
     },
   });
   if (!snapshot) return null;
+
+  const currentRegisterVersion = await enrichOnDetailsOpen(
+    snapshot.companyRecordId,
+    snapshot.companyRecord,
+  );
+  // Re-read only when enrichment could have written. Nothing else in the payload
+  // changes, so this is at most one extra query on the uncommon path.
+  if (
+    snapshot.companyRecordId &&
+    isSponsorEvidenceStale(snapshot.companyRecord ?? {}, currentRegisterVersion)
+  ) {
+    snapshot =
+      (await prisma.jobSnapshot.findUnique({
+        where: { id: jobSnapshotId },
+        include: {
+          providerReferences: true,
+          companyRecord: true,
+          employerSource: true,
+          savedJobs: { where: { userId }, select: { id: true } },
+        },
+      })) ?? snapshot;
+  }
+
   const selected = description(snapshot);
   const intelligence = currentIntelligence(snapshot);
   const reference = preferredReference(snapshot);
-  // Register provenance is recorded twice: authoritatively on the canonical
-  // company, and on the snapshot's own evidence blob for employers that never
-  // resolved to a company. Prefer the company, fall back to the blob, and emit
-  // nothing when neither holds a value.
-  const employerEvidence = toJson<{
+
+  /**
+   * BLOCK 1 — employer sponsor-register evidence.
+   *
+   * About an ORGANISATION NAME and the current Home Office register. It says
+   * nothing about this vacancy and nothing about this candidate, which is why it
+   * is assembled independently of the vacancy wording below and carries its own
+   * mandatory disclaimer.
+   *
+   * Provenance is recorded in two places: authoritatively on the canonical
+   * company, and on the snapshot's own blob for employers that never resolved to
+   * one. The company wins when it has actually been checked.
+   */
+  const snapshotEvidence = toJson<{
+    status?: string;
+    matchedOrganisationName?: string;
     checkedAt?: string;
     registerVersion?: string;
+    reasons?: string[];
   }>(snapshot.employerSponsorEvidence);
-  const sponsorCheckedAt =
-    iso(snapshot.companyRecord?.sponsorCheckedAt) ?? employerEvidence?.checkedAt;
-  const sponsorRegisterVersion =
-    snapshot.companyRecord?.sponsorRegisterVersion ??
-    employerEvidence?.registerVersion;
+  const sponsorEvidence: SponsorEvidenceViewModel =
+    snapshot.companyRecord && snapshot.companyRecord.sponsorMatchStatus !== "NOT_CHECKED"
+      ? toSponsorEvidenceViewModel(snapshot.companyRecord, {
+          ...(currentRegisterVersion ? { currentRegisterVersion } : {}),
+        })
+      : snapshotEvidence?.status && snapshotEvidence.status !== "NOT_CHECKED"
+        ? toSponsorEvidenceViewModel(
+            {
+              sponsorMatchStatus: snapshotEvidence.status,
+              sponsorOrganisationName: snapshotEvidence.matchedOrganisationName ?? null,
+              sponsorRegisterVersion: snapshotEvidence.registerVersion ?? null,
+              sponsorCheckedAt: snapshotEvidence.checkedAt ?? null,
+              sponsorEvidence: { reasons: snapshotEvidence.reasons },
+            },
+            { ...(currentRegisterVersion ? { currentRegisterVersion } : {}) },
+          )
+        : toSponsorEvidenceViewModel(snapshot.companyRecord, {
+            ...(currentRegisterVersion ? { currentRegisterVersion } : {}),
+            // No company means no organisation to check — a materially different
+            // statement from "a check is outstanding".
+            fallbackCheckState: snapshot.companyRecordId
+              ? "NEVER_CHECKED"
+              : "COMPANY_UNRESOLVED",
+          });
+
+  /**
+   * BLOCK 3 — candidate practical compatibility.
+   *
+   * User-specific, so it is computed per request and NEVER shared-cached. It
+   * reads confirmed structured profile fields only, and it is kept out of every
+   * score: it appears here as its own set of flags.
+   */
+  let practicalCompatibility: PracticalCompatibilityViewModel | undefined;
+  if (options.profileId) {
+    const facts = await buildConfirmedCandidateFacts(userId, options.profileId);
+    if (facts) {
+      // Requirements come from `intelligence`, not the raw column, so a vacancy
+      // whose description has since changed compares against nothing rather than
+      // against requirements extracted from text that is no longer in force.
+      const requirements = intelligence?.practicalRequirements;
+      practicalCompatibility = comparePracticalCompatibility(
+        Array.isArray(requirements) ? (requirements as VacancyRequirementEvidence[]) : [],
+        facts,
+        {
+          city: snapshot.city,
+          region: snapshot.region,
+          country: snapshot.country,
+          locationText: snapshot.locationText,
+          workStyle: snapshot.workStyle,
+          sponsorshipSignal: (intelligence?.vacancySponsorship as { signal?: string } | undefined)
+            ?.signal as never,
+        },
+      );
+      // Counts only. No field name, no field value, no visa or location data.
+      logJobBoardEvent("practical_comparison_completed", {
+        count: practicalCompatibility.items.length,
+        confirmedCount: practicalCompatibility.summary.confirmed,
+        conflictCount: practicalCompatibility.summary.conflicts,
+        unknownCount: practicalCompatibility.summary.unknown,
+        notApplicableCount: practicalCompatibility.summary.notApplicable,
+      });
+    }
+  }
+
   return {
     job: jobCard(snapshot, snapshot.savedJobs.length > 0),
     description: {
@@ -277,22 +445,12 @@ export async function getJobDetailsView(jobSnapshotId: string, userId: string) {
     ...(selected.hash ? { activeDescriptionHash: selected.hash } : {}),
     ...(intelligence ? intelligence : {}),
     sponsorEvidence: {
-      summary: sponsorSummary(
-        snapshot.companyRecord?.sponsorMatchStatus ??
-          toJson<any>(snapshot.employerSponsorEvidence)?.status,
-      ),
-      disclaimer: SPONSOR_REGISTER_DISCLAIMER,
-      ...(snapshot.companyRecord?.sponsorOrganisationName
-        ? {
-            matchedOrganisationName:
-              snapshot.companyRecord.sponsorOrganisationName,
-          }
-        : {}),
-      ...(sponsorCheckedAt ? { checkedAt: sponsorCheckedAt } : {}),
-      ...(sponsorRegisterVersion
-        ? { registerVersion: sponsorRegisterVersion }
-        : {}),
+      ...sponsorEvidence,
+      // `summary` is retained for older clients; every new field lives on the
+      // view model itself so the two can never disagree.
+      summary: { status: sponsorEvidence.status },
     },
+    ...(practicalCompatibility ? { practicalCompatibility } : {}),
     sourceProvenance: snapshot.providerReferences.map((item) => ({
       provider: item.provider,
       providerJobId: item.providerJobId,
@@ -649,22 +807,42 @@ export async function getCompanyDetailsView(
   void _userId;
   const now = new Date();
   const usable = usableSnapshotWhere(now);
-  const company = await prisma.companyRecord.findUnique({
+  const companySelect = {
+    id: true,
+    displayName: true,
+    websiteUrl: true,
+    careersUrl: true,
+    industry: true,
+    country: true,
+    sponsorMatchStatus: true,
+    sponsorOrganisationName: true,
+    sponsorRegisterVersion: true,
+    sponsorCheckedAt: true,
+    sponsorEvidence: true,
+    jobSources: { select: companySourceSelect },
+    _count: { select: { jobSnapshots: { where: usable } } },
+  } as const;
+  let company = await prisma.companyRecord.findUnique({
     where: { id: companyRecordId },
-    select: {
-      id: true,
-      displayName: true,
-      websiteUrl: true,
-      careersUrl: true,
-      industry: true,
-      country: true,
-      sponsorMatchStatus: true,
-      sponsorOrganisationName: true,
-      jobSources: { select: companySourceSelect },
-      _count: { select: { jobSnapshots: { where: usable } } },
-    },
+    select: companySelect,
   });
   if (!company) return null;
+  // The company page is the one place a user is looking directly AT the employer,
+  // so it is the right place to make sure the register evidence is current.
+  let currentRegisterVersion: string | undefined;
+  try {
+    currentRegisterVersion = await getSponsorRegisterVersion();
+  } catch {
+    currentRegisterVersion = undefined;
+  }
+  if (isSponsorEvidenceStale(company, currentRegisterVersion)) {
+    await ensureCompanySponsorEvidence(companyRecordId);
+    company =
+      (await prisma.companyRecord.findUnique({
+        where: { id: companyRecordId },
+        select: companySelect,
+      })) ?? company;
+  }
   const ukVacancyCount = await prisma.jobSnapshot.count({
     where: { companyRecordId, ...ukVacancyWhere(now) },
   });
@@ -692,11 +870,10 @@ export async function getCompanyDetailsView(
   return {
     company: companyListView(company, ukVacancyCount),
     sponsorEvidence: {
+      ...toSponsorEvidenceViewModel(company, {
+        ...(currentRegisterVersion ? { currentRegisterVersion } : {}),
+      }),
       summary: sponsorSummary(company.sponsorMatchStatus),
-      disclaimer: SPONSOR_REGISTER_DISCLAIMER,
-      ...(company.sponsorOrganisationName
-        ? { matchedOrganisationName: company.sponsorOrganisationName }
-        : {}),
     },
     sources: company.jobSources.map((source) => ({
       provider: source.provider,

@@ -41,6 +41,10 @@ export type JobBoardEvent =
   | 'session_rejected'
   | 'sponsor_match_cached'
   | 'sponsor_match_computed'
+  | 'sponsor_company_enriched'
+  | 'sponsor_check_unavailable'
+  | 'company_link_resolved'
+  | 'practical_comparison_completed'
   | 'vacancy_intelligence_stage'
   | 'vacancy_intelligence_completed';
 
@@ -79,6 +83,15 @@ export interface SafeJobLogMeta {
   firstUsefulMs?: number;
   /** Counts — of jobs, providers, employers. Never their content. */
   count?: number;
+  /**
+   * Practical-compatibility outcome counts ONLY. These are tallies of comparison
+   * items, deliberately never the fields compared: a log line may say "3 unknown"
+   * but can never say which facts, nor any visa status, location or licence value.
+   */
+  confirmedCount?: number;
+  conflictCount?: number;
+  unknownCount?: number;
+  notApplicableCount?: number;
   /** Age of a served cache entry, for stale-serving visibility. */
   ageMs?: number;
   /** Short, credential-free failure reason code. Never a raw error message. */
@@ -106,6 +119,10 @@ const ALLOWED_KEYS: ReadonlyArray<keyof SafeJobLogMeta> = [
   'durationMs',
   'firstUsefulMs',
   'count',
+  'confirmedCount',
+  'conflictCount',
+  'unknownCount',
+  'notApplicableCount',
   'ageMs',
   'reason',
   'partial',
@@ -160,6 +177,7 @@ const WARN_EVENTS = new Set<JobBoardEvent>([
   'provider_deadline_reached',
   'provider_health_degraded',
   'refresh_unavailable',
+  'sponsor_check_unavailable',
   'session_missing',
   'session_rejected',
 ]);

@@ -1,4 +1,5 @@
 import type { JobDescriptionAvailability } from './job';
+import type { PracticalCompatibilityViewModel } from './practical-compatibility';
 
 export type JobDescriptionSource = 'PROVIDER_FULL' | 'PROVIDER_PARTIAL' | 'USER_PASTED';
 export type IntelligenceConfidence = 'HIGH' | 'MEDIUM' | 'LOW';
@@ -44,7 +45,11 @@ export type VacancyRequirementCategory =
   | 'DRIVING_LICENCE'
   | 'OWN_VEHICLE'
   | 'ONSITE'
-  | 'TRAVEL';
+  | 'TRAVEL'
+  // Stated shift pattern. Extracted deterministically like every other category
+  // so the practical comparison has a vacancy-side fact to compare a recorded
+  // shift availability against, rather than re-parsing the advert in React.
+  | 'SHIFT_PATTERN';
 
 export type VacancyRequirementEvidence = {
   category: VacancyRequirementCategory;
@@ -52,33 +57,6 @@ export type VacancyRequirementEvidence = {
   value?: string;
   evidenceText: string;
   confidence: IntelligenceConfidence;
-};
-
-export type CandidatePracticalProfile = {
-  requiresSponsorshipNow?: boolean;
-  mayRequireSponsorshipLater?: boolean;
-  hasConfirmedRightToWork?: boolean;
-  ukResidencyStartDate?: string;
-  securityClearance?: { status: 'HELD' | 'NOT_HELD' | 'UNKNOWN'; level?: string };
-  dbs?: { status: 'HELD' | 'NOT_HELD' | 'UNKNOWN'; type?: 'BASIC' | 'STANDARD' | 'ENHANCED'; updateService?: boolean };
-  professionalRegistrations: Array<{ body: string; status: 'ACTIVE' | 'PENDING' | 'EXPIRED' }>;
-  drivingLicenceHeld?: boolean;
-  ownVehicleAvailable?: boolean;
-  willingToWorkOnsite?: boolean;
-  willingToTravel?: boolean;
-};
-
-export type PracticalVacancyAssessment = {
-  overall: 'NO_OBVIOUS_BLOCKER' | 'POTENTIAL_ISSUE' | 'MANUAL_CONFIRMATION_NEEDED' | 'INSUFFICIENT_INFORMATION';
-  findings: Array<{
-    category: VacancyRequirementCategory;
-    status: 'ALIGNED' | 'POTENTIAL_ISSUE' | 'MISSING_INFORMATION' | 'NOT_APPLICABLE';
-    title: string;
-    explanation: string;
-    vacancyEvidence?: string;
-    candidateEvidence?: string;
-  }>;
-  disclaimer: string;
 };
 
 export type DiscoveryRelevance = { level: 'HIGH' | 'MEDIUM' | 'LOW'; reasons: string[] };
@@ -103,7 +81,13 @@ export type JobIntelligenceViewModel = {
     disclaimer: string;
   };
   requirements: VacancyRequirementEvidence[];
-  practicalAssessment?: PracticalVacancyAssessment;
+  /**
+   * Candidate practical compatibility. Deliberately a SEPARATE model from
+   * `sponsorship` above: employer register evidence, vacancy wording and
+   * candidate facts are three different claims and are never merged into one
+   * badge, score or conclusion.
+   */
+  practicalCompatibility?: PracticalCompatibilityViewModel;
   relevance?: DiscoveryRelevance;
   assessedAt: string;
 };

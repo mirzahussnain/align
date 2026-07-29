@@ -7,14 +7,14 @@ import {
   assessDescription,
   assessVacancySponsorship,
   calculateDiscoveryRelevance,
-  compareCandidateToVacancy,
   extractVacancyRequirements,
 } from '@/shared/services/job-intelligence';
 import { descriptionHash, resolveSelectedDescription } from '@/shared/services/job-snapshot';
+import { comparePracticalCompatibility } from '@/shared/services/practical-compatibility';
 import { matchSponsorCompaniesCached } from '@/shared/services/sponsor-match-cache';
 import { getSponsorRegisterVersion } from '@/shared/services/sponsor-registry';
+import type { ConfirmedCandidateFacts } from '@/shared/types/practical-compatibility';
 import type {
-  CandidatePracticalProfile,
   CareerTrackDiscoveryInput,
   EmployerSponsorEvidence,
   JobIntelligenceViewModel,
@@ -28,6 +28,13 @@ function meaningfulEmployerName(name: string): boolean {
   return compact.length >= 2 && compact.length <= 256 && /[\p{L}\p{N}]/u.test(compact) && !/^(unknown|n\/?a|not supplied)$/i.test(compact);
 }
 
+/**
+ * Snapshot-level sponsor evidence, for employers that never resolved to a
+ * CompanyRecord. The CANONICAL evidence lives on the company (see
+ * `company-sponsor-evidence.ts`) and the view mappers prefer it; this is the
+ * fallback so an unlinked vacancy still gets a real answer rather than a
+ * permanent "not checked".
+ */
 export async function getEmployerSponsorEvidence(employerName: string): Promise<EmployerSponsorEvidence> {
   const queriedEmployerName = employerName.trim();
   if (!meaningfulEmployerName(queriedEmployerName)) {
@@ -39,11 +46,18 @@ export async function getEmployerSponsorEvidence(employerName: string): Promise<
       matchSponsorCompaniesCached(getCacheStore(), [queriedEmployerName]),
     ]);
     const match = matches.get(queriedEmployerName);
-    const status = match?.status ?? 'NONE';
+    // An absent entry means the matcher declined the name, NOT that the register
+    // was consulted and found nothing. This used to read `?? 'NONE'`, which
+    // published "no sponsor-register match" for employers that were never asked.
+    if (!match) {
+      return { status: 'NOT_CHECKED', queriedEmployerName, registerVersion, reasons: ['The employer name could not be checked against the sponsor register.'] };
+    }
+    const status = match.status;
     return {
       status,
       queriedEmployerName,
-      ...(match?.organisationName ? { matchedOrganisationName: match.organisationName } : {}),
+      ...(match.organisationName ? { matchedOrganisationName: match.organisationName } : {}),
+      ...(match.candidateOrganisationNames?.length ? { candidateOrganisationNames: match.candidateOrganisationNames } : {}),
       registerVersion,
       checkedAt: new Date().toISOString(),
       reasons: [
@@ -61,38 +75,11 @@ export async function getEmployerSponsorEvidence(employerName: string): Promise<
   }
 }
 
-export async function buildCandidatePracticalProfile(userId: string, profileId: string): Promise<CandidatePracticalProfile | null> {
-  const [identity, profile] = await Promise.all([
-    prisma.profileIdentity.findUnique({ where: { userId }, select: { visaStatus: true } }),
-    prisma.profile.findFirst({
-      where: { id: profileId, userId },
-      select: {
-        licences: { select: { officialName: true, status: true } },
-        professionalRegistrations: { select: { issuingBody: true, status: true } },
-      },
-    }),
-  ]);
-  if (!profile) return null;
-  const registrations = profile.professionalRegistrations.map((registration) => ({
-    body: registration.issuingBody,
-    status: /active|current|valid/i.test(registration.status ?? '') ? 'ACTIVE' as const : /pending/i.test(registration.status ?? '') ? 'PENDING' as const : 'EXPIRED' as const,
-  }));
-  const driving = profile.licences.find((licence) => /driving licen[cs]e/i.test(licence.officialName));
-  // `visaStatus` is structured but does not have a universal legal mapping.
-  // Only an explicit profile value is used; every other case stays unknown.
-  const visa = String(identity?.visaStatus ?? '');
-  return {
-    ...(visa === 'REQUIRES_SPONSORSHIP' ? { requiresSponsorshipNow: true } : {}),
-    ...(visa === 'RIGHT_TO_WORK_CONFIRMED' ? { hasConfirmedRightToWork: true } : {}),
-    ...(driving ? { drivingLicenceHeld: !/expired|not held/i.test(driving.status ?? '') } : {}),
-    professionalRegistrations: registrations,
-  };
-}
-
 export async function assessAndPersistJobIntelligence(input: {
   jobSnapshotId: string;
   careerTrack?: CareerTrackDiscoveryInput | null;
-  candidate?: CandidatePracticalProfile | null;
+  /** Confirmed structured profile facts. Never derived from CV prose. */
+  candidateFacts?: ConfirmedCandidateFacts | null;
 }): Promise<JobIntelligenceViewModel | null> {
   const snapshot = await prisma.jobSnapshot.findUnique({
     where: { id: input.jobSnapshotId },
@@ -118,8 +105,18 @@ export async function assessAndPersistJobIntelligence(input: {
   const employer = await employerPromise;
   logJobBoardEvent('vacancy_intelligence_stage', { cacheLayer: 'sponsor-evidence', durationMs: Date.now() - descriptionStartedAt });
   const practicalStartedAt = Date.now();
-  const practicalAssessment = input.candidate ? compareCandidateToVacancy(requirements, input.candidate) : undefined;
-  logJobBoardEvent('vacancy_intelligence_stage', { cacheLayer: 'candidate-comparison', durationMs: Date.now() - practicalStartedAt });
+  const practicalCompatibility = input.candidateFacts
+    ? comparePracticalCompatibility(requirements, input.candidateFacts, {
+        city: snapshot.city,
+        region: snapshot.region,
+        country: snapshot.country,
+        locationText: snapshot.locationText,
+        workStyle: snapshot.workStyle,
+        sponsorshipSignal: vacancy.signal,
+      })
+    : undefined;
+  // Counts only: never which facts were compared, and never their values.
+  logJobBoardEvent('vacancy_intelligence_stage', { cacheLayer: 'candidate-comparison', durationMs: Date.now() - practicalStartedAt, ...(practicalCompatibility ? { count: practicalCompatibility.items.length, confirmedCount: practicalCompatibility.summary.confirmed, conflictCount: practicalCompatibility.summary.conflicts, unknownCount: practicalCompatibility.summary.unknown } : {}) });
   const relevance = input.careerTrack ? calculateDiscoveryRelevance({ title: snapshot.title, locationText: snapshot.locationText, workStyle: snapshot.workStyle, seniority: snapshot.seniority, contractType: snapshot.contractType, salaryMax: snapshot.salaryMax ? Number(snapshot.salaryMax) : null, descriptionAvailability: snapshot.descriptionAvailability }, input.careerTrack) : undefined;
   logJobBoardEvent('vacancy_intelligence_stage', { cacheLayer: 'relevance', durationMs: Date.now() - practicalStartedAt });
   const assessedAt = new Date().toISOString();
@@ -140,7 +137,7 @@ export async function assessAndPersistJobIntelligence(input: {
     description,
     sponsorship: { employer, vacancy, disclaimer: SPONSOR_REGISTER_DISCLAIMER },
     requirements,
-    ...(practicalAssessment ? { practicalAssessment } : {}),
+    ...(practicalCompatibility ? { practicalCompatibility } : {}),
     ...(relevance ? { relevance } : {}),
     assessedAt,
   };

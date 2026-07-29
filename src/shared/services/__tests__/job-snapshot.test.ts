@@ -2,7 +2,10 @@ import { describe, expect, it, vi, beforeEach } from 'vitest';
 
 const { prisma } = vi.hoisted(() => ({
   prisma: {
-    jobSnapshot: { findUnique: vi.fn(), create: vi.fn(), update: vi.fn() },
+    jobSnapshot: { findUnique: vi.fn(), create: vi.fn(), update: vi.fn(), findMany: vi.fn() },
+    // Ingestion now resolves an employer NAME to a canonical company, so the
+    // aggregator half of the board can carry sponsor evidence at all.
+    companyRecord: { findUnique: vi.fn(), findMany: vi.fn() },
     jobProviderReference: { upsert: vi.fn() },
     savedJob: { upsert: vi.fn(), deleteMany: vi.fn() },
     jobMatchRequest: { findFirst: vi.fn(), create: vi.fn(), update: vi.fn() },
@@ -17,7 +20,12 @@ const job = {
 } as const;
 
 describe('JobSnapshot service', () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => {
+    vi.clearAllMocks();
+    // Default: the employer text resolves to nothing. Individual tests opt in.
+    prisma.companyRecord.findUnique.mockResolvedValue(null);
+    prisma.companyRecord.findMany.mockResolvedValue([]);
+  });
 
   it('creates one canonical snapshot and attaches every provider reference', async () => {
     prisma.jobSnapshot.findUnique.mockResolvedValueOnce(null).mockResolvedValueOnce({ id: 'snapshot-1', providerReferences: [] });

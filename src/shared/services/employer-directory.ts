@@ -1,4 +1,3 @@
-import { Prisma } from '../../generated/prisma/client.ts';
 import { prisma } from '../lib/prisma.ts';
 import { normaliseEmployerName } from './employer-name.ts';
 import type { EmployerDirectorySeed } from '../types/employer-source.ts';
@@ -95,23 +94,20 @@ export async function updateEmployerSourceCompany(sourceId: string, companyRecor
   return client.employerJobSource.update({ where: { id: sourceId }, data: { companyRecordId, enabled: false } });
 }
 
-/** Sponsor enrichment is optional and remains entirely separate from ATS verification. */
+/**
+ * Sponsor enrichment remains entirely separate from ATS verification.
+ *
+ * This used to be the only sponsor-writing code in the repository — and it had
+ * NO CALLERS, which is why every CompanyRecord sat on its `NOT_CHECKED` default
+ * and the board reported "Sponsor-register evidence not checked" for everything.
+ * It now delegates to the one service that owns staleness, failure handling and
+ * provenance, so there is a single write path rather than two that can disagree.
+ */
 export async function enrichCompanySponsorEvidence(companyRecordId: string, client = prisma) {
-  const company = await client.companyRecord.findUnique({ where: { id: companyRecordId } });
-  if (!company) return null;
-  const { matchSponsorCompanies } = await import('./sponsor-registry.ts');
-  const match = (await matchSponsorCompanies([company.displayName])).get(company.displayName);
-  if (!match) return null;
-  return client.companyRecord.update({
-    where: { id: company.id },
-    data: {
-      sponsorMatchStatus: match.status,
-      sponsorOrganisationName: match.matchedOrganisationName ?? null,
-      sponsorRegisterVersion: match.registerVersion,
-      sponsorCheckedAt: new Date(),
-      sponsorEvidence: JSON.parse(JSON.stringify({ reasons: match.confidenceReasons, candidates: match.candidateOrganisationNames ?? [] })) as Prisma.InputJsonValue,
-    },
-  });
+  const { ensureCompanySponsorEvidence } = await import('./company-sponsor-evidence.ts');
+  const result = await ensureCompanySponsorEvidence(companyRecordId, { force: true, client });
+  if (result.outcome === 'COMPANY_NOT_FOUND') return null;
+  return client.companyRecord.findUnique({ where: { id: companyRecordId } });
 }
 
 export type EmployerDirectoryReport = {

@@ -3,7 +3,8 @@ import { z } from 'zod';
 import { auth } from '@/shared/lib/auth';
 import { loadProfileTarget, resolveProfileId } from '@/features/dashboard/data/load-profile';
 import { createMatchRequest } from '@/shared/services/job-snapshot';
-import { assessAndPersistJobIntelligence, buildCandidatePracticalProfile } from '@/shared/services/job-intelligence-store';
+import { assessAndPersistJobIntelligence } from '@/shared/services/job-intelligence-store';
+import { buildConfirmedCandidateFacts } from '@/shared/services/practical-compatibility-store';
 import { APIError, withErrorHandler } from '@/shared/utils/api-error';
 
 const Input = z.object({ profileId: z.string().optional(), partialDescriptionAccepted: z.boolean().default(false) });
@@ -16,14 +17,14 @@ export async function POST(request: NextRequest, context: RouteContext<'/api/job
     const profileId = await resolveProfileId(session.user.id, parsed.data.profileId);
     if (!profileId) throw new APIError('Choose a Career Track before matching a vacancy.', 400);
     const { jobSnapshotId } = await context.params;
-    const [track, candidate] = await Promise.all([
+    const [track, candidateFacts] = await Promise.all([
       loadProfileTarget(session.user.id, profileId),
-      buildCandidatePracticalProfile(session.user.id, profileId),
+      buildConfirmedCandidateFacts(session.user.id, profileId),
     ]);
     await assessAndPersistJobIntelligence({
       jobSnapshotId,
       careerTrack: track ? { targetRoleTitle: track.targetRoleTitle, occupationFamily: track.targetOccupation, industry: track.targetIndustry, seniority: track.targetSeniority } : null,
-      candidate,
+      candidateFacts,
     });
     let matchRequest;
     try {

@@ -1,9 +1,7 @@
 import type {
-  CandidatePracticalProfile,
   CareerTrackDiscoveryInput,
   DescriptionAssessment,
   DiscoveryRelevance,
-  PracticalVacancyAssessment,
   VacancyRequirementCategory,
   VacancyRequirementEvidence,
   VacancySponsorshipAssessment,
@@ -95,6 +93,13 @@ const requirementRules: RequirementRule[] = [
   { category: 'OWN_VEHICLE', pattern: /\b(?:own vehicle|access to (?:your )?own (?:car|vehicle))\s+(?:is )?(?:required|essential|preferred)\b/gi, requirement: 'REQUIRED' },
   { category: 'ONSITE', pattern: /\b(?:fully onsite|on[- ]site|hybrid\s+(?:\d+|one|two|three|four|five)\s+days?(?:\s+per\s+week)?)\b/gi, requirement: 'MENTIONED' },
   { category: 'TRAVEL', pattern: /\b(?:occasional |regular )?(?:uk |regional |international )?travel(?:\s+(?:across|to))?[^.]{0,80}\b/gi, requirement: 'MENTIONED' },
+  // Shift wording. Kept as three narrow alternatives with a captured value so
+  // the practical comparison can check the SPECIFIC availability a candidate
+  // recorded, rather than treating every rota mention as one undifferentiated
+  // "shift work" requirement.
+  { category: 'SHIFT_PATTERN', pattern: /\b(night shifts?|nights?\s+(?:working|rota|shift))\b/gi, value: () => 'NIGHT', requirement: 'MENTIONED' },
+  { category: 'SHIFT_PATTERN', pattern: /\b(weekend (?:shifts?|working|work|rota)|includes weekends)\b/gi, value: () => 'WEEKEND', requirement: 'MENTIONED' },
+  { category: 'SHIFT_PATTERN', pattern: /\b(rotating shifts?|shift rotation|rotational shift|earlies and lates|3 shift|three[- ]shift)\b/gi, value: () => 'ROTATING', requirement: 'MENTIONED' },
 ];
 
 export function extractVacancyRequirements(text: string, remoteType?: JobRemoteType): VacancyRequirementEvidence[] {
@@ -108,41 +113,18 @@ export function extractVacancyRequirements(text: string, remoteType?: JobRemoteT
   return extracted;
 }
 
-export function compareCandidateToVacancy(requirements: VacancyRequirementEvidence[], candidate: CandidatePracticalProfile): PracticalVacancyAssessment {
-  const findings: PracticalVacancyAssessment['findings'] = [];
-  const add = (category: VacancyRequirementCategory, status: PracticalVacancyAssessment['findings'][number]['status'], title: string, explanation: string, vacancyEvidence?: string, candidateEvidence?: string) => findings.push({ category, status, title, explanation, ...(vacancyEvidence ? { vacancyEvidence } : {}), ...(candidateEvidence ? { candidateEvidence } : {}) });
-  for (const requirement of requirements) {
-    if (requirement.requirement === 'NOT_DETECTED') continue;
-    if (requirement.category === 'SPONSORSHIP') {
-      // eslint-disable-next-line @typescript-eslint/no-unused-expressions
-      candidate.requiresSponsorshipNow === true ? add('SPONSORSHIP', 'POTENTIAL_ISSUE', 'Potential sponsorship issue', 'The vacancy says sponsorship is unavailable and your profile says sponsorship is currently required.', requirement.evidenceText, 'Requires sponsorship now') : candidate.requiresSponsorshipNow === false ? add('SPONSORSHIP', 'ALIGNED', 'No obvious blocker found', 'Your confirmed profile does not say sponsorship is currently required.', requirement.evidenceText, 'Does not require sponsorship now') : add('SPONSORSHIP', 'MISSING_INFORMATION', 'Not enough information to assess', 'The vacancy mentions sponsorship, but your confirmed sponsorship status is unknown.', requirement.evidenceText);
-    } else if (requirement.category === 'RIGHT_TO_WORK') {
-      // eslint-disable-next-line @typescript-eslint/no-unused-expressions
-      candidate.hasConfirmedRightToWork === true ? add('RIGHT_TO_WORK', 'ALIGNED', 'No obvious blocker found', 'Your profile confirms right to work.', requirement.evidenceText, 'Confirmed right to work') : add('RIGHT_TO_WORK', 'MISSING_INFORMATION', 'Not enough information to assess', 'The vacancy requires right to work, but the profile does not confirm it.', requirement.evidenceText);
-    } else if (requirement.category === 'DRIVING_LICENCE') {
-      // eslint-disable-next-line @typescript-eslint/no-unused-expressions
-      candidate.drivingLicenceHeld === true ? add('DRIVING_LICENCE', 'ALIGNED', 'No obvious blocker found', 'Your profile confirms a driving licence.', requirement.evidenceText) : candidate.drivingLicenceHeld === false ? add('DRIVING_LICENCE', 'POTENTIAL_ISSUE', 'Potential issue', 'The vacancy requires a driving licence and your profile says one is not held.', requirement.evidenceText) : add('DRIVING_LICENCE', 'MISSING_INFORMATION', 'Not enough information to assess', 'The vacancy requires a driving licence, but this is not confirmed in your profile.', requirement.evidenceText);
-    } else if (requirement.category === 'OWN_VEHICLE') {
-      // eslint-disable-next-line @typescript-eslint/no-unused-expressions
-      candidate.ownVehicleAvailable === true ? add('OWN_VEHICLE', 'ALIGNED', 'No obvious blocker found', 'Your profile confirms own-vehicle availability.', requirement.evidenceText) : candidate.ownVehicleAvailable === false ? add('OWN_VEHICLE', 'POTENTIAL_ISSUE', 'Potential issue', 'The vacancy requires an own vehicle and your profile says one is unavailable.', requirement.evidenceText) : add('OWN_VEHICLE', 'MISSING_INFORMATION', 'Not enough information to assess', 'The vacancy requires an own vehicle, but this is not confirmed in your profile.', requirement.evidenceText);
-    } else if (requirement.category === 'ONSITE') {
-      // eslint-disable-next-line @typescript-eslint/no-unused-expressions
-      candidate.willingToWorkOnsite === true ? add('ONSITE', 'ALIGNED', 'No obvious blocker found', 'Your profile indicates onsite work is acceptable.', requirement.evidenceText) : candidate.willingToWorkOnsite === false ? add('ONSITE', 'POTENTIAL_ISSUE', 'Potential issue', 'The vacancy includes onsite work and your profile says it is not acceptable.', requirement.evidenceText) : add('ONSITE', 'MISSING_INFORMATION', 'Not enough information to assess', 'The vacancy includes onsite work, but this preference is unknown.', requirement.evidenceText);
-    } else if (requirement.category === 'TRAVEL') {
-      // eslint-disable-next-line @typescript-eslint/no-unused-expressions
-      candidate.willingToTravel === true ? add('TRAVEL', 'ALIGNED', 'No obvious blocker found', 'Your profile indicates travel is acceptable.', requirement.evidenceText) : candidate.willingToTravel === false ? add('TRAVEL', 'POTENTIAL_ISSUE', 'Potential issue', 'The vacancy mentions travel and your profile says it is not acceptable.', requirement.evidenceText) : add('TRAVEL', 'MISSING_INFORMATION', 'Not enough information to assess', 'The vacancy mentions travel, but this preference is unknown.', requirement.evidenceText);
-    } else if (requirement.category === 'PROFESSIONAL_REGISTRATION') {
-      const registration = candidate.professionalRegistrations.find((item) => item.body.toUpperCase() === requirement.value?.toUpperCase());
-      // eslint-disable-next-line @typescript-eslint/no-unused-expressions
-      registration?.status === 'ACTIVE' ? add('PROFESSIONAL_REGISTRATION', 'ALIGNED', 'No obvious blocker found', `Your profile confirms active ${registration.body} registration.`, requirement.evidenceText, `${registration.body} active`) : add('PROFESSIONAL_REGISTRATION', 'MISSING_INFORMATION', 'Manual confirmation needed', `The vacancy mentions ${requirement.value ?? 'professional'} registration, but an active matching registration is not confirmed.`, requirement.evidenceText);
-    } else if (requirement.category === 'SECURITY_CLEARANCE' || requirement.category === 'DBS' || requirement.category === 'UK_RESIDENCY') {
-      add(requirement.category, 'MISSING_INFORMATION', 'Manual confirmation needed', 'This stated requirement needs direct confirmation; the profile does not provide sufficient confirmed structured evidence.', requirement.evidenceText);
-    }
-  }
-  const statuses = findings.map((finding) => finding.status);
-  const overall = statuses.includes('POTENTIAL_ISSUE') ? 'POTENTIAL_ISSUE' : statuses.includes('MISSING_INFORMATION') ? 'INSUFFICIENT_INFORMATION' : findings.length ? 'NO_OBVIOUS_BLOCKER' : 'MANUAL_CONFIRMATION_NEEDED';
-  return { overall, findings, disclaimer: VACANCY_INTELLIGENCE_DISCLAIMER };
-}
+/**
+ * The candidate ↔ vacancy comparison LIVES IN `practical-compatibility.ts`.
+ *
+ * It used to live here, as `compareCandidateToVacancy`, and it was wrong in a
+ * way no test caught: its candidate profile was built by comparing the
+ * structured `VisaStatus` enum against the strings 'REQUIRES_SPONSORSHIP' and
+ * 'RIGHT_TO_WORK_CONFIRMED', neither of which is a member of that enum. Every
+ * right-to-work and sponsorship comparison the product has ever shown therefore
+ * resolved to "not enough information", regardless of what the user had
+ * recorded. It has been replaced rather than repaired, so there is exactly one
+ * comparison engine and one set of state semantics.
+ */
 
 export function calculateDiscoveryRelevance(job: { title: string; locationText?: string | null; workStyle?: JobRemoteType | string | null; seniority?: string | null; contractType?: string | null; salaryMax?: number | null; descriptionAvailability?: JobDescriptionAvailability }, track?: CareerTrackDiscoveryInput | null): DiscoveryRelevance {
   if (!track || ![track.targetRoleTitle, track.occupationFamily, track.industry, ...(track.titleAliases ?? [])].some(Boolean)) return { level: 'LOW', reasons: ['Career Track preferences are not yet detailed enough to assess discovery relevance.'] };

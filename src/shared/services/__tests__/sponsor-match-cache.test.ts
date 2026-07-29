@@ -26,8 +26,10 @@ beforeEach(() => {
   getSponsorRegisterVersion.mockResolvedValue('register-v1');
 });
 
+// The matcher's own shape: `matchedOrganisationName`, plus reasons the UI may
+// show. The cache maps it to `organisationName` for its callers.
 const exact = (names: string[]) =>
-  new Map(names.map((name) => [name, { status: 'EXACT' as const, organisationName: name.toUpperCase() }]));
+  new Map(names.map((name) => [name, { status: 'EXACT' as const, matchedOrganisationName: name.toUpperCase(), confidenceReasons: ['Unique exact normalised organisation-name match.'] }]));
 
 describe('memoising completed matches', () => {
   it('scans the register once per employer, then serves from the cache', async () => {
@@ -35,12 +37,12 @@ describe('memoising completed matches', () => {
     matchSponsorCompanies.mockImplementation(async (names: string[]) => exact(names));
 
     const first = await matchSponsorCompaniesCached(store, ['Acme Ltd']);
-    expect(first.get('Acme Ltd')).toEqual({ status: 'EXACT', organisationName: 'ACME LTD' });
+    expect(first.get('Acme Ltd')).toMatchObject({ status: 'EXACT', organisationName: 'ACME LTD' });
     expect(matchSponsorCompanies).toHaveBeenCalledTimes(1);
 
     // The employer recurs — across searches, and across users.
     const second = await matchSponsorCompaniesCached(store, ['Acme Ltd']);
-    expect(second.get('Acme Ltd')).toEqual({ status: 'EXACT', organisationName: 'ACME LTD' });
+    expect(second.get('Acme Ltd')).toMatchObject({ status: 'EXACT', organisationName: 'ACME LTD' });
     expect(matchSponsorCompanies).toHaveBeenCalledTimes(1);
   });
 
@@ -92,14 +94,14 @@ describe('memoising completed matches', () => {
 
     const result = await matchSponsorCompaniesCached(store, ['Unknown Trading Co']);
     expect(matchSponsorCompanies).not.toHaveBeenCalled();
-    expect(result.get('Unknown Trading Co')).toEqual({ status: 'NONE' });
+    expect(result.get('Unknown Trading Co')).toMatchObject({ status: 'NONE' });
   });
 });
 
 describe('register version is part of the key', () => {
   it('does not serve evidence from a superseded register', async () => {
     const store = new MemoryCacheStore();
-    matchSponsorCompanies.mockResolvedValueOnce(new Map([['Acme Ltd', { status: 'EXACT' as const, organisationName: 'ACME LTD' }]]));
+    matchSponsorCompanies.mockResolvedValueOnce(new Map([['Acme Ltd', { status: 'EXACT' as const, matchedOrganisationName: 'ACME LTD' }]]));
     await matchSponsorCompaniesCached(store, ['Acme Ltd']);
 
     // A new CSV lands. Cached evidence must not outlive the register that
@@ -110,7 +112,7 @@ describe('register version is part of the key', () => {
 
     const result = await matchSponsorCompaniesCached(store, ['Acme Ltd']);
     expect(matchSponsorCompanies).toHaveBeenCalledTimes(2);
-    expect(result.get('Acme Ltd')).toEqual({ status: 'NONE' });
+    expect(result.get('Acme Ltd')).toMatchObject({ status: 'NONE' });
   });
 
   it('keeps each register version\'s entries addressable independently', async () => {
@@ -127,12 +129,15 @@ describe('register version is part of the key', () => {
 });
 
 describe('edge cases', () => {
-  it('answers NONE for a name with no register identity, without caching an empty key', async () => {
+  it('omits a name with no register identity rather than reporting it as NONE', async () => {
     const store = new MemoryCacheStore();
     const result = await matchSponsorCompaniesCached(store, ['', '   ', '---']);
 
-    expect(result.get('')).toEqual({ status: 'NONE' });
-    expect(result.get('   ')).toEqual({ status: 'NONE' });
+    // NONE means "checked against the register, nothing found". These names were
+    // never checked, and answering NONE for them published a factual claim about
+    // an employer on the strength of a name the matcher had refused to look at.
+    expect(result.has('')).toBe(false);
+    expect(result.has('   ')).toBe(false);
     expect(matchSponsorCompanies).not.toHaveBeenCalled();
     // Every such employer would otherwise share one entry under an empty key.
     expect(store.size).toBe(0);

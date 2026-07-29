@@ -25,6 +25,7 @@ model User {
   accounts      Account[]
 
   identity                    ProfileIdentity?
+  practicalFacts              ProfilePracticalFacts?
   profiles                    Profile[]
   analyses                    Analysis[]
   generatedCVs                GeneratedCV[]
@@ -220,6 +221,86 @@ model ProfileIdentity {
   updatedAt     DateTime    @updatedAt
 
   @@map("profile_identity")
+}
+
+/**
+ * How the candidate is willing to attend a workplace. Distinct from a vacancy's
+ * `workStyle`: this is a stated preference, never derived from a CV.
+ */
+enum WorkPatternPreference {
+  REMOTE_ONLY
+  HYBRID
+  ONSITE
+  FLEXIBLE
+}
+
+/** Highest DBS check the candidate currently holds. NONE is a confirmed absence. */
+enum DbsCheckLevel {
+  NONE
+  BASIC
+  STANDARD
+  ENHANCED
+}
+
+/** Highest UK security clearance currently held. NONE is a confirmed absence. */
+enum SecurityClearanceLevel {
+  NONE
+  BPSS
+  CTC
+  SC
+  DV
+}
+
+/**
+ * Confirmed, structured practical facts about the candidate.
+ *
+ * Every field is nullable and every nullable field means UNKNOWN, never "no".
+ * That distinction is the whole point of the model: practical compatibility must
+ * be able to say "not confirmed in your profile" instead of manufacturing a
+ * conflict out of an absent value. Nothing here is ever inferred from CV prose —
+ * these are only written when the user records them explicitly.
+ *
+ * Held once per user (like ProfileIdentity) because a driving licence or a DBS
+ * check does not vary by which Career Track the candidate is applying under.
+ */
+model ProfilePracticalFacts {
+  id     String @id @default(cuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Immigration and work permission. `visaStatus`/`visaExpiry` stay on
+  // ProfileIdentity; these are the two answers that status alone cannot give.
+  requiresSponsorshipNow      Boolean?
+  mayRequireSponsorshipLater  Boolean?
+
+  // Location and work pattern. Home location itself is ProfileIdentity.city/state.
+  openToRelocation      Boolean?
+  relocationLocations   String[] @default([])
+  maxCommuteMinutes     Int?
+  workPatternPreference WorkPatternPreference?
+  maxOnsiteDaysPerWeek  Int?
+
+  // Mobility
+  drivingLicenceHeld  Boolean?
+  ownVehicleAvailable Boolean?
+  willingToTravel     Boolean?
+
+  // Checks and regulation
+  dbsCheckLevel        DbsCheckLevel?
+  dbsUpdateService     Boolean?
+  securityClearance    SecurityClearanceLevel?
+  ukResidencyStartDate DateTime?
+
+  // Availability
+  availableForNightShifts    Boolean?
+  availableForWeekendShifts  Boolean?
+  availableForRotatingShifts Boolean?
+  earliestStartDate          DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("profile_practical_facts")
 }
 
 // One career track's worth of content — "Software Engineer", "Warehouse
@@ -781,6 +862,18 @@ enum SponsorMatchStatus {
   NONE
 }
 
+// Outcome of resolving a provider's employer TEXT to a canonical CompanyRecord.
+// Deliberately separate from SponsorMatchStatus: linking a vacancy to a company
+// is an identity question, and matching that company to the Home Office register
+// is a different one. A vacancy can be confidently linked to a company that has
+// no register entry, and vice versa.
+enum CompanyLinkStatus {
+  NOT_ATTEMPTED
+  MATCHED_COMPANY
+  AMBIGUOUS_COMPANY
+  NO_COMPANY_MATCH
+}
+
 enum JobDescriptionAvailability {
   FULL
   PARTIAL
@@ -824,6 +917,12 @@ model JobSnapshot {
   employerName              String
   normalisedEmployerName    String
   companyRecordId           String?
+  // Why this snapshot is (or is not) linked to a company. Retained even when no
+  // link was made, so a backfill can tell "never tried" from "tried, ambiguous"
+  // and does not re-run resolution against an unchanged employer name forever.
+  companyLinkStatus         CompanyLinkStatus          @default(NOT_ATTEMPTED)
+  companyLinkEvidence       Json?
+  companyLinkedAt           DateTime?
   employerSourceId          String?
   locationText              String?
   city                      String?
@@ -865,6 +964,9 @@ model JobSnapshot {
 
   @@index([dedupeFingerprint])
   @@index([companyRecordId])
+  // The backfill command's selection predicate: unlinked snapshots grouped by the
+  // employer text a resolution attempt would use.
+  @@index([companyLinkStatus, normalisedEmployerName])
   @@index([employerSourceId])
   // Discovery's actual predicate. `getAtsSnapshotProviderResults` filters on
   // status = ACTIVE and a lastSeenAt freshness window on every search; without a
@@ -900,6 +1002,9 @@ model CompanyRecord {
 
   @@unique([normalisedName])
   @@index([sponsorMatchStatus])
+  // Staleness selection for the enrichment backfill: "which companies were not
+  // checked against the CURRENT register version".
+  @@index([sponsorRegisterVersion])
   @@map("company_record")
 }
 

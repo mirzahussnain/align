@@ -3,9 +3,9 @@ import {
   assessDescription,
   assessVacancySponsorship,
   calculateDiscoveryRelevance,
-  compareCandidateToVacancy,
   extractVacancyRequirements,
 } from '@/shared/services/job-intelligence';
+import { comparePracticalCompatibility } from '@/shared/services/practical-compatibility';
 
 describe('focused vacancy intelligence', () => {
   it('classifies complete, snippet, truncated, external and pasted descriptions conservatively', () => {
@@ -38,10 +38,13 @@ describe('focused vacancy intelligence', () => {
   });
 
   it('keeps missing candidate facts unknown and never emits legal-certainty wording', () => {
+    // The comparison itself now lives in `practical-compatibility.ts`; this
+    // guards the Phase 6 half of the contract — that the deterministic extractor
+    // hands it real vacancy evidence to compare, and states nothing legal.
     const requirements = extractVacancyRequirements('No visa sponsorship. Full UK driving licence required.');
-    const assessment = compareCandidateToVacancy(requirements, { requiresSponsorshipNow: true, professionalRegistrations: [] });
-    expect(assessment.overall).toBe('POTENTIAL_ISSUE');
-    expect(assessment.findings.some((finding) => finding.status === 'MISSING_INFORMATION')).toBe(true);
+    const assessment = comparePracticalCompatibility(requirements, { requiresSponsorshipNow: true, professionalRegistrations: [] });
+    expect(assessment.items.some((item) => item.category === 'SPONSORSHIP' && item.state === 'CONFLICT')).toBe(true);
+    expect(assessment.items.some((item) => item.state === 'UNKNOWN')).toBe(true);
     expect(JSON.stringify(assessment)).not.toMatch(/eligible|ineligible|guaranteed/i);
   });
 
