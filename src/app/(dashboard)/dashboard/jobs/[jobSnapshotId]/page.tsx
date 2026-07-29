@@ -1,4 +1,4 @@
-import { JobDetailsBoard } from '@/features/job-board/components/JobBoard';
+import { JobDetailsBoard } from "@/features/job-board/components/JobBoard";
 
 export default async function JobDetailsPage({
   params,

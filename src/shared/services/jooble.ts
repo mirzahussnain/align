@@ -32,9 +32,22 @@ export async function searchJoobleJobs(
     throw new Error('Jooble API key not configured');
   }
 
+  // UK SCOPE. Adzuna is scoped by its `/gb/` base path and Reed is a UK-only
+  // board, but Jooble's endpoint is global and its only geographic control is the
+  // `location` string. An empty location therefore returned worldwide results,
+  // and a bare city ("Birmingham") is ambiguous to Jooble in exactly the way it
+  // is ambiguous to us. The country is appended to every request so the provider
+  // itself narrows the result set, rather than relying on the local classifier to
+  // discard most of what it sends.
+  const location = params.location?.trim()
+    ? /\b(uk|u\.k\.|united kingdom|england|scotland|wales|northern ireland)\b/i.test(params.location)
+      ? params.location.trim()
+      : `${params.location.trim()}, United Kingdom`
+    : 'United Kingdom';
+
   const body = {
     keywords: params.query,
-    location: params.location || 'United Kingdom',
+    location,
     page: String(params.page),
     resultonthepage: String(params.perPage),
     ...(params.salaryMin && { salary: String(params.salaryMin) }),

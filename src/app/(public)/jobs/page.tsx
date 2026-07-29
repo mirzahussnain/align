@@ -1,30 +1,105 @@
-'use client';
-import { FormEvent } from 'react';
-import { AlertCircle, Briefcase, ExternalLink, Loader2, MapPin, Search } from 'lucide-react';
-import Navbar from '@/shared/components/layout/Navbar';
-import GlassCard from '@/shared/components/ui/GlassCard';
-import { Input } from '@/shared/components/ui/Input';
-import Button from '@/shared/components/ui/Button';
-import JobCard from '@/features/jobs/components/JobCard';
-import { useJobs } from '@/features/jobs/hooks/useJobs';
-import { EXTERNAL_LINKS } from '@/shared/constants/navigation';
+import Link from "next/link";
+import {
+  Bookmark,
+  Building2,
+  Compass,
+  FileSearch,
+  ShieldCheck,
+  Sparkles,
+} from "lucide-react";
+import Navbar from "@/shared/components/layout/Navbar";
 
-export default function JobBoardsPage() {
-  const jobs = useJobs(); const submit = (event: FormEvent) => { event.preventDefault(); jobs.searchJobs(false); }; const externalQuery = encodeURIComponent(jobs.query || 'jobs');
-  return <main className="min-h-screen bg-hero-gradient"><Navbar /><section className="pt-24 pb-12 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
-    <header className="mb-6"><h1 className="text-3xl font-bold text-text-primary">Jobs for your Career Track</h1>{jobs.selectedProfile ? <div className="mt-2 flex flex-wrap items-center gap-3 text-text-secondary"><span>Career Track: <strong className="text-text-primary">{jobs.selectedProfile.label}</strong></span><select aria-label="Switch Career Track" value={jobs.selectedProfile.profileId} onChange={(event) => jobs.selectProfile(event.target.value)} className="bg-transparent text-xs border border-border-subtle rounded-lg px-2 py-1">{jobs.profiles.map((profile) => <option key={profile.profileId} value={profile.profileId}>{profile.label}</option>)}</select></div> : <p className="mt-2 text-text-secondary">Create a Career Track to receive personalised job defaults. You can still search all UK vacancies.</p>}</header>
-    <form onSubmit={submit} className="glass-card p-4 sm:p-6 mb-5 space-y-3"><div className="grid grid-cols-1 md:grid-cols-2 gap-3"><Input icon={<Search size={16} />} value={jobs.query} onChange={(event) => jobs.setQuery(event.target.value)} placeholder="Job title or keywords" /><Input icon={<MapPin size={16} />} value={jobs.location} onChange={(event) => jobs.setLocation(event.target.value)} placeholder="City or region" /></div>
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-2"><select value={jobs.remoteType} onChange={(event) => jobs.setRemoteType(event.target.value)} className="filter-select"><option value="all">Any work style</option><option value="REMOTE">Remote</option><option value="HYBRID">Hybrid</option><option value="ONSITE">Onsite</option></select><select value={jobs.experienceLevel} onChange={(event) => jobs.setExperienceLevel(event.target.value)} className="filter-select"><option value="all">Any seniority</option><option value="junior">Junior</option><option value="mid">Mid-level</option><option value="senior">Senior</option></select><select value={jobs.contractType} onChange={(event) => jobs.setContractType(event.target.value)} className="filter-select"><option value="all">Any contract</option><option value="permanent">Permanent</option><option value="contract">Contract</option><option value="temporary">Temporary</option></select><select value={jobs.sponsorshipFilter} onChange={(event) => jobs.setSponsorshipFilter(event.target.value)} className="filter-select"><option value="all">Any sponsorship</option><option value="registered">Employer on register</option><option value="offered">Sponsorship mentioned</option><option value="exclude_no_sponsorship">Exclude no-sponsorship</option></select><select value={jobs.sortBy} onChange={(event) => jobs.setSortBy(event.target.value)} className="filter-select"><option value="relevance">Relevance</option><option value="date">Most recent</option><option value="salary_desc">Salary high to low</option><option value="salary_asc">Salary low to high</option></select></div>
-      <Button type="submit" disabled={jobs.isLoading || !jobs.query.trim()} className="w-full">{jobs.isLoading ? <Loader2 size={16} className="animate-spin mr-2" /> : <Search size={16} className="mr-2" />}{jobs.isLoading ? 'Finding jobs…' : 'Search jobs'}</Button></form>
-    {jobs.partialMessage && <div className="mb-4 p-3 rounded-lg bg-warning/10 text-warning text-sm">{jobs.partialMessage}</div>}{jobs.error && <div className="mb-4 p-3 rounded-lg bg-error/10 text-error text-sm flex gap-2"><AlertCircle size={16} />{jobs.error}</div>}
-    {/* Entitlement problems are not transient — the user has to remove a saved job or upgrade — so this is a persistent alert rather than a toast that disappears before it can be acted on. */}
-    {jobs.saveAlert && <div className={`mb-4 flex items-start gap-2 rounded-lg p-3 text-sm ${jobs.saveAlert.kind === 'entitlement' ? 'bg-warning/10 text-warning' : 'bg-error/10 text-error'}`} role="alert"><AlertCircle size={16} className="mt-0.5 shrink-0" /><span className="flex-1">{jobs.saveAlert.message}</span><button type="button" onClick={jobs.dismissSaveAlert} className="underline">Dismiss</button></div>}
-    {jobs.providerCounts.length > 0 && <div className="flex flex-wrap gap-2 mb-4 text-xs">{jobs.providerCounts.map((count) => <span key={count.provider} className="rounded-full border border-border-subtle px-3 py-1">{count.status === 'SUCCESS' ? `${count.provider} · ${count.uniqueContributed}` : count.status === 'NOT_CONFIGURED' ? `${count.provider} not connected` : count.status === 'EMPTY' ? `${count.provider} · none found` : `${count.provider} unavailable`}</span>)}<span className="self-center text-text-tertiary" aria-live="polite">{jobs.jobs.length} unique jobs</span></div>}
-    {!jobs.initialising && jobs.hasSearched && !jobs.isLoading && jobs.jobs.length === 0 && <GlassCard hover={false} className="text-center py-12"><Briefcase size={36} className="mx-auto mb-3 text-text-tertiary" />No jobs found. Try refining your search.</GlassCard>}
-    <div className="space-y-3">{jobs.jobs.map((job) => <JobCard key={job.canonicalJobId} job={job} saved={jobs.isSaved(job)} saving={jobs.isSaving(job)} onToggleSave={jobs.toggleSave} />)}</div>
-    {/* Skeletons only while there is nothing to keep on screen. A refresh over existing results leaves them in place and shows the inline spinner on the Search button instead, so the page never blanks. */}
-    {jobs.isLoading && jobs.jobs.length === 0 && <div className="space-y-3" aria-live="polite" aria-busy="true"><span className="sr-only">Searching job sources…</span>{[0, 1, 2, 3, 4].map((index) => <div key={index} className="glass-card border-border-subtle p-5"><div className="animate-pulse space-y-3"><div className="h-4 w-2/5 rounded bg-bg-tertiary" /><div className="h-3 w-3/5 rounded bg-bg-tertiary" /><div className="h-3 w-full rounded bg-bg-tertiary" /><div className="h-3 w-4/5 rounded bg-bg-tertiary" /></div></div>)}</div>}
-    {jobs.hasMore && <div className="mt-8 flex justify-center"><Button variant="outline" onClick={() => jobs.searchJobs(true)} disabled={jobs.isLoading}>{jobs.isLoading ? <><Loader2 size={16} className="animate-spin mr-2" />Loading…</> : 'Load more jobs'}</Button></div>}
-    <div className="mt-10 border-t border-border-subtle pt-5 text-xs text-text-tertiary"><p className="mb-2">Search on external job boards</p><div className="flex flex-wrap gap-3">{[['LinkedIn', `${EXTERNAL_LINKS.linkedin}${externalQuery}`], ['Indeed', `${EXTERNAL_LINKS.indeed}${externalQuery}`], ['GOV.UK Find a Job', `${EXTERNAL_LINKS.govFindJob}${externalQuery}`]].map(([label, href]) => <a key={label} href={href} target="_blank" rel="noopener noreferrer" className="inline-flex gap-1 hover:text-text-primary">{label}<ExternalLink size={11} /></a>)}</div></div>
-  </section></main>;
+const features = [
+  {
+    icon: Compass,
+    title: "Discover relevant vacancies",
+    body: "Search provider-neutral UK vacancies with compact filters and Career Track relevance.",
+  },
+  {
+    icon: Bookmark,
+    title: "Keep a durable shortlist",
+    body: "Saved jobs remain available for review even after they leave the live discovery feed.",
+  },
+  {
+    icon: Building2,
+    title: "Browse verified companies",
+    body: "See verified employer job sources, current canonical vacancies and restrained source health.",
+  },
+  {
+    icon: ShieldCheck,
+    title: "Review sponsorship evidence",
+    body: "Keep employer register evidence separate from wording found in an individual vacancy.",
+  },
+  {
+    icon: FileSearch,
+    title: "Check your match",
+    body: "Send a durable vacancy and its description provenance into Align's canonical CV analysis flow.",
+  },
+  {
+    icon: Sparkles,
+    title: "Work from one Career Track",
+    body: "Connect discovery relevance, confirmed profile facts and tailored CV work without duplicating them.",
+  },
+];
+
+export default function JobsLandingPage() {
+  return (
+    <main className="min-h-screen bg-hero-gradient">
+      <Navbar />
+      <section className="mx-auto max-w-6xl px-4 pb-16 pt-28 sm:px-6 lg:px-8">
+        <div className="mx-auto max-w-3xl text-center">
+          <p className="text-sm font-bold uppercase tracking-[0.18em] text-accent-purple">
+            Align Job Board
+          </p>
+          <h1 className="mt-4 text-4xl font-black tracking-tight text-text-primary sm:text-5xl">
+            Find the role. Understand the evidence. Tailor the application.
+          </h1>
+          <p className="mx-auto mt-5 max-w-2xl text-lg leading-8 text-text-secondary">
+            Align brings vacancy discovery, saved jobs, verified company
+            sources, sponsorship evidence and CV matching into one authenticated
+            workspace.
+          </p>
+          <div className="mt-8 flex flex-wrap justify-center gap-3">
+            <Link
+              href="/dashboard/jobs"
+              className="inline-flex min-h-12 items-center rounded-full bg-accent-purple px-6 text-sm font-bold text-white hover:opacity-90"
+            >
+              Open Job Board
+            </Link>
+            <Link
+              href="/signup"
+              className="inline-flex min-h-12 items-center rounded-full border border-border-subtle bg-bg-primary px-6 text-sm font-bold text-text-primary hover:bg-bg-secondary"
+            >
+              Create your Career Track
+            </Link>
+          </div>
+        </div>
+
+        <div className="mt-14 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {features.map(({ icon: Icon, title, body }) => (
+            <article
+              key={title}
+              className="rounded-2xl border border-border-subtle bg-bg-primary/80 p-5 shadow-sm backdrop-blur"
+            >
+              <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-accent-purple/10 text-accent-purple">
+                <Icon className="h-5 w-5" />
+              </span>
+              <h2 className="mt-4 text-lg font-bold text-text-primary">
+                {title}
+              </h2>
+              <p className="mt-2 text-sm leading-6 text-text-secondary">
+                {body}
+              </p>
+            </article>
+          ))}
+        </div>
+
+        <p className="mx-auto mt-10 max-w-3xl text-center text-xs leading-5 text-text-tertiary">
+          Sponsor-register evidence indicates that an organisation name may
+          appear on the UK register. It does not confirm sponsorship for a
+          particular vacancy or candidate.
+        </p>
+      </section>
+    </main>
+  );
 }

@@ -866,6 +866,14 @@ model JobSnapshot {
   @@index([dedupeFingerprint])
   @@index([companyRecordId])
   @@index([employerSourceId])
+  // Discovery's actual predicate. `getAtsSnapshotProviderResults` filters on
+  // status = ACTIVE and a lastSeenAt freshness window on every search; without a
+  // composite index that is a sequential scan of the whole snapshot table each
+  // time. Ordered status-first because it is the equality term.
+  @@index([status, lastSeenAt])
+  // The company vacancy list's filter-and-sort: companyRecordId equality, then
+  // postedAt descending. Matches `listCompanyVacancies` exactly.
+  @@index([companyRecordId, postedAt])
   @@map("job_snapshot")
 }
 
@@ -927,15 +935,15 @@ model EmployerJobSource {
 }
 
 model JobProviderReference {
-  id            String      @id @default(cuid())
-  jobSnapshotId String
-  provider      JobProvider
-  providerJobId String
-  providerUrl   String
+  id             String      @id @default(cuid())
+  jobSnapshotId  String
+  provider       JobProvider
+  providerJobId  String
+  providerUrl    String
   applicationUrl String?
-  firstSeenAt   DateTime    @default(now())
-  lastSeenAt    DateTime    @default(now())
-  jobSnapshot   JobSnapshot @relation(fields: [jobSnapshotId], references: [id], onDelete: Cascade)
+  firstSeenAt    DateTime    @default(now())
+  lastSeenAt     DateTime    @default(now())
+  jobSnapshot    JobSnapshot @relation(fields: [jobSnapshotId], references: [id], onDelete: Cascade)
 
   @@unique([provider, providerJobId])
   @@index([jobSnapshotId])

@@ -1,44 +1,1598 @@
-'use client';
+"use client";
 
-import { FormEvent, useCallback, useEffect, useRef, useState } from 'react';
-import Link from 'next/link';
-import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { Bookmark, Building2, ExternalLink, Loader2, MapPin, RefreshCw, Search } from 'lucide-react';
+import {
+  type FormEvent,
+  type KeyboardEvent as ReactKeyboardEvent,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import Link from "next/link";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import {
+  ChevronLeft,
+  ChevronRight,
+  ExternalLink,
+  Loader2,
+  MapPin,
+  RefreshCw,
+  Search,
+  SlidersHorizontal,
+  X,
+} from "lucide-react";
+import {
+  BoardFrame,
+  Card,
+  JobSkeletons,
+  Notice,
+  SponsorEvidenceLine,
+} from "@/features/job-board/components/board-chrome";
+import { JobResultCard } from "@/features/job-board/components/JobResultCard";
+import { JobDetailsPanel } from "@/features/job-board/components/JobDetailsPanel";
+import {
+  dateLabel,
+  humanise,
+  sourceHealthLabels,
+} from "@/features/job-board/lib/format";
+import {
+  DEFAULT_FILTERS,
+  JOB_BOARD_ROUTES,
+  filtersToApi,
+  filtersToUrl,
+  hasDegradedProviders,
+  parseDiscoverFilters,
+  readJson,
+  type CareerTrack,
+  type CompanyViewModel,
+  type DiscoverFilters,
+  type JobCardViewModel,
+  type Page,
+  type SearchMeta,
+  type SearchResponse,
+  type SponsorStatus,
+} from "@/features/job-board/lib/job-board";
 
-type SponsorStatus = 'MATCHED' | 'AMBIGUOUS' | 'NONE' | 'NOT_CHECKED';
-type Card = { id?: string; title: string; company: { id?: string; displayName: string }; location?: string; workplaceType?: string; employmentType?: string; salary?: { text?: string }; postedAt?: string; freshness: 'FRESH' | 'STALE'; sourceSummary: { preferredProvider: string; providerCount: number; employerDirect: boolean }; sponsorEvidenceSummary?: { status: SponsorStatus }; saved: boolean; careerTrackRelevance?: 'HIGH' | 'MEDIUM' | 'LOW' };
-type SearchJob = Card & { id: string };
-type Page<T> = { items: T[]; page: { hasMore: boolean; nextCursor?: string } };
-type ApiError = { error?: string; code?: string };
+export { JobResultCard } from "@/features/job-board/components/JobResultCard";
 
-const sponsorLabel: Record<SponsorStatus, string> = { MATCHED: 'Employer register evidence: matched', AMBIGUOUS: 'Employer register evidence: ambiguous', NONE: 'Employer register evidence: none found', NOT_CHECKED: 'Employer register evidence: not checked' };
-const availabilityLabel = (availability: string) => availability === 'DISCOVERABLE' ? 'Currently discoverable' : 'No longer in Discover';
-const dateLabel = (value?: string) => value ? new Intl.DateTimeFormat('en-GB', { dateStyle: 'medium' }).format(new Date(value)) : undefined;
-async function readJson<T>(input: RequestInfo, init?: RequestInit): Promise<T> { const response = await fetch(input, init); const body = await response.json().catch(() => ({})) as T & ApiError; if (!response.ok) throw Object.assign(new Error(body.error ?? 'Unable to complete this request.'), { code: body.code, status: response.status }); return body; }
+const PAGE_SIZE = 15;
 
-function BoardNavigation() { const pathname = usePathname(); const links = [['/dashboard/jobs', 'Discover'], ['/dashboard/jobs/saved', 'Saved'], ['/dashboard/jobs/companies', 'Companies']] as const; return <nav aria-label="Job Board" className="mb-7 flex border-b border-neutral-200 dark:border-border-subtle">{links.map(([href, label]) => { const active = href === '/dashboard/jobs' ? pathname === href : pathname.startsWith(href); return <Link key={href} href={href} aria-current={active ? 'page' : undefined} className={`border-b-2 px-4 py-3 text-sm font-semibold ${active ? 'border-accent-purple text-accent-purple' : 'border-transparent text-text-secondary hover:text-text-primary'}`}>{label}</Link>; })}</nav>; }
-function Shell({ title, children, action }: { title: string; children: React.ReactNode; action?: React.ReactNode }) { return <main className="min-h-screen bg-bg-primary px-4 py-7 sm:px-6 lg:px-10"><div className="mx-auto max-w-6xl"><BoardNavigation /><div className="mb-6 flex flex-wrap items-end justify-between gap-3"><div><h1 className="text-2xl font-bold text-text-primary sm:text-3xl">{title}</h1><p className="mt-1 text-sm text-text-secondary">Find, assess and keep track of roles from verified sources.</p></div>{action}</div>{children}</div></main>; }
-function Notice({ children, tone = 'info' }: { children: React.ReactNode; tone?: 'info' | 'warning' | 'error' }) { const colour = tone === 'error' ? 'border-error/30 bg-error/10 text-error' : tone === 'warning' ? 'border-warning/30 bg-warning/10 text-warning' : 'border-info/30 bg-info/10 text-text-primary'; return <div role={tone === 'error' ? 'alert' : 'status'} className={`rounded-xl border p-3 text-sm ${colour}`}>{children}</div>; }
-function Skeletons() { return <div className="space-y-3" aria-busy="true" aria-label="Loading jobs">{[0, 1, 2, 3].map((i) => <div key={i} className="h-40 animate-pulse rounded-2xl bg-bg-tertiary" />)}</div>; }
+function useSaveMutation(onChange: (id: string, saved: boolean) => void) {
+  const pendingRef = useRef(new Set<string>());
+  const [pending, setPending] = useState<Set<string>>(new Set());
+  const [error, setError] = useState<string | null>(null);
 
-/** The single snapshot save abstraction used by all Phase 11 job lists and details. */
-function useSaveMutation(onChange?: (id: string, saved: boolean) => void) { const [pending, setPending] = useState<string | null>(null); const [error, setError] = useState<string | null>(null); const mutate = useCallback(async (id: string, saved: boolean, profileId?: string) => { if (pending) return; setPending(id); setError(null); try { await readJson(`/api/jobs/${encodeURIComponent(id)}/save`, saved ? { method: 'DELETE' } : { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(profileId ? { profileId } : {}) }); onChange?.(id, !saved); } catch (caught) { setError(caught instanceof Error ? caught.message : 'Unable to update saved jobs.'); } finally { setPending(null); } }, [onChange, pending]); return { mutate, pending, error }; }
+  const mutate = useCallback(
+    async (id: string, saved: boolean, profileId?: string) => {
+      if (pendingRef.current.has(id)) return;
+      pendingRef.current.add(id);
+      setPending(new Set(pendingRef.current));
+      setError(null);
+      onChange(id, !saved);
+      try {
+        await readJson(
+          `/api/jobs/${encodeURIComponent(id)}/save`,
+          saved
+            ? { method: "DELETE" }
+            : {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(profileId ? { profileId } : {}),
+              },
+        );
+      } catch (caught) {
+        onChange(id, saved);
+        setError(
+          caught instanceof Error
+            ? caught.message
+            : "Unable to update saved jobs.",
+        );
+      } finally {
+        pendingRef.current.delete(id);
+        setPending(new Set(pendingRef.current));
+      }
+    },
+    [onChange],
+  );
 
-function JobCard({ job, availability, onSaved }: { job: SearchJob; availability?: string; onSaved?: (saved: boolean) => void }) { const router = useRouter(); const creating = useRef<Promise<string> | null>(null); const [snapshotId, setSnapshotId] = useState(job.id); const [opening, setOpening] = useState(false); const [saved, setSaved] = useState(job.saved); const save = useSaveMutation((_, next) => { setSaved(next); onSaved?.(next); }); const ensureSnapshot = useCallback(async () => { if (snapshotId) return snapshotId; if (!creating.current) creating.current = readJson<{ jobSnapshotId: string }>('/api/jobs/snapshots', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ job }) }).then((data) => { setSnapshotId(data.jobSnapshotId); return data.jobSnapshotId; }).finally(() => { creating.current = null; }); return creating.current; }, [job, snapshotId]); const open = async () => { setOpening(true); try { router.push(`/dashboard/jobs/${encodeURIComponent(await ensureSnapshot())}`); } finally { setOpening(false); } }; const toggle = async () => { const id = await ensureSnapshot(); await save.mutate(id, saved); }; return <article className="rounded-2xl border border-neutral-200 bg-bg-secondary p-5 shadow-sm dark:border-border-subtle"><div className="flex flex-col gap-4 sm:flex-row sm:justify-between"><div className="min-w-0"><h2 className="text-lg font-semibold text-text-primary">{job.title}</h2><p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-text-secondary"><span className="inline-flex items-center gap-1"><Building2 size={15} />{job.company.displayName}</span>{job.location && <span className="inline-flex items-center gap-1"><MapPin size={15} />{job.location}</span>}</p><div className="mt-3 flex flex-wrap gap-2 text-xs text-text-secondary">{job.workplaceType && <span className="rounded-full bg-bg-tertiary px-2.5 py-1">{job.workplaceType}</span>}{job.employmentType && <span className="rounded-full bg-bg-tertiary px-2.5 py-1">{job.employmentType}</span>}{job.salary?.text && <span className="rounded-full bg-bg-tertiary px-2.5 py-1">{job.salary.text}</span>}{dateLabel(job.postedAt) && <span className="rounded-full bg-bg-tertiary px-2.5 py-1">Posted {dateLabel(job.postedAt)}</span>}{job.sourceSummary.employerDirect && <span className="rounded-full bg-success/10 px-2.5 py-1 text-success">Employer-direct</span>}{job.sponsorEvidenceSummary && <span className="rounded-full bg-bg-tertiary px-2.5 py-1">{sponsorLabel[job.sponsorEvidenceSummary.status]}</span>}{job.careerTrackRelevance ? <span className="rounded-full bg-accent-purple/10 px-2.5 py-1 text-accent-purple">Career Track relevance: {job.careerTrackRelevance[0]}{job.careerTrackRelevance.slice(1).toLowerCase()}</span> : <span className="rounded-full bg-bg-tertiary px-2.5 py-1">Choose a Career Track for relevance</span>}{availability && <span className="rounded-full bg-warning/10 px-2.5 py-1 text-warning">{availabilityLabel(availability)}</span>}</div></div><div className="flex shrink-0 flex-wrap items-center gap-2"><button type="button" onClick={toggle} disabled={Boolean(save.pending)} aria-pressed={saved} className="inline-flex items-center gap-1 rounded-lg border border-border-subtle px-3 py-2 text-sm font-medium text-text-primary hover:bg-bg-tertiary disabled:opacity-60">{save.pending ? <Loader2 size={15} className="animate-spin" /> : <Bookmark size={15} fill={saved ? 'currentColor' : 'none'} />}{saved ? 'Saved' : 'Save'}</button><button type="button" onClick={open} disabled={opening} className="rounded-lg bg-accent-purple px-3 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-60">{opening ? 'Opening…' : 'Open details'}</button></div></div>{save.error && <p role="alert" className="mt-3 text-sm text-error">{save.error}</p>}</article>; }
+  return { mutate, pending, error };
+}
 
-function normaliseSearchJob(value: Record<string, unknown>): SearchJob { const company = typeof value.company === 'string' ? value.company : 'Unknown employer'; return { ...(value as object), id: '', title: String(value.title), company: { id: typeof value.companyRecordId === 'string' ? value.companyRecordId : undefined, displayName: company }, location: typeof value.locationText === 'string' ? value.locationText : undefined, workplaceType: typeof value.remoteType === 'string' ? value.remoteType : undefined, employmentType: typeof value.employmentType === 'string' ? value.employmentType : typeof value.contractType === 'string' ? value.contractType : undefined, salary: typeof value.salaryText === 'string' ? { text: value.salaryText } : undefined, postedAt: typeof value.postedAt === 'string' ? value.postedAt : undefined, freshness: 'FRESH', sourceSummary: { preferredProvider: typeof value.source === 'string' ? value.source : 'Source', providerCount: Array.isArray(value.providerReferences) ? value.providerReferences.length : 1, employerDirect: Boolean(value.employerSourceId) }, sponsorEvidenceSummary: { status: value.sponsorSignal && typeof value.sponsorSignal === 'object' && (value.sponsorSignal as { registerMatchStatus?: string }).registerMatchStatus === 'EXACT' ? 'MATCHED' : 'NOT_CHECKED' }, saved: false } as SearchJob; }
+function useDialogFocus(onClose: () => void) {
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const returnFocusRef = useRef<HTMLElement | null>(null);
 
-export function DiscoverBoard() { const router = useRouter(); const pathname = usePathname(); const searchParams = useSearchParams(); const [query, setQuery] = useState(''); const [location, setLocation] = useState(''); const [workplace, setWorkplace] = useState('all'); const [employmentType, setEmploymentType] = useState('all'); const [salaryMin, setSalaryMin] = useState(''); const [freshness, setFreshness] = useState(''); const [sponsorStatus, setSponsorStatus] = useState('all'); const [sort, setSort] = useState('relevance'); const [tracks, setTracks] = useState<{ profileId: string; label: string }[]>([]); const [track, setTrack] = useState(''); const [jobs, setJobs] = useState<SearchJob[]>([]); const [loading, setLoading] = useState(true); const [refreshing, setRefreshing] = useState(false); const [error, setError] = useState<string | null>(null); const [partial, setPartial] = useState<string | null>(null); const [meta, setMeta] = useState<{ cached?: boolean; cacheState?: string; providerCounts?: { provider: string; status: string }[] }>({}); const [sessionId, setSessionId] = useState<string | null>(null); const [hasMore, setHasMore] = useState(false); const controller = useRef<AbortController | null>(null); const signature = useRef(''); const readControls = useCallback(() => { setQuery(searchParams.get('q') ?? ''); setLocation(searchParams.get('location') ?? ''); setWorkplace(searchParams.get('workplace') ?? 'all'); setEmploymentType(searchParams.get('employmentType') ?? 'all'); setSalaryMin(searchParams.get('salaryMin') ?? ''); setFreshness(searchParams.get('freshness') ?? ''); setSponsorStatus(searchParams.get('sponsorStatus') ?? 'all'); setSort(searchParams.get('sort') ?? 'relevance'); setTrack(searchParams.get('careerTrack') ?? ''); }, [searchParams]); const load = useCallback(async (more = false, force = false) => { const activeQuery = searchParams.get('q') ?? ''; if (!activeQuery.trim()) { setJobs([]); setLoading(false); return; } const params = new URLSearchParams({ query: activeQuery, location: searchParams.get('location') ?? '', remoteType: searchParams.get('workplace') ?? 'all', contractType: searchParams.get('employmentType') ?? 'all', sponsorship: searchParams.get('sponsorStatus') ?? 'all', sortBy: searchParams.get('sort') ?? 'relevance', perPage: '15' }); const min = searchParams.get('salaryMin'); const days = searchParams.get('freshness'); if (min) params.set('salaryMin', min); if (days) params.set('postedWithinDays', days); if (more && sessionId) params.set('sessionId', sessionId); const nextSignature = `${more}:${params}`; if (!force && signature.current === nextSignature) return; signature.current = nextSignature; controller.current?.abort(); const abort = new AbortController(); controller.current = abort; more || jobs.length ? setRefreshing(true) : setLoading(true); setError(null); try { const data = await readJson<{ jobs: Record<string, unknown>[]; sessionId: string; meta: { message?: string; cached?: boolean; cacheState?: string; providerCounts?: { provider: string; status: string }[] } }>(`/api/jobs?${params}`, { signal: abort.signal }); const incoming = data.jobs.map(normaliseSearchJob); setJobs((current) => more ? [...current, ...incoming.filter((item) => !current.some((old) => old.id === item.id))] : incoming); setSessionId(data.sessionId); setHasMore(incoming.length === 15); setPartial(data.meta.message ?? null); setMeta(data.meta); } catch (caught) { if ((caught as Error).name !== 'AbortError') setError(caught instanceof Error ? caught.message : 'Unable to load jobs.'); } finally { if (!abort.signal.aborted) { setLoading(false); setRefreshing(false); } signature.current = ''; } }, [jobs.length, searchParams, sessionId]); useEffect(() => { readControls(); load(); }, [load, readControls]); useEffect(() => { readJson<{ profiles?: { profileId: string; label: string }[] }>('/api/jobs/bootstrap').then((data) => setTracks(data.profiles ?? [])).catch(() => undefined); }, []); const apply = (event: FormEvent) => { event.preventDefault(); const next = new URLSearchParams(); if (query.trim()) next.set('q', query.trim()); if (location.trim()) next.set('location', location.trim()); if (workplace !== 'all') next.set('workplace', workplace); if (employmentType !== 'all') next.set('employmentType', employmentType); if (salaryMin) next.set('salaryMin', salaryMin); if (freshness) next.set('freshness', freshness); if (sponsorStatus !== 'all') next.set('sponsorStatus', sponsorStatus); if (sort !== 'relevance') next.set('sort', sort); if (track) next.set('careerTrack', track); router.push(`${pathname}?${next}`); }; const reset = () => router.push(pathname); return <Shell title="Discover" action={<button type="button" onClick={() => load(false, true)} disabled={loading || refreshing} className="inline-flex items-center gap-2 rounded-lg border border-border-subtle px-3 py-2 text-sm font-semibold hover:bg-bg-tertiary disabled:opacity-60"><RefreshCw size={15} className={refreshing ? 'animate-spin' : ''} />Refresh</button>}><form onSubmit={apply} className="rounded-2xl border border-neutral-200 bg-bg-secondary p-4 dark:border-border-subtle"><div className="grid gap-3 md:grid-cols-2"><label className="text-sm font-medium text-text-primary">Search<input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Role or keyword" className="mt-1 w-full" /></label><label className="text-sm font-medium text-text-primary">Location<input value={location} onChange={(e) => setLocation(e.target.value)} placeholder="City or region" className="mt-1 w-full" /></label></div><div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4"><label className="text-sm">Workplace<select value={workplace} onChange={(e) => setWorkplace(e.target.value)} className="mt-1 w-full"><option value="all">Any</option><option value="REMOTE">Remote</option><option value="HYBRID">Hybrid</option><option value="ONSITE">Onsite</option></select></label><label className="text-sm">Employment<select value={employmentType} onChange={(e) => setEmploymentType(e.target.value)} className="mt-1 w-full"><option value="all">Any</option><option value="permanent">Permanent</option><option value="contract">Contract</option><option value="temporary">Temporary</option></select></label><label className="text-sm">Minimum salary<input inputMode="numeric" value={salaryMin} onChange={(e) => setSalaryMin(e.target.value.replace(/\D/g, ''))} placeholder="e.g. 40000" className="mt-1 w-full" /></label><label className="text-sm">Freshness<select value={freshness} onChange={(e) => setFreshness(e.target.value)} className="mt-1 w-full"><option value="">Any date</option><option value="1">Past day</option><option value="7">Past week</option><option value="30">Past month</option></select></label><label className="text-sm">Sponsor register evidence<select value={sponsorStatus} onChange={(e) => setSponsorStatus(e.target.value)} className="mt-1 w-full"><option value="all">Any evidence</option><option value="registered">Employer matched</option></select></label><label className="text-sm">Sort<select value={sort} onChange={(e) => setSort(e.target.value)} className="mt-1 w-full"><option value="relevance">Relevance</option><option value="date">Most recent</option><option value="salary_desc">Salary: high to low</option><option value="salary_asc">Salary: low to high</option></select></label><label className="text-sm">Career Track<select value={track} onChange={(e) => setTrack(e.target.value)} className="mt-1 w-full"><option value="">Choose a Career Track</option>{tracks.map((item) => <option key={item.profileId} value={item.profileId}>{item.label}</option>)}</select></label></div><div className="mt-4 flex flex-wrap gap-3"><button type="submit" disabled={!query.trim() || loading} className="inline-flex items-center gap-2 rounded-lg bg-accent-purple px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"><Search size={15} />Search</button><button type="button" onClick={reset} className="rounded-lg px-3 py-2 text-sm font-semibold text-text-secondary hover:bg-bg-tertiary">Reset filters</button></div></form><div className="mt-5 space-y-3">{partial && <Notice tone="warning">Some job sources are temporarily unavailable. The results shown may be incomplete.</Notice>}{meta.cached && <Notice>Showing {meta.cacheState === 'STALE' ? 'stale cached' : 'cached'} results{refreshing ? '; refreshing in the background.' : '.'}</Notice>}{meta.providerCounts && <p className="text-sm text-text-secondary" aria-live="polite">{jobs.length} results shown · {meta.providerCounts.filter((item) => item.status === 'SUCCESS').length} sources available</p>}{error && <Notice tone="error">{error}</Notice>}{loading && jobs.length === 0 ? <Skeletons /> : jobs.map((job) => <JobCard key={job.id || job.title} job={job} />)}{!loading && !error && query && jobs.length === 0 && <div className="rounded-2xl border border-dashed border-border-default p-10 text-center text-text-secondary">No jobs matched these filters. Try broadening the location, role or workplace settings.</div>}{hasMore && <div className="flex justify-center"><button type="button" onClick={() => load(true)} disabled={refreshing} className="rounded-lg border border-border-subtle px-4 py-2 text-sm font-semibold hover:bg-bg-tertiary disabled:opacity-60">{refreshing ? 'Loading…' : 'Load more'}</button></div>}</div></Shell>; }
+  useEffect(() => {
+    returnFocusRef.current =
+      document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : null;
+    const frame = requestAnimationFrame(() => {
+      dialogRef.current
+        ?.querySelector<HTMLElement>(
+          'button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])',
+        )
+        ?.focus();
+    });
+    return () => {
+      cancelAnimationFrame(frame);
+      returnFocusRef.current?.focus();
+    };
+  }, []);
 
-export function SavedBoard() { const [data, setData] = useState<Page<{ id: string; savedAt: string; availability: string; job: Card }> | null>(null); const [error, setError] = useState<string | null>(null); const [cursor, setCursor] = useState<string | undefined>(); const load = useCallback(async (append = false, nextCursor?: string) => { try { const result = await readJson<Page<{ id: string; savedAt: string; availability: string; job: Card }>>(`/api/jobs/saved?limit=20${nextCursor ? `&cursor=${encodeURIComponent(nextCursor)}` : ''}`); setData((previous) => append && previous ? { ...result, items: [...previous.items, ...result.items] } : result); setCursor(result.page.nextCursor); } catch (caught) { setError(caught instanceof Error ? caught.message : 'Unable to load saved jobs.'); } }, []); useEffect(() => { load(); }, [load]); const rows = data?.items ?? []; return <Shell title="Saved jobs">{error && <Notice tone="error">{error}</Notice>}{!data ? <Skeletons /> : rows.length === 0 ? <div className="rounded-2xl border border-dashed border-border-default p-10 text-center text-text-secondary">Save roles you are considering so you can compare and analyse them later.</div> : <div className="space-y-3">{rows.map((row) => <div key={row.id}><JobCard job={{ ...row.job, id: row.job.id ?? row.id, saved: true }} availability={row.availability} onSaved={(saved) => !saved && setData((current) => current ? { ...current, items: current.items.filter((item) => item.id !== row.id) } : current)} /><p className="px-1 pt-1 text-xs text-text-tertiary">Saved {dateLabel(row.savedAt)}</p></div>)}{data.page.hasMore && cursor && <button type="button" onClick={() => load(true, cursor)} className="rounded-lg border border-border-subtle px-4 py-2 text-sm font-semibold hover:bg-bg-tertiary">Load more saved jobs</button>}</div>}</Shell>; }
+  const onKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      onClose();
+      return;
+    }
+    if (event.key !== "Tab" || !dialogRef.current) return;
+    const focusable = Array.from(
+      dialogRef.current.querySelectorAll<HTMLElement>(
+        'button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])',
+      ),
+    );
+    if (!focusable.length) return;
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
+    }
+  };
 
-type Company = { id: string; displayName: string; industry?: string; websiteUrl?: string; careersUrl?: string; sponsorEvidenceSummary: { status: SponsorStatus }; verifiedSourceCount: number; activeJobCount: number; providers: string[]; lastRefreshedAt?: string };
-export function CompaniesBoard() { const searchParams = useSearchParams(); const pathname = usePathname(); const router = useRouter(); const [data, setData] = useState<Page<Company> | null>(null); const [error, setError] = useState<string | null>(null); const [search, setSearch] = useState(searchParams.get('search') ?? ''); const [provider, setProvider] = useState(searchParams.get('provider') ?? ''); const [industry, setIndustry] = useState(searchParams.get('industry') ?? ''); const [sponsor, setSponsor] = useState(searchParams.get('sponsorStatus') ?? ''); const [activeOnly, setActiveOnly] = useState(searchParams.get('activeJobsOnly') === 'true'); const [sort, setSort] = useState(searchParams.get('sort') ?? 'NAME'); const load = useCallback(async () => { try { const result = await readJson<Page<Company>>(`/api/companies?${searchParams}`); setData(result); } catch (caught) { setError(caught instanceof Error ? caught.message : 'Unable to load companies.'); } }, [searchParams]); useEffect(() => { load(); }, [load]); const apply = (event: FormEvent) => { event.preventDefault(); const params = new URLSearchParams(); if (search.trim()) params.set('search', search.trim()); if (provider) params.set('provider', provider); if (industry.trim()) params.set('industry', industry.trim()); if (sponsor) params.set('sponsorStatus', sponsor); if (activeOnly) params.set('activeJobsOnly', 'true'); if (sort !== 'NAME') params.set('sort', sort); router.push(`${pathname}?${params}`); }; return <Shell title="Companies"><form onSubmit={apply} className="mb-5 rounded-2xl border border-neutral-200 bg-bg-secondary p-4 dark:border-border-subtle"><div className="grid gap-3 md:grid-cols-3"><label className="text-sm">Search<input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Company name" className="mt-1 w-full" /></label><label className="text-sm">Provider<select value={provider} onChange={(e) => setProvider(e.target.value)} className="mt-1 w-full"><option value="">All verified providers</option><option value="GREENHOUSE">Greenhouse</option><option value="LEVER">Lever</option><option value="ASHBY">Ashby</option></select></label><label className="text-sm">Industry<input value={industry} onChange={(e) => setIndustry(e.target.value)} placeholder="Industry" className="mt-1 w-full" /></label><label className="text-sm">Sponsor evidence<select value={sponsor} onChange={(e) => setSponsor(e.target.value)} className="mt-1 w-full"><option value="">Any</option><option value="MATCHED">Matched</option><option value="AMBIGUOUS">Ambiguous</option><option value="NONE">None found</option><option value="NOT_CHECKED">Not checked</option></select></label><label className="text-sm">Sort<select value={sort} onChange={(e) => setSort(e.target.value)} className="mt-1 w-full"><option value="NAME">Name</option><option value="ACTIVE_JOBS">Active vacancies</option><option value="RECENTLY_REFRESHED">Recently refreshed</option></select></label><label className="mt-6 flex items-center gap-2 text-sm"><input type="checkbox" checked={activeOnly} onChange={(e) => setActiveOnly(e.target.checked)} />Active vacancies only</label></div><button type="submit" className="mt-4 rounded-lg bg-accent-purple px-4 py-2 text-sm font-semibold text-white">Apply filters</button></form>{error && <Notice tone="error">{error}</Notice>}{!data ? <Skeletons /> : <div className="grid gap-3 md:grid-cols-2">{data.items.map((company) => <article key={company.id} className="rounded-2xl border border-neutral-200 bg-bg-secondary p-5 dark:border-border-subtle"><h2 className="text-lg font-semibold text-text-primary">{company.displayName}</h2><p className="mt-1 text-sm text-text-secondary">{company.industry ?? 'Industry not known'}</p><div className="mt-3 flex flex-wrap gap-2 text-xs text-text-secondary"><span className="rounded-full bg-bg-tertiary px-2.5 py-1">{company.activeJobCount} active vacancies</span><span className="rounded-full bg-bg-tertiary px-2.5 py-1">{company.verifiedSourceCount} verified sources</span><span className="rounded-full bg-bg-tertiary px-2.5 py-1">{sponsorLabel[company.sponsorEvidenceSummary.status]}</span></div><p className="mt-3 text-xs text-text-tertiary">{company.lastRefreshedAt ? `Last refreshed ${dateLabel(company.lastRefreshedAt)}` : 'Source freshness is not available.'}</p><Link href={`/dashboard/jobs/companies/${encodeURIComponent(company.id)}`} className="mt-4 inline-block text-sm font-semibold text-accent-purple hover:underline">View company</Link></article>)}</div>}</Shell>; }
+  return { dialogRef, onKeyDown };
+}
 
-function Description({ description }: { description: { text?: string; source: string; completeness: string } }) { const paragraphs = description.text?.split(/\n\s*\n/).filter(Boolean) ?? []; return <section className="rounded-2xl border border-neutral-200 bg-bg-secondary p-5 dark:border-border-subtle"><h2 className="text-lg font-semibold text-text-primary">Description</h2>{description.completeness !== 'FULL' && <div className="mt-3"><Notice tone="warning">This description is partial. The complete description may be available externally.</Notice></div>}{description.source === 'USER_PASTED' && <div className="mt-3"><Notice>User-pasted description is being used for match preparation.</Notice></div>}{paragraphs.length ? <div className="mt-4 space-y-4 text-sm leading-7 text-text-secondary">{paragraphs.map((paragraph, index) => paragraph.split('\n').every((line) => /^[-•*]\s+/.test(line)) ? <ul key={index} className="list-disc space-y-1 pl-5">{paragraph.split('\n').map((line) => <li key={line}>{line.replace(/^[-•*]\s+/, '')}</li>)}</ul> : <p key={index}>{paragraph}</p>)}</div> : <p className="mt-3 text-sm text-text-secondary">No durable description is available for this vacancy.</p>}</section>; }
+function FilterDialog({
+  filters,
+  onChange,
+  onClose,
+  onApply,
+}: {
+  filters: DiscoverFilters;
+  onChange: (filters: DiscoverFilters) => void;
+  onClose: () => void;
+  onApply: () => void;
+}) {
+  const { dialogRef, onKeyDown } = useDialogFocus(onClose);
+  const update = <K extends keyof DiscoverFilters>(
+    key: K,
+    value: DiscoverFilters[K],
+  ) => onChange({ ...filters, [key]: value });
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/50 backdrop-blur-sm"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="filter-title"
+      ref={dialogRef}
+      onKeyDown={onKeyDown}
+    >
+      <div className="max-h-[85vh] w-full max-w-lg sm:max-w-xl overflow-y-auto rounded-2xl bg-white p-4 sm:p-6 shadow-2xl border border-neutral-200 dark:border-border-subtle dark:bg-bg-secondary">
+        <div className="flex items-center justify-between border-b border-neutral-100 pb-3 dark:border-border-subtle">
+          <h2 id="filter-title" className="text-base sm:text-lg font-bold text-neutral-900 dark:text-text-primary">
+            More filters
+          </h2>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close filters"
+            className="h-8 w-8 rounded-lg flex items-center justify-center text-neutral-400 hover:bg-neutral-100 dark:hover:bg-bg-tertiary dark:text-text-secondary"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+        <div className="mt-4 grid gap-3 sm:grid-cols-2">
+          <label className="text-xs font-semibold text-neutral-700 dark:text-text-secondary">
+            Workplace
+            <select
+              value={filters.workplace}
+              onChange={(event) =>
+                update(
+                  "workplace",
+                  event.target.value as DiscoverFilters["workplace"],
+                )
+              }
+              className="mt-1 w-full h-9 rounded-lg border border-neutral-200 bg-neutral-50 px-2.5 text-xs font-medium text-neutral-900 focus:outline-none focus:ring-2 focus:ring-accent-purple dark:border-border-subtle dark:bg-bg-tertiary dark:text-text-primary"
+            >
+              <option value="all">Any workplace</option>
+              <option value="REMOTE">Remote</option>
+              <option value="HYBRID">Hybrid</option>
+              <option value="ONSITE">Onsite</option>
+            </select>
+          </label>
+          <label className="text-xs font-semibold text-neutral-700 dark:text-text-secondary">
+            Employment type
+            <select
+              value={filters.employmentType}
+              onChange={(event) =>
+                update(
+                  "employmentType",
+                  event.target.value as DiscoverFilters["employmentType"],
+                )
+              }
+              className="mt-1 w-full h-9 rounded-lg border border-neutral-200 bg-neutral-50 px-2.5 text-xs font-medium text-neutral-900 focus:outline-none focus:ring-2 focus:ring-accent-purple dark:border-border-subtle dark:bg-bg-tertiary dark:text-text-primary"
+            >
+              <option value="all">Any type</option>
+              <option value="permanent">Permanent</option>
+              <option value="contract">Contract</option>
+              <option value="temporary">Temporary</option>
+            </select>
+          </label>
+          <label className="text-xs font-semibold text-neutral-700 dark:text-text-secondary">
+            Minimum salary
+            <input
+              inputMode="numeric"
+              value={filters.salaryMin}
+              onChange={(event) =>
+                update(
+                  "salaryMin",
+                  event.target.value.replace(/\D/g, "").slice(0, 7),
+                )
+              }
+              placeholder="e.g. 40000"
+              className="mt-1 w-full h-9 rounded-lg border border-neutral-200 bg-neutral-50 px-2.5 text-xs font-medium text-neutral-900 focus:outline-none focus:ring-2 focus:ring-accent-purple dark:border-border-subtle dark:bg-bg-tertiary dark:text-text-primary"
+            />
+          </label>
+          <label className="text-xs font-semibold text-neutral-700 dark:text-text-secondary">
+            Freshness
+            <select
+              value={filters.freshness}
+              onChange={(event) =>
+                update(
+                  "freshness",
+                  event.target.value as DiscoverFilters["freshness"],
+                )
+              }
+              className="mt-1 w-full h-9 rounded-lg border border-neutral-200 bg-neutral-50 px-2.5 text-xs font-medium text-neutral-900 focus:outline-none focus:ring-2 focus:ring-accent-purple dark:border-border-subtle dark:bg-bg-tertiary dark:text-text-primary"
+            >
+              <option value="">Any date</option>
+              <option value="1">Past day</option>
+              <option value="7">Past week</option>
+              <option value="30">Past month</option>
+            </select>
+          </label>
+          <label className="text-xs font-semibold text-neutral-700 dark:text-text-secondary sm:col-span-2">
+            Sponsor-register evidence
+            <select
+              value={filters.sponsorStatus}
+              onChange={(event) =>
+                update(
+                  "sponsorStatus",
+                  event.target.value as DiscoverFilters["sponsorStatus"],
+                )
+              }
+              className="mt-1 w-full h-9 rounded-lg border border-neutral-200 bg-neutral-50 px-2.5 text-xs font-medium text-neutral-900 focus:outline-none focus:ring-2 focus:ring-accent-purple dark:border-border-subtle dark:bg-bg-tertiary dark:text-text-primary"
+            >
+              <option value="all">Any evidence</option>
+              <option value="registered">Employer matched</option>
+            </select>
+          </label>
+        </div>
+        <div className="mt-5 flex flex-col sm:flex-row items-stretch sm:items-center sm:justify-end gap-2 border-t border-neutral-100 pt-3 dark:border-border-subtle">
+          <button
+            type="button"
+            onClick={() =>
+              onChange({
+                ...filters,
+                workplace: "all",
+                employmentType: "all",
+                salaryMin: "",
+                freshness: "",
+                sponsorStatus: "all",
+              })
+            }
+            className="h-9 rounded-xl border border-neutral-200 px-3 text-xs font-semibold text-neutral-600 hover:bg-neutral-50 dark:border-border-subtle dark:text-text-secondary dark:hover:bg-bg-tertiary"
+          >
+            Clear secondary filters
+          </button>
+          <button
+            type="button"
+            onClick={onApply}
+            className="h-9 rounded-xl bg-accent-purple px-4 text-xs font-semibold text-white hover:bg-accent-purple/90 transition shadow-sm"
+          >
+            Apply filters
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
-function MatchPreparation({ id, onClose }: { id: string; onClose: () => void }) { const [tracks, setTracks] = useState<{ id: string; label: string }[]>([]); const [track, setTrack] = useState(''); const [prepared, setPrepared] = useState<{ matchRequestId?: string; warnings?: string[] } | null>(null); const [error, setError] = useState<string | null>(null); const [running, setRunning] = useState(false); useEffect(() => { readJson<{ availableCareerTracks: { id: string; label: string }[] }>(`/api/jobs/${encodeURIComponent(id)}`).then((data) => { setTracks(data.availableCareerTracks); setTrack(data.availableCareerTracks[0]?.id ?? ''); }).catch((caught) => setError(caught instanceof Error ? caught.message : 'Unable to load Career Tracks.')); }, [id]); const prepare = async () => { setRunning(true); setError(null); try { const data = await readJson<{ matchRequestId: string; warnings?: string[] }>(`/api/jobs/${encodeURIComponent(id)}/match-preparation`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ profileId: track }) }); setPrepared(data); } catch (caught) { setError(caught instanceof Error ? caught.message : 'Unable to prepare this match.'); } finally { setRunning(false); } }; return <div className="fixed inset-0 z-50 flex items-end bg-black/40 p-0 sm:items-center sm:justify-center sm:p-4" role="dialog" aria-modal="true" aria-labelledby="match-preparation-title"><div className="w-full max-w-xl rounded-t-2xl bg-bg-primary p-5 shadow-xl sm:rounded-2xl"><div className="flex items-start justify-between gap-4"><div><h2 id="match-preparation-title" className="text-lg font-bold">Match preparation</h2><p className="text-sm text-text-secondary">Review confirmed facts before launching the canonical analysis flow.</p></div><button type="button" onClick={onClose} className="text-sm font-semibold">Close</button></div><label className="mt-5 block text-sm font-medium">Career Track<select value={track} onChange={(e) => setTrack(e.target.value)} className="mt-1 w-full">{tracks.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</select></label>{error && <div className="mt-4"><Notice tone="error">{error}</Notice></div>}{prepared && <div className="mt-4 space-y-3"><Notice>{prepared.warnings?.join(' ') || 'Description and vacancy requirements are ready for the next step.'}</Notice><section className="rounded-xl bg-bg-tertiary p-3 text-sm"><h3 className="font-semibold">Practical requirements</h3><p className="mt-1 text-text-secondary">Confirmed from your profile, not confirmed in your profile, and facts not stated in the vacancy are shown in the canonical analysis preparation.</p></section></div>}<div className="mt-5 flex justify-end gap-3"><button type="button" onClick={onClose} className="rounded-lg px-3 py-2 text-sm font-semibold">Cancel</button>{prepared?.matchRequestId ? <Link href={`/analyze?mode=job_match&matchRequest=${encodeURIComponent(prepared.matchRequestId)}`} className="rounded-lg bg-accent-purple px-4 py-2 text-sm font-semibold text-white">Continue to choose CV</Link> : <button type="button" onClick={prepare} disabled={!track || running} className="rounded-lg bg-accent-purple px-4 py-2 text-sm font-semibold text-white disabled:opacity-60">{running ? 'Preparing…' : 'Review and continue'}</button>}</div></div></div>; }
+const freshnessLabel = (value: DiscoverFilters["freshness"]) =>
+  value === "1"
+    ? "Past day"
+    : value === "7"
+      ? "Past week"
+      : value === "30"
+        ? "Past month"
+        : "Any time";
 
-export function JobDetailsBoard({ jobSnapshotId }: { jobSnapshotId: string }) { const [data, setData] = useState<{ job: Card & { id: string }; description: { text?: string; source: string; completeness: string }; sponsorEvidence: { summary: { status: SponsorStatus }; disclaimer: string; matchedOrganisationName?: string }; sourceProvenance: { provider: string; hostedUrl?: string; applicationUrl?: string }[]; applicationUrl?: string; availability: string; practicalRequirements?: { category?: string; statement?: string; excerpt?: string }[]; vacancySponsorship?: { statement?: string }; availableCareerTracks: { id: string; label: string }[] } | null>(null); const [error, setError] = useState<string | null>(null); const [saved, setSaved] = useState(false); const [preparing, setPreparing] = useState(false); const save = useSaveMutation((_, next) => setSaved(next)); useEffect(() => { readJson<NonNullable<typeof data>>(`/api/jobs/${encodeURIComponent(jobSnapshotId)}`).then((result) => { setData(result); setSaved(Boolean(result.job.saved)); }).catch((caught) => setError(caught instanceof Error ? caught.message : 'Unable to load this vacancy.')); }, [jobSnapshotId]); if (error) return <Shell title="Vacancy"><Notice tone="error">{error}</Notice></Shell>; if (!data) return <Shell title="Vacancy"><Skeletons /></Shell>; const requirements = Array.isArray(data.practicalRequirements) ? data.practicalRequirements : []; return <Shell title="Vacancy"><Link href="/dashboard/jobs" className="mb-4 inline-block text-sm font-semibold text-accent-purple hover:underline">← Back to results</Link><article className="rounded-2xl border border-neutral-200 bg-bg-secondary p-5 dark:border-border-subtle"><div className="flex flex-col gap-4 md:flex-row md:justify-between"><div><h2 className="text-2xl font-bold">{data.job.title}</h2><p className="mt-1 text-text-secondary">{data.job.company.displayName}{data.job.location ? ` · ${data.job.location}` : ''}</p><div className="mt-3 flex flex-wrap gap-2 text-xs"><span className="rounded-full bg-bg-tertiary px-2.5 py-1">{data.availability === 'DISCOVERABLE' ? 'Currently discoverable' : 'Historical saved vacancy'}</span>{data.job.workplaceType && <span className="rounded-full bg-bg-tertiary px-2.5 py-1">{data.job.workplaceType}</span>}{data.job.salary?.text && <span className="rounded-full bg-bg-tertiary px-2.5 py-1">{data.job.salary.text}</span>}</div></div><div className="flex flex-wrap gap-2"><button type="button" onClick={() => save.mutate(jobSnapshotId, saved)} disabled={Boolean(save.pending)} className="rounded-lg border border-border-subtle px-3 py-2 text-sm font-semibold">{save.pending ? 'Saving…' : saved ? 'Unsave' : 'Save'}</button><button type="button" onClick={() => setPreparing(true)} className="rounded-lg bg-accent-purple px-3 py-2 text-sm font-semibold text-white">Check Match</button>{data.applicationUrl && <a href={data.applicationUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 rounded-lg border border-border-subtle px-3 py-2 text-sm font-semibold">Apply safely <ExternalLink size={14} /></a>}</div></div>{!data.applicationUrl && <p className="mt-4 text-sm text-text-secondary">A safe application link was not supplied for this vacancy.</p>}{save.error && <p role="alert" className="mt-3 text-sm text-error">{save.error}</p>}</article><div className="mt-5 grid gap-5 lg:grid-cols-[minmax(0,2fr)_minmax(18rem,1fr)]"><div className="space-y-5"><Description description={data.description} /><section className="rounded-2xl border border-neutral-200 bg-bg-secondary p-5 dark:border-border-subtle"><h2 className="text-lg font-semibold">Practical requirements</h2>{requirements.length ? <div className="mt-3 space-y-2">{requirements.map((item, index) => <p key={index} className="rounded-lg bg-bg-tertiary p-3 text-sm text-text-secondary">{item.statement ?? item.excerpt ?? item.category?.replaceAll('_', ' ')}</p>)}</div> : <p className="mt-3 text-sm text-text-secondary">No practical requirements were extracted from the available description.</p>}</section></div><aside className="space-y-5"><section className="rounded-2xl border border-neutral-200 bg-bg-secondary p-5 dark:border-border-subtle"><h2 className="font-semibold">Sponsorship evidence</h2><p className="mt-3 text-sm font-medium">Employer register evidence</p><p className="text-sm text-text-secondary">{sponsorLabel[data.sponsorEvidence.summary.status]}</p>{data.sponsorEvidence.matchedOrganisationName && <p className="mt-2 text-xs text-text-tertiary">Matched organisation: {data.sponsorEvidence.matchedOrganisationName}</p>}<p className="mt-3 text-sm font-medium">Vacancy sponsorship wording</p><p className="text-sm text-text-secondary">{data.vacancySponsorship?.statement ?? 'No sponsorship wording was detected.'}</p><p className="mt-4 text-xs text-text-tertiary">{data.sponsorEvidence.disclaimer}</p></section><section className="rounded-2xl border border-neutral-200 bg-bg-secondary p-5 dark:border-border-subtle"><h2 className="font-semibold">Source and freshness</h2><p className="mt-2 text-sm text-text-secondary">{data.job.freshness === 'FRESH' ? 'Fresh source snapshot' : 'Stale source snapshot'}</p>{data.sourceProvenance.map((source) => <p key={source.provider} className="mt-2 text-xs text-text-secondary">Verified source: {source.provider}</p>)}</section></aside></div>{preparing && <MatchPreparation id={jobSnapshotId} onClose={() => setPreparing(false)} />}</Shell>; }
+/**
+ * Every secondary filter is shown, defaults included, so the applied search is
+ * legible without opening the dialog. Chips read applied state, never the
+ * unsubmitted draft, and clearing one applies immediately.
+ */
+function FilterChips({
+  filters,
+  onClear,
+  onClearAll,
+}: {
+  filters: DiscoverFilters;
+  onClear: (key: keyof DiscoverFilters) => void;
+  onClearAll: () => void;
+}) {
+  const chips: Array<[keyof DiscoverFilters, string, string, boolean]> = [
+    [
+      "salaryMin",
+      "Salary",
+      filters.salaryMin
+        ? `£${Number(filters.salaryMin).toLocaleString("en-GB")}+`
+        : "Any",
+      Boolean(filters.salaryMin),
+    ],
+    [
+      "workplace",
+      "Work style",
+      filters.workplace === "all" ? "Any" : (humanise(filters.workplace) ?? ""),
+      filters.workplace !== "all",
+    ],
+    [
+      "employmentType",
+      "Employment",
+      filters.employmentType === "all"
+        ? "Any"
+        : (humanise(filters.employmentType) ?? ""),
+      filters.employmentType !== "all",
+    ],
+    [
+      "freshness",
+      "Freshness",
+      freshnessLabel(filters.freshness),
+      Boolean(filters.freshness),
+    ],
+    [
+      "sponsorStatus",
+      "Sponsor evidence",
+      filters.sponsorStatus === "all" ? "Any" : "Register match",
+      filters.sponsorStatus !== "all",
+    ],
+  ];
 
-export function CompanyDetailsBoard({ companyRecordId }: { companyRecordId: string }) { const [data, setData] = useState<{ company: Company; sponsorEvidence: { summary: { status: SponsorStatus }; disclaimer: string; matchedOrganisationName?: string }; sources: { provider: string; health: string }[]; activeVacancies: Card[] } | null>(null); const [error, setError] = useState<string | null>(null); useEffect(() => { readJson<NonNullable<typeof data>>(`/api/companies/${encodeURIComponent(companyRecordId)}`).then(setData).catch((caught) => setError(caught instanceof Error ? caught.message : 'Unable to load company.')); }, [companyRecordId]); if (error) return <Shell title="Company"><Notice tone="error">{error}</Notice></Shell>; if (!data) return <Shell title="Company"><Skeletons /></Shell>; return <Shell title={data.company.displayName}><Link href="/dashboard/jobs/companies" className="mb-4 inline-block text-sm font-semibold text-accent-purple hover:underline">← Back to companies</Link><div className="grid gap-5 lg:grid-cols-[minmax(0,2fr)_minmax(18rem,1fr)]"><div><section className="rounded-2xl border border-neutral-200 bg-bg-secondary p-5 dark:border-border-subtle"><h2 className="text-lg font-semibold">Company identity</h2><p className="mt-2 text-sm text-text-secondary">{data.company.industry ?? 'Industry not known'}</p><div className="mt-3 flex flex-wrap gap-3 text-sm">{data.company.websiteUrl && <a href={data.company.websiteUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-accent-purple hover:underline">Website <ExternalLink size={13} /></a>}{data.company.careersUrl && <a href={data.company.careersUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-accent-purple hover:underline">Careers <ExternalLink size={13} /></a>}</div></section><section className="mt-5"><h2 className="mb-3 text-lg font-semibold">Current vacancies</h2>{data.activeVacancies.length ? <div className="space-y-3">{data.activeVacancies.map((job) => <JobCard key={job.id} job={{ ...job, id: job.id ?? job.title }} />)}</div> : <div className="rounded-2xl border border-dashed border-border-default p-8 text-center text-text-secondary">This company has verified job sources but no usable current vacancies were found.</div>}</section></div><aside className="space-y-5"><section className="rounded-2xl border border-neutral-200 bg-bg-secondary p-5 dark:border-border-subtle"><h2 className="font-semibold">Sponsor-register evidence</h2><p className="mt-2 text-sm text-text-secondary">{sponsorLabel[data.sponsorEvidence.summary.status]}</p><p className="mt-3 text-xs text-text-tertiary">{data.sponsorEvidence.disclaimer}</p></section><section className="rounded-2xl border border-neutral-200 bg-bg-secondary p-5 dark:border-border-subtle"><h2 className="font-semibold">Source health</h2><div className="mt-3 space-y-2 text-sm text-text-secondary">{data.sources.map((source) => <p key={source.provider}><span className="font-medium text-text-primary">{source.provider}</span> · {source.health.replaceAll('_', ' ').toLowerCase()}</p>)}</div></section></aside></div></Shell>; }
+  return (
+    <div className="mt-3 flex flex-wrap items-center gap-2">
+      {chips.map(([key, label, value, active]) => (
+        <span
+          key={key}
+          className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs transition ${
+            active
+              ? "border-accent-purple/30 bg-purple-50 font-semibold text-accent-purple dark:border-accent-purple/40 dark:bg-accent-purple/10"
+              : "border-neutral-200/80 bg-neutral-50 text-neutral-600 dark:border-border-subtle dark:bg-bg-tertiary dark:text-text-secondary"
+          }`}
+        >
+          <span className="font-normal text-neutral-500 dark:text-text-tertiary">
+            {label}:
+          </span>
+          <span className="font-semibold">{value}</span>
+          <button
+            type="button"
+            onClick={() => onClear(key)}
+            aria-label={`Clear ${label.toLowerCase()} filter`}
+            className="rounded p-0.5 hover:bg-neutral-200/70 dark:hover:bg-bg-secondary"
+          >
+            <X className="h-3 w-3 text-neutral-400 hover:text-neutral-700 dark:hover:text-text-primary" />
+          </button>
+        </span>
+      ))}
+      <button
+        type="button"
+        onClick={onClearAll}
+        className="ml-auto text-xs font-semibold text-accent-purple hover:underline"
+      >
+        Clear all
+      </button>
+    </div>
+  );
+}
+
+function Pagination({
+  pageCount,
+  pageIndex,
+  hasMore,
+  busy,
+  onSelect,
+  onNext,
+}: {
+  pageCount: number;
+  pageIndex: number;
+  hasMore: boolean;
+  busy: boolean;
+  onSelect: (index: number) => void;
+  onNext: () => void;
+}) {
+  if (pageCount <= 1 && !hasMore) return null;
+  return (
+    <nav
+      aria-label="Results pages"
+      className="mt-5 flex items-center justify-center gap-1.5"
+    >
+      <button
+        type="button"
+        onClick={() => onSelect(pageIndex - 1)}
+        disabled={pageIndex === 0}
+        aria-label="Previous page"
+        className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-neutral-200 bg-white text-neutral-600 hover:bg-neutral-50 disabled:opacity-40 dark:border-border-subtle dark:bg-bg-secondary dark:text-text-secondary"
+      >
+        <ChevronLeft className="h-3.5 w-3.5" />
+      </button>
+      {Array.from({ length: pageCount }, (_, index) => (
+        <button
+          key={index}
+          type="button"
+          onClick={() => onSelect(index)}
+          aria-current={index === pageIndex ? "page" : undefined}
+          aria-label={`Page ${index + 1}`}
+          className={`h-8 min-w-8 rounded-lg border px-2 text-xs font-semibold ${
+            index === pageIndex
+              ? "border-accent-purple bg-accent-purple/10 text-accent-purple"
+              : "border-neutral-200 bg-white text-neutral-600 hover:bg-neutral-50 dark:border-border-subtle dark:bg-bg-secondary dark:text-text-secondary"
+          }`}
+        >
+          {index + 1}
+        </button>
+      ))}
+      {hasMore && (
+        <span
+          aria-hidden
+          className="px-1 text-xs text-neutral-400 dark:text-text-tertiary"
+        >
+          …
+        </span>
+      )}
+      <button
+        type="button"
+        onClick={onNext}
+        disabled={busy || (!hasMore && pageIndex === pageCount - 1)}
+        className="inline-flex h-8 items-center gap-1 rounded-lg border border-neutral-200 bg-white px-3 text-xs font-semibold text-neutral-700 hover:bg-neutral-50 disabled:opacity-40 dark:border-border-subtle dark:bg-bg-secondary dark:text-text-primary"
+      >
+        {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
+        Next
+        <ChevronRight className="h-3.5 w-3.5" />
+      </button>
+    </nav>
+  );
+}
+
+export function DiscoverBoard({
+  initialJobSnapshotId,
+}: { initialJobSnapshotId?: string } = {}) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const serialized = searchParams.toString();
+  const filters = useMemo(
+    () => parseDiscoverFilters(new URLSearchParams(serialized)),
+    [serialized],
+  );
+  const [draft, setDraft] = useState(filters);
+  const [tracks, setTracks] = useState<CareerTrack[]>([]);
+  const [bootstrapReady, setBootstrapReady] = useState(false);
+  // Pages are kept client-side so the numbered control can step back over
+  // results the cursor-forward search API cannot re-request.
+  const [pages, setPages] = useState<JobCardViewModel[][]>([]);
+  const pagesRef = useRef<JobCardViewModel[][]>([]);
+  const [pageIndex, setPageIndex] = useState(0);
+  const [meta, setMeta] = useState<SearchMeta>({});
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [hasMore, setHasMore] = useState(false);
+  /** Set when a continuation returned no unseen vacancies. */
+  const [exhausted, setExhausted] = useState(false);
+  const [sessionRestarted, setSessionRestarted] = useState(false);
+  const [reloadToken, setReloadToken] = useState(0);
+  const [filterOpen, setFilterOpen] = useState(false);
+  const [mobileAdvancedOpen, setMobileAdvancedOpen] = useState(false);
+  const selectedJobSnapshotId = useMemo(() => {
+    const prefix = `${JOB_BOARD_ROUTES.discover}/`;
+    if (!pathname.startsWith(prefix)) return undefined;
+    const remainder = pathname.slice(prefix.length);
+    if (
+      !remainder ||
+      remainder.includes("/") ||
+      remainder === "saved" ||
+      remainder === "companies"
+    )
+      return undefined;
+    try {
+      return decodeURIComponent(remainder);
+    } catch {
+      return undefined;
+    }
+  }, [pathname]);
+  const initialFiltersRef = useRef(filters);
+  const initialDetailsRef = useRef(Boolean(initialJobSnapshotId));
+  const sessionRef = useRef<string | undefined>(undefined);
+  const requestRef = useRef(0);
+  const controllerRef = useRef<AbortController | undefined>(undefined);
+  /**
+   * A speculative page two, fetched while the browser is idle.
+   *
+   * Keyed by the session it belongs to, so a filter change (which starts a new
+   * session) can never serve the previous search's second page. It holds the
+   * PARSED response, not a promise, so consuming it is synchronous.
+   */
+  const prefetchRef = useRef<
+    { sessionId: string; response: SearchResponse } | undefined
+  >(undefined);
+  const prefetchControllerRef = useRef<AbortController | undefined>(undefined);
+
+  /** Drop any in-flight or completed prefetch. Called whenever the search changes. */
+  const cancelPrefetch = useCallback(() => {
+    prefetchControllerRef.current?.abort();
+    prefetchControllerRef.current = undefined;
+    prefetchRef.current = undefined;
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    queueMicrotask(() => {
+      if (active) setDraft(filters);
+    });
+    return () => {
+      active = false;
+    };
+  }, [filters]);
+
+  useEffect(() => {
+    let active = true;
+    readJson<{
+      profiles?: CareerTrack[];
+      defaultSearch: { query: string; location: string };
+    }>("/api/jobs/bootstrap")
+      .then((data) => {
+        if (!active) return;
+        const available = data.profiles ?? [];
+        setTracks(available);
+        setBootstrapReady(true);
+        const initialFilters = initialFiltersRef.current;
+        if (
+          initialFilters.careerTrackId &&
+          !available.some(
+            (track) => track.profileId === initialFilters.careerTrackId,
+          )
+        ) {
+          const repaired = filtersToUrl({
+            ...initialFilters,
+            careerTrackId: "",
+          });
+          router.replace(`${JOB_BOARD_ROUTES.discover}?${repaired}`);
+        } else if (!initialFilters.query && !initialDetailsRef.current) {
+          const defaults = filtersToUrl({
+            ...initialFilters,
+            query: data.defaultSearch.query,
+            location: data.defaultSearch.location,
+          });
+          router.replace(`${JOB_BOARD_ROUTES.discover}?${defaults}`);
+        }
+      })
+      .catch(() => setBootstrapReady(true));
+    return () => {
+      active = false;
+    };
+  }, [router]);
+
+  useEffect(() => {
+    if (
+      bootstrapReady &&
+      filters.careerTrackId &&
+      !tracks.some((track) => track.profileId === filters.careerTrackId)
+    ) {
+      const repaired = filtersToUrl({ ...filters, careerTrackId: "" });
+      router.replace(`${JOB_BOARD_ROUTES.discover}?${repaired}`);
+    }
+  }, [bootstrapReady, filters, router, tracks]);
+
+  const load = useCallback(
+    async (more = false, force = false) => {
+      if (!filters.query.trim() || !bootstrapReady) {
+        setLoading(false);
+        return;
+      }
+      const requestId = ++requestRef.current;
+      controllerRef.current?.abort();
+      // Any prefetch belongs to the state we are about to replace. `more` keeps
+      // it, because the consumer below is the reason it exists.
+      if (!more) cancelPrefetch();
+      const controller = new AbortController();
+      controllerRef.current = controller;
+      if (more || pagesRef.current.length) setRefreshing(true);
+      else setLoading(true);
+      setError(null);
+      try {
+        // A prefetched page two is consumed here rather than at the call site,
+        // so "Next" behaves identically whether or not the speculative fetch
+        // landed in time.
+        const prefetched =
+          more &&
+          !force &&
+          prefetchRef.current &&
+          prefetchRef.current.sessionId === sessionRef.current
+            ? prefetchRef.current.response
+            : undefined;
+        prefetchRef.current = undefined;
+
+        const params = filtersToApi(
+          filters,
+          more ? sessionRef.current : undefined,
+        );
+        if (force) params.set("refresh", "true");
+        const result =
+          prefetched ??
+          (await readJson<SearchResponse>(`/api/jobs?${params}`, {
+            signal: controller.signal,
+          }));
+        if (requestId !== requestRef.current) return;
+        if (result.jobs.some((job) => !job.id))
+          throw new Error(
+            "A vacancy was returned without a durable snapshot id.",
+          );
+        const seen = more
+          ? new Set(pagesRef.current.flat().map((job) => job.id))
+          : new Set<string>();
+        const page = result.jobs.filter((job) => !seen.has(job.id));
+        setMeta(result.meta);
+        sessionRef.current = result.sessionId;
+        // A continuation that yields nothing new is the end of the results, not
+        // a blank page to navigate onto.
+        if (more && !page.length) {
+          setHasMore(false);
+          setExhausted(true);
+          return;
+        }
+        const next = more ? [...pagesRef.current, page] : [page];
+        pagesRef.current = next;
+        setPages(next);
+        setPageIndex(next.length - 1);
+        setExhausted(false);
+        // Authoritative only. A full page says nothing about whether the
+        // providers behind it have more, and inferring "more" from the page size
+        // is how a Next button came to be offered over an empty continuation.
+        setHasMore(result.meta.hasMore === true);
+      } catch (caught) {
+        if (
+          (caught as Error).name !== "AbortError" &&
+          requestId === requestRef.current
+        ) {
+          // The search API refuses to answer a continuation whose session it
+          // cannot place, precisely so the user is never served page one under
+          // a "Next" button. Restarting the search is the documented recovery.
+          if ((caught as { code?: string }).code === "SEARCH_SESSION_EXPIRED") {
+            sessionRef.current = undefined;
+            setSessionRestarted(true);
+            setReloadToken((token) => token + 1);
+            return;
+          }
+          setError(
+            caught instanceof Error ? caught.message : "Unable to load jobs.",
+          );
+        }
+      } finally {
+        if (requestId === requestRef.current) {
+          setLoading(false);
+          setRefreshing(false);
+        }
+      }
+    },
+    [bootstrapReady, cancelPrefetch, filters],
+  );
+
+  /**
+   * Warm page two once page one has rendered.
+   *
+   * Conditions are all required, and each rules out a way this could waste work
+   * or mislead. `meta.hasMore` must be authoritative-true — never inferred from
+   * the page size. A session id must exist, or the request would start a fresh
+   * search rather than continue this one. The user must still be on page one, so
+   * a back-navigation does not re-prefetch a page already held. And it waits for
+   * browser idle, so it never competes with the render it follows.
+   *
+   * Exactly ONE page ahead. Prefetching the remaining pages would spend the
+   * providers' rate limit on results most sessions never reach.
+   */
+  useEffect(() => {
+    if (!meta.hasMore) return;
+    if (!sessionRef.current) return;
+    if (pageIndex !== pages.length - 1) return;
+    if (prefetchRef.current || prefetchControllerRef.current) return;
+    if (loading || refreshing) return;
+    // Respect a user who has asked the browser to conserve data.
+    const connection = (
+      navigator as Navigator & { connection?: { saveData?: boolean } }
+    ).connection;
+    if (connection?.saveData) return;
+
+    const sessionId = sessionRef.current;
+    const controller = new AbortController();
+    prefetchControllerRef.current = controller;
+
+    const run = () => {
+      if (controller.signal.aborted) return;
+      const params = filtersToApi(filters, sessionId);
+      readJson<SearchResponse>(`/api/jobs?${params}`, {
+        signal: controller.signal,
+      })
+        .then((response) => {
+          // The session must still be the one we asked about; a filter change
+          // between scheduling and landing invalidates the answer.
+          if (controller.signal.aborted || sessionRef.current !== sessionId)
+            return;
+          prefetchRef.current = { sessionId, response };
+        })
+        .catch(() => {
+          // A failed prefetch is silent by design: nothing was promised to the
+          // user, and "Next" will simply make the request itself.
+        })
+        .finally(() => {
+          if (prefetchControllerRef.current === controller)
+            prefetchControllerRef.current = undefined;
+        });
+    };
+
+    // `requestIdleCallback` is absent on Safari before 17, so the timeout is a
+    // real fallback rather than a formality.
+    const useIdle = typeof window.requestIdleCallback === "function";
+    const handle = useIdle
+      ? window.requestIdleCallback(run, { timeout: 2_000 })
+      : window.setTimeout(run, 400);
+
+    return () => {
+      controller.abort();
+      if (prefetchControllerRef.current === controller)
+        prefetchControllerRef.current = undefined;
+      if (useIdle) window.cancelIdleCallback(handle);
+      else window.clearTimeout(handle);
+    };
+  }, [filters, loading, meta.hasMore, pageIndex, pages.length, refreshing]);
+
+  // `reloadToken` is what a session-expiry recovery bumps, so the restart runs
+  // through the same single entry point as a filter change.
+  useEffect(() => {
+    let active = true;
+    sessionRef.current = undefined;
+    pagesRef.current = [];
+    cancelPrefetch();
+    queueMicrotask(() => {
+      if (active) load();
+    });
+    return () => {
+      active = false;
+      controllerRef.current?.abort();
+    };
+  }, [cancelPrefetch, load, reloadToken]);
+
+  const onSaved = useCallback((id: string, saved: boolean) => {
+    pagesRef.current = pagesRef.current.map((page) =>
+      page.map((job) => (job.id === id ? { ...job, saved } : job)),
+    );
+    setPages(pagesRef.current);
+  }, []);
+  const save = useSaveMutation(onSaved);
+
+  const visible = pages[pageIndex] ?? [];
+  const selected = pages
+    .flat()
+    .find((job) => job.id === selectedJobSnapshotId);
+
+  // Both entry points a user has for starting a search over. Clearing the
+  // continuation notices here, rather than inside `load`, keeps the restart the
+  // expiry recovery performs from wiping the message explaining it.
+  const resetContinuationNotices = () => {
+    setExhausted(false);
+    setSessionRestarted(false);
+  };
+  const applyFilters = (next: DiscoverFilters) => {
+    setFilterOpen(false);
+    sessionRef.current = undefined;
+    cancelPrefetch();
+    resetContinuationNotices();
+    router.push(`${JOB_BOARD_ROUTES.discover}?${filtersToUrl(next)}`);
+  };
+  const submit = (event?: FormEvent) => {
+    event?.preventDefault();
+    applyFilters(draft);
+  };
+  const select = (id: string) =>
+    window.history.pushState(
+      null,
+      "",
+      `${JOB_BOARD_ROUTES.details(id)}${serialized ? `?${serialized}` : ""}`,
+    );
+
+  return (
+    <BoardFrame
+      action={
+        <button
+          type="button"
+          onClick={() => {
+            resetContinuationNotices();
+            load(false, true);
+          }}
+          disabled={loading || refreshing}
+          className="my-2 inline-flex h-9 shrink-0 items-center gap-1.5 rounded-lg border border-neutral-200 bg-white px-3 text-xs font-semibold text-neutral-700 shadow-sm transition hover:bg-neutral-50 disabled:opacity-60 dark:border-border-subtle dark:bg-bg-tertiary dark:text-text-primary"
+        >
+          <RefreshCw
+            className={`h-3.5 w-3.5 ${refreshing ? "animate-spin" : ""}`}
+          />
+          Refresh
+        </button>
+      }
+    >
+      <div className={selectedJobSnapshotId ? "hidden lg:block" : ""}>
+        <form
+          onSubmit={submit}
+          className="rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm dark:border-border-subtle dark:bg-bg-secondary"
+        >
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-[minmax(12rem,1.2fr)_minmax(10rem,1fr)_minmax(11rem,1fr)_auto]">
+            {/* Field 1: Role or Keyword */}
+            <label className="text-xs font-semibold text-neutral-600 dark:text-text-secondary">
+              Role or keyword
+              <span className="relative mt-1 block">
+                <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-400" />
+                <input
+                  value={draft.query}
+                  onChange={(event) =>
+                    setDraft({ ...draft, query: event.target.value })
+                  }
+                  placeholder="e.g. IT Analyst"
+                  style={{ paddingLeft: "2.75rem" }}
+                  className="w-full rounded-xl !pl-11 pr-3.5 py-2.5 text-sm border border-neutral-200 focus:outline-none focus:ring-2 focus:ring-accent-purple/30 dark:border-border-subtle dark:bg-bg-tertiary dark:text-text-primary"
+                />
+              </span>
+            </label>
+
+            {/* Field 2: Location */}
+            <label className="text-xs font-semibold text-neutral-600 dark:text-text-secondary">
+              Location
+              <span className="relative mt-1 block">
+                <MapPin className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-400" />
+                <input
+                  value={draft.location}
+                  onChange={(event) =>
+                    setDraft({ ...draft, location: event.target.value })
+                  }
+                  placeholder="City or region"
+                  style={{ paddingLeft: "2.75rem" }}
+                  className="w-full rounded-xl !pl-11 pr-3.5 py-2.5 text-sm border border-neutral-200 focus:outline-none focus:ring-2 focus:ring-accent-purple/30 dark:border-border-subtle dark:bg-bg-tertiary dark:text-text-primary"
+                />
+              </span>
+            </label>
+
+            {/* Field 3: Career Track (Hidden on mobile unless expanded) */}
+            <label
+              className={`text-xs font-semibold text-neutral-600 dark:text-text-secondary ${
+                mobileAdvancedOpen ? "block" : "hidden md:block"
+              }`}
+            >
+              Career Track
+              <select
+                value={draft.careerTrackId}
+                onChange={(event) =>
+                  setDraft({ ...draft, careerTrackId: event.target.value })
+                }
+                className="mt-1 w-full rounded-xl border border-neutral-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent-purple/30 dark:border-border-subtle dark:bg-bg-tertiary dark:text-text-primary"
+              >
+                <option value="">Select a Career Track</option>
+                {tracks.map((track) => (
+                  <option key={track.profileId} value={track.profileId}>
+                    {track.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            {/* Action Buttons */}
+            <div className="flex items-end gap-2">
+              <button
+                type="submit"
+                disabled={!draft.query.trim()}
+                className="inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-xl bg-accent-purple px-5 text-sm font-semibold text-white shadow-sm transition hover:bg-accent-purple/90 disabled:opacity-60"
+              >
+                <Search className="h-4 w-4" />
+                Search
+              </button>
+
+              {/* Filters Button */}
+              <button
+                type="button"
+                onClick={() => {
+                  setFilterOpen(true);
+                  setMobileAdvancedOpen((prev) => !prev);
+                }}
+                className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-neutral-200 bg-white px-4 text-sm font-semibold text-neutral-800 transition hover:bg-neutral-50 dark:border-border-subtle dark:bg-bg-tertiary dark:text-text-primary"
+              >
+                <SlidersHorizontal className="h-4 w-4" />
+                Filters
+              </button>
+            </div>
+          </div>
+
+          {/* Filter Chips: Hidden on mobile unless expanded */}
+          <div className={mobileAdvancedOpen ? "block" : "hidden md:block"}>
+            <FilterChips
+              filters={filters}
+              onClear={(key) =>
+                applyFilters({ ...filters, [key]: DEFAULT_FILTERS[key] })
+              }
+              onClearAll={() =>
+                applyFilters({
+                  ...DEFAULT_FILTERS,
+                  query: filters.query,
+                  location: filters.location,
+                  careerTrackId: filters.careerTrackId,
+                  sort: filters.sort,
+                })
+              }
+            />
+          </div>
+        </form>
+      </div>
+
+      <div className="mt-4 space-y-3">
+        {hasDegradedProviders(meta) && (
+          <Notice tone="warning">
+            Some job sources are temporarily unavailable. The results shown may
+            be incomplete.
+          </Notice>
+        )}
+        {meta.cached && (
+          <Notice>
+            Showing {meta.cacheState === "STALE" ? "stale cached" : "cached"}{" "}
+            results{refreshing ? " while refreshing." : "."}
+          </Notice>
+        )}
+        {sessionRestarted && (
+          <Notice tone="warning">
+            Your search session expired, so these results were reloaded from the
+            first page. Paging beyond the first page needs a configured cache
+            (REDIS_URL).
+          </Notice>
+        )}
+        {exhausted && (
+          <Notice>
+            No further vacancies were returned for this search. Broaden the role,
+            location or filters to see more.
+          </Notice>
+        )}
+        {error && <Notice tone="error">{error}</Notice>}
+        {save.error && <Notice tone="error">{save.error}</Notice>}
+      </div>
+
+      <div className="mt-4 grid items-start gap-4 lg:grid-cols-[minmax(22rem,0.85fr)_minmax(0,1.6fr)] min-w-0 w-full">
+        <section
+          aria-label="Job results"
+          className={selectedJobSnapshotId ? "hidden lg:block" : "block min-w-0 w-full"}
+        >
+          <div
+            className="mb-3 flex items-center justify-between gap-2 min-w-0"
+            aria-live="polite"
+          >
+            <span className="text-xs sm:text-sm font-medium text-neutral-600 dark:text-text-secondary truncate">
+              {visible.length} results
+              {refreshing && (
+                <Loader2 className="ml-1.5 inline h-3.5 w-3.5 animate-spin align-[-2px]" />
+              )}
+            </span>
+            <label className="flex items-center gap-1.5 text-xs text-neutral-500 dark:text-text-tertiary shrink-0">
+              Sort by:
+              <select
+                value={filters.sort}
+                onChange={(event) =>
+                  applyFilters({
+                    ...filters,
+                    sort: event.target.value as DiscoverFilters["sort"],
+                  })
+                }
+                aria-label="Sort results"
+                className="h-9 px-2.5 py-1 text-xs font-medium text-neutral-800 rounded-lg border border-neutral-200 bg-neutral-50/80 focus:outline-none focus:ring-2 focus:ring-accent-purple/30 dark:border-border-subtle dark:bg-bg-tertiary dark:text-text-primary shrink-0 min-w-0 max-w-[130px] sm:max-w-none"
+              >
+                <option value="relevance">Relevance</option>
+                <option value="date">Most recent</option>
+                <option value="salary_desc">Salary: high to low</option>
+                <option value="salary_asc">Salary: low to high</option>
+              </select>
+            </label>
+          </div>
+          {loading && !pages.length ? (
+            <JobSkeletons />
+          ) : visible.length ? (
+            <>
+              <div className="space-y-3">
+                {visible.map((job) => (
+                  <JobResultCard
+                    key={job.id}
+                    job={job}
+                    selected={job.id === selectedJobSnapshotId}
+                    careerTrackId={filters.careerTrackId}
+                    onSelect={() => select(job.id)}
+                    onSave={() =>
+                      save.mutate(
+                        job.id,
+                        job.saved,
+                        filters.careerTrackId || undefined,
+                      )
+                    }
+                    saving={save.pending.has(job.id)}
+                  />
+                ))}
+              </div>
+              <Pagination
+                pageCount={pages.length}
+                pageIndex={pageIndex}
+                hasMore={hasMore}
+                busy={refreshing}
+                onSelect={setPageIndex}
+                onNext={() =>
+                  pageIndex < pages.length - 1
+                    ? setPageIndex(pageIndex + 1)
+                    : load(true)
+                }
+              />
+            </>
+          ) : !error && filters.query ? (
+            <div className="rounded-2xl border border-dashed border-neutral-300 p-10 text-center text-sm text-neutral-500 dark:border-border-subtle">
+              No jobs matched these filters. Try broadening the role, location
+              or workplace settings.
+            </div>
+          ) : null}
+        </section>
+
+        <section
+          aria-label="Selected job details"
+          className={`${selectedJobSnapshotId ? "block" : "hidden lg:block"} lg:sticky lg:top-20`}
+        >
+          <JobDetailsPanel
+            // Remount per vacancy so the fetched details and the open detail
+            // tab reset together instead of leaking across selections.
+            key={selectedJobSnapshotId ?? "no-selection"}
+            jobSnapshotId={selectedJobSnapshotId}
+            saved={selected?.saved}
+            onSaved={onSaved}
+            onBack={() => router.back()}
+            onSave={(id, isSaved) =>
+              save.mutate(id, isSaved, filters.careerTrackId || undefined)
+            }
+            saving={
+              selectedJobSnapshotId
+                ? save.pending.has(selectedJobSnapshotId)
+                : false
+            }
+          />
+        </section>
+      </div>
+
+      {filterOpen && (
+        <FilterDialog
+          filters={draft}
+          onChange={setDraft}
+          onClose={() => setFilterOpen(false)}
+          onApply={() => applyFilters(draft)}
+        />
+      )}
+    </BoardFrame>
+  );
+}
+
+export function JobDetailsBoard({ jobSnapshotId }: { jobSnapshotId: string }) {
+  return <DiscoverBoard initialJobSnapshotId={jobSnapshotId} />;
+}
+
+type SavedJobRow = {
+  id: string;
+  savedAt: string;
+  availability: string;
+  job: JobCardViewModel;
+};
+
+export function SavedBoard() {
+  const router = useRouter();
+  const [data, setData] = useState<Page<SavedJobRow> | null>(null);
+  const optimisticallyRemoved = useRef(new Map<string, SavedJobRow>());
+  const [error, setError] = useState<string | null>(null);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const load = useCallback(async (cursor?: string) => {
+    if (cursor) setLoadingMore(true);
+    try {
+      const result = await readJson<NonNullable<typeof data>>(
+        `/api/jobs/saved?limit=20${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ""}`,
+      );
+      setData((current) =>
+        cursor && current
+          ? { ...result, items: [...current.items, ...result.items] }
+          : result,
+      );
+    } catch (caught) {
+      setError(
+        caught instanceof Error ? caught.message : "Unable to load saved jobs.",
+      );
+    } finally {
+      setLoadingMore(false);
+    }
+  }, []);
+  useEffect(() => {
+    queueMicrotask(() => load());
+  }, [load]);
+  const onSaved = useCallback((id: string, saved: boolean) => {
+    setData((current) => {
+      if (!current) return current;
+      if (!saved) {
+        const removed = current.items.find((row) => row.job.id === id);
+        if (removed) optimisticallyRemoved.current.set(id, removed);
+        return {
+          ...current,
+          items: current.items.filter((row) => row.job.id !== id),
+        };
+      }
+      if (current.items.some((row) => row.job.id === id)) return current;
+      const restored = optimisticallyRemoved.current.get(id);
+      if (!restored) return current;
+      optimisticallyRemoved.current.delete(id);
+      return {
+        ...current,
+        items: [
+          { ...restored, job: { ...restored.job, saved: true } },
+          ...current.items,
+        ],
+      };
+    });
+  }, []);
+  const save = useSaveMutation(onSaved);
+  return (
+    <BoardFrame>
+      <div className="mt-4 sm:mt-6 space-y-4">
+        {error && <Notice tone="error">{error}</Notice>}
+        {save.error && <Notice tone="error">{save.error}</Notice>}
+        {!data ? (
+          <JobSkeletons />
+        ) : data.items.length === 0 ? (
+          <div className="rounded-2xl border border-dashed border-neutral-300 p-10 text-center text-neutral-500 dark:border-border-subtle">
+            Save roles you are considering so you can review and analyse them
+            later.
+          </div>
+        ) : (
+          <div className="grid gap-3 lg:grid-cols-2 min-w-0 w-full">
+            {data.items.map((row) => (
+              <div key={row.id}>
+                <JobResultCard
+                  job={row.job}
+                  availability={row.availability}
+                  onSelect={() => router.push(JOB_BOARD_ROUTES.details(row.job.id))}
+                  onSave={() => save.mutate(row.job.id, true)}
+                  saving={save.pending.has(row.job.id)}
+                />
+                <p className="px-1 pt-1 text-xs text-neutral-400 dark:text-text-tertiary">
+                  Saved {dateLabel(row.savedAt)}
+                </p>
+              </div>
+            ))}
+            {data.page.hasMore && data.page.nextCursor && (
+              <button
+                type="button"
+                disabled={loadingMore}
+                onClick={() => load(data.page.nextCursor)}
+                className="min-h-11 rounded-lg border px-4 text-sm font-semibold dark:border-border-subtle"
+              >
+                {loadingMore ? "Loading…" : "Load more saved jobs"}
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+    </BoardFrame>
+  );
+}
+
+export function CompaniesBoard() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const serialized = searchParams.toString();
+  const [data, setData] = useState<Page<CompanyViewModel> | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [search, setSearch] = useState(searchParams.get("search") ?? "");
+  const [provider, setProvider] = useState(searchParams.get("provider") ?? "");
+  const [industry, setIndustry] = useState(searchParams.get("industry") ?? "");
+  const [sponsor, setSponsor] = useState(
+    searchParams.get("sponsorStatus") ?? "",
+  );
+  const [activeOnly, setActiveOnly] = useState(
+    searchParams.get("activeJobsOnly") === "true",
+  );
+  const [sort, setSort] = useState(searchParams.get("sort") ?? "NAME");
+  useEffect(() => {
+    let active = true;
+    const controller = new AbortController();
+    readJson<Page<CompanyViewModel>>(`/api/companies?${serialized}`, {
+      signal: controller.signal,
+    })
+      .then((result) => {
+        if (!active) return;
+        setError(null);
+        setData(result);
+      })
+      .catch((caught) => {
+        if (active && (caught as Error).name !== "AbortError")
+          setError(
+            caught instanceof Error
+              ? caught.message
+              : "Unable to load companies.",
+          );
+      });
+    return () => {
+      active = false;
+      controller.abort();
+    };
+  }, [serialized]);
+  const loadMore = useCallback(
+    async (cursor: string) => {
+      setLoadingMore(true);
+      try {
+        const params = new URLSearchParams(serialized);
+        params.set("cursor", cursor);
+        const result = await readJson<Page<CompanyViewModel>>(
+          `/api/companies?${params}`,
+        );
+        setError(null);
+        setData((current) =>
+          current
+            ? { ...result, items: [...current.items, ...result.items] }
+            : result,
+        );
+      } catch (caught) {
+        setError(
+          caught instanceof Error
+            ? caught.message
+            : "Unable to load companies.",
+        );
+      } finally {
+        setLoadingMore(false);
+      }
+    },
+    [serialized],
+  );
+  const apply = (event: FormEvent) => {
+    event.preventDefault();
+    const params = new URLSearchParams();
+    if (search.trim()) params.set("search", search.trim());
+    if (provider) params.set("provider", provider);
+    if (industry.trim()) params.set("industry", industry.trim());
+    if (sponsor) params.set("sponsorStatus", sponsor);
+    if (activeOnly) params.set("activeJobsOnly", "true");
+    if (sort !== "NAME") params.set("sort", sort);
+    router.push(`${JOB_BOARD_ROUTES.companies}?${params}`);
+  };
+  return (
+    <BoardFrame>
+      <div className="mt-4 sm:mt-6 space-y-4">
+        <form
+        onSubmit={apply}
+        className="rounded-2xl border border-neutral-200 bg-white p-4 dark:border-border-subtle dark:bg-bg-secondary"
+      >
+        <div className="grid gap-3 md:grid-cols-3 xl:grid-cols-6">
+          <label className="text-xs font-semibold text-neutral-700 dark:text-text-secondary">
+            Company
+            <input
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Company name"
+              className="mt-1 h-9 w-full rounded-lg border border-neutral-200 bg-neutral-50 px-2.5 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-accent-purple dark:border-border-subtle dark:bg-bg-tertiary dark:text-text-primary"
+            />
+          </label>
+          <label className="text-xs font-semibold text-neutral-700 dark:text-text-secondary">
+            Provider
+            <select
+              value={provider}
+              onChange={(event) => setProvider(event.target.value)}
+              className="mt-1 h-9 w-full rounded-lg border border-neutral-200 bg-neutral-50 px-2.5 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-accent-purple dark:border-border-subtle dark:bg-bg-tertiary dark:text-text-primary"
+            >
+              <option value="">All providers</option>
+              <option value="GREENHOUSE">Greenhouse</option>
+              <option value="LEVER">Lever</option>
+              <option value="ASHBY">Ashby</option>
+            </select>
+          </label>
+          <label className="text-xs font-semibold text-neutral-700 dark:text-text-secondary">
+            Industry
+            <input
+              value={industry}
+              onChange={(event) => setIndustry(event.target.value)}
+              placeholder="Industry"
+              className="mt-1 h-9 w-full rounded-lg border border-neutral-200 bg-neutral-50 px-2.5 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-accent-purple dark:border-border-subtle dark:bg-bg-tertiary dark:text-text-primary"
+            />
+          </label>
+          <label className="text-xs font-semibold text-neutral-700 dark:text-text-secondary">
+            Sponsor evidence
+            <select
+              value={sponsor}
+              onChange={(event) => setSponsor(event.target.value)}
+              className="mt-1 h-9 w-full rounded-lg border border-neutral-200 bg-neutral-50 px-2.5 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-accent-purple dark:border-border-subtle dark:bg-bg-tertiary dark:text-text-primary"
+            >
+              <option value="">Any</option>
+              <option value="MATCHED">Matched</option>
+              <option value="AMBIGUOUS">Ambiguous</option>
+              <option value="NONE">None</option>
+              <option value="NOT_CHECKED">Not checked</option>
+            </select>
+          </label>
+          <label className="text-xs font-semibold text-neutral-700 dark:text-text-secondary">
+            Sort
+            <select
+              value={sort}
+              onChange={(event) => setSort(event.target.value)}
+              className="mt-1 h-9 w-full rounded-lg border border-neutral-200 bg-neutral-50 px-2.5 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-accent-purple dark:border-border-subtle dark:bg-bg-tertiary dark:text-text-primary"
+            >
+              <option value="NAME">Name</option>
+              <option value="ACTIVE_JOBS">Active vacancies</option>
+              <option value="RECENTLY_REFRESHED">Recently refreshed</option>
+            </select>
+          </label>
+          <div className="flex items-end">
+            <button
+              type="submit"
+              className="h-9 w-full rounded-xl bg-accent-purple px-4 text-xs font-semibold text-white hover:bg-accent-purple/90 transition shadow-sm"
+            >
+              Apply filters
+            </button>
+          </div>
+        </div>
+        <label className="mt-3 inline-flex min-h-11 items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={activeOnly}
+            onChange={(event) => setActiveOnly(event.target.checked)}
+          />
+          Active vacancies only
+        </label>
+      </form>
+      {error && (
+        <div className="mt-4">
+          <Notice tone="error">{error}</Notice>
+        </div>
+      )}
+      {!data ? (
+        <div className="mt-4">
+          <JobSkeletons />
+        </div>
+      ) : data.items.length === 0 ? (
+        // Companies are curated employer records with verified ATS sources, not
+        // a by-product of search results. An empty directory is a real state and
+        // has to say so, or it is indistinguishable from a failed fetch.
+        <div className="mt-4 rounded-2xl border border-dashed border-neutral-300 p-10 text-center dark:border-border-subtle">
+          <p className="text-sm font-semibold text-neutral-700 dark:text-text-primary">
+            {serialized
+              ? "No companies matched these filters."
+              : "No employers have been added to the directory yet."}
+          </p>
+          <p className="mx-auto mt-2 max-w-md text-sm text-neutral-500 dark:text-text-secondary">
+            {serialized
+              ? "Clear the filters to see every verified employer."
+              : "Companies appear here once an employer record exists and at least one of its ATS job sources has been verified."}
+          </p>
+        </div>
+      ) : (
+        <div className="mt-4 grid gap-3 lg:grid-cols-2 xl:grid-cols-3">
+          {data.items.map((company) => (
+            <article
+              key={company.id}
+              className="rounded-2xl border border-neutral-200 bg-white p-5 dark:border-border-subtle dark:bg-bg-secondary"
+            >
+              <h2 className="text-lg font-bold">{company.displayName}</h2>
+              <p className="mt-1 text-sm text-neutral-500 dark:text-text-secondary">
+                {company.industry ?? "Industry not stated"}
+              </p>
+              <div className="mt-3 flex flex-wrap gap-2 text-xs">
+                <span className="rounded-md bg-neutral-100 px-2 py-1 dark:bg-bg-tertiary">
+                  {company.activeJobCount} active vacancies
+                </span>
+                <span className="rounded-md bg-neutral-100 px-2 py-1 dark:bg-bg-tertiary">
+                  {company.verifiedSourceCount} verified sources
+                </span>
+              </div>
+              <SponsorEvidenceLine
+                status={company.sponsorEvidenceSummary.status}
+                className="mt-3"
+              />
+              <p className="mt-3 text-xs text-neutral-400 dark:text-text-tertiary">
+                {company.lastRefreshedAt
+                  ? `Refreshed ${dateLabel(company.lastRefreshedAt)}`
+                  : "Source freshness unavailable"}
+              </p>
+              <Link
+                href={JOB_BOARD_ROUTES.company(company.id)}
+                className="mt-4 inline-flex min-h-11 items-center text-sm font-semibold text-accent-purple"
+              >
+                View company
+              </Link>
+            </article>
+          ))}
+        </div>
+      )}
+      {data && data.page.hasMore && data.page.nextCursor && (
+        <div className="mt-4 flex justify-center">
+          <button
+            type="button"
+            disabled={loadingMore}
+            onClick={() => loadMore(data.page.nextCursor!)}
+            className="min-h-11 rounded-lg border px-4 text-sm font-semibold dark:border-border-subtle"
+          >
+            {loadingMore ? "Loading…" : "Load more companies"}
+          </button>
+        </div>
+      )}
+      </div>
+    </BoardFrame>
+  );
+}
+
+export function CompanyDetailsBoard({
+  companyRecordId,
+}: {
+  companyRecordId: string;
+}) {
+  const router = useRouter();
+  const [data, setData] = useState<{
+    company: CompanyViewModel;
+    sponsorEvidence: { summary: { status: SponsorStatus }; disclaimer: string };
+    sources: Array<{ provider: string; health: string }>;
+  } | null>(null);
+  const [vacancies, setVacancies] = useState<JobCardViewModel[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    let active = true;
+    const controller = new AbortController();
+    Promise.all([
+      readJson<NonNullable<typeof data>>(
+        `/api/companies/${encodeURIComponent(companyRecordId)}`,
+        { signal: controller.signal },
+      ),
+      readJson<Page<JobCardViewModel>>(
+        `/api/companies/${encodeURIComponent(companyRecordId)}/jobs?limit=20`,
+        { signal: controller.signal },
+      ),
+    ])
+      .then(([company, jobs]) => {
+        if (!active) return;
+        setError(null);
+        setData(company);
+        setVacancies(jobs.items);
+      })
+      .catch((caught) => {
+        if (active && (caught as Error).name !== "AbortError")
+          setError(
+            caught instanceof Error
+              ? caught.message
+              : "Unable to load company.",
+          );
+      });
+    return () => {
+      active = false;
+      controller.abort();
+    };
+  }, [companyRecordId]);
+  const onSaved = useCallback(
+    (id: string, saved: boolean) =>
+      setVacancies((current) =>
+        current.map((job) => (job.id === id ? { ...job, saved } : job)),
+      ),
+    [],
+  );
+  const save = useSaveMutation(onSaved);
+  if (error)
+    return (
+      <BoardFrame
+        title="Company"
+        description="Verified employer sources and vacancies."
+      >
+        <Notice tone="error">{error}</Notice>
+      </BoardFrame>
+    );
+  if (!data)
+    return (
+      <BoardFrame
+        title="Company"
+        description="Verified employer sources and vacancies."
+      >
+        <JobSkeletons />
+      </BoardFrame>
+    );
+  return (
+    <BoardFrame
+      title={data.company.displayName}
+      description={data.company.industry ?? "Industry not stated"}
+    >
+      <Link
+        href={JOB_BOARD_ROUTES.companies}
+        className="mb-4 inline-flex min-h-11 items-center gap-1 text-sm font-semibold text-accent-purple"
+      >
+        <ChevronLeft className="h-4 w-4" />
+        Back to companies
+      </Link>
+      <div className="grid gap-5 lg:grid-cols-[minmax(0,1.5fr)_minmax(18rem,.7fr)]">
+        <div>
+          <Card title="Company identity">
+            <div className="flex flex-wrap gap-3 text-sm">
+              {data.company.websiteUrl && (
+                <a
+                  href={data.company.websiteUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex min-h-11 items-center gap-1 text-accent-purple"
+                >
+                  Website <ExternalLink className="h-4 w-4" />
+                </a>
+              )}
+              {data.company.careersUrl && (
+                <a
+                  href={data.company.careersUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex min-h-11 items-center gap-1 text-accent-purple"
+                >
+                  Careers <ExternalLink className="h-4 w-4" />
+                </a>
+              )}
+            </div>
+          </Card>
+          <section className="mt-5">
+            <h2 className="mb-3 text-lg font-bold">
+              Current canonical vacancies
+            </h2>
+            {vacancies.length ? (
+              <div className="space-y-3">
+                {vacancies.map((job) => (
+                  <JobResultCard
+                    key={job.id}
+                    job={job}
+                    onSelect={() => router.push(JOB_BOARD_ROUTES.details(job.id))}
+                    onSave={() => save.mutate(job.id, job.saved)}
+                    saving={save.pending.has(job.id)}
+                  />
+                ))}
+              </div>
+            ) : (
+              <div className="rounded-2xl border border-dashed border-neutral-300 p-8 text-center text-neutral-500 dark:border-border-subtle">
+                This company has verified job sources, but no usable current
+                vacancies were found.
+              </div>
+            )}
+          </section>
+        </div>
+        <aside className="space-y-4">
+          <Card title="Sponsor-register evidence">
+            <SponsorEvidenceLine status={data.sponsorEvidence.summary.status} />
+            <p className="mt-3 text-xs text-neutral-500 dark:text-text-tertiary">
+              {data.sponsorEvidence.disclaimer}
+            </p>
+          </Card>
+          <Card title="Source health">
+            <div className="space-y-2 text-sm">
+              {data.sources.map((source) => (
+                <p key={source.provider}>
+                  {humanise(source.provider)}
+                  {" — "}
+                  {sourceHealthLabels[source.health] ??
+                    "Temporarily unavailable"}
+                </p>
+              ))}
+            </div>
+          </Card>
+        </aside>
+      </div>
+    </BoardFrame>
+  );
+}

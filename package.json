@@ -38,7 +38,9 @@
     "employers:report": "node --env-file=.env.local --experimental-strip-types --no-warnings scripts/employers-report.mts",
     "employers:fetch:greenhouse": "npx tsx --env-file=.env.local scripts/employers-fetch-greenhouse.mts",
     "employers:fetch:lever": "npx tsx --env-file=.env.local scripts/employers-fetch-lever.mts",
-    "employers:fetch:ashby": "npx tsx --env-file=.env.local scripts/employers-fetch-ashby.mts"
+    "employers:fetch:ashby": "npx tsx --env-file=.env.local scripts/employers-fetch-ashby.mts",
+    "jobs:reassess-descriptions": "node --env-file=.env.local --experimental-strip-types --no-warnings --import ./scripts/register-alias.mts scripts/jobs-reassess-descriptions.mts",
+    "jobs:audit-locations": "node --env-file=.env.local --experimental-strip-types --no-warnings --import ./scripts/register-alias.mts scripts/jobs-audit-locations.mts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1089.0",

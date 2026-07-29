@@ -63,6 +63,10 @@ export interface NormalisedJob {
   source: JobProvider; sourceJobId: string; providerReferences: ProviderReference[];
   canonicalUrl: string; title: string; company: string; companyNormalised?: string;
   locationText: string; city?: string; region?: string; country?: string;
+  /** ISO-3166 alpha-2 established by the deterministic UK classifier, not by the provider. */
+  countryCode?: string;
+  /** Deterministic UK-scope verdict. Absent means the job has not been assessed yet. */
+  ukEligibility?: 'CONFIRMED_UK' | 'LIKELY_UK' | 'NOT_UK' | 'UNKNOWN';
   description?: string; descriptionAvailability: JobDescriptionAvailability;
   salaryMin?: number; salaryMax?: number; salaryPeriod?: JobSalaryPeriod; currency?: 'GBP'; salaryText?: string;
   employmentType?: string; contractType?: string; remoteType: JobRemoteType;

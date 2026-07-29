@@ -43,6 +43,26 @@ export interface JobSearchSession {
   exhaustedProviders: SearchJobProvider[];
   seenCanonicalJobIds: string[];
 
+  /**
+   * Canonical job ids in DISPLAY ORDER, including ones not yet shown.
+   *
+   * This is the change that makes a second page fast. Previously a session held
+   * only provider cursors and seen-ids, so "Load more" re-ran the ENTIRE
+   * pipeline — three provider fan-outs, the whole employer-ATS catalogue query,
+   * dedupe over the lot, sponsor matching, filtering and sorting — purely to
+   * throw away the first page's worth and return the next slice. Page two cost
+   * strictly more than page one, which is the reverse of what a user expects.
+   *
+   * One search pass now fetches a buffer of ordered results; the ids live here
+   * and the payloads live under `cacheKeys.searchBuffer(id)`. Page two is a
+   * slice. A provider is only asked for another page once the buffer runs out.
+   */
+  orderedCanonicalJobIds: string[];
+  /** How many of `orderedCanonicalJobIds` have been served. The slice offset. */
+  servedCount: number;
+  /** How many pages this session has answered. Counts buffered pages too. */
+  pagesServed: number;
+
   createdAt: string;
   updatedAt: string;
 
@@ -79,6 +99,9 @@ export function newSession(queryHash: string, userId: string | null): JobSearchS
     providerPages: {},
     exhaustedProviders: [],
     seenCanonicalJobIds: [],
+    orderedCanonicalJobIds: [],
+    servedCount: 0,
+    pagesServed: 0,
     createdAt: now,
     updatedAt: now,
     ownerHash: userId ? hashToken(userId) : null,
@@ -90,7 +113,35 @@ export async function loadSession(store: CacheStore, sessionId: string): Promise
   // A value that is not a well-formed session (older schema, partial write) is
   // treated as absent. The caller then starts a fresh search, which is correct.
   if (!stored || typeof stored.queryHash !== 'string' || !Array.isArray(stored.seenCanonicalJobIds)) return null;
-  return stored;
+  // The buffer fields are newer than the rest of the shape. A value written
+  // before them is still a valid session — it just has no buffer to slice, so it
+  // degrades to a provider continuation rather than being discarded.
+  return {
+    ...stored,
+    orderedCanonicalJobIds: Array.isArray(stored.orderedCanonicalJobIds) ? stored.orderedCanonicalJobIds : [],
+    servedCount: typeof stored.servedCount === 'number' ? stored.servedCount : stored.seenCanonicalJobIds.length,
+    pagesServed: typeof stored.pagesServed === 'number' ? stored.pagesServed : Math.max(...Object.values(stored.providerPages ?? {}).map((page) => page ?? 0), 0),
+  };
+}
+
+/**
+ * The ordered result buffer backing a session, stored apart from the session.
+ *
+ * Kept separate because the two have very different sizes and read patterns: the
+ * session is small and read on every request, while the buffer is a page or two
+ * of full job payloads and is read only when a continuation is actually served.
+ */
+export async function saveSessionBuffer(
+  store: CacheStore,
+  sessionId: string,
+  jobs: readonly unknown[]
+): Promise<void> {
+  await store.set(cacheKeys.searchBuffer(sessionId), jobs, CACHE_TTL_SECONDS.searchSession);
+}
+
+export async function loadSessionBuffer<T>(store: CacheStore, sessionId: string): Promise<T[] | null> {
+  const stored = await store.get<T[]>(cacheKeys.searchBuffer(sessionId));
+  return Array.isArray(stored) ? stored : null;
 }
 
 export async function saveSession(store: CacheStore, session: JobSearchSession): Promise<void> {
@@ -173,19 +224,41 @@ export function recordPage(
     pages: Partial<Record<SearchJobProvider, number>>;
     exhausted: readonly SearchJobProvider[];
     shownCanonicalJobIds: readonly string[];
+    /** The full ordered buffer this pass produced, shown and unshown alike. */
+    orderedCanonicalJobIds?: readonly string[];
   }
 ): JobSearchSession {
   const seen = [...session.seenCanonicalJobIds, ...outcome.shownCanonicalJobIds];
+  // Buffered ids extend the ordered list; nothing already ordered is reordered,
+  // because a user must never see page one's results shuffled into page two.
+  const ordered = outcome.orderedCanonicalJobIds
+    ? [...new Set([...session.orderedCanonicalJobIds, ...outcome.orderedCanonicalJobIds])]
+    : session.orderedCanonicalJobIds;
   return {
     ...session,
     providerPages: { ...session.providerPages, ...outcome.pages },
     exhaustedProviders: [...new Set([...session.exhaustedProviders, ...outcome.exhausted])],
     seenCanonicalJobIds: [...new Set(seen)].slice(-MAX_SEEN_IDS),
+    orderedCanonicalJobIds: ordered,
+    servedCount: session.servedCount + outcome.shownCanonicalJobIds.length,
+    pagesServed: session.pagesServed + 1,
     updatedAt: new Date().toISOString(),
   };
 }
 
-/** How many pages this session has served. 1-based, for response metadata. */
+/** Unserved buffered ids, in display order. Empty means a continuation is needed. */
+export function bufferedRemainder(session: JobSearchSession): string[] {
+  return session.orderedCanonicalJobIds.slice(session.servedCount);
+}
+
+/**
+ * How many pages this session has served. 1-based, for response metadata.
+ *
+ * Counted from pages actually ANSWERED, not from the highest provider page
+ * requested. Those used to be the same number only because every page cost a
+ * provider fan-out; a page served from the session buffer requests nothing from
+ * any provider, so the old derivation reported every buffered page as page one.
+ */
 export function servedPageCount(session: JobSearchSession): number {
-  return Math.max(1, ...Object.values(session.providerPages).map((page) => page ?? 0));
+  return Math.max(1, session.pagesServed);
 }

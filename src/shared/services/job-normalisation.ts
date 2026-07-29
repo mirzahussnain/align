@@ -1,8 +1,10 @@
 import { createHash } from 'node:crypto';
-import { getProviderCapabilities } from '@/shared/services/job-providers/capabilities';
+import {
+  classifyDescriptionAvailability,
+  readableDescriptionText,
+} from '@/shared/services/job-description-completeness';
 import type {
   EligibilityHint,
-  JobDescriptionAvailability,
   JobProvider,
   JobRemoteType,
   JobSalaryPeriod,
@@ -80,28 +82,19 @@ export function extractEligibilityHints(description: string, remoteType: JobRemo
 }
 
 /**
- * How complete a provider's description is, derived from that provider's
- * DECLARED contract rather than from its name.
+ * How complete a provider's description is.
  *
- * This used to read `source === 'JOOBLE' || isTruncated ? 'PARTIAL' : 'FULL'`.
- * The outcome for Jooble is the same Ã¢â‚¬â€ its field is literally named `snippet`,
- * so a teaser is what the integration is contractually promised and no Jooble
- * record can honestly be called FULL Ã¢â‚¬â€ but the reason is now a declared,
- * testable capability instead of a hardcoded provider name, and adding a
- * provider no longer means remembering to edit this expression.
+ * The rules live in `assessDescriptionCompleteness`, which combines the
+ * provider's DECLARED contract with per-record truncation evidence (ellipsis
+ * variants, read-more markers, mid-sentence cut-off, teaser length) and is
+ * shared with the Phase 6 read-time assessment, so a card badge, a Description
+ * tab and a match-preparation gate cannot disagree about the same text.
  *
- * This is a coarse ceiling, not the full classifier: richer per-record signals
- * (ellipsis variants, sentence completeness, length, truncation markers) are a
- * later phase. Defaults stay conservative Ã¢â‚¬â€ an unestablished contract is treated
- * as partial, because over-claiming completeness is what produces a confident
- * analysis of half an advert.
+ * The expression that used to live here tested nothing but a literal trailing
+ * `...` and demoted only SNIPPET/UNKNOWN contracts, so Adzuna and Reed records
+ * were persisted FULL despite both providers declaring PARTIAL semantics.
  */
-export function classifyDescriptionAvailability(provider: JobProvider, description: string): JobDescriptionAvailability {
-  if (!description) return 'EXTERNAL_ONLY';
-  const semantics = getProviderCapabilities(provider).descriptionSemantics;
-  if (semantics === 'SNIPPET' || semantics === 'UNKNOWN') return 'PARTIAL';
-  return /\.\.\.$/.test(description) ? 'PARTIAL' : 'FULL';
-}
+export { classifyDescriptionAvailability } from '@/shared/services/job-description-completeness';
 
 export function blankSponsorSignal(): SponsorSignal {
   return { registerMatchStatus: 'NONE', jobWording: 'NOT_MENTIONED', explanation: 'The employer was not matched to the sponsor register. This is not a sponsorship decision for this vacancy.' };
@@ -109,7 +102,11 @@ export function blankSponsorSignal(): SponsorSignal {
 
 export function normaliseProviderJob(raw: ProviderJob): NormalisedJob {
   const source = raw.source.toUpperCase() as JobProvider;
-  const description = clean(raw.description);
+  // Providers return HTML. `clean` collapsed it to one line, which destroyed both
+  // the paragraph structure the details view renders and the line-level evidence
+  // the completeness classifier needs, so the readable-text conversion is done
+  // here once and the readable form is what is stored and assessed.
+  const description = readableDescriptionText(raw.description).text;
   const location = normaliseLocation(raw.location);
   const salary = parseSalary(raw.salary, raw.salaryMin, raw.salaryMax);
   const extractedWording = wording(description);

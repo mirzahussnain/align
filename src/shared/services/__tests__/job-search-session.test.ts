@@ -4,6 +4,7 @@ import { MemoryCacheStore } from '@/shared/lib/cache/memory-cache-store';
 import { CACHE_TTL_SECONDS } from '@/shared/lib/cache/cache-keys';
 import {
   activeProviders,
+  bufferedRemainder,
   newSession,
   nextProviderPages,
   recordPage,
@@ -160,9 +161,48 @@ describe('load more does not replay page one', () => {
     expect(session.seenCanonicalJobIds).toContain('page-60-job-0');
   });
 
-  it('reports the page count actually served', () => {
-    const session = recordPage(newSession(HASH, null), { pages: { ADZUNA: 3, REED: 2 }, exhausted: [], shownCanonicalJobIds: [] });
-    expect(servedPageCount(session)).toBe(3);
+  it('reports the page count actually served, not the highest provider page requested', () => {
+    // These used to be the same number only because every page cost a provider
+    // fan-out. A page served from the session buffer requests nothing from any
+    // provider, so deriving the count from provider cursors reported every
+    // buffered page as page one.
+    const first = recordPage(newSession(HASH, null), { pages: { ADZUNA: 3, REED: 2 }, exhausted: [], shownCanonicalJobIds: ['job-1'] });
+    expect(servedPageCount(first)).toBe(1);
+
+    // A buffered continuation asks no provider for anything and is still page two.
+    const second = recordPage(first, { pages: {}, exhausted: [], shownCanonicalJobIds: ['job-2'] });
+    expect(servedPageCount(second)).toBe(2);
+  });
+
+  it('slices the ordered buffer at the number of results already served', () => {
+    const seeded = recordPage(newSession(HASH, null), {
+      pages: { REED: 1 },
+      exhausted: [],
+      shownCanonicalJobIds: ['job-1', 'job-2'],
+      orderedCanonicalJobIds: ['job-1', 'job-2', 'job-3', 'job-4'],
+    });
+    // Two shown, two held back for the next page — no provider call needed.
+    expect(bufferedRemainder(seeded)).toEqual(['job-3', 'job-4']);
+
+    const continued = recordPage(seeded, { pages: {}, exhausted: [], shownCanonicalJobIds: ['job-3', 'job-4'] });
+    expect(bufferedRemainder(continued)).toEqual([]);
+  });
+
+  it('appends a provider continuation to the buffer without reordering what was shown', () => {
+    const first = recordPage(newSession(HASH, null), {
+      pages: { REED: 1 },
+      exhausted: [],
+      shownCanonicalJobIds: ['job-1'],
+      orderedCanonicalJobIds: ['job-1', 'job-2'],
+    });
+    const second = recordPage(first, {
+      pages: { REED: 2 },
+      exhausted: [],
+      shownCanonicalJobIds: ['job-2'],
+      orderedCanonicalJobIds: ['job-3', 'job-4'],
+    });
+    // Order already presented to the user is never rewritten underneath them.
+    expect(second.orderedCanonicalJobIds).toEqual(['job-1', 'job-2', 'job-3', 'job-4']);
   });
 });
 

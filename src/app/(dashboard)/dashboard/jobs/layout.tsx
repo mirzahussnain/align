@@ -1,0 +1,39 @@
+import { headers } from "next/headers";
+import { redirect } from "next/navigation";
+import JobBoardDashboardShell from "@/features/job-board/components/JobBoardDashboardShell";
+import { listProfiles } from "@/features/dashboard/data/load-profile";
+import { getEntitlementSnapshot } from "@/shared/entitlements/server";
+import { auth } from "@/shared/lib/auth";
+
+export default async function JobBoardLayout({
+  children,
+}: Readonly<{ children: React.ReactNode }>) {
+  const session = await auth.api.getSession({ headers: await headers() });
+  if (!session) redirect("/login");
+
+  const [profiles, entitlement] = await Promise.all([
+    listProfiles(session.user.id),
+    getEntitlementSnapshot(session.user.id),
+  ]);
+  const activeProfile =
+    profiles.find((profile) => profile.isDefault) ?? profiles[0];
+
+  return (
+    <JobBoardDashboardShell
+      user={{
+        name: session.user.name,
+        email: session.user.email,
+        image: session.user.image,
+      }}
+      tier={entitlement.plan.toLowerCase()}
+      entitlementSnapshot={entitlement}
+      profiles={profiles}
+      activeProfileId={activeProfile?.id ?? ""}
+      maxProfiles={
+        entitlement.capabilities.additional_career_profiles.limit ?? 1
+      }
+    >
+      {children}
+    </JobBoardDashboardShell>
+  );
+}
