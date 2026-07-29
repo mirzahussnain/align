@@ -48,6 +48,8 @@ import {
   type SponsorStatus,
 } from "@/features/job-board/lib/job-board";
 import { CheckMatchModal } from "@/features/job-board/components/CheckMatchModal";
+import { FormattedJobDescription } from "@/shared/components/ui/FormattedJobDescription";
+import { JobLoader } from "@/shared/components/ui/JobLoader";
 
 const DETAIL_TABS = [
   "Overview",
@@ -170,32 +172,7 @@ export function DescriptionBody({
 }: {
   description: JobDetailsViewModel["description"];
 }) {
-  const blocks = description.text?.split(/\n\s*\n/).filter(Boolean) ?? [];
-  if (!blocks.length)
-    return (
-      <p className="text-sm text-neutral-500 dark:text-text-tertiary">
-        No durable description is stored for this vacancy. Open the source
-        advert for the complete text.
-      </p>
-    );
-  return (
-    <div className="space-y-4 text-sm leading-7 text-neutral-700 dark:text-text-secondary">
-      {blocks.map((block, index) => {
-        const lines = block.split("\n").filter(Boolean);
-        return lines.every((line) => /^\s*[-*•]\s+/.test(line)) ? (
-          <ul key={index} className="list-disc space-y-1 pl-5">
-            {lines.map((line, lineIndex) => (
-              <li key={lineIndex}>{line.replace(/^\s*[-*•]\s+/, "")}</li>
-            ))}
-          </ul>
-        ) : (
-          <p key={index} className="whitespace-pre-wrap">
-            {block}
-          </p>
-        );
-      })}
-    </div>
-  );
+  return <FormattedJobDescription text={description.text} />;
 }
 
 function MatchPreparationPanel({
@@ -957,10 +934,13 @@ export function JobDetailsPanel({
     );
   if (!data)
     return (
-      <div
-        className="h-[36rem] animate-pulse rounded-2xl bg-neutral-200/70 dark:bg-bg-tertiary"
-        aria-label="Loading job details"
-      />
+      <div className="rounded-2xl border border-neutral-200 bg-white p-4 dark:border-border-subtle dark:bg-bg-secondary">
+        {backButton}
+        <JobLoader
+          message="Your Jobs are on the way"
+          subMessage="Loading vacancy details..."
+        />
+      </div>
     );
 
   const isSaved = saved ?? data.job.saved;
