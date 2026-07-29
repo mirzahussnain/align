@@ -35,6 +35,7 @@ const HEADLINES: Partial<Record<ProductCapability, string>> = {
   view_full_ats_report: 'Unlock the full ATS report',
   view_full_job_match_report: 'Unlock the full requirement report',
   view_requirement_ledger: 'Unlock the full requirement report',
+  job_match_analysis: 'Unlock AI Job Match Analysis',
   cv_regeneration: 'Generate a truthful tailored CV',
   human_evidence_capture: 'Add and reuse verified Career Profile evidence',
   approve_evidence_for_application: 'Approve more evidence for this application',

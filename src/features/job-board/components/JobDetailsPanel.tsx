@@ -50,6 +50,7 @@ import {
 import { CheckMatchModal } from "@/features/job-board/components/CheckMatchModal";
 import { FormattedJobDescription } from "@/shared/components/ui/FormattedJobDescription";
 import { JobLoader } from "@/shared/components/ui/JobLoader";
+import { useEntitlements } from "@/shared/components/entitlements/EntitlementProvider";
 
 const DETAIL_TABS = [
   "Overview",
@@ -522,32 +523,26 @@ function OverviewTab({
         </div>
       </dl>
 
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,1.55fr)_minmax(0,.95fr)]">
+      <div className="space-y-4">
         <Card title="About the role">
           <div className="rounded-xl border border-neutral-100 bg-neutral-50/80 p-4 dark:border-border-subtle dark:bg-bg-tertiary/40">
-            {expanded ? (
-              <DescriptionBody description={data.description} />
-            ) : intro ? (
-              <p className="line-clamp-6 text-sm leading-6 text-neutral-700 dark:text-text-secondary">
-                {intro}
-              </p>
+            {data.description.text ? (
+              <div className={expanded ? "" : "max-h-72 overflow-hidden relative"}>
+                <FormattedJobDescription text={data.description.text} />
+                {!expanded && bullets?.length && !data.description.text.toLowerCase().includes("key responsibilities") ? (
+                  <h4 className="mt-3 text-sm font-bold text-neutral-900 dark:text-text-primary">
+                    Key responsibilities
+                  </h4>
+                ) : null}
+                {!expanded && (
+                  <div className="absolute bottom-0 inset-x-0 h-16 bg-gradient-to-t from-neutral-50 to-transparent pointer-events-none dark:from-bg-tertiary" />
+                )}
+              </div>
             ) : (
               <p className="text-sm text-neutral-500 dark:text-text-tertiary">
                 No durable description is stored for this vacancy.
               </p>
             )}
-            {!expanded && bullets?.length ? (
-              <>
-                <h4 className="mt-4 text-sm font-bold text-neutral-900 dark:text-text-primary">
-                  Key responsibilities
-                </h4>
-                <ul className="mt-2 list-disc space-y-1 pl-5 text-sm leading-6 text-neutral-700 dark:text-text-secondary">
-                  {bullets.slice(0, 6).map((line, index) => (
-                    <li key={index}>{line}</li>
-                  ))}
-                </ul>
-              </>
-            ) : null}
             {/*
               The expand toggle and the external link are different actions and
               are no longer conflated. The toggle expands text we HOLD; the link
@@ -832,6 +827,8 @@ export function JobDetailsPanel({
   const [requestedTab, setTab] = useState<DetailTab>("Overview");
   const [matchModalOpen, setMatchModalOpen] = useState(false);
   const tabsRef = useRef<HTMLDivElement>(null);
+  const { decisionFor, openUpgrade } = useEntitlements();
+  const jobMatchDecision = decisionFor('job_match_analysis');
 
   useEffect(() => {
     if (!jobSnapshotId) return;
@@ -934,7 +931,7 @@ export function JobDetailsPanel({
     );
   if (!data)
     return (
-      <div className="rounded-2xl border border-neutral-200 bg-white p-4 dark:border-border-subtle dark:bg-bg-secondary">
+      <div className="rounded-2xl border border-neutral-200 bg-white p-4 dark:border-border-subtle dark:bg-bg-secondary transition-all duration-300 animate-in fade-in opacity-100">
         {backButton}
         <JobLoader
           message="Your Jobs are on the way"
@@ -992,7 +989,7 @@ export function JobDetailsPanel({
   };
 
   return (
-    <>
+    <div className="transition-all duration-300 animate-in fade-in slide-in-from-bottom-2">
       <div className="space-y-4">
         {backButton}
 
@@ -1051,7 +1048,17 @@ export function JobDetailsPanel({
             </button>
             <button
               type="button"
-              onClick={() => setMatchModalOpen(true)}
+              onClick={() => {
+                if (!jobMatchDecision.allowed) {
+                  openUpgrade({
+                    capability: 'job_match_analysis',
+                    decision: jobMatchDecision,
+                    source: 'analysis',
+                  });
+                  return;
+                }
+                setMatchModalOpen(true);
+              }}
               className="h-10 px-5 bg-sky-50 border border-sky-200/80 text-sky-700 text-xs font-semibold rounded-xl flex items-center justify-center gap-2 hover:bg-sky-100 transition dark:border-sky-800/40 dark:bg-sky-950/40 dark:text-sky-300 whitespace-nowrap"
             >
               <Sparkles className="h-3.5 w-3.5 text-sky-500 shrink-0" />
@@ -1101,24 +1108,32 @@ export function JobDetailsPanel({
         </article>
       </div>
 
-      <CheckMatchModal
-        open={matchModalOpen}
-        onClose={() => setMatchModalOpen(false)}
-        jobId={data.job.id}
-        jobTitle={data.job.title}
-        companyName={data.job.company.displayName}
-        descriptionCompleteness={data.description.completeness}
-        // The PROVIDER's text, so the modal can show it as the partial excerpt
-        // and refuse a paste that is merely the same teaser returned.
-        providerDescription={data.providerDescription}
-        // A saved paste changes the active description, its hash and the
-        // intelligence derived from it, so the panel refetches rather than
-        // continuing to render a stale completeness verdict.
-        onDescriptionSaved={() => setRetry((value) => value + 1)}
-        availableCareerTracks={data.availableCareerTracks}
-        hostedUrl={data.hostedUrl}
-        applicationUrl={data.applicationUrl}
-      />
-    </>
+      {/*
+        MOUNTED only while open. The modal documents that every opening starts
+        from fresh state — that only holds if the element is unmounted in
+        between, otherwise a closed wizard keeps its old step, its CV choice and
+        (now) a finished analysis, and shows them again on the next opening.
+      */}
+      {matchModalOpen && (
+        <CheckMatchModal
+          open={matchModalOpen}
+          onClose={() => setMatchModalOpen(false)}
+          jobId={data.job.id}
+          jobTitle={data.job.title}
+          companyName={data.job.company.displayName}
+          descriptionCompleteness={data.description.completeness}
+          // The PROVIDER's text, so the modal can show it as the partial excerpt
+          // and refuse a paste that is merely the same teaser returned.
+          providerDescription={data.providerDescription}
+          // A saved paste changes the active description, its hash and the
+          // intelligence derived from it, so the panel refetches rather than
+          // continuing to render a stale completeness verdict.
+          onDescriptionSaved={() => setRetry((value) => value + 1)}
+          availableCareerTracks={data.availableCareerTracks}
+          hostedUrl={data.hostedUrl}
+          applicationUrl={data.applicationUrl}
+        />
+      )}
+    </div>
   );
 }

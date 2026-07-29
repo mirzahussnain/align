@@ -132,7 +132,7 @@ export const PLAN_ENTITLEMENTS = {
   FREE: {
     ats_analysis: enabled(),
     ai_enhanced_ats_analysis: quota(1),
-    job_match_analysis: quota(2),
+    job_match_analysis: disabled('Job match analysis is not available on the Free plan.'),
     view_full_ats_report: partial('summary'),
     view_full_job_match_report: partial('preview'),
     view_requirement_ledger: partial('limited'),
