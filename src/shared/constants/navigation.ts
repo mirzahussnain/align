@@ -23,6 +23,19 @@ export const MARKETING_NAV_LINKS = [
     description: 'Plans for every stage of the search',
   },
   {
+    label: 'Analyze',
+    href: '/analyze',
+    description: 'Get clear, practical feedback on your CV',
+  },
+] as const;
+
+export const MARKETING_NAV_RESOURCES = [
+  {
+    label: 'Immigration',
+    href: '/immigration',
+    description: 'Visa sponsors and immigration guidance',
+  },
+  {
     label: 'Insights',
     href: '/trends',
     description: 'UK tech market salary and demand data',

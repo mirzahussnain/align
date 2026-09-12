@@ -2,15 +2,16 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { FileSearch, Menu, X, ArrowRight } from 'lucide-react';
+import { ChevronDown, Menu, X, ArrowRight } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { cn } from '@/shared/utils/cn';
-import { MARKETING_NAV_LINKS } from '@/shared/constants/navigation';
+import { MARKETING_NAV_LINKS, MARKETING_NAV_RESOURCES } from '@/shared/constants/navigation';
 import { authClient } from '@/shared/lib/auth-client';
 
 export default function Navbar() {
   const pathname = usePathname();
   const [isMobileOpen, setIsMobileOpen] = useState(false);
+  const [isResourcesOpen, setIsResourcesOpen] = useState(false);
   // Initialised lazily so no effect needs to set state on mount; off-home
   // pages force the solid style by derivation rather than by setState.
   const [scrolledPastTop, setScrolledPastTop] = useState(false);
@@ -25,6 +26,7 @@ export default function Navbar() {
   // The navbar is always solid off the home page; only the home page needs to
   // track scroll position for the transparent-at-top treatment.
   const isScrolled = pathname !== '/' || scrolledPastTop;
+  const isResourcesActive = MARKETING_NAV_RESOURCES.some(({ href }) => isLinkActive(href));
 
   useEffect(() => {
     if (pathname !== '/') return;
@@ -103,6 +105,15 @@ export default function Navbar() {
                 </Link>
               );
             })}
+            <div className="relative" onMouseEnter={() => setIsResourcesOpen(true)} onMouseLeave={() => setIsResourcesOpen(false)}>
+              <button type="button" aria-expanded={isResourcesOpen} aria-haspopup="menu" onClick={() => setIsResourcesOpen((open) => !open)} className={cn('flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs transition-all duration-300', isResourcesActive ? (isScrolled ? 'bg-neutral-950 text-white font-bold shadow-sm' : 'bg-white text-neutral-950 font-bold shadow-md') : (isScrolled ? 'text-neutral-600 hover:text-neutral-900 hover:bg-neutral-950/5' : 'text-white/80 hover:text-white hover:bg-white/5'))}>
+                {isResourcesActive && <span className={cn('w-1.5 h-1.5 rounded-full animate-pulse', isScrolled ? 'bg-white' : 'bg-neutral-950')} />}
+                <span>Resources</span><ChevronDown size={14} className={cn('transition-transform duration-200', isResourcesOpen && 'rotate-180')} aria-hidden="true" />
+              </button>
+              {isResourcesOpen && <div className="absolute right-0 top-full w-60 pt-2"><div role="menu" className="rounded-2xl border border-neutral-200/70 bg-white p-1.5 shadow-xl shadow-neutral-950/10">
+                {MARKETING_NAV_RESOURCES.map((item) => { const isActive = isLinkActive(item.href); return <Link key={item.href} href={item.href} role="menuitem" onClick={() => setIsResourcesOpen(false)} className={cn('block rounded-xl px-3 py-2.5 transition-colors', isActive ? 'bg-neutral-950 text-white' : 'text-neutral-700 hover:bg-neutral-950/5 hover:text-neutral-950')}><span className="block text-xs font-semibold">{item.label}</span><span className={cn('mt-0.5 block text-[11px] leading-4', isActive ? 'text-white/70' : 'text-neutral-500')}>{item.description}</span></Link>; })}
+              </div></div>}
+            </div>
           </div>
 
           {/* Desktop Actions */}
@@ -207,6 +218,10 @@ export default function Navbar() {
                 </Link>
               );
             })}
+            <div className={cn('mt-2 border-t pt-3', isScrolled ? 'border-neutral-950/5' : 'border-white/10')}>
+              <p className={cn('px-4 pb-1 text-[11px] font-semibold uppercase tracking-wider', isScrolled ? 'text-neutral-500' : 'text-white/60')}>Resources</p>
+              {MARKETING_NAV_RESOURCES.map((item) => { const isActive = isLinkActive(item.href); return <Link key={item.href} href={item.href} onClick={() => setIsMobileOpen(false)} className={cn('flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200', isActive ? (isScrolled ? 'text-accent-purple bg-neutral-950/5' : 'text-accent-cyan bg-white/5') : (isScrolled ? 'text-neutral-600 hover:text-neutral-900 hover:bg-neutral-950/5' : 'text-white/70 hover:text-white hover:bg-white/5'))}>{isActive && <span className={cn('w-1.5 h-1.5 rounded-full', isScrolled ? 'bg-accent-purple' : 'bg-accent-cyan')} />}<span>{item.label}</span></Link>; })}
+            </div>
             <div className={cn(
               "pt-4 mt-2 border-t flex flex-col gap-2",
               isScrolled ? "border-neutral-950/5" : "border-white/5"
