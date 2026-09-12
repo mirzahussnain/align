@@ -48,3 +48,10 @@ next-env.d.ts
 # Stage 4 artifacts.
 /artifacts/golden-cvs/
 /artifacts/stage4-browser/
+# Local design, editor and inspection artifacts
+/.impeccable/
+/.vscode/
+/analyze.html
+/scratch-count.cjs
+/artifacts/onboarding-reference/
+/artifacts/*.log
