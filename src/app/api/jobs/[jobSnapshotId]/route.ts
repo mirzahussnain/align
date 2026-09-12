@@ -17,13 +17,13 @@ import { APIError, withErrorHandler } from '@/shared/utils/api-error';
 export async function GET(request: NextRequest, context: RouteContext<'/api/jobs/[jobSnapshotId]'>) {
   return withErrorHandler(async () => {
     const session = await auth.api.getSession({ headers: request.headers });
-    if (!session) throw new APIError('Please sign in to view this vacancy.', 401, undefined, 'UNAUTHENTICATED');
+    const userId = session?.user?.id;
     const { jobSnapshotId } = await context.params;
     const requestedProfileId = new URL(request.url).searchParams.get('profileId') ?? undefined;
-    const profileId = await resolveProfileId(session.user.id, requestedProfileId);
+    const profileId = userId ? await resolveProfileId(userId, requestedProfileId) : undefined;
     const [details, careerTracks] = await Promise.all([
-      getJobDetailsView(jobSnapshotId, session.user.id, profileId ? { profileId } : {}),
-      listProfileTargets(session.user.id),
+      getJobDetailsView(jobSnapshotId, userId ?? '', profileId ? { profileId } : {}),
+      userId ? listProfileTargets(userId) : Promise.resolve([]),
     ]);
     if (!details) throw new APIError('Vacancy not found.', 404, undefined, 'NOT_FOUND');
     return NextResponse.json({

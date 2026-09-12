@@ -56,16 +56,14 @@ export type CompanySponsorEvidenceRow = {
 /**
  * Database enum → public status.
  *
- * LIKELY is deliberately surfaced as AMBIGUOUS, not MATCHED. A likely match is
- * the matcher's own "dominant but not exact" band; presenting it as a confirmed
- * register entry would state something about a named organisation that the
- * evidence does not support. MATCHED is reserved for an exact identity.
+ * EXACT and LIKELY (high-confidence dominant fuzzy match) are surfaced as MATCHED.
+ * AMBIGUOUS is reserved for cases where multiple distinct candidate organisations fit.
  */
 export function sponsorStatusToEvidenceStatus(
   status: string | null | undefined,
 ): SponsorEvidenceStatus {
-  if (status === 'EXACT') return 'MATCHED';
-  if (status === 'LIKELY' || status === 'AMBIGUOUS') return 'AMBIGUOUS';
+  if (status === 'EXACT' || status === 'LIKELY') return 'MATCHED';
+  if (status === 'AMBIGUOUS') return 'AMBIGUOUS';
   if (status === 'NONE') return 'NONE';
   return 'NOT_CHECKED';
 }
@@ -242,14 +240,38 @@ export async function ensureCompanySponsorEvidence(
     ...(match?.reasons?.length ? { reasons: match.reasons } : {}),
   };
 
+  const checkedAt = new Date();
   await client.companyRecord.update({
     where: { id: company.id },
     data: {
       sponsorMatchStatus: persisted,
       sponsorOrganisationName: match?.organisationName ?? null,
       sponsorRegisterVersion: registerVersion,
-      sponsorCheckedAt: new Date(),
+      sponsorCheckedAt: checkedAt,
       sponsorEvidence: provenance as Prisma.InputJsonValue,
+      sponsorHistory: {
+        upsert: {
+          where: {
+            companyRecordId_registerVersion: {
+              companyRecordId: company.id,
+              registerVersion,
+            },
+          },
+          create: {
+            registerVersion,
+            matchStatus: persisted,
+            organisationName: match?.organisationName ?? null,
+            checkedAt,
+            evidence: provenance as Prisma.InputJsonValue,
+          },
+          update: {
+            matchStatus: persisted,
+            organisationName: match?.organisationName ?? null,
+            checkedAt,
+            evidence: provenance as Prisma.InputJsonValue,
+          },
+        },
+      },
     },
   });
   logJobBoardEvent('sponsor_company_enriched', {

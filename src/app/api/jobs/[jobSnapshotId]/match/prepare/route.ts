@@ -23,6 +23,7 @@ export async function POST(request: NextRequest, context: RouteContext<'/api/job
     ]);
     await assessAndPersistJobIntelligence({
       jobSnapshotId,
+      userId: session.user.id,
       careerTrack: track ? { targetRoleTitle: track.targetRoleTitle, occupationFamily: track.targetOccupation, industry: track.targetIndustry, seniority: track.targetSeniority } : null,
       candidateFacts,
     });

@@ -58,7 +58,7 @@ const TAB_GROUPS: { label: string; items: TabItem[] }[] = [
 
 // Route-backed tools stay real links so browser navigation and active state remain canonical.
 const EXTERNAL_LINKS: LinkItem[] = [
-  { href: "/dashboard/jobs", label: "Job Board", icon: Briefcase },
+  { href: "/dashboard/jobs", label: "Jobs & Analysis", icon: Briefcase },
   { href: "/immigration", label: "Sponsorship", icon: Stamp },
 ];
 

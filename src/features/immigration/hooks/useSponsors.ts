@@ -1,10 +1,22 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useSearchParams } from 'next/navigation';
 import type { Sponsor } from '@/shared/types/job';
 
+export type SponsorRegisterMetadata = {
+  releaseVersion: string;
+  registerVersion: string;
+  publishedAt?: string;
+  rowCount: number;
+  source: 'BUNDLED_RELEASE' | 'LIVE_FALLBACK';
+};
+
 export function useSponsors() {
-  const [query, setQuery] = useState('');
+  const searchParams = useSearchParams();
+  const initialQuery = searchParams.get('q') || searchParams.get('query') || '';
+
+  const [query, setQuery] = useState(initialQuery);
   const [route, setRoute] = useState('all');
   const [industry, setIndustry] = useState('all');
   const [sponsors, setSponsors] = useState<Sponsor[]>([]);
@@ -12,6 +24,14 @@ export function useSponsors() {
   const [isLoading, setIsLoading] = useState(false);
   const [page, setPage] = useState(1);
   const [error, setError] = useState<string | null>(null);
+  const [register, setRegister] = useState<SponsorRegisterMetadata | null>(null);
+
+  useEffect(() => {
+    const urlQuery = searchParams.get('q') || searchParams.get('query') || '';
+    if (urlQuery && urlQuery !== query) {
+      setQuery(urlQuery);
+    }
+  }, [searchParams]);
 
   const fetchSponsors = async (searchQuery: string, searchRoute: string, searchIndustry: string, targetPage: number) => {
     setIsLoading(true);
@@ -39,6 +59,7 @@ export function useSponsors() {
       setSponsors(data.sponsors || []);
       setTotal(data.total || 0);
       setPage(data.page || 1);
+      setRegister(data.register || null);
     } catch (err) {
       console.error(err);
       setError(err instanceof Error ? err.message : 'An error occurred loading sponsors');
@@ -73,6 +94,7 @@ export function useSponsors() {
     isLoading,
     page,
     error,
+    register,
     handlePageChange,
   };
 }

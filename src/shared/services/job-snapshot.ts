@@ -4,7 +4,7 @@ import { prisma } from '@/shared/lib/prisma';
 import { resolveCompaniesForEmployers } from '@/shared/services/company-resolution';
 import { assessDescriptionCompleteness, classifyDescriptionAvailability } from '@/shared/services/job-description-completeness';
 import { logJobBoardEvent } from '@/shared/services/job-board-observability';
-import { normaliseTitle } from '@/shared/services/job-normalisation';
+import { normaliseCompanyName, normaliseLocation, normaliseTitle } from '@/shared/services/job-normalisation';
 import type { NormalisedJob } from '@/shared/types/job';
 import type { CompanyResolutionResult } from '@/shared/types/sponsor-evidence';
 
@@ -190,6 +190,91 @@ export async function getOrCreateSnapshotFromNormalisedJob(job: NormalisedJob) {
   return getSnapshotDetails(snapshot.id);
 }
 
+export interface ImportedVacancyInput {
+  userId: string;
+  title: string;
+  employerName: string;
+  locationText?: string;
+  sourceUrl?: string;
+  description: string;
+}
+
+/**
+ * Persist a vacancy brought from outside Align.
+ *
+ * Imported descriptions are private user content. Their identity therefore
+ * includes the owner id and the row records that owner explicitly; they never
+ * enter provider discovery or share a snapshot with another account.
+ */
+export async function createImportedJobSnapshot(input: ImportedVacancyInput) {
+  const description = input.description.trim();
+  const title = input.title.trim();
+  const employerName = input.employerName.trim();
+  const sourceUrl = input.sourceUrl?.trim() || undefined;
+  const fingerprint = `import:${createHash('sha256')
+    .update(`${input.userId}|${sourceUrl ?? descriptionHash(description)}`)
+    .digest('hex')
+    .slice(0, 32)}`;
+  const assessed = assessDescriptionCompleteness({
+    description,
+    userSupplied: true,
+  });
+  const selectedHash = descriptionHash(description);
+  const location = normaliseLocation(input.locationText?.trim() ?? '');
+  const now = new Date();
+
+  return prisma.jobSnapshot.upsert({
+    where: { canonicalJobId: fingerprint },
+    create: {
+      canonicalJobId: fingerprint,
+      dedupeFingerprint: fingerprint,
+      title,
+      normalisedTitle: normaliseTitle(title),
+      employerName,
+      normalisedEmployerName: normaliseCompanyName(employerName),
+      importedByUserId: input.userId,
+      importedUrl: sourceUrl,
+      locationText: location.locationText || null,
+      city: location.city ?? null,
+      region: location.region ?? null,
+      country: location.country ?? null,
+      workStyle: location.remoteType,
+      providerDescription: null,
+      userSuppliedDescription: description,
+      descriptionAvailability: assessed.availability,
+      selectedDescriptionSource: 'USER_PASTED',
+      selectedDescriptionHash: selectedHash,
+      fetchedAt: now,
+      firstSeenAt: now,
+      lastSeenAt: now,
+    },
+    update: {
+      title,
+      normalisedTitle: normaliseTitle(title),
+      employerName,
+      normalisedEmployerName: normaliseCompanyName(employerName),
+      importedUrl: sourceUrl,
+      locationText: location.locationText || null,
+      city: location.city ?? null,
+      region: location.region ?? null,
+      country: location.country ?? null,
+      workStyle: location.remoteType,
+      userSuppliedDescription: description,
+      descriptionAvailability: assessed.availability,
+      selectedDescriptionSource: 'USER_PASTED',
+      selectedDescriptionHash: selectedHash,
+      descriptionAssessment: Prisma.JsonNull,
+      employerSponsorEvidence: Prisma.JsonNull,
+      vacancySponsorshipSignal: Prisma.JsonNull,
+      requirementEvidence: Prisma.JsonNull,
+      intelligenceAssessedAt: null,
+      lastSeenAt: now,
+      fetchedAt: now,
+    },
+    include: { providerReferences: true },
+  });
+}
+
 /**
  * Durable snapshot IDs for a whole search page, in one batch.
  *
@@ -247,11 +332,13 @@ export async function materialiseSnapshotIds(jobs: readonly NormalisedJob[]): Pr
   return ids;
 }
 
-export async function getSnapshotDetails(jobSnapshotId: string) {
-  return prisma.jobSnapshot.findUnique({
+export async function getSnapshotDetails(jobSnapshotId: string, userId?: string) {
+  const snapshot = await prisma.jobSnapshot.findUnique({
     where: { id: jobSnapshotId },
     include: { providerReferences: { orderBy: { firstSeenAt: 'asc' } } },
   });
+  if (snapshot?.importedByUserId && snapshot.importedByUserId !== userId) return null;
+  return snapshot;
 }
 
 export function resolveSelectedDescription(snapshot: NonNullable<Awaited<ReturnType<typeof getSnapshotDetails>>>): SelectedDescription | null {
@@ -273,7 +360,7 @@ export function resolveSelectedDescription(snapshot: NonNullable<Awaited<ReturnT
 export async function attachUserDescription(input: { userId: string; jobSnapshotId: string; description: string }) {
   const description = input.description.trim();
   if (!description) throw new Error('A job description is required.');
-  const snapshot = await getSnapshotDetails(input.jobSnapshotId);
+  const snapshot = await getSnapshotDetails(input.jobSnapshotId, input.userId);
   if (!snapshot) return null;
   const selected = { text: description, source: 'USER_PASTED' as const, hash: descriptionHash(description) };
   return prisma.jobSnapshot.update({
@@ -297,7 +384,7 @@ export async function removeSavedJob(userId: string, id: string) {
 }
 
 export async function createMatchRequest(input: { userId: string; profileId: string; jobSnapshotId: string; partialDescriptionAccepted: boolean }) {
-  const snapshot = await getSnapshotDetails(input.jobSnapshotId);
+  const snapshot = await getSnapshotDetails(input.jobSnapshotId, input.userId);
   if (!snapshot) return null;
   const selected = resolveSelectedDescription(snapshot);
   if (!selected) throw new Error('Add a job description before preparing a match.');

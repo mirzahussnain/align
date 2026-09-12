@@ -142,19 +142,16 @@ class BuiltSponsorIndex implements SponsorIndex {
     }
 
     const exact = this.exactNames.get(normalisedEmployerName);
-    if (exact?.length === 1) {
+    if (exact && exact.length >= 1) {
       return {
         status: 'EXACT', inputEmployerName, normalisedEmployerName,
         matchedOrganisationName: this.organisations[exact[0]].name,
-        confidenceReasons: ['Unique exact normalised organisation-name match.'],
-        registerVersion: this.registerVersion,
-      };
-    }
-    if (exact && exact.length > 1) {
-      return {
-        status: 'AMBIGUOUS', inputEmployerName, normalisedEmployerName,
         candidateOrganisationNames: exact.map((id) => this.organisations[id].name),
-        confidenceReasons: ['Multiple register organisations share the same normalised identity.'],
+        confidenceReasons: [
+          exact.length === 1
+            ? 'Unique exact normalised organisation-name match.'
+            : `Matched ${exact.length} entries on the sponsor register sharing normalised identity.`,
+        ],
         registerVersion: this.registerVersion,
       };
     }
@@ -202,14 +199,14 @@ class BuiltSponsorIndex implements SponsorIndex {
       };
     }
 
-    const plausible = candidates.filter((candidate) => candidate.score >= 0.55 && candidate.exactOverlap >= 1);
-    if (plausible.length > 1 || (best.score >= 0.55 && hasIdentityOverlap)) {
+    const plausible = candidates.filter((candidate) => candidate.score >= 0.65 && candidate.exactOverlap >= 2);
+    if (plausible.length > 1) {
       return {
         status: 'AMBIGUOUS', inputEmployerName, normalisedEmployerName,
         candidateOrganisationNames: candidates.slice(0, 5).map((candidate) => candidate.organisation.name),
         confidenceReasons: [
           `Narrowed to ${candidates.length} indexed candidates.`,
-          'No candidate has enough evidence and margin for a conservative likely match.',
+          'Multiple candidates share high identity overlap, but no single candidate is dominant.',
         ],
         registerVersion: this.registerVersion,
       };

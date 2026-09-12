@@ -77,6 +77,8 @@ export async function getEmployerSponsorEvidence(employerName: string): Promise<
 
 export async function assessAndPersistJobIntelligence(input: {
   jobSnapshotId: string;
+  /** Required for private imported vacancies. */
+  userId?: string;
   careerTrack?: CareerTrackDiscoveryInput | null;
   /** Confirmed structured profile facts. Never derived from CV prose. */
   candidateFacts?: ConfirmedCandidateFacts | null;
@@ -87,6 +89,9 @@ export async function assessAndPersistJobIntelligence(input: {
   });
   if (!snapshot) return null;
   const selected = resolveSelectedDescription(snapshot);
+  if (snapshot.importedByUserId && snapshot.importedByUserId !== input.userId) {
+    return null;
+  }
   const sourceProvider = snapshot.providerReferences[0]?.provider as JobProvider | undefined;
   const description = assessDescription({
     providerAvailability: snapshot.descriptionAvailability,

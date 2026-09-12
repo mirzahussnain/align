@@ -45,12 +45,9 @@ beforeEach(() => {
 });
 
 describe('status mapping', () => {
-  it('never presents a likely match as a confirmed register entry', () => {
+  it('presents exact and high-confidence likely matches as MATCHED', () => {
     expect(sponsorStatusToEvidenceStatus('EXACT')).toBe('MATCHED');
-    // LIKELY is the matcher's "dominant but inexact" band. Publishing it as
-    // MATCHED would assert something about a named organisation that the
-    // evidence does not support.
-    expect(sponsorStatusToEvidenceStatus('LIKELY')).toBe('AMBIGUOUS');
+    expect(sponsorStatusToEvidenceStatus('LIKELY')).toBe('MATCHED');
     expect(sponsorStatusToEvidenceStatus('AMBIGUOUS')).toBe('AMBIGUOUS');
     expect(sponsorStatusToEvidenceStatus('NONE')).toBe('NONE');
     expect(sponsorStatusToEvidenceStatus('NOT_CHECKED')).toBe('NOT_CHECKED');
@@ -73,6 +70,11 @@ describe('persistence', () => {
     });
     expect(written.sponsorCheckedAt).toBeInstanceOf(Date);
     expect(written.sponsorEvidence).toMatchObject({ confidenceBand: 'EXACT' });
+    expect(written.sponsorHistory.upsert.create).toMatchObject({
+      registerVersion: 'register-v1',
+      matchStatus: 'EXACT',
+      organisationName: 'FIXTURE SYSTEMS LIMITED',
+    });
   });
 
   it('persists a completed NONE, which is a real finding rather than an absence', async () => {

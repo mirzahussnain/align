@@ -2,6 +2,7 @@ export const JOB_BOARD_ROUTES = {
   discover: "/dashboard/jobs",
   saved: "/dashboard/jobs/saved",
   companies: "/dashboard/jobs/companies",
+  intake: "/dashboard/jobs/analyze",
   details: (jobSnapshotId: string) =>
     `/dashboard/jobs/${encodeURIComponent(jobSnapshotId)}`,
   company: (companyRecordId: string) =>
@@ -231,6 +232,14 @@ export interface CompanyViewModel {
     | "UNKNOWN";
   providers: string[];
   lastRefreshedAt?: string;
+}
+
+export interface CompanySponsorHistoryViewModel {
+  registerVersion: string;
+  status: SponsorStatus;
+  organisationName?: string;
+  checkedAt: string;
+  current: boolean;
 }
 
 export interface DiscoverFilters {

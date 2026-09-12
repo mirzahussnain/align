@@ -25,9 +25,10 @@ describe('SponsorIndex', () => {
     });
   });
 
-  it('returns ambiguity for an exact-key collision rather than choosing a row', () => {
+  it('matches exact normalised identity across multiple register rows as EXACT', () => {
     expect(index.matchEmployer('collision')).toMatchObject({
-      status: 'AMBIGUOUS',
+      status: 'EXACT',
+      matchedOrganisationName: 'Collision LLP',
       candidateOrganisationNames: ['Collision LLP', 'Collision Limited'],
     });
   });

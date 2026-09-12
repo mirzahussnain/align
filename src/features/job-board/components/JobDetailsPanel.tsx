@@ -275,8 +275,24 @@ function SponsorEvidenceCard({ data }: { data: JobDetailsViewModel }) {
   const status = evidence.status ?? evidence.summary.status;
   const Icon = sponsorIcons[status];
   const checkState = status === "NOT_CHECKED" ? evidence.checkState : undefined;
+  const companyQuery = evidence.matchedOrganisationName || data.company?.displayName;
+
   return (
-    <Card title="Employer sponsor-register evidence">
+    <Card
+      title="Employer sponsor-register evidence"
+      action={
+        companyQuery ? (
+          <a
+            href={`/immigration?q=${encodeURIComponent(companyQuery)}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 text-xs font-semibold text-accent-purple hover:underline"
+          >
+            Check on Immigration Hub <ExternalLink className="h-3 w-3" />
+          </a>
+        ) : null
+      }
+    >
       <p
         className={`inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-semibold ${
           status === "MATCHED"

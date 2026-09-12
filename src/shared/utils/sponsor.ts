@@ -1,3 +1,5 @@
+import type { Sponsor } from '@/shared/types/job';
+
 /**
  * Heuristically classifies a company name into an industry sector
  * to enrich the GOV.UK licensed sponsor register dataset.
@@ -115,4 +117,33 @@ export function getIndustryFromCompany(name: string): string {
   }
   
   return 'General Business Services';
+}
+
+export type SponsorFilters = {
+  query: string;
+  route: string;
+  industry: string;
+};
+
+const normaliseFilter = (value: string) => value.trim().toLocaleLowerCase('en-GB');
+
+/** All sponsor-list filters are case-insensitive, including select values. */
+export function filterSponsors(
+  sponsors: readonly Sponsor[],
+  filters: SponsorFilters,
+): Sponsor[] {
+  const query = normaliseFilter(filters.query);
+  const route = normaliseFilter(filters.route);
+  const industry = normaliseFilter(filters.industry);
+
+  return sponsors.filter((sponsor) => {
+    if (
+      query
+      && !normaliseFilter(sponsor.organisationName).includes(query)
+      && !normaliseFilter(sponsor.townCity).includes(query)
+    ) return false;
+    if (route !== 'all' && !normaliseFilter(sponsor.route).includes(route)) return false;
+    if (industry !== 'all' && normaliseFilter(sponsor.industry ?? '') !== industry) return false;
+    return true;
+  });
 }

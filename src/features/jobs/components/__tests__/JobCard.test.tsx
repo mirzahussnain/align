@@ -55,7 +55,7 @@ describe('JobCard sponsorship wording', () => {
   });
 
   it('describes an uncertain register match as possible rather than confirmed', () => {
-    render_({ job: job({ sponsorSignal: { ...blankSponsorSignal(), registerMatchStatus: 'LIKELY' } }) });
+    render_({ job: job({ sponsorSignal: { ...blankSponsorSignal(), registerMatchStatus: 'AMBIGUOUS' } }) });
     expect(screen.getByText(/possible sponsor-register match/i)).toBeInTheDocument();
   });
 });

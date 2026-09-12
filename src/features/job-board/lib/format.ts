@@ -109,21 +109,32 @@ export const dateLabel = (value?: string) =>
     : undefined;
 
 /**
- * Day-granular "3 days ago". Job freshness is only ever meaningful to the day,
- * so finer units would imply a precision the snapshot does not have.
+ * Human-readable relative date ("today", "3 days ago", "2 weeks ago", "1 month ago", "2 years ago").
  */
 export function relativeDay(value?: string, now = Date.now()) {
   if (!value) return undefined;
   const then = new Date(value).getTime();
   if (Number.isNaN(then)) return undefined;
-  const days = Math.round((then - now) / 86_400_000);
-  if (days === 0) return "today";
-  // "always" keeps counts uniform ("1 day ago", "2 days ago") rather than
-  // swapping in "yesterday", which reads inconsistently in a column of dates.
-  return new Intl.RelativeTimeFormat("en-GB", { numeric: "always" }).format(
-    days,
-    "day",
-  );
+
+  const diffMs = now - then;
+  if (diffMs < 0) {
+    // Future date fallback
+    const futureDays = Math.max(1, Math.round(-diffMs / 86_400_000));
+    return `in ${futureDays} day${futureDays === 1 ? "" : "s"}`;
+  }
+
+  const daysAgo = Math.floor(diffMs / 86_400_000);
+  if (daysAgo === 0) return "today";
+  if (daysAgo < 7) return `${daysAgo} day${daysAgo === 1 ? "" : "s"} ago`;
+
+  const weeksAgo = Math.floor(daysAgo / 7);
+  if (daysAgo < 28) return `${weeksAgo} week${weeksAgo === 1 ? "" : "s"} ago`;
+
+  const monthsAgo = Math.floor(daysAgo / 30);
+  if (daysAgo < 365) return `${monthsAgo} month${monthsAgo === 1 ? "" : "s"} ago`;
+
+  const yearsAgo = Math.floor(daysAgo / 365);
+  return `${yearsAgo} year${yearsAgo === 1 ? "" : "s"} ago`;
 }
 
 const compactAmount = (value: number, currency: string) =>

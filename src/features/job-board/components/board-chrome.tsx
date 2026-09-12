@@ -3,7 +3,7 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Shield, ShieldCheck, ShieldOff } from "lucide-react";
+import { ExternalLink, Plus, Shield, ShieldCheck, ShieldOff } from "lucide-react";
 import DashboardTopBar from "@/features/dashboard/components/DashboardTopBar";
 import { sponsorLabels } from "@/features/job-board/lib/format";
 import {
@@ -15,15 +15,16 @@ export function BoardNavigation({ action }: { action?: ReactNode }) {
   const pathname = usePathname();
   const companiesActive = pathname.startsWith(JOB_BOARD_ROUTES.companies);
   const savedActive = pathname === JOB_BOARD_ROUTES.saved;
+  const intakeActive = pathname === JOB_BOARD_ROUTES.intake;
   const links = [
-    [JOB_BOARD_ROUTES.discover, "Discover", !companiesActive && !savedActive],
+    [JOB_BOARD_ROUTES.discover, "Discover", !companiesActive && !savedActive && !intakeActive],
     [JOB_BOARD_ROUTES.saved, "Saved", savedActive],
     [JOB_BOARD_ROUTES.companies, "Companies", companiesActive],
   ] as const;
 
   return (
     <div className="flex items-center justify-between gap-3 border-b border-neutral-200 px-4 sm:px-6 lg:px-8 dark:border-border-subtle">
-      <nav aria-label="Job Board" className="flex min-w-0 overflow-x-auto">
+      <nav aria-label="Jobs and analysis" className="flex min-w-0 overflow-x-auto">
         {links.map(([href, label, active]) => (
           <Link
             key={href}
@@ -39,7 +40,22 @@ export function BoardNavigation({ action }: { action?: ReactNode }) {
           </Link>
         ))}
       </nav>
-      {action}
+      <div className="flex shrink-0 items-center gap-2">
+        {action}
+        <Link
+          href={JOB_BOARD_ROUTES.intake}
+          aria-current={intakeActive ? "page" : undefined}
+          className={`inline-flex min-h-9 items-center gap-1.5 rounded-lg px-2.5 text-xs font-bold transition sm:min-h-10 sm:px-3 ${
+            intakeActive
+              ? "bg-accent-purple text-white"
+              : "bg-neutral-900 text-white hover:bg-neutral-800 dark:bg-white dark:text-neutral-900"
+          }`}
+        >
+          <Plus className="h-3.5 w-3.5" aria-hidden />
+          <span className="sm:hidden">Own job</span>
+          <span className="hidden sm:inline">Analyse your own job</span>
+        </Link>
+      </div>
     </div>
   );
 }
@@ -62,8 +78,8 @@ export function BoardFrame({
   return (
     <main className="min-h-screen bg-neutral-50 dark:bg-bg-primary overflow-x-hidden">
       <DashboardTopBar
-        title="Job Board"
-        subtitle="Discover, save and assess verified vacancies"
+        title="Jobs & Analysis"
+        subtitle="Bring any vacancy, check the practicals, then tailor your CV"
         showNewAnalysis={false}
       />
       <BoardNavigation action={action} />
@@ -204,9 +220,11 @@ export function Card({
  */
 export function SponsorEvidenceLine({
   status,
+  companyName,
   className = "",
 }: {
   status: SponsorStatus;
+  companyName?: string;
   className?: string;
 }) {
   const { icon: Icon, tone } = {
@@ -216,10 +234,25 @@ export function SponsorEvidenceLine({
     NOT_CHECKED: { icon: Shield, tone: "text-neutral-400" },
   }[status];
   return (
-    <p className={`flex items-center gap-1.5 text-xs ${tone} ${className}`}>
-      <Icon className="h-3.5 w-3.5 shrink-0" />
-      <span className="truncate">{sponsorLabels[status]}</span>
-    </p>
+    <div className={`flex items-center justify-between gap-1.5 text-xs ${tone} ${className}`}>
+      <p className="flex items-center gap-1.5 truncate">
+        <Icon className="h-3.5 w-3.5 shrink-0" />
+        <span className="truncate">{sponsorLabels[status]}</span>
+      </p>
+      {companyName && (
+        <Link
+          href={`/immigration?q=${encodeURIComponent(companyName)}`}
+          onClick={(e) => e.stopPropagation()}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-0.5 text-[11px] font-medium text-accent-purple hover:underline shrink-0 ml-1"
+          title={`Check ${companyName} on Immigration Hub`}
+        >
+          <span>Verify</span>
+          <ExternalLink className="h-2.5 w-2.5" />
+        </Link>
+      )}
+    </div>
   );
 }
 

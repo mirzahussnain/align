@@ -40,6 +40,7 @@ model User {
   onboardingState             OnboardingState?
   savedJobs                   SavedJob[]
   jobMatchRequests            JobMatchRequest[]
+  importedJobSnapshots        JobSnapshot[]               @relation("ImportedJobSnapshots")
 
   @@unique([email])
   @@map("user")
@@ -916,6 +917,12 @@ model JobSnapshot {
   normalisedTitle           String
   employerName              String
   normalisedEmployerName    String
+  // Vacancies brought in by a user are private, unlike discovery snapshots.
+  // Null means the snapshot came from a shared provider feed.
+  importedByUserId          String?
+  importedByUser            User?                      @relation("ImportedJobSnapshots", fields: [importedByUserId], references: [id], onDelete: Cascade)
+  importedUrl               String?
+
   companyRecordId           String?
   // Why this snapshot is (or is not) linked to a company. Retained even when no
   // link was made, so a backfill can tell "never tried" from "tried, ambiguous"
@@ -963,6 +970,7 @@ model JobSnapshot {
   matchRequests             JobMatchRequest[]
 
   @@index([dedupeFingerprint])
+  @@index([importedByUserId, createdAt])
   @@index([companyRecordId])
   // The backfill command's selection predicate: unlinked snapshots grouped by the
   // employer text a resolution attempt would use.
@@ -997,8 +1005,9 @@ model CompanyRecord {
   createdAt               DateTime           @default(now())
   updatedAt               DateTime           @updatedAt
 
-  jobSources   EmployerJobSource[]
-  jobSnapshots JobSnapshot[]
+  jobSources     EmployerJobSource[]
+  jobSnapshots   JobSnapshot[]
+  sponsorHistory CompanySponsorHistory[]
 
   @@unique([normalisedName])
   @@index([sponsorMatchStatus])
@@ -1006,6 +1015,27 @@ model CompanyRecord {
   // checked against the CURRENT register version".
   @@index([sponsorRegisterVersion])
   @@map("company_record")
+}
+
+// One immutable historical outcome per company and sponsor-register release.
+// CompanyRecord keeps the latest outcome for fast reads; this table preserves
+// earlier evidence when a new register release supersedes it.
+model CompanySponsorHistory {
+  id               String             @id @default(cuid())
+  companyRecordId  String
+  registerVersion  String
+  matchStatus      SponsorMatchStatus
+  organisationName String?
+  checkedAt        DateTime
+  evidence         Json?
+  createdAt        DateTime           @default(now())
+
+  companyRecord CompanyRecord @relation(fields: [companyRecordId], references: [id], onDelete: Cascade)
+
+  @@unique([companyRecordId, registerVersion])
+  @@index([companyRecordId, checkedAt])
+  @@index([registerVersion])
+  @@map("company_sponsor_history")
 }
 
 // A public ATS board candidate for one canonical company. A source remains

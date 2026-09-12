@@ -39,7 +39,7 @@ export async function POST(request: NextRequest) {
       const decision = await checkCapability(session.user.id, 'saved_jobs');
       if (!decision.allowed) throw new EntitlementRequiredError(decision);
     }
-    await assessAndPersistJobIntelligence({ jobSnapshotId: snapshot.id });
+    await assessAndPersistJobIntelligence({ jobSnapshotId: snapshot.id, userId: session.user.id });
     const saved = await saveSnapshotForUser({ userId: session.user.id, jobSnapshotId: snapshot.id, profileId: parsed.data.profileId });
     return NextResponse.json({ saved: { id: saved.id, jobSnapshotId: saved.jobSnapshotId, canonicalIdentity: saved.jobSnapshot.dedupeFingerprint } }, { status: existing ? 200 : 201 });
   });

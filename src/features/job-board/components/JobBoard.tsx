@@ -31,6 +31,8 @@ import {
 } from "@/features/job-board/components/board-chrome";
 import { JobResultCard } from "@/features/job-board/components/JobResultCard";
 import { JobDetailsPanel } from "@/features/job-board/components/JobDetailsPanel";
+import { JobLoader } from "@/shared/components/ui/JobLoader";
+import { JobDetailModal } from "@/shared/components/ui/JobDetailModal";
 import {
   dateLabel,
   humanise,
@@ -46,6 +48,7 @@ import {
   readJson,
   type CareerTrack,
   type CompanyViewModel,
+  type CompanySponsorHistoryViewModel,
   type DiscoverFilters,
   type JobCardViewModel,
   type Page,
@@ -57,6 +60,17 @@ import {
 export { JobResultCard } from "@/features/job-board/components/JobResultCard";
 
 const PAGE_SIZE = 15;
+
+function useIsMobile() {
+  const [isMobile, setIsMobile] = useState(false);
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 768);
+    check();
+    window.addEventListener("resize", check);
+    return () => window.removeEventListener("resize", check);
+  }, []);
+  return isMobile;
+}
 
 function useSaveMutation(onChange: (id: string, saved: boolean) => void) {
   const pendingRef = useRef(new Set<string>());
@@ -468,11 +482,33 @@ function Pagination({
   );
 }
 
+type GlobalJobPagesCache = {
+  filterKey: string;
+  pages: JobCardViewModel[][];
+  meta: SearchMeta;
+  hasMore: boolean;
+  sessionId?: string;
+};
+
+// Stored on globalThis so it survives Next.js client-side navigations but is
+// reset on full-page reloads. Using a named property avoids Turbopack issues
+// with HMR re-evaluating module-level mutable `let` bindings.
+declare global {
+  // eslint-disable-next-line no-var
+  var __alignJobPagesCache: GlobalJobPagesCache | null | undefined;
+}
+
+const getCache = () => globalThis.__alignJobPagesCache ?? null;
+const setCache = (v: GlobalJobPagesCache | null) => {
+  globalThis.__alignJobPagesCache = v;
+};
+
 export function DiscoverBoard({
   initialJobSnapshotId,
 }: { initialJobSnapshotId?: string } = {}) {
   const router = useRouter();
   const pathname = usePathname();
+  const isMobile = useIsMobile();
   const searchParams = useSearchParams();
   const serialized = searchParams.toString();
   const filters = useMemo(
@@ -484,21 +520,21 @@ export function DiscoverBoard({
   const [bootstrapReady, setBootstrapReady] = useState(false);
   // Pages are kept client-side so the numbered control can step back over
   // results the cursor-forward search API cannot re-request.
-  const [pages, setPages] = useState<JobCardViewModel[][]>([]);
-  const pagesRef = useRef<JobCardViewModel[][]>([]);
+  const [pages, setPages] = useState<JobCardViewModel[][]>(() => getCache()?.pages ?? []);
+  const pagesRef = useRef<JobCardViewModel[][]>(getCache()?.pages ?? []);
   const [pageIndex, setPageIndex] = useState(0);
-  const [meta, setMeta] = useState<SearchMeta>({});
-  const [loading, setLoading] = useState(true);
+  const [meta, setMeta] = useState<SearchMeta>(getCache()?.meta ?? {});
+  const [loading, setLoading] = useState(() => !(getCache()?.pages.length));
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [hasMore, setHasMore] = useState(false);
+  const [hasMore, setHasMore] = useState(getCache()?.hasMore ?? false);
   /** Set when a continuation returned no unseen vacancies. */
   const [exhausted, setExhausted] = useState(false);
   const [sessionRestarted, setSessionRestarted] = useState(false);
   const [reloadToken, setReloadToken] = useState(0);
   const [filterOpen, setFilterOpen] = useState(false);
   const [mobileAdvancedOpen, setMobileAdvancedOpen] = useState(false);
-  const selectedJobSnapshotId = useMemo(() => {
+  const urlSelectedId = useMemo(() => {
     const prefix = `${JOB_BOARD_ROUTES.discover}/`;
     if (!pathname.startsWith(prefix)) return undefined;
     const remainder = pathname.slice(prefix.length);
@@ -515,24 +551,51 @@ export function DiscoverBoard({
       return undefined;
     }
   }, [pathname]);
+
+  const [activeJobSnapshotId, setActiveJobSnapshotId] = useState<string | undefined>(initialJobSnapshotId);
+
+  useEffect(() => {
+    if (urlSelectedId !== undefined) {
+      setActiveJobSnapshotId(urlSelectedId);
+    }
+  }, [urlSelectedId]);
+
+  useEffect(() => {
+    const handlePopState = () => {
+      const currentPath = window.location.pathname;
+      const prefix = `${JOB_BOARD_ROUTES.discover}/`;
+      if (currentPath.startsWith(prefix)) {
+        const remainder = currentPath.slice(prefix.length);
+        if (
+          remainder &&
+          !remainder.includes("/") &&
+          remainder !== "saved" &&
+          remainder !== "companies"
+        ) {
+          try {
+            setActiveJobSnapshotId(decodeURIComponent(remainder));
+            return;
+          } catch {}
+        }
+      }
+      setActiveJobSnapshotId(undefined);
+    };
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, []);
+
+  const selectedJobSnapshotId = activeJobSnapshotId;
   const initialFiltersRef = useRef(filters);
   const initialDetailsRef = useRef(Boolean(initialJobSnapshotId));
+  const defaultSearchQueryRef = useRef<string>("");
   const sessionRef = useRef<string | undefined>(undefined);
   const requestRef = useRef(0);
   const controllerRef = useRef<AbortController | undefined>(undefined);
-  /**
-   * A speculative page two, fetched while the browser is idle.
-   *
-   * Keyed by the session it belongs to, so a filter change (which starts a new
-   * session) can never serve the previous search's second page. It holds the
-   * PARSED response, not a promise, so consuming it is synchronous.
-   */
   const prefetchRef = useRef<
     { sessionId: string; response: SearchResponse } | undefined
   >(undefined);
   const prefetchControllerRef = useRef<AbortController | undefined>(undefined);
 
-  /** Drop any in-flight or completed prefetch. Called whenever the search changes. */
   const cancelPrefetch = useCallback(() => {
     prefetchControllerRef.current?.abort();
     prefetchControllerRef.current = undefined;
@@ -559,8 +622,20 @@ export function DiscoverBoard({
         if (!active) return;
         const available = data.profiles ?? [];
         setTracks(available);
-        setBootstrapReady(true);
+        const fallbackQuery = data.defaultSearch?.query || "IT Support Technician";
+        defaultSearchQueryRef.current = fallbackQuery;
         const initialFilters = initialFiltersRef.current;
+
+        if (!initialFilters.query) {
+          setDraft((prev) => ({
+            ...prev,
+            query: fallbackQuery,
+            location: prev.location || data.defaultSearch?.location || "",
+          }));
+        }
+
+        setBootstrapReady(true);
+
         if (
           initialFilters.careerTrackId &&
           !available.some(
@@ -575,8 +650,8 @@ export function DiscoverBoard({
         } else if (!initialFilters.query && !initialDetailsRef.current) {
           const defaults = filtersToUrl({
             ...initialFilters,
-            query: data.defaultSearch.query,
-            location: data.defaultSearch.location,
+            query: fallbackQuery,
+            location: data.defaultSearch?.location || "",
           });
           router.replace(`${JOB_BOARD_ROUTES.discover}?${defaults}`);
         }
@@ -598,16 +673,30 @@ export function DiscoverBoard({
     }
   }, [bootstrapReady, filters, router, tracks]);
 
+  const lastLoadedFiltersKey = useRef<string>("");
+
   const load = useCallback(
     async (more = false, force = false) => {
-      if (!filters.query.trim() || !bootstrapReady) {
+      if (!bootstrapReady) return;
+      const activeQuery =
+        filters.query.trim() || draft.query.trim() || defaultSearchQueryRef.current || "IT Support Technician";
+
+      const effectiveFilters = filters.query.trim()
+        ? filters
+        : { ...filters, query: activeQuery, location: filters.location || draft.location };
+
+      const filterKey = `${effectiveFilters.query}_${effectiveFilters.location}_${effectiveFilters.workplace}_${effectiveFilters.employmentType}_${effectiveFilters.sponsorStatus}_${effectiveFilters.sort}_${effectiveFilters.careerTrackId}_${effectiveFilters.salaryMin}_${effectiveFilters.freshness}`;
+
+      // Prevent job list from re-fetching or flickering into loading state when simply selecting a job card
+      if (!more && !force && pagesRef.current.length > 0 && lastLoadedFiltersKey.current === filterKey) {
         setLoading(false);
+        setRefreshing(false);
         return;
       }
+      lastLoadedFiltersKey.current = filterKey;
+
       const requestId = ++requestRef.current;
       controllerRef.current?.abort();
-      // Any prefetch belongs to the state we are about to replace. `more` keeps
-      // it, because the consumer below is the reason it exists.
       if (!more) cancelPrefetch();
       const controller = new AbortController();
       controllerRef.current = controller;
@@ -615,9 +704,6 @@ export function DiscoverBoard({
       else setLoading(true);
       setError(null);
       try {
-        // A prefetched page two is consumed here rather than at the call site,
-        // so "Next" behaves identically whether or not the speculative fetch
-        // landed in time.
         const prefetched =
           more &&
           !force &&
@@ -628,7 +714,7 @@ export function DiscoverBoard({
         prefetchRef.current = undefined;
 
         const params = filtersToApi(
-          filters,
+          effectiveFilters,
           more ? sessionRef.current : undefined,
         );
         if (force) params.set("refresh", "true");
@@ -663,7 +749,15 @@ export function DiscoverBoard({
         // Authoritative only. A full page says nothing about whether the
         // providers behind it have more, and inferring "more" from the page size
         // is how a Next button came to be offered over an empty continuation.
-        setHasMore(result.meta.hasMore === true);
+        const moreAvailable = result.meta.hasMore === true;
+        setHasMore(moreAvailable);
+        setCache({
+          filterKey,
+          pages: next,
+          meta: result.meta,
+          hasMore: moreAvailable,
+          sessionId: result.sessionId,
+        });
       } catch (caught) {
         if (
           (caught as Error).name !== "AbortError" &&
@@ -674,6 +768,7 @@ export function DiscoverBoard({
           // a "Next" button. Restarting the search is the documented recovery.
           if ((caught as { code?: string }).code === "SEARCH_SESSION_EXPIRED") {
             sessionRef.current = undefined;
+            setCache(null);
             setSessionRestarted(true);
             setReloadToken((token) => token + 1);
             return;
@@ -781,6 +876,10 @@ export function DiscoverBoard({
       page.map((job) => (job.id === id ? { ...job, saved } : job)),
     );
     setPages(pagesRef.current);
+    const cache = getCache();
+    if (cache) {
+      setCache({ ...cache, pages: pagesRef.current });
+    }
   }, []);
   const save = useSaveMutation(onSaved);
 
@@ -799,6 +898,7 @@ export function DiscoverBoard({
   const applyFilters = (next: DiscoverFilters) => {
     setFilterOpen(false);
     sessionRef.current = undefined;
+    setCache(null);
     cancelPrefetch();
     resetContinuationNotices();
     router.push(`${JOB_BOARD_ROUTES.discover}?${filtersToUrl(next)}`);
@@ -807,12 +907,17 @@ export function DiscoverBoard({
     event?.preventDefault();
     applyFilters(draft);
   };
-  const select = (id: string) =>
-    window.history.pushState(
-      null,
-      "",
-      `${JOB_BOARD_ROUTES.details(id)}${serialized ? `?${serialized}` : ""}`,
-    );
+  const select = (id: string) => {
+    const targetUrl = `${JOB_BOARD_ROUTES.details(id)}${serialized ? `?${serialized}` : ""}`;
+    window.history.pushState(null, "", targetUrl);
+    setActiveJobSnapshotId(id);
+  };
+
+  const closeDetails = () => {
+    const targetUrl = `${JOB_BOARD_ROUTES.discover}${serialized ? `?${serialized}` : ""}`;
+    window.history.pushState(null, "", targetUrl);
+    setActiveJobSnapshotId(undefined);
+  };
 
   return (
     <BoardFrame
@@ -973,10 +1078,20 @@ export function DiscoverBoard({
         {save.error && <Notice tone="error">{save.error}</Notice>}
       </div>
 
-      <div className="mt-4 grid items-start gap-4 lg:grid-cols-[minmax(22rem,0.85fr)_minmax(0,1.6fr)] min-w-0 w-full">
+      <div
+        className={
+          selectedJobSnapshotId
+            ? "mt-4 grid items-start gap-5 min-w-0 w-full grid-cols-1 md:grid-cols-12"
+            : "mt-4 grid items-start gap-5 min-w-0 w-full grid-cols-1"
+        }
+      >
         <section
           aria-label="Job results"
-          className={selectedJobSnapshotId ? "hidden lg:block" : "block min-w-0 w-full"}
+          className={
+            selectedJobSnapshotId
+              ? "block min-w-0 w-full md:col-span-5 lg:col-span-4"
+              : "block min-w-0 w-full md:col-span-12"
+          }
         >
           <div
             className="mb-3 flex items-center justify-between gap-2 min-w-0"
@@ -1009,7 +1124,13 @@ export function DiscoverBoard({
             </label>
           </div>
           {loading && !pages.length ? (
-            <JobSkeletons />
+            selectedJobSnapshotId ? (
+              <div className="flex h-64 items-center justify-center rounded-2xl border border-neutral-200 bg-white/50 dark:border-border-subtle dark:bg-bg-secondary/30">
+                <Loader2 className="h-6 w-6 animate-spin text-neutral-400" />
+              </div>
+            ) : (
+              <JobLoader message="Your Jobs are on the way" />
+            )
           ) : visible.length ? (
             <>
               <div className="space-y-3">
@@ -1044,37 +1165,79 @@ export function DiscoverBoard({
                 }
               />
             </>
-          ) : !error && filters.query ? (
+          ) : !error ? (
             <div className="rounded-2xl border border-dashed border-neutral-300 p-10 text-center text-sm text-neutral-500 dark:border-border-subtle">
-              No jobs matched these filters. Try broadening the role, location
-              or workplace settings.
+              {filters.query ? (
+                "No jobs matched these filters. Try broadening the role, location or workplace settings."
+              ) : (
+                <div className="space-y-2">
+                  <p className="font-semibold text-neutral-800 dark:text-text-primary">
+                    Find Your Next Role
+                  </p>
+                  <p className="text-xs text-neutral-500 dark:text-text-secondary">
+                    Enter a job title or location in the search bar above to discover vacancies.
+                  </p>
+                </div>
+              )}
             </div>
           ) : null}
         </section>
 
-        <section
-          aria-label="Selected job details"
-          className={`${selectedJobSnapshotId ? "block" : "hidden lg:block"} lg:sticky lg:top-20`}
-        >
-          <JobDetailsPanel
-            // Remount per vacancy so the fetched details and the open detail
-            // tab reset together instead of leaking across selections.
-            key={selectedJobSnapshotId ?? "no-selection"}
-            jobSnapshotId={selectedJobSnapshotId}
-            saved={selected?.saved}
-            onSaved={onSaved}
-            onBack={() => router.back()}
-            onSave={(id, isSaved) =>
-              save.mutate(id, isSaved, filters.careerTrackId || undefined)
-            }
-            saving={
+        {/* Desktop Side Window Panel */}
+        {!isMobile && (
+          <section
+            aria-label="Selected job details"
+            className={
               selectedJobSnapshotId
-                ? save.pending.has(selectedJobSnapshotId)
-                : false
+                ? "block md:sticky md:top-20 md:col-span-7 lg:col-span-8 min-w-0 w-full"
+                : "hidden"
             }
-          />
-        </section>
+          >
+            <JobDetailsPanel
+              key={selectedJobSnapshotId ?? "no-selection"}
+              jobSnapshotId={selectedJobSnapshotId}
+              saved={selected?.saved}
+              onSaved={onSaved}
+              onBack={closeDetails}
+              onSave={(id, isSaved) =>
+                save.mutate(id, isSaved, filters.careerTrackId || undefined)
+              }
+              saving={
+                selectedJobSnapshotId
+                  ? save.pending.has(selectedJobSnapshotId)
+                  : false
+              }
+            />
+          </section>
+        )}
       </div>
+
+      {/* Mobile Screen Modal Panel */}
+      {selectedJobSnapshotId && isMobile && (
+        <div className="lg:hidden">
+          <JobDetailModal
+            open={Boolean(selectedJobSnapshotId)}
+            onClose={closeDetails}
+            title={selected?.title || "Job Details"}
+          >
+            <JobDetailsPanel
+              key={`mobile-${selectedJobSnapshotId}`}
+              jobSnapshotId={selectedJobSnapshotId}
+              saved={selected?.saved}
+              onSaved={onSaved}
+              onBack={closeDetails}
+              onSave={(id, isSaved) =>
+                save.mutate(id, isSaved, filters.careerTrackId || undefined)
+              }
+              saving={
+                selectedJobSnapshotId
+                  ? save.pending.has(selectedJobSnapshotId)
+                  : false
+              }
+            />
+          </JobDetailModal>
+        </div>
+      )}
 
       {filterOpen && (
         <FilterDialog
@@ -1447,7 +1610,14 @@ export function CompanyDetailsBoard({
   const router = useRouter();
   const [data, setData] = useState<{
     company: CompanyViewModel;
-    sponsorEvidence: { summary: { status: SponsorStatus }; disclaimer: string };
+    sponsorEvidence: {
+      summary: { status: SponsorStatus };
+      disclaimer: string;
+      matchedOrganisationName?: string;
+      registerVersion?: string;
+      checkedAt?: string;
+    };
+    sponsorHistory?: CompanySponsorHistoryViewModel[];
     sources: Array<{ provider: string; health: string }>;
   } | null>(null);
   const [vacancies, setVacancies] = useState<JobCardViewModel[]>([]);
@@ -1575,10 +1745,49 @@ export function CompanyDetailsBoard({
         <aside className="space-y-4">
           <Card title="Sponsor-register evidence">
             <SponsorEvidenceLine status={data.sponsorEvidence.summary.status} />
+            {data.sponsorEvidence.matchedOrganisationName && (
+              <p className="mt-2 text-sm font-medium text-neutral-700 dark:text-text-secondary">
+                {data.sponsorEvidence.matchedOrganisationName}
+              </p>
+            )}
             <p className="mt-3 text-xs text-neutral-500 dark:text-text-tertiary">
               {data.sponsorEvidence.disclaimer}
             </p>
           </Card>
+          {(data.sponsorHistory?.length ?? 0) > 0 && (
+            <Card title="Sponsorship history">
+              <div className="space-y-4">
+                {data.sponsorHistory?.map((entry) => (
+                  <div
+                    key={entry.registerVersion}
+                    className="border-b border-neutral-100 pb-4 last:border-0 last:pb-0 dark:border-border-subtle"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <SponsorEvidenceLine status={entry.status} />
+                      {entry.current && (
+                        <span className="rounded-full bg-accent-purple/10 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-accent-purple">
+                          Current
+                        </span>
+                      )}
+                    </div>
+                    <p className="mt-2 text-xs font-medium text-neutral-600 dark:text-text-secondary">
+                      {entry.registerVersion.startsWith("v2-2026-07-29-")
+                        ? "Version 2 · 29 Jul 2026"
+                        : `Register ${entry.registerVersion}`}
+                    </p>
+                    {entry.organisationName && (
+                      <p className="mt-1 text-xs text-neutral-500 dark:text-text-tertiary">
+                        Matched as {entry.organisationName}
+                      </p>
+                    )}
+                    <p className="mt-1 text-xs text-neutral-400 dark:text-text-tertiary">
+                      Checked {dateLabel(entry.checkedAt)}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </Card>
+          )}
           <Card title="Source health">
             <div className="space-y-2 text-sm">
               {data.sources.map((source) => (

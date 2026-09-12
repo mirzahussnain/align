@@ -63,10 +63,23 @@ export function JobResultCard({
 
   return (
     <article
-      className={`rounded-2xl border p-3.5 sm:p-4 shadow-sm transition overflow-hidden min-w-0 w-full max-w-full ${
+      onClick={onSelect}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          if ((e.target as HTMLElement).tagName !== "BUTTON") {
+            e.preventDefault();
+            onSelect();
+          }
+        }
+      }}
+      tabIndex={0}
+      role="button"
+      aria-pressed={selected}
+      aria-label={job.title}
+      className={`group cursor-pointer rounded-2xl border p-3.5 sm:p-4 shadow-sm transition-all overflow-hidden min-w-0 w-full max-w-full ${
         selected
           ? "border-accent-purple bg-accent-purple/[0.02] ring-1 ring-accent-purple/30 dark:bg-accent-purple/10"
-          : "border-neutral-200 bg-white hover:border-neutral-300 dark:border-border-subtle dark:bg-bg-secondary"
+          : "border-neutral-200 bg-white hover:border-neutral-300 hover:shadow-md dark:border-border-subtle dark:bg-bg-secondary"
       }`}
     >
       <div className="flex items-start gap-2.5 sm:gap-3 min-w-0 w-full">
@@ -77,15 +90,10 @@ export function JobResultCard({
           {companyInitials(job.company.displayName)}
         </span>
         <div className="min-w-0 flex-1 overflow-hidden">
-          <h2 className="text-xs sm:text-sm font-bold leading-snug text-neutral-900 dark:text-text-primary min-w-0 w-full break-words">
-            <button
-              type="button"
-              onClick={onSelect}
-              aria-pressed={selected}
-              className="block w-full min-w-0 text-left outline-none focus-visible:ring-2 focus-visible:ring-accent-purple break-words [overflow-wrap:anywhere]"
-            >
+          <h2 className="text-xs sm:text-sm font-bold leading-snug text-neutral-900 group-hover:text-accent-purple transition-colors dark:text-text-primary min-w-0 w-full break-words">
+            <span className="block w-full min-w-0 text-left break-words [overflow-wrap:anywhere]">
               {job.title}
-            </button>
+            </span>
           </h2>
           <p className="mt-0.5 truncate text-[11px] sm:text-xs text-neutral-500 dark:text-text-secondary min-w-0 max-w-full">
             {job.company.displayName}
@@ -95,7 +103,10 @@ export function JobResultCard({
         </div>
         <button
           type="button"
-          onClick={onSave}
+          onClick={(e) => {
+            e.stopPropagation();
+            onSave();
+          }}
           disabled={saving}
           aria-pressed={job.saved}
           aria-label={job.saved ? `Unsave ${job.title}` : `Save ${job.title}`}
@@ -141,7 +152,11 @@ export function JobResultCard({
       </div>
 
       {sponsor && (
-        <SponsorEvidenceLine status={sponsor} className="mt-2 sm:mt-2.5 sm:pl-12 min-w-0 max-w-full truncate" />
+        <SponsorEvidenceLine
+          status={sponsor}
+          companyName={job.company.displayName}
+          className="mt-2 sm:mt-2.5 sm:pl-12 min-w-0 max-w-full"
+        />
       )}
     </article>
   );

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, type ChangeEvent } from "react";
+import { useEffect, useState, useRef, type ChangeEvent } from "react";
 import {
   X,
   ExternalLink,
@@ -11,8 +11,17 @@ import {
   CheckCircle2,
   ChevronRight,
   ClipboardPaste,
+  AlertTriangle,
+  ArrowRight,
 } from "lucide-react";
 import { readJson } from "@/features/job-board/lib/job-board";
+import type { CVAnalysisResult } from "@/shared/types/cv";
+import type { JobMatchReportView } from "@/shared/types/job-match-report";
+import {
+  ENTITLEMENT_REQUIRED_EVENT,
+  ENTITLEMENTS_REFRESH_EVENT,
+} from "@/shared/entitlements/registry";
+import { interpretOperationalError } from "@/shared/entitlements/operational-errors";
 
 /**
  * Shortest text accepted as a complete advert.
@@ -23,6 +32,26 @@ import { readJson } from "@/features/job-board/lib/job-board";
  * classified PARTIAL there rather than being rejected here.
  */
 const MIN_PASTED_CHARS = 400;
+
+/** Matches the analyse route's own upload limit, so nothing is rejected late. */
+const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
+
+/** One of the user's stored source CVs, as listed by /api/stored-cvs. */
+interface StoredCvOption {
+  id: string;
+  originalFilename: string;
+  sizeBytes: number;
+  createdAt: string;
+  objectAvailable: boolean;
+}
+
+/** What the modal shows once the analysis has actually run. */
+interface CompletedAnalysis {
+  /** Absent only if the result could not be filed; the CTA is hidden, not dead. */
+  analysisId?: string;
+  score: number;
+  report?: JobMatchReportView;
+}
 
 export interface CheckMatchModalProps {
   open: boolean;
@@ -56,7 +85,14 @@ export function CheckMatchModal({
     availableCareerTracks[0]?.id ?? "",
   );
   const [cvOption, setCvOption] = useState<"PROFILE" | "UPLOAD">("PROFILE");
-  const [uploadedFileName, setUploadedFileName] = useState<string | null>(null);
+  /**
+   * The CV that will actually be analysed. Both of these are SENT — the previous
+   * version collected a filename and a radio choice, sent neither, and left the
+   * user to upload the same CV again on the analyse page.
+   */
+  const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [storedCvs, setStoredCvs] = useState<StoredCvOption[] | null>(null);
+  const [selectedStoredCvId, setSelectedStoredCvId] = useState<string>("");
   // Deliberately EMPTY, not seeded with the provider's partial text. Seeding it
   // meant a user could press Continue on the same teaser and have it counted as
   // a completed paste.
@@ -64,13 +100,53 @@ export function CheckMatchModal({
   const [savedDescription, setSavedDescription] = useState(false);
   const [partialAccepted, setPartialAccepted] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [running, setRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [step, setStep] = useState<"TRACK" | "CV" | "DESCRIPTION" | "REVIEW">(
     "TRACK",
   );
+  /**
+   * The wizard, the run and the outcome are three states of ONE modal. The
+   * analysis used to happen on another page, so a user who had just answered
+   * four questions here was handed a fresh upload form to answer them again.
+   */
+  const [phase, setPhase] = useState<"FORM" | "RUNNING" | "DONE">("FORM");
+  const [completed, setCompleted] = useState<CompletedAnalysis | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+  /**
+   * A stable operation id for the CURRENT logical submission, mirroring the
+   * uploader's rule: a network retry of the same analysis reuses it, so the
+   * server treats the retry idempotently instead of reserving — and charging —
+   * a second unit. Only a materially different request mints a fresh one.
+   *
+   * Declared with the other hooks, ABOVE the `!open` early return: every hook in
+   * this component must run on every render or React sees a changing hook count.
+   */
+  const submissionKeyRef = useRef<string | null>(null);
+  const operationIdRef = useRef<string>("");
+  const running = phase === "RUNNING";
+
+  // The user's stored CVs, so a repeat match needs no re-upload. Failure is not
+  // fatal: the upload option still works, and the list simply reports empty.
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      try {
+        const data = await readJson<{ storedCvs?: StoredCvOption[] }>(
+          "/api/stored-cvs",
+        );
+        if (!active) return;
+        const usable = (data.storedCvs ?? []).filter((cv) => cv.objectAvailable);
+        setStoredCvs(usable);
+        setSelectedStoredCvId((current) => current || (usable[0]?.id ?? ""));
+      } catch {
+        if (active) setStoredCvs([]);
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, []);
   const isFullDescription = descriptionCompleteness === "FULL";
   const sourceUrl = applicationUrl || hostedUrl;
   const trimmedPaste = pastedDescription.trim();
@@ -85,6 +161,12 @@ export function CheckMatchModal({
   const pasteIsUsable =
     trimmedPaste.length >= MIN_PASTED_CHARS &&
     trimmedPaste !== providerDescription.trim();
+  /**
+   * Whether a CV has actually been chosen. The analysis reads a real document,
+   * so the wizard cannot advance past the CV step on a radio button alone.
+   */
+  const cvSourceReady =
+    cvOption === "UPLOAD" ? uploadFile !== null : selectedStoredCvId !== "";
 
   // No reset effect. The caller MOUNTS this component only while it is open, so
   // every opening starts from fresh `useState` initialisers. The effect that
@@ -127,16 +209,46 @@ export function CheckMatchModal({
 
   const handleFileUpload = (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      setUploadedFileName(file.name);
+    if (!file) return;
+    if (file.size > MAX_UPLOAD_BYTES) {
+      setError("That file is too large. The maximum size is 10MB.");
+      return;
     }
+    setError(null);
+    setUploadFile(file);
   };
 
+  const operationId = (): string => {
+    const key = JSON.stringify({
+      jobId,
+      track: selectedTrack,
+      source:
+        cvOption === "UPLOAD"
+          ? [uploadFile?.name, uploadFile?.size, uploadFile?.lastModified]
+          : ["stored", selectedStoredCvId],
+    });
+    if (submissionKeyRef.current !== key || !operationIdRef.current) {
+      submissionKeyRef.current = key;
+      operationIdRef.current = crypto.randomUUID();
+    }
+    return operationIdRef.current;
+  };
+
+  /**
+   * Prepare the match request and RUN the analysis, here, in this modal.
+   *
+   * It used to stop after preparation and navigate to /analyze, where the user
+   * met an empty upload form: the career track, CV choice and description they
+   * had just supplied bought them nothing. The preparation call is unchanged and
+   * still owns the description and the reduced-confidence guard; the analysis
+   * simply follows it instead of being handed to another screen.
+   */
   const handleStartAnalysis = async () => {
-    setRunning(true);
+    if (!cvSourceReady) return;
+    setPhase("RUNNING");
     setError(null);
     try {
-      const result = await readJson<{ matchRequestId: string }>(
+      const prepared = await readJson<{ matchRequestId: string }>(
         `/api/jobs/${encodeURIComponent(jobId)}/match-preparation`,
         {
           method: "POST",
@@ -155,18 +267,60 @@ export function CheckMatchModal({
         },
       );
 
-      window.location.assign(
-        `/analyze?mode=job_match&matchRequest=${encodeURIComponent(
-          result.matchRequestId,
-        )}`,
-      );
+      // The match request owns the description and the profile server-side; the
+      // form only has to say WHICH CV to read.
+      const form = new FormData();
+      form.append("mode", "job_match");
+      form.append("jobMatchRequestId", prepared.matchRequestId);
+      if (selectedTrack) form.append("profileId", selectedTrack);
+      if (cvOption === "UPLOAD" && uploadFile) form.append("file", uploadFile);
+      else form.append("storedCvId", selectedStoredCvId);
+
+      const response = await fetch("/api/analyze", {
+        method: "POST",
+        headers: { "x-operation-id": operationId() },
+        body: form,
+      });
+
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        // The same interpretation every other metered flow uses, so the "you
+        // were not charged" reassurance reads identically here.
+        const action = interpretOperationalError(response.status, body);
+        if (action.type === "upgrade") {
+          window.dispatchEvent(
+            new CustomEvent(ENTITLEMENT_REQUIRED_EVENT, {
+              // 'analysis' is the upgrade modal's own vocabulary for a metered
+              // analysis block; the Job Board is where it happened, not a
+              // different kind of block.
+              detail: { capability: action.capability, source: "analysis" },
+            }),
+          );
+        }
+        throw new Error(
+          "message" in action
+            ? action.message
+            : "Match analysis is not available on your plan.",
+        );
+      }
+
+      const result = (await response.json()) as CVAnalysisResult;
+      window.dispatchEvent(new Event(ENTITLEMENTS_REFRESH_EVENT));
+      setCompleted({
+        analysisId: result.analysisId,
+        // The score the server derived, never one recomputed here from the
+        // plan-projected subset.
+        score: result.jobMatchReport?.overview.score ?? result.overallScore,
+        report: result.jobMatchReport,
+      });
+      setPhase("DONE");
     } catch (caught) {
       setError(
         caught instanceof Error
           ? caught.message
-          : "Unable to start match analysis. Please try again.",
+          : "Unable to run this match analysis. Please try again.",
       );
-      setRunning(false);
+      setPhase("FORM");
     }
   };
 
@@ -196,11 +350,17 @@ export function CheckMatchModal({
               </p>
             </div>
           </div>
+          {/*
+            Closing mid-run would throw away a result the user has already been
+            charged for, so the control is disabled while the analysis is in
+            flight rather than quietly losing it.
+          */}
           <button
             type="button"
             onClick={onClose}
+            disabled={running}
             aria-label="Close modal"
-            className="rounded-lg p-2 text-neutral-400 hover:bg-neutral-100 hover:text-neutral-700 dark:hover:bg-bg-tertiary dark:hover:text-text-primary transition-colors"
+            className="rounded-lg p-2 text-neutral-400 hover:bg-neutral-100 hover:text-neutral-700 dark:hover:bg-bg-tertiary dark:hover:text-text-primary transition-colors disabled:opacity-40 disabled:hover:bg-transparent"
           >
             <X className="h-5 w-5" />
           </button>
@@ -214,8 +374,145 @@ export function CheckMatchModal({
             </div>
           )}
 
+          {/*
+            The analysis, running HERE. There is no navigation and no second
+            form: the user's four answers are already everything the run needs.
+          */}
+          {phase === "RUNNING" && (
+            <div
+              className="flex flex-col items-center gap-3 py-10 text-center"
+              role="status"
+              aria-live="polite"
+            >
+              <Loader2
+                className="h-8 w-8 animate-spin text-accent-purple"
+                aria-hidden
+              />
+              <p className="text-sm font-bold text-neutral-900 dark:text-text-primary">
+                Analysing your CV against this vacancy…
+              </p>
+              <p className="max-w-xs text-xs leading-5 text-neutral-500 dark:text-text-tertiary">
+                Reading the advert&apos;s requirements and checking each one
+                against your CV. This usually takes under a minute — keep this
+                window open.
+              </p>
+            </div>
+          )}
+
+          {phase === "DONE" && completed && (
+            <div className="space-y-4">
+              <div className="flex flex-col items-center gap-2 rounded-2xl border border-emerald-200/70 bg-emerald-50/70 p-5 text-center dark:border-emerald-800/40 dark:bg-emerald-950/30">
+                <CheckCircle2
+                  className="h-7 w-7 text-emerald-600 dark:text-emerald-400"
+                  aria-hidden
+                />
+                <p className="text-sm font-bold text-emerald-900 dark:text-emerald-200">
+                  Analysis complete
+                </p>
+                <p className="text-4xl font-black tabular-nums text-neutral-900 dark:text-text-primary">
+                  {completed.score}
+                  <span className="text-lg font-bold text-neutral-400">
+                    /100
+                  </span>
+                </p>
+                {completed.report && (
+                  <p className="text-xs font-semibold uppercase tracking-wider text-emerald-700 dark:text-emerald-300">
+                    {completed.report.overview.verdict}
+                  </p>
+                )}
+              </div>
+
+              {completed.report && (
+                <div className="space-y-3">
+                  <p className="text-xs leading-5 text-neutral-600 dark:text-text-secondary">
+                    {completed.report.overview.summary}
+                  </p>
+
+                  <p className="text-xs font-semibold text-neutral-700 dark:text-text-secondary">
+                    {completed.report.requirements.totals.mandatoryMet} of{" "}
+                    {completed.report.requirements.totals.mandatory} essential
+                    requirements met
+                    {completed.report.requirements.totals.desirable > 0
+                      ? ` · ${completed.report.requirements.totals.desirableMet} of ${completed.report.requirements.totals.desirable} desirable`
+                      : ""}
+                  </p>
+
+                  {/*
+                    Gaps come from the server-derived view model, which already
+                    limits them to what this plan may see — nothing withheld is
+                    reconstructed or teased here.
+                  */}
+                  {(completed.report.mandatoryGaps.missing.length > 0 ||
+                    completed.report.mandatoryGaps.partial.length > 0) && (
+                    <div className="rounded-xl border border-amber-200/80 bg-amber-50/80 p-3 dark:border-amber-900/40 dark:bg-amber-950/30">
+                      <p className="flex items-center gap-1.5 text-xs font-bold text-amber-900 dark:text-amber-200">
+                        <AlertTriangle className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                        Biggest gaps
+                      </p>
+                      <ul className="mt-2 space-y-1 text-xs leading-5 text-amber-900 dark:text-amber-200">
+                        {[
+                          ...completed.report.mandatoryGaps.missing.map(
+                            (text) => ({ text, partial: false }),
+                          ),
+                          ...completed.report.mandatoryGaps.partial.map(
+                            (text) => ({ text, partial: true }),
+                          ),
+                        ]
+                          .slice(0, 3)
+                          .map((gap) => (
+                            <li key={gap.text} className="flex gap-1.5">
+                              <span aria-hidden>•</span>
+                              <span>
+                                {gap.text}
+                                <span className="font-semibold">
+                                  {gap.partial
+                                    ? " — partly evidenced"
+                                    : " — not evidenced"}
+                                </span>
+                              </span>
+                            </li>
+                          ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <div className="pt-3 flex flex-col-reverse sm:flex-row items-stretch sm:items-center sm:justify-between gap-3 border-t border-neutral-100 dark:border-border-subtle">
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="px-4 py-2.5 rounded-xl border border-neutral-200 dark:border-border-subtle text-xs font-semibold text-neutral-600 dark:text-text-secondary hover:bg-neutral-50 dark:hover:bg-bg-tertiary transition"
+                >
+                  Close
+                </button>
+                {/*
+                  Only rendered when there is a report to open. A result that
+                  could not be filed gets an honest note instead of a CTA that
+                  leads nowhere.
+                */}
+                {completed.analysisId ? (
+                  <a
+                    href={`/dashboard?tab=analyses&analysis=${encodeURIComponent(
+                      completed.analysisId,
+                    )}`}
+                    className="px-6 py-3 rounded-xl bg-gradient-to-r from-purple-600 to-accent-purple text-white text-xs font-bold shadow-md hover:opacity-95 transition flex items-center justify-center gap-2"
+                  >
+                    View Full Analysis
+                    <ArrowRight className="h-4 w-4" aria-hidden />
+                  </a>
+                ) : (
+                  <p className="text-xs text-neutral-500 dark:text-text-tertiary">
+                    This result could not be saved to your history, so the full
+                    report cannot be opened.
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* STEP 1: Select Career Track */}
-          {step === "TRACK" && (
+          {phase === "FORM" && step === "TRACK" && (
             <div className="space-y-4">
               <div>
                 <h3 className="text-sm font-bold text-neutral-900 dark:text-text-primary">
@@ -279,14 +576,14 @@ export function CheckMatchModal({
           )}
 
           {/* STEP 2: Select CV Source */}
-          {step === "CV" && (
+          {phase === "FORM" && step === "CV" && (
             <div className="space-y-4">
               <div>
                 <h3 className="text-sm font-bold text-neutral-900 dark:text-text-primary">
-                  2. Choose Job Analysis Options
+                  2. Choose the CV to analyse
                 </h3>
                 <p className="text-xs text-neutral-500 dark:text-text-secondary mt-0.5">
-                  Select whether to use your stored profile CV or upload a new document.
+                  Pick one of your stored CVs, or upload a new one for this match.
                 </p>
               </div>
 
@@ -309,9 +606,9 @@ export function CheckMatchModal({
                       className="h-4 w-4 text-accent-purple focus:ring-accent-purple"
                     />
                   </div>
-                  <span className="text-sm font-bold">Existing Profile CV</span>
+                  <span className="text-sm font-bold">Stored CV</span>
                   <span className="text-xs font-normal text-neutral-500 dark:text-text-tertiary mt-1">
-                    Use your active profile facts and documents
+                    Analyse a CV you have already uploaded
                   </span>
                 </label>
 
@@ -335,10 +632,60 @@ export function CheckMatchModal({
                   </div>
                   <span className="text-sm font-bold">Upload New CV</span>
                   <span className="text-xs font-normal text-neutral-500 dark:text-text-tertiary mt-1">
-                    Upload a PDF or Word document for this match
+                    Upload a PDF for this match
                   </span>
                 </label>
               </div>
+
+              {cvOption === "PROFILE" &&
+                (storedCvs === null ? (
+                  <p className="flex items-center gap-2 p-4 rounded-xl bg-neutral-50 dark:bg-bg-tertiary border border-neutral-200/80 dark:border-border-subtle text-xs text-neutral-600 dark:text-text-secondary">
+                    <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                    Loading your stored CVs…
+                  </p>
+                ) : storedCvs.length === 0 ? (
+                  <div className="p-4 rounded-xl bg-neutral-50 dark:bg-bg-tertiary border border-neutral-200/80 dark:border-border-subtle text-xs text-neutral-600 dark:text-text-secondary">
+                    You have no stored CVs yet. Choose{" "}
+                    <span className="font-semibold">Upload New CV</span> to
+                    analyse one for this vacancy.
+                  </div>
+                ) : (
+                  <fieldset className="space-y-2">
+                    <legend className="sr-only">Choose a stored CV</legend>
+                    {storedCvs.map((cv) => (
+                      <label
+                        key={cv.id}
+                        className={`flex items-center justify-between gap-3 p-3 rounded-xl border cursor-pointer transition ${
+                          selectedStoredCvId === cv.id
+                            ? "border-accent-purple bg-accent-purple/5 dark:bg-accent-purple/10 text-accent-purple font-semibold"
+                            : "border-neutral-200 dark:border-border-subtle bg-white dark:bg-bg-tertiary text-neutral-700 dark:text-text-secondary hover:border-neutral-300"
+                        }`}
+                      >
+                        <span className="min-w-0">
+                          <span className="block truncate text-sm">
+                            {cv.originalFilename}
+                          </span>
+                          <span className="block text-xs font-normal text-neutral-500 dark:text-text-tertiary">
+                            Uploaded{" "}
+                            {new Date(cv.createdAt).toLocaleDateString("en-GB", {
+                              day: "numeric",
+                              month: "short",
+                              year: "numeric",
+                            })}
+                          </span>
+                        </span>
+                        <input
+                          type="radio"
+                          name="storedCv"
+                          value={cv.id}
+                          checked={selectedStoredCvId === cv.id}
+                          onChange={() => setSelectedStoredCvId(cv.id)}
+                          className="h-4 w-4 shrink-0 text-accent-purple focus:ring-accent-purple"
+                        />
+                      </label>
+                    ))}
+                  </fieldset>
+                ))}
 
               {cvOption === "UPLOAD" && (
                 <div className="p-4 rounded-xl border border-dashed border-neutral-300 dark:border-border-subtle bg-neutral-50/60 dark:bg-bg-tertiary/40 text-center">
@@ -346,7 +693,9 @@ export function CheckMatchModal({
                     type="file"
                     ref={fileInputRef}
                     onChange={handleFileUpload}
-                    accept=".pdf,.doc,.docx,.txt"
+                    // PDF only: the analyse route reads uploads with the PDF
+                    // parser, so offering .docx here would fail after the fact.
+                    accept="application/pdf,.pdf"
                     className="hidden"
                   />
                   <button
@@ -355,14 +704,17 @@ export function CheckMatchModal({
                     className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-white dark:bg-bg-secondary border border-neutral-200 dark:border-border-subtle text-xs font-semibold text-neutral-700 dark:text-text-primary hover:bg-neutral-50 transition"
                   >
                     <Upload className="h-4 w-4 text-neutral-500" />
-                    {uploadedFileName ? "Change Document" : "Choose File"}
+                    {uploadFile ? "Change Document" : "Choose File"}
                   </button>
-                  {uploadedFileName && (
+                  {uploadFile && (
                     <p className="mt-2 text-xs font-medium text-emerald-600 dark:text-emerald-400 flex items-center justify-center gap-1">
                       <CheckCircle2 className="h-3.5 w-3.5" />
-                      {uploadedFileName}
+                      {uploadFile.name}
                     </p>
                   )}
+                  <p className="mt-2 text-xs text-neutral-500 dark:text-text-tertiary">
+                    PDF, up to 10MB.
+                  </p>
                 </div>
               )}
 
@@ -383,7 +735,8 @@ export function CheckMatchModal({
                       setStep("REVIEW");
                     }
                   }}
-                  className="px-5 py-2.5 rounded-xl bg-accent-purple text-white text-xs font-semibold hover:bg-accent-purple/90 shadow-sm transition flex items-center gap-1.5"
+                  disabled={!cvSourceReady}
+                  className="px-5 py-2.5 rounded-xl bg-accent-purple text-white text-xs font-semibold hover:bg-accent-purple/90 shadow-sm transition flex items-center gap-1.5 disabled:opacity-50"
                 >
                   Continue
                   <ChevronRight className="h-4 w-4" />
@@ -408,7 +761,7 @@ export function CheckMatchModal({
             and read-only, pasting is saved and reassessed explicitly, and
             proceeding on partial text requires a deliberate acknowledgement.
           */}
-          {step === "DESCRIPTION" && !isFullDescription && (
+          {phase === "FORM" && step === "DESCRIPTION" && !isFullDescription && (
             <div className="space-y-4">
               <div className="rounded-xl border border-amber-200/80 bg-amber-50/90 p-3 text-xs leading-5 text-amber-900 dark:border-amber-900/40 dark:bg-amber-950/40 dark:text-amber-200">
                 <p className="font-bold">
@@ -579,7 +932,9 @@ export function CheckMatchModal({
           )}
 
           {/* STEP 4: Review & Start Analysis */}
-          {(step === "REVIEW" || (step === "DESCRIPTION" && isFullDescription)) && (
+          {phase === "FORM" &&
+            (step === "REVIEW" ||
+              (step === "DESCRIPTION" && isFullDescription)) && (
             <div className="space-y-4">
               <div className="rounded-xl bg-neutral-50 dark:bg-bg-tertiary p-4 border border-neutral-200/80 dark:border-border-subtle space-y-2">
                 <h4 className="text-xs font-bold text-neutral-900 dark:text-text-primary uppercase tracking-wider">
@@ -594,10 +949,11 @@ export function CheckMatchModal({
                     {availableCareerTracks.find((t) => t.id === selectedTrack)?.label || "Default Profile"}
                   </p>
                   <p>
-                    <span className="font-semibold">CV Source:</span>{" "}
+                    <span className="font-semibold">CV:</span>{" "}
                     {cvOption === "UPLOAD"
-                      ? uploadedFileName || "New Upload"
-                      : "Existing Profile CV"}
+                      ? (uploadFile?.name ?? "New upload")
+                      : (storedCvs?.find((cv) => cv.id === selectedStoredCvId)
+                          ?.originalFilename ?? "Stored CV")}
                   </p>
                   <p>
                     <span className="font-semibold">Description Status:</span>{" "}
@@ -611,7 +967,8 @@ export function CheckMatchModal({
               </div>
 
               <p className="text-xs text-neutral-500 dark:text-text-tertiary">
-                Match analysis will consume 1 quota unit from your active plan. Results will render instantly upon completion.
+                Match analysis uses 1 unit of your plan&apos;s job-match quota and
+                runs here — the result appears in this window when it finishes.
               </p>
 
               <div className="pt-3 flex items-center justify-between gap-3 border-t border-neutral-100 dark:border-border-subtle">
@@ -626,20 +983,11 @@ export function CheckMatchModal({
                 <button
                   type="button"
                   onClick={handleStartAnalysis}
-                  disabled={running}
+                  disabled={running || !cvSourceReady}
                   className="w-full sm:w-auto px-6 py-3 rounded-xl bg-gradient-to-r from-purple-600 to-accent-purple text-white text-xs font-bold shadow-md hover:opacity-95 transition flex items-center justify-center gap-2 disabled:opacity-60"
                 >
-                  {running ? (
-                    <>
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                      Starting Analysis...
-                    </>
-                  ) : (
-                    <>
-                      <Sparkles className="h-4 w-4" />
-                      Start Analysis
-                    </>
-                  )}
+                  <Sparkles className="h-4 w-4" />
+                  Start Analysis
                 </button>
               </div>
             </div>

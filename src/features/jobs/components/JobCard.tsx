@@ -41,7 +41,22 @@ export default function JobCard({ job, saved, saving, onToggleSave }: JobCardPro
           replaces it lands with the relevance phase.
         */}
         <div className="mt-3 flex flex-wrap gap-2 text-[10px]">
-          {register !== 'NONE' && <span className="inline-flex items-center gap-1 rounded-full px-2 py-1 bg-success/10 text-success border border-success/30"><CheckCircle2 size={11} /> {register === 'EXACT' ? 'Appears on sponsor register' : 'Possible sponsor-register match'}</span>}
+          {register !== 'NONE' && (
+            <span className="inline-flex items-center gap-1 rounded-full px-2 py-1 bg-success/10 text-success border border-success/30">
+              <CheckCircle2 size={11} />
+              {register === 'EXACT' || register === 'LIKELY' ? 'Appears on sponsor register' : 'Possible sponsor-register match'}
+              <a
+                href={`/immigration?q=${encodeURIComponent(job.company)}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-0.5 ml-1 text-accent-purple hover:underline"
+                title={`Verify ${job.company} on Immigration Hub`}
+              >
+                <span>Verify</span>
+                <ExternalLink size={9} />
+              </a>
+            </span>
+          )}
           {wording !== 'NOT_MENTIONED' && <span className="inline-flex items-center gap-1 rounded-full px-2 py-1 bg-warning/10 text-warning border border-warning/20"><AlertTriangle size={11} /> {job.sponsorSignal.explanation}</span>}
           {job.eligibilityHints.slice(0, 2).map((hint) => <span key={hint.type} className="rounded-full px-2 py-1 bg-bg-tertiary text-text-secondary">{hint.label}</span>)}
         </div>

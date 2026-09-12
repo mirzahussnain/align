@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, Suspense } from 'react';
 import { motion } from 'framer-motion';
 import { Search, ShieldCheck, Building2, ExternalLink, Loader2, Info } from 'lucide-react';
 import Navbar from '@/shared/components/layout/Navbar';
@@ -14,7 +14,7 @@ import { useSponsors } from '@/features/immigration/hooks/useSponsors';
 import { VISAS, INDUSTRY_SECTORS } from '@/shared/constants/immigration-config';
 import { EXTERNAL_LINKS } from '@/shared/constants/navigation';
 
-export default function ImmigrationHubPage() {
+function ImmigrationHubContent() {
   const [activeVisaTab, setActiveVisaTab] = useState<string>(VISAS[0].title);
   
   const {
@@ -29,6 +29,7 @@ export default function ImmigrationHubPage() {
     isLoading,
     page,
     error,
+    register,
     handlePageChange,
   } = useSponsors();
 
@@ -99,7 +100,13 @@ export default function ImmigrationHubPage() {
               <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
                 <div>
                   <h2 className="text-xl font-bold text-text-primary mb-1">Register of Licensed Sponsors</h2>
-                  <p className="text-xs text-text-tertiary">Data sourced directly from GOV.UK CSV</p>
+                  <p className="text-xs text-text-tertiary">
+                    {!register
+                      ? 'Loading register details…'
+                      : register.source === 'BUNDLED_RELEASE'
+                        ? `GOV.UK register · Version ${register.releaseVersion} · ${register.rowCount.toLocaleString()} entries${register.publishedAt ? ` · ${new Date(`${register.publishedAt}T00:00:00Z`).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' })}` : ''}`
+                        : 'Data sourced directly from the live GOV.UK CSV'}
+                  </p>
                 </div>
                 <a href={EXTERNAL_LINKS.govSponsorList} target="_blank" rel="noopener noreferrer" className="text-xs flex items-center gap-1 text-text-tertiary hover:text-text-primary transition-colors">
                   Official Source <ExternalLink size={12} />
@@ -304,5 +311,13 @@ export default function ImmigrationHubPage() {
         </div>
       </section>
     </main>
+  );
+}
+
+export default function ImmigrationHubPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-hero-gradient flex items-center justify-center text-text-secondary">Loading Immigration Hub...</div>}>
+      <ImmigrationHubContent />
+    </Suspense>
   );
 }

@@ -195,8 +195,9 @@ function currentIntelligence(snapshot: any) {
 }
 export function jobCard(snapshot: any, saved = false) {
   const ref = preferredReference(snapshot);
-  const provider =
-    snapshot.employerSource?.provider ?? ref?.provider ?? "UNKNOWN";
+  const provider = snapshot.importedByUserId
+    ? "IMPORTED"
+    : snapshot.employerSource?.provider ?? ref?.provider ?? "UNKNOWN";
   const employerDirect =
     !!snapshot.employerSource ||
     (snapshot.providerReferences ?? []).some((item: any) =>
@@ -217,8 +218,10 @@ export function jobCard(snapshot: any, saved = false) {
      */
     descriptionAvailability: selected.completeness,
     hasReadableDescription: selected.hasReadableText,
-    ...(safeUrl(preferredReference(snapshot)?.providerUrl)
-      ? { fullDescriptionExternalUrl: safeUrl(preferredReference(snapshot)?.providerUrl) }
+    ...(safeUrl(preferredReference(snapshot)?.providerUrl ?? snapshot.importedUrl)
+      ? {
+          fullDescriptionExternalUrl: safeUrl(preferredReference(snapshot)?.providerUrl ?? snapshot.importedUrl),
+        }
       : {}),
     title: snapshot.title,
     company: {
@@ -311,6 +314,9 @@ export async function getJobDetailsView(
   });
   if (!snapshot) return null;
 
+  if (snapshot.importedByUserId && snapshot.importedByUserId !== userId) {
+    return null;
+  }
   const currentRegisterVersion = await enrichOnDetailsOpen(
     snapshot.companyRecordId,
     snapshot.companyRecord,
@@ -451,20 +457,32 @@ export async function getJobDetailsView(
       summary: { status: sponsorEvidence.status },
     },
     ...(practicalCompatibility ? { practicalCompatibility } : {}),
-    sourceProvenance: snapshot.providerReferences.map((item) => ({
-      provider: item.provider,
-      providerJobId: item.providerJobId,
-      ...(safeUrl(item.providerUrl)
-        ? { hostedUrl: safeUrl(item.providerUrl) }
-        : {}),
-      ...(safeUrl(item.applicationUrl)
-        ? { applicationUrl: safeUrl(item.applicationUrl) }
-        : {}),
-    })),
+    sourceProvenance: snapshot.importedUrl
+      ? [
+          {
+            provider: "IMPORTED",
+            ...(safeUrl(snapshot.importedUrl)
+              ? { hostedUrl: safeUrl(snapshot.importedUrl) }
+              : {}),
+          },
+        ]
+      : snapshot.providerReferences.map((item) => ({
+          provider: item.provider,
+          providerJobId: item.providerJobId,
+          ...(safeUrl(item.providerUrl)
+            ? { hostedUrl: safeUrl(item.providerUrl) }
+            : {}),
+          ...(safeUrl(item.applicationUrl)
+            ? { applicationUrl: safeUrl(item.applicationUrl) }
+            : {}),
+        })),
     firstSeenAt: iso(snapshot.firstSeenAt),
     lastRefreshedAt: iso(snapshot.lastSeenAt),
     ...(safeUrl(reference?.applicationUrl)
       ? { applicationUrl: safeUrl(reference.applicationUrl) }
+      : {}),
+    ...(safeUrl(snapshot.importedUrl)
+      ? { hostedUrl: safeUrl(snapshot.importedUrl) }
       : {}),
     ...(safeUrl(reference?.providerUrl)
       ? { hostedUrl: safeUrl(reference.providerUrl) }
@@ -819,6 +837,16 @@ export async function getCompanyDetailsView(
     sponsorRegisterVersion: true,
     sponsorCheckedAt: true,
     sponsorEvidence: true,
+    sponsorHistory: {
+      orderBy: { checkedAt: "desc" as const },
+      take: 20,
+      select: {
+        registerVersion: true,
+        matchStatus: true,
+        organisationName: true,
+        checkedAt: true,
+      },
+    },
     jobSources: { select: companySourceSelect },
     _count: { select: { jobSnapshots: { where: usable } } },
   } as const;
@@ -875,6 +903,13 @@ export async function getCompanyDetailsView(
       }),
       summary: sponsorSummary(company.sponsorMatchStatus),
     },
+    sponsorHistory: (company.sponsorHistory ?? []).map((entry) => ({
+      registerVersion: entry.registerVersion,
+      status: sponsorStatusToEvidenceStatus(entry.matchStatus),
+      ...(entry.organisationName ? { organisationName: entry.organisationName } : {}),
+      checkedAt: entry.checkedAt.toISOString(),
+      current: entry.registerVersion === company.sponsorRegisterVersion,
+    })),
     sources: company.jobSources.map((source) => ({
       provider: source.provider,
       verificationStatus: source.verificationStatus,
