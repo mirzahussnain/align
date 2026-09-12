@@ -137,6 +137,32 @@ export async function savePersonalInfo(input: PersonalInfoInput, profileId?: str
   return { ok: true as const };
 }
 
+/** Optional profile details, persisted without changing direction or eligibility. */
+export interface ProfileBackgroundInput {
+  profileId?: string;
+  tagline: string;
+  professionalSummary: string;
+  email: string;
+  phoneDialCode: string;
+  phoneNumber: string;
+  phoneCountry: string;
+  website: string;
+  linkedin: string;
+  github: string;
+}
+
+export async function saveProfileBackground(input: ProfileBackgroundInput) {
+  const userId = await requireUserId();
+  const profileId = await resolveOwnedProfileId(userId, input.profileId);
+  const phone = repairStoredPhone(input);
+  const identity = { email: input.email.trim() || null, phoneDialCode: phone.phoneDialCode || null, phoneNumber: phone.phoneNumber || null, phoneCountry: phone.phoneCountry || null, website: input.website.trim() || null, linkedin: input.linkedin.trim() || null, github: input.github.trim() || null };
+  await prisma.$transaction([
+    prisma.profileIdentity.upsert({ where: { userId }, create: { userId, fullName: '', ...identity }, update: identity }),
+    prisma.profile.update({ where: { id: profileId }, data: { tagline: input.tagline.trim() || null, professionalSummary: input.professionalSummary.trim() || null } }),
+  ]);
+  revalidatePath('/dashboard');
+  return { ok: true as const };
+}
 /**
  * Stamp the user as having been through onboarding, so the dashboard layout
  * stops redirecting them back to `/onboarding`. Idempotent — safe to call on

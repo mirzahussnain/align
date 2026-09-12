@@ -1,11 +1,8 @@
 'use client';
 
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
-import { Label, TextField, TextArea } from '@/features/dashboard/components/profile/Field';
+import { Label, TextField } from '@/features/dashboard/components/profile/Field';
 import TargetRolePicker from '@/features/dashboard/components/profile/TargetRolePicker';
-import LocationPicker from '@/features/dashboard/components/profile/LocationPicker';
-import PhonePicker from '@/features/dashboard/components/profile/PhonePicker';
-import VisaStatusPicker from '@/features/dashboard/components/profile/VisaStatusPicker';
 import type { ProfileStepHandle } from '@/features/dashboard/components/profile/step-handle';
 import { savePersonalInfo, type PersonalInfoInput } from '@/features/dashboard/actions/profile-actions';
 import type { ProfileData } from '@/features/dashboard/data/load-profile';
@@ -123,16 +120,6 @@ const BasicsStep = forwardRef<ProfileStepHandle, BasicsStepProps>(function Basic
         </Label>
         <TextField id="fullName" value={form.fullName} onChange={(e) => set('fullName', e.target.value)} placeholder="Ada Lovelace" />
       </div>
-      <div>
-        <Label htmlFor="tagline">Headline / tagline</Label>
-        <TextField id="tagline" value={form.tagline} onChange={(e) => set('tagline', e.target.value)} placeholder="Senior Backend Engineer" />
-      </div>
-      <div>
-        <Label htmlFor="email">
-          Email <span className="text-rose-500">*</span>
-        </Label>
-        <TextField id="email" type="email" value={form.email} onChange={(e) => set('email', e.target.value)} placeholder="you@example.com" />
-      </div>
 
       <TargetRolePicker value={form} onChange={patch} />
 
@@ -144,38 +131,12 @@ const BasicsStep = forwardRef<ProfileStepHandle, BasicsStepProps>(function Basic
           onChange={(e) => setLabel(e.target.value)}
           placeholder="e.g. Software Engineering"
         />
-        <p className="mt-1 text-[10px] text-neutral-400">
+        <p className="mt-1 text-xs text-neutral-500">
           Suggested from your target role — rename it if you&apos;d like something different. You can add more
           tracks later for other kinds of roles.
         </p>
       </div>
 
-      <PhonePicker value={form} onChange={patch} />
-
-      <LocationPicker value={form} onChange={patch} />
-
-      <VisaStatusPicker value={form} onChange={patch} />
-
-      <div>
-        <Label htmlFor="linkedin">LinkedIn</Label>
-        <TextField id="linkedin" value={form.linkedin} onChange={(e) => set('linkedin', e.target.value)} placeholder="linkedin.com/in/…" />
-      </div>
-      <div>
-        <Label htmlFor="github">GitHub</Label>
-        <TextField id="github" value={form.github} onChange={(e) => set('github', e.target.value)} placeholder="github.com/…" />
-      </div>
-
-      <div className="sm:col-span-2">
-        <Label htmlFor="summary">
-          Professional summary <span className="text-rose-500">*</span>
-        </Label>
-        <TextArea
-          id="summary"
-          value={form.professionalSummary}
-          onChange={(e) => set('professionalSummary', e.target.value)}
-          placeholder="Two or three sentences on who you are and the value you bring."
-        />
-      </div>
     </div>
   );
 });
