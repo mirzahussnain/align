@@ -6,6 +6,8 @@ import type { Classification } from './classification';
 import type { AnalysisContext } from './analysis-context';
 
 export interface CVAnalysisResult {
+  /** Presentation tier resolved by the server; anonymous previews use a separate DTO. */
+  viewerMode?: 'anonymous_demo' | 'authenticated_free' | 'authenticated_pro';
   overallScore: number;
   categories: CategoryScore[];
   keywords: KeywordAnalysis;
@@ -75,7 +77,7 @@ export interface CVAnalysisResult {
   jobDescription?: string;
 
   /**
-   * Id of the persisted `Analysis` row this result was saved as. Attached to the
+   * Id of the persisted ATS analysis or Job Match this result was saved as. Attached to the
    * API response after the row is created — never stored inside the row's own
    * `rawResult` blob. Lets the results screen rebuild a tailored CV from the
    * stored analysis (via /api/cv/regenerate) without re-uploading anything.

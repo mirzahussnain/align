@@ -87,7 +87,7 @@ beforeEach(() => {
     const url = String(input);
     if (url.includes("/api/stored-cvs")) return json({ storedCvs: STORED_CVS });
     if (url.includes("match-preparation")) return json({ matchRequestId: "match-1" });
-    if (url.includes("/api/analyze")) return json(ANALYZE_RESULT);
+    if (url.includes("/api/job-matches")) return json(ANALYZE_RESULT);
     return json({ ok: true });
   });
   vi.stubGlobal("fetch", fetchMock);
@@ -227,7 +227,7 @@ describe("validation before a paste is accepted", () => {
 });
 
 describe("saving a pasted description", () => {
-  it("persists it and asks the caller to refresh", async () => {
+  it("keeps it as a private match-time override instead of mutating the shared vacancy", async () => {
     const user = userEvent.setup();
     const onSaved = open("PARTIAL");
     await reachDescriptionStep(user);
@@ -237,16 +237,8 @@ describe("saving a pasted description", () => {
     await user.paste(FULL_ADVERT);
     await user.click(screen.getByRole("button", { name: /Save and reassess/i }));
 
-    const [url, init] = fetchMock.mock.calls.at(-1) as [string, RequestInit];
-    expect(url).toBe("/api/jobs/snapshot-1/description");
-    expect(init.method).toBe("POST");
-    expect(JSON.parse(String(init.body)).description).toContain(
-      "We are recruiting an IT analyst",
-    );
-
-    // The panel refetches, so badges, tabs and completeness follow the server's
-    // reassessment rather than a client-side guess.
-    expect(onSaved).toHaveBeenCalledTimes(1);
+    expect(fetchMock.mock.calls.some(([url]) => String(url).includes("/description"))).toBe(false);
+    expect(onSaved).not.toHaveBeenCalled();
     expect(screen.getByText(/Saved and reassessed/i)).toBeTruthy();
   });
 
@@ -338,7 +330,7 @@ describe("the analysis runs inside the modal", () => {
     expect((stored as HTMLInputElement).checked).toBe(true);
   });
 
-  it("posts the chosen stored CV to /api/analyze without navigating away", async () => {
+  it("posts the chosen stored CV to the dedicated Job Match endpoint without navigating away", async () => {
     const assign = vi.fn();
     vi.stubGlobal("location", { ...window.location, assign });
 
@@ -350,7 +342,7 @@ describe("the analysis runs inside the modal", () => {
     await screen.findByText(/Analysis complete/i);
 
     const call = fetchMock.mock.calls.find(([url]) =>
-      String(url).includes("/api/analyze"),
+      String(url).includes("/api/job-matches"),
     );
     const body = (call?.[1] as RequestInit).body as FormData;
     expect(body.get("mode")).toBe("job_match");
@@ -375,7 +367,7 @@ describe("the analysis runs inside the modal", () => {
 
     const link = screen.getByRole("link", { name: /View Full Analysis/i });
     expect(link.getAttribute("href")).toBe(
-      "/dashboard?tab=analyses&analysis=analysis-9",
+      "/dashboard?tab=job_matches&analysis=analysis-9",
     );
   });
 

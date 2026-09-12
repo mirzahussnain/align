@@ -51,14 +51,27 @@ export default function CVUploader({ mode = 'ats', onAnalysisComplete, profileId
   // Only a provider-supplied FULL description can prefill canonical job matching.
   useEffect(() => {
     if (mode !== 'job_match' || jobDescription) return;
+    let active = true;
+    let prefill = '';
     try {
-      if (matchRequest?.description) { setJobDescription(matchRequest.description); return; }
-      const raw = window.sessionStorage.getItem('align:job-match-prefill');
-      if (!raw) return;
-      const job = JSON.parse(raw) as { description?: string; descriptionAvailability?: string };
-      if (job.descriptionAvailability === 'FULL' && job.description) setJobDescription(job.description);
+      if (matchRequest?.description) {
+        prefill = matchRequest.description;
+      } else {
+        const raw = window.sessionStorage.getItem('align:job-match-prefill');
+        if (raw) {
+          const job = JSON.parse(raw) as { description?: string; descriptionAvailability?: string };
+          if (job.descriptionAvailability === 'FULL' && job.description) prefill = job.description;
+        }
+      }
     } catch { /* stale browser data is non-authoritative */ }
-  }, [mode, jobDescription]);
+    const timer = window.setTimeout(() => {
+      if (active && prefill) setJobDescription(prefill);
+    }, 0);
+    return () => {
+      active = false;
+      window.clearTimeout(timer);
+    };
+  }, [mode, jobDescription, matchRequest?.description]);
 
   // A stable operation id for the CURRENT logical submission, so a network retry
   // of the same analysis reuses it (the server treats the retry idempotently) and
@@ -134,7 +147,7 @@ export default function CVUploader({ mode = 'ats', onAnalysisComplete, profileId
         if (target.targetRole) formData.append('targetRole', target.targetRole);
       }
 
-      const response = await fetch('/api/analyze', {
+      const response = await fetch(mode === 'job_match' ? '/api/job-matches' : '/api/ats-analyses', {
         method: 'POST',
         headers: { 'x-operation-id': operationIdFor(target) },
         body: formData,

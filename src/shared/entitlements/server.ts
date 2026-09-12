@@ -154,7 +154,11 @@ export async function getResourceCount(userId: string, capability: ProductCapabi
     return prisma.generatedCV.count({ where: { userId } });
   }
   if (capability === 'stored_analyses') {
-    return prisma.analysis.count({ where: { userId } });
+    const [ats, matches] = await Promise.all([
+      prisma.atsAnalysis.count({ where: { userId } }),
+      prisma.jobMatch.count({ where: { userId } }),
+    ]);
+    return ats + matches;
   }
   if (capability === 'saved_jobs') return prisma.savedJob.count({ where: { userId } });
   if (capability === 'profile_evidence_storage') return countStoredEvidence(userId);
@@ -383,8 +387,8 @@ async function countApplicationApprovals(
   analysisId: string
 ): Promise<number> {
   const [contexts, approvals] = await Promise.all([
-    client.applicationEvidenceContext.count({ where: { userId, analysisId } }),
-    client.profileEvidenceApproval.count({ where: { userId, analysisId } }),
+    client.applicationEvidenceContext.count({ where: { userId, jobMatchId: analysisId } }),
+    client.profileEvidenceApproval.count({ where: { userId, jobMatchId: analysisId } }),
   ]);
   return contexts + approvals;
 }

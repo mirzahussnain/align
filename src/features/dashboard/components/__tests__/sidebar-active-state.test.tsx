@@ -54,7 +54,7 @@ describe("Sidebar active state", () => {
 
     render(<Sidebar {...props} />);
 
-    expect(currentItems()).toEqual(["Jobs & Analysis"]);
+    expect(currentItems()).toEqual(["Jobs"]);
   });
 
   it("keeps the tool link current on its nested routes", () => {
@@ -62,6 +62,6 @@ describe("Sidebar active state", () => {
 
     render(<Sidebar {...props} />);
 
-    expect(currentItems()).toEqual(["Jobs & Analysis"]);
+    expect(currentItems()).toEqual(["Jobs"]);
   });
 });

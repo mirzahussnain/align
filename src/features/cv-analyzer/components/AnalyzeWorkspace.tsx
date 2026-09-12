@@ -1,33 +1,13 @@
 'use client';
 
-import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Sparkles, ShieldCheck, RefreshCw } from 'lucide-react';
+import { ShieldCheck, RefreshCw } from 'lucide-react';
 import CVUploader from '@/features/cv-analyzer/components/shared/CVUploader';
 import AtsAnalysisDashboard from '@/features/cv-analyzer/components/ats/AtsAnalysisDashboard';
-import JobMatchDashboard from '@/features/cv-analyzer/components/job-match/JobMatchDashboard';
-import Tabs from '@/shared/components/ui/Tabs';
 import type { CVAnalysisResult } from '@/shared/types/cv';
 import { useAnalysisStore } from '@/shared/stores/analysis-store';
 
-const containerVariants = {
-  hidden: { opacity: 0 },
-  show: { opacity: 1, transition: { staggerChildren: 0.1 } },
-} as const;
-
-const itemVariants = {
-  hidden: { opacity: 0, y: 20 },
-  show: { opacity: 1, y: 0, transition: { type: 'spring' as const, stiffness: 100, damping: 15 } },
-} as const;
-
-/**
- * The full analyze flow — mode toggle, uploader, and result dashboards — with
- * its state held in the analysis store so it survives dashboard tab switches.
- * `compact` drops the big marketing heading for the embedded dashboard tab.
- *
- * `profileId` files the result under a career track. Only the dashboard passes
- * it — the public analyser has no switcher, so the server picks the default.
- */
+/** ATS is deliberately a CV-only workspace. Vacancy fit starts from Jobs. */
 export default function AnalyzeWorkspace({
   compact = false,
   profileId,
@@ -35,93 +15,52 @@ export default function AnalyzeWorkspace({
   compact?: boolean;
   profileId?: string;
 }) {
-  const result = useAnalysisStore((s) => s.result);
-  const mode = useAnalysisStore((s) => s.mode);
-  const setResult = useAnalysisStore((s) => s.setResult);
-  const setMode = useAnalysisStore((s) => s.setMode);
-  const reset = useAnalysisStore((s) => s.reset);
-  const [matchRequest, setMatchRequest] = useState<{ profileId: string; description: string; descriptionAvailability: string } | null>(null);
-  const matchRequestId = new URLSearchParams(typeof window === 'undefined' ? '' : window.location.search).get('matchRequest');
-
-  useEffect(() => {
-    if (new URLSearchParams(window.location.search).get('mode') === 'job_match') setMode('job_match');
-    if (matchRequestId) fetch('/api/job-match-requests/' + encodeURIComponent(matchRequestId)).then((response) => response.ok ? response.json() : null).then(setMatchRequest).catch(() => setMatchRequest(null));
-  }, [setMode, matchRequestId]);
+  const result = useAnalysisStore((state) => state.result);
+  const setResult = useAnalysisStore((state) => state.setResult);
+  const reset = useAnalysisStore((state) => state.reset);
 
   return (
     <AnimatePresence mode="wait">
       {!result ? (
         <motion.div
-          key="uploader-view"
-          initial={{ opacity: 0, scale: 0.95 }}
-          animate={{ opacity: 1, scale: 1 }}
-          exit={{ opacity: 0, scale: 0.95 }}
-          transition={{ duration: 0.4 }}
-          className="text-center max-w-3xl mx-auto"
+          key="ats-upload"
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0 }}
+          className="mx-auto max-w-3xl text-center"
         >
-          {!compact && (
-            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-accent-purple/10 border border-accent-purple/20 mb-6">
-              <Sparkles size={14} className="text-accent-purple" />
-              <span className="text-xs font-medium text-accent-purple">CV Readiness Tool</span>
-            </div>
-          )}
-
-          <h1 className={compact ? 'text-2xl font-bold mb-3 text-text-primary' : 'text-4xl sm:text-5xl font-bold mb-4 leading-tight text-text-primary'}>
-            {mode === 'ats' ? 'CV Readiness Check' : 'Job Matcher AI'}
+          <h1 className={compact ? 'mb-3 text-2xl font-semibold tracking-tight text-text-primary' : 'mb-4 text-4xl font-semibold tracking-[-0.035em] text-text-primary sm:text-5xl'}>
+            Check how your CV reads to an ATS
           </h1>
-
-          <p className="text-base text-text-secondary max-w-xl mx-auto mb-8">
-            {mode === 'ats'
-              ? 'Upload your CV to check formatting, keyword mapping, UK compliance rules, and receive a comprehensive scoring audit.'
-              : 'Paste your target Job Description and upload your CV to see your exact match percentage, skill gaps, and tailored rewrite suggestions.'}
+          <p className="mx-auto mb-8 max-w-xl text-base text-text-secondary">
+            Review parsing, structure, evidence, keywords, and UK CV conventions. Job-specific fit
+            is assessed separately from a vacancy in Jobs.
           </p>
-
-          <Tabs
-            activeTab={mode}
-            onChange={(value) => setMode(value as 'ats' | 'job_match')}
-            tabs={[
-              { label: 'ATS Score Check', value: 'ats' },
-              { label: 'Job Matcher', value: 'job_match' },
-            ]}
-            className="max-w-md mx-auto mb-8"
-          />
-
           <CVUploader
-            mode={mode}
-            profileId={matchRequest?.profileId ?? profileId}
-            jobMatchRequestId={matchRequestId ?? undefined}
-            matchRequest={matchRequest}
-            onAnalysisComplete={(r) => setResult(r as CVAnalysisResult)}
+            mode="ats"
+            profileId={profileId}
+            onAnalysisComplete={(value) => setResult(value as CVAnalysisResult)}
           />
         </motion.div>
       ) : (
-        <motion.div key="dashboard-view" variants={containerVariants} initial="hidden" animate="show" className="space-y-8">
-          <motion.div
-            variants={itemVariants}
-            className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-border-subtle pb-6"
-          >
+        <motion.div key="ats-report" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-8">
+          <div className="flex flex-col items-start justify-between gap-4 border-b border-border-subtle pb-6 sm:flex-row sm:items-center">
             <div>
-              <h1 className="text-3xl font-bold text-text-primary flex items-center gap-2">
+              <h1 className="flex items-center gap-2 text-3xl font-semibold tracking-tight text-text-primary">
                 <ShieldCheck className="text-accent-purple" />
-                CV Analysis Report
+                ATS analysis
               </h1>
-              <p className="text-xs text-text-tertiary mt-1">Checked against 2026 UK hiring practices for your occupation</p>
+              <p className="mt-1 text-xs text-text-tertiary">CV readiness, independent of any vacancy</p>
             </div>
             <button
+              type="button"
               onClick={reset}
-              className="flex items-center gap-2 px-4 py-2 text-xs font-semibold rounded-xl bg-bg-tertiary hover:bg-border-subtle text-text-primary border border-border-subtle transition-all duration-300"
+              className="flex min-h-11 items-center gap-2 rounded-xl border border-border-subtle bg-bg-tertiary px-4 py-2 text-xs font-semibold text-text-primary transition-colors hover:bg-border-subtle"
             >
-              <RefreshCw size={14} /> Analyze New CV
+              <RefreshCw size={14} /> Analyze another CV
             </button>
-          </motion.div>
-
-          <motion.div variants={itemVariants}>
-            {result.mode === 'job_match' ? (
-              <JobMatchDashboard result={result} />
-            ) : (
-              <AtsAnalysisDashboard result={result} onNewUpload={reset} />
-            )}
-          </motion.div>
+          </div>
+          <AtsAnalysisDashboard result={result} onNewUpload={reset} />
         </motion.div>
       )}
     </AnimatePresence>

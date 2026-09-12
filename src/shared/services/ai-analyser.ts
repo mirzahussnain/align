@@ -17,7 +17,11 @@ import {
   type AIClassificationOutput,
 } from '@/shared/schemas/ai-output';
 import { composeSemanticPrompt, composeJobMatchPrompt } from './prompt-composer';
-import { generateJSONFromAI } from './ai-orchestrator';
+import {
+  generateJSONFromAI,
+  generateJSONFromAIWithProvenance,
+  type AIResultWithProvenance,
+} from './ai-orchestrator';
 import { normalizeJobMatchDataV2 } from './job-match-ledger';
 
 /**
@@ -65,9 +69,19 @@ export async function getSemanticCVFeedback(
   profile: OccupationProfile,
   classification: Classification
 ): Promise<AISemanticOutput | null> {
+  const result = await getSemanticCVFeedbackWithProvenance(cvText, baseResult, profile, classification);
+  return result?.data ?? null;
+}
+
+export async function getSemanticCVFeedbackWithProvenance(
+  cvText: string,
+  baseResult: CVAnalysisResult,
+  profile: OccupationProfile,
+  classification: Classification
+): Promise<AIResultWithProvenance<AISemanticOutput> | null> {
   // Zod's loose objects widen the inferred type with an index signature, so
   // the schema is bridged to the declared output interface explicitly.
-  return generateJSONFromAI<AISemanticOutput>({
+  return generateJSONFromAIWithProvenance<AISemanticOutput>({
     prompt: composeSemanticPrompt(cvText, baseResult, profile, classification),
     temperature: 0.1,
     thinkingBudget: THINKING_BUDGETS.semanticFeedback,
@@ -82,13 +96,25 @@ export async function getJobMatchFeedback(
   profile: OccupationProfile,
   classification: Classification
 ): Promise<JobMatchDataV2 | null> {
-  const draft = await generateJSONFromAI<JobMatchDataV2Draft>({
+  const result = await getJobMatchFeedbackWithProvenance(cvText, jobDescription, profile, classification);
+  return result?.data ?? null;
+}
+
+export async function getJobMatchFeedbackWithProvenance(
+  cvText: string,
+  jobDescription: string,
+  profile: OccupationProfile,
+  classification: Classification
+): Promise<AIResultWithProvenance<JobMatchDataV2> | null> {
+  const result = await generateJSONFromAIWithProvenance<JobMatchDataV2Draft>({
     prompt: composeJobMatchPrompt(cvText, jobDescription, profile, classification),
     temperature: 0.1,
     thinkingBudget: THINKING_BUDGETS.jobMatch,
     schema: AIJobMatchV2RawSchema as unknown as ZodType<JobMatchDataV2Draft>,
   });
 
-  return draft ? normalizeJobMatchDataV2(draft, cvText) : null;
+  return result
+    ? { data: normalizeJobMatchDataV2(result.data, cvText), provenance: result.provenance }
+    : null;
 }
 

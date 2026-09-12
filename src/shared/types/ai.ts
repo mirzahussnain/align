@@ -81,7 +81,7 @@ export type RequirementCategory =
   | 'availability'
   | 'other';
 
-export type EvidenceSource = 'cv' | 'profile' | 'user_context';
+export type EvidenceSource = 'cv' | 'profile' | 'practical_fact' | 'user_context';
 
 export interface RequirementEvidence {
   source: EvidenceSource;

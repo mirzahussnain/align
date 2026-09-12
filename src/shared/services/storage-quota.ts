@@ -17,8 +17,18 @@
 import { prisma } from '@/shared/lib/prisma';
 import { storage } from '@/shared/lib/storage';
 import { entitlementsFor, type Entitlements } from '@/shared/lib/entitlements';
+import { getPlanEntitlement } from '@/shared/entitlements/registry';
 
 export interface StorageUsage {
+  sourceCvs: number;
+  maxSourceCvs: number;
+  sourceCvBytes: number;
+  generatedCvs: number;
+  maxGeneratedCvs: number | null;
+  generatedCvBytes: number;
+  atsAnalyses: number;
+  jobMatches: number;
+  temporaryDemoBytes: number;
   storedCvs: number;
   maxStoredCvs: number;
   storedAnalyses: number;
@@ -35,24 +45,37 @@ export async function getStorageUsage(
   effectivePlan: string | null | undefined
 ): Promise<StorageUsage> {
   const entitlements = entitlementsFor(effectivePlan);
+  const plan = entitlements.tier === 'pro' ? 'PRO' : 'FREE';
+  const sourceLimit = getPlanEntitlement(plan, 'stored_source_cvs');
 
-  const [cvCount, analysisCount, cvBytes, uploadBytes] = await Promise.all([
+  const [sourceCount, cvCount, atsCount, matchCount, sourceBytes, cvBytes] = await Promise.all([
+    prisma.storedCv.count({ where: { userId, deletedAt: null } }),
     prisma.generatedCV.count({ where: { userId } }),
-    prisma.analysis.count({ where: { userId } }),
+    prisma.atsAnalysis.count({ where: { userId } }),
+    prisma.jobMatch.count({ where: { userId } }),
+    prisma.storedCv.aggregate({ where: { userId, deletedAt: null, objectDeletedAt: null }, _sum: { sizeBytes: true } }),
     prisma.generatedCV.aggregate({ where: { userId }, _sum: { fileSize: true } }),
-    prisma.analysis.aggregate({ where: { userId }, _sum: { sourceFileSize: true } }),
   ]);
 
   return {
-    storedCvs: cvCount,
-    maxStoredCvs: entitlements.maxStoredCvs,
-    storedAnalyses: analysisCount,
+    sourceCvs: sourceCount,
+    maxSourceCvs: sourceLimit.mode === 'resource_limit' ? sourceLimit.limit : Number.POSITIVE_INFINITY,
+    sourceCvBytes: sourceBytes._sum.sizeBytes ?? 0,
+    generatedCvs: cvCount,
+    maxGeneratedCvs: Number.isFinite(entitlements.maxStoredCvs) ? entitlements.maxStoredCvs : null,
+    generatedCvBytes: cvBytes._sum.fileSize ?? 0,
+    atsAnalyses: atsCount,
+    jobMatches: matchCount,
+    temporaryDemoBytes: 0,
+    storedCvs: sourceCount,
+    maxStoredCvs: sourceLimit.mode === 'resource_limit' ? sourceLimit.limit : Number.POSITIVE_INFINITY,
+    storedAnalyses: atsCount + matchCount,
     maxStoredAnalyses: Number.isFinite(entitlements.maxStoredAnalyses)
       ? entitlements.maxStoredAnalyses
       : null,
     // Rows archived before size tracking existed report null; treat as 0 rather
     // than guessing, so the meter under-reports instead of inventing usage.
-    bytesUsed: (cvBytes._sum.fileSize ?? 0) + (uploadBytes._sum.sourceFileSize ?? 0),
+    bytesUsed: (cvBytes._sum.fileSize ?? 0) + (sourceBytes._sum.sizeBytes ?? 0),
     sourceRetentionDays: entitlements.sourceRetentionDays,
   };
 }
@@ -99,32 +122,11 @@ export async function pruneGeneratedCvs(
  * finite cap (free) — paid tiers keep their full history.
  */
 export async function pruneAnalyses(userId: string, entitlements: Entitlements): Promise<number> {
-  const { maxStoredAnalyses } = entitlements;
-  if (!Number.isFinite(maxStoredAnalyses)) return 0;
-
-  try {
-    const excess = await prisma.analysis.findMany({
-      where: { userId },
-      orderBy: { createdAt: 'desc' },
-      skip: maxStoredAnalyses,
-      select: { id: true, sourceFileKey: true },
-    });
-    if (excess.length === 0) return 0;
-
-    await Promise.all(
-      excess.filter((a) => a.sourceFileKey).map((a) => storage.delete('uploads', a.sourceFileKey as string))
-    );
-    await prisma.analysis.deleteMany({ where: { id: { in: excess.map((a) => a.id) } } });
-
-    console.info(`[storage-quota] Pruned ${excess.length} analysis record(s) for user ${userId}.`);
-    return excess.length;
-  } catch (error) {
-    console.warn(
-      '[storage-quota] Failed to prune analyses:',
-      error instanceof Error ? error.message : error
-    );
-    return 0;
-  }
+  void userId;
+  void entitlements;
+  // Result history is never silently pruned. Explicit user deletion can later
+  // remove a result and then collect only its now-unreferenced revisions.
+  return 0;
 }
 
 /**
@@ -137,23 +139,24 @@ export async function pruneAnalyses(userId: string, entitlements: Entitlements):
  */
 export async function sweepExpiredSources(userId?: string, limit = 100): Promise<number> {
   try {
-    const expired = await prisma.analysis.findMany({
+    const expired = await prisma.cvRevision.findMany({
       where: {
         ...(userId ? { userId } : {}),
-        sourceExpiresAt: { lt: new Date() },
-        sourceFileKey: { not: null },
+        sourceObjectExpiresAt: { lt: new Date() },
+        sourceObjectKey: { not: null },
+        sourceObjectDeletedAt: null,
       },
       take: limit,
-      select: { id: true, sourceFileKey: true },
+      select: { id: true, sourceObjectKey: true },
     });
     if (expired.length === 0) return 0;
 
     await Promise.all(
-      expired.map((a) => storage.delete('uploads', a.sourceFileKey as string))
+      expired.map((a) => storage.delete('uploads', a.sourceObjectKey as string))
     );
-    await prisma.analysis.updateMany({
+    await prisma.cvRevision.updateMany({
       where: { id: { in: expired.map((a) => a.id) } },
-      data: { sourceFileKey: null, sourceFileSize: null, sourceExpiresAt: null },
+      data: { sourceObjectKey: null, sourceObjectDeletedAt: new Date() },
     });
 
     console.info(`[storage-quota] Swept ${expired.length} expired source file(s).`);

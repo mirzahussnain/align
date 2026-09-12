@@ -79,7 +79,7 @@ describe('JobSnapshot service', () => {
   });
 
   it('keeps provider and user descriptions separate and hashes the selected pasted text', async () => {
-    const snapshot = { id: 'snapshot-1', providerDescription: 'Provider text', userSuppliedDescription: null, descriptionAvailability: 'PARTIAL', providerReferences: [] };
+    const snapshot = { id: 'snapshot-1', importedByUserId: 'user-1', providerDescription: 'Provider text', userSuppliedDescription: null, descriptionAvailability: 'PARTIAL', providerReferences: [] };
     prisma.jobSnapshot.findUnique.mockResolvedValue(snapshot);
     prisma.jobSnapshot.update.mockResolvedValue({ ...snapshot, userSuppliedDescription: 'User pasted full description' });
 

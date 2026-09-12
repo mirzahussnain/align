@@ -246,8 +246,9 @@ export default function BillingView({
             <p className="text-[11px] text-neutral-400">{formatBytes(storage.bytesUsed)} archived</p>
           </div>
 
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <UsageMeter label="Stored CVs" used={storage.storedCvs} limit={storage.maxStoredCvs} />
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+            <UsageMeter label="Source CVs" used={storage.sourceCvs} limit={storage.maxSourceCvs} />
+            <UsageMeter label="Generated CVs" used={storage.generatedCvs} limit={storage.maxGeneratedCvs} />
             <UsageMeter label="Analyses kept" used={storage.storedAnalyses} limit={storage.maxStoredAnalyses} />
           </div>
 
@@ -255,7 +256,7 @@ export default function BillingView({
             {storage.sourceRetentionDays === null
               ? 'Your uploaded CV files are kept indefinitely.'
               : `Uploaded CV files are kept for ${storage.sourceRetentionDays} days, then removed. Your analysis results and scores are always kept.`}{' '}
-            Once you pass a limit, the oldest items are removed automatically.
+            Result metadata remains in history after an original source file expires.
           </p>
         </div>
 
@@ -274,7 +275,7 @@ export default function BillingView({
                 <div className="flex items-center justify-between">
                   <p className="text-xs font-bold uppercase tracking-wider text-neutral-500">{t.name}</p>
                   {isCurrent && (
-                    <span className="rounded-full bg-accent-purple/10 px-2 py-0.5 text-[10px] font-bold text-accent-purple">
+                    <span className="rounded-full bg-accent-purple/10 px-2 py-0.5 text-xs font-bold text-accent-purple">
                       Current
                     </span>
                   )}

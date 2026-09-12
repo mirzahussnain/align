@@ -207,7 +207,7 @@ export async function resolveApprovedApplicationEvidence(
   if (ids.length === 0) return [];
   if (new Set(ids).size !== ids.length) throw new StructuredEvidenceValidationError('Duplicate application evidence context.');
   const rows = await prisma.applicationEvidenceContext.findMany({
-    where: { id: { in: ids }, userId, analysisId, ...(profileId ? { profileId } : {}) },
+    where: { id: { in: ids }, userId, jobMatchId: analysisId, ...(profileId ? { profileId } : {}) },
     select: { id: true, requirementId: true, kind: true, details: true },
   });
   if (rows.length !== ids.length) throw new StructuredEvidenceValidationError('Application evidence is stale, deleted, or not owned by this profile.');

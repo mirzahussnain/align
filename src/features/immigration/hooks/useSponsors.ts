@@ -29,9 +29,10 @@ export function useSponsors() {
   useEffect(() => {
     const urlQuery = searchParams.get('q') || searchParams.get('query') || '';
     if (urlQuery && urlQuery !== query) {
-      setQuery(urlQuery);
+      const timer = window.setTimeout(() => setQuery(urlQuery), 0);
+      return () => window.clearTimeout(timer);
     }
-  }, [searchParams]);
+  }, [query, searchParams]);
 
   const fetchSponsors = async (searchQuery: string, searchRoute: string, searchIndustry: string, targetPage: number) => {
     setIsLoading(true);

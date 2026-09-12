@@ -429,7 +429,7 @@ describe('sweepExpiredReservations', () => {
     const later = new Date(T0.getTime() + RESERVATION_TTL_MS + 1000);
     // A fresh hold on a DIFFERENT capability, reserved AT sweep time — its own
     // lazy expiry is scoped to job_match_analysis, so it can't pre-expire 'stale'.
-    await reserveCapability({ userId: 'u1', capability: 'job_match_analysis', operationId: 'live', now: later });
+    await reserveCapability({ userId: 'u1', capability: 'human_evidence_capture', operationId: 'live', now: later });
 
     const { expired } = await sweepExpiredReservations({ userId: 'u1', now: later });
     expect(expired).toBe(1);

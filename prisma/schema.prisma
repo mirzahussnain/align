@@ -27,7 +27,11 @@ model User {
   identity                    ProfileIdentity?
   practicalFacts              ProfilePracticalFacts?
   profiles                    Profile[]
-  analyses                    Analysis[]
+  atsAnalyses                 AtsAnalysis[]
+  jobMatches                  JobMatch[]
+  cvRevisions                 CvRevision[]
+  jobRevisions                JobRevision[]
+  careerProfileSnapshots      CareerProfileSnapshot[]
   generatedCVs                GeneratedCV[]
   usage                       UsageCounter[]
   capabilityReservations      CapabilityReservation[]
@@ -40,7 +44,8 @@ model User {
   onboardingState             OnboardingState?
   savedJobs                   SavedJob[]
   jobMatchRequests            JobMatchRequest[]
-  importedJobSnapshots        JobSnapshot[]               @relation("ImportedJobSnapshots")
+  claimedAnonymousAtsResults  AnonymousAtsResult[]
+  importedJobSnapshots        JobSnapshot[]                @relation("ImportedJobSnapshots")
 
   @@unique([email])
   @@map("user")
@@ -235,7 +240,9 @@ enum WorkPatternPreference {
   FLEXIBLE
 }
 
-/** Highest DBS check the candidate currently holds. NONE is a confirmed absence. */
+/**
+ * Highest DBS check the candidate currently holds. NONE is a confirmed absence.
+ */
 enum DbsCheckLevel {
   NONE
   BASIC
@@ -243,7 +250,9 @@ enum DbsCheckLevel {
   ENHANCED
 }
 
-/** Highest UK security clearance currently held. NONE is a confirmed absence. */
+/**
+ * Highest UK security clearance currently held. NONE is a confirmed absence.
+ */
 enum SecurityClearanceLevel {
   NONE
   BPSS
@@ -254,13 +263,11 @@ enum SecurityClearanceLevel {
 
 /**
  * Confirmed, structured practical facts about the candidate.
- *
  * Every field is nullable and every nullable field means UNKNOWN, never "no".
  * That distinction is the whole point of the model: practical compatibility must
  * be able to say "not confirmed in your profile" instead of manufacturing a
  * conflict out of an absent value. Nothing here is ever inferred from CV prose —
  * these are only written when the user records them explicitly.
- *
  * Held once per user (like ProfileIdentity) because a driving licence or a DBS
  * check does not vary by which Career Track the candidate is applying under.
  */
@@ -271,12 +278,12 @@ model ProfilePracticalFacts {
 
   // Immigration and work permission. `visaStatus`/`visaExpiry` stay on
   // ProfileIdentity; these are the two answers that status alone cannot give.
-  requiresSponsorshipNow      Boolean?
-  mayRequireSponsorshipLater  Boolean?
+  requiresSponsorshipNow     Boolean?
+  mayRequireSponsorshipLater Boolean?
 
   // Location and work pattern. Home location itself is ProfileIdentity.city/state.
   openToRelocation      Boolean?
-  relocationLocations   String[] @default([])
+  relocationLocations   String[]               @default([])
   maxCommuteMinutes     Int?
   workPatternPreference WorkPatternPreference?
   maxOnsiteDaysPerWeek  Int?
@@ -364,7 +371,8 @@ model Profile {
   applicationEvidenceContexts ApplicationEvidenceContext[]
   profileEvidenceApprovals    ProfileEvidenceApproval[]
   generatedCVs                GeneratedCV[]
-  analyses                    Analysis[]
+  atsAnalyses                 AtsAnalysis[]
+  careerProfileSnapshots      CareerProfileSnapshot[]
   savedJobs                   SavedJob[]
   jobMatchRequests            JobMatchRequest[]
   cvImportSessions            CvImportSession[]
@@ -597,8 +605,8 @@ model ProfileEvidenceApproval {
   id              String   @id @default(cuid())
   userId          String
   user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  analysisId      String
-  analysis        Analysis @relation(fields: [analysisId], references: [id], onDelete: Cascade)
+  jobMatchId      String
+  jobMatch        JobMatch @relation(fields: [jobMatchId], references: [id], onDelete: Cascade)
   profileId       String?
   profile         Profile? @relation(fields: [profileId], references: [id], onDelete: SetNull)
   requirementId   String
@@ -608,7 +616,7 @@ model ProfileEvidenceApproval {
   snapshotVersion Int      @default(1)
   approvedAt      DateTime @default(now())
 
-  @@index([userId, analysisId, requirementId])
+  @@index([userId, jobMatchId, requirementId])
   @@index([profileId])
   @@map("profile_evidence_approval")
 }
@@ -617,8 +625,8 @@ model ApplicationEvidenceContext {
   id            String              @id @default(cuid())
   userId        String
   user          User                @relation(fields: [userId], references: [id], onDelete: Cascade)
-  analysisId    String
-  analysis      Analysis            @relation(fields: [analysisId], references: [id], onDelete: Cascade)
+  jobMatchId    String
+  jobMatch      JobMatch            @relation(fields: [jobMatchId], references: [id], onDelete: Cascade)
   profileId     String?
   profile       Profile?            @relation(fields: [profileId], references: [id], onDelete: SetNull)
   requirementId String
@@ -627,7 +635,7 @@ model ApplicationEvidenceContext {
   approvedAt    DateTime
   createdAt     DateTime            @default(now())
 
-  @@index([userId, analysisId, requirementId])
+  @@index([userId, jobMatchId, requirementId])
   @@map("application_evidence_context")
 }
 
@@ -745,73 +753,194 @@ model OtherEvidence {
 // Persists a full CVAnalysisResult run (src/shared/types/cv.ts). The general
 // ATS/CV result is stored as Json to avoid over-normalizing volatile fields,
 // while mode/overallScore stay queryable columns for history views.
-model Analysis {
-  id                  String    @id @default(cuid())
+/**
+ * Immutable CV input used by an ATS analysis or Job Match.
+ */
+model CvRevision {
+  id                    String        @id @default(cuid())
+  userId                String
+  user                  User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  storedCvId            String?
+  storedCv              StoredCv?     @relation(fields: [storedCvId], references: [id], onDelete: SetNull)
+  extractionId          String?
+  extraction            CvExtraction? @relation(fields: [extractionId], references: [id], onDelete: SetNull)
+  filename              String
+  mimeType              String
+  byteSize              Int
+  checksum              String
+  extractedText         String
+  pageCount             Int?
+  parserVersion         String
+  sourceObjectKey       String?
+  sourceObjectExpiresAt DateTime?
+  sourceObjectDeletedAt DateTime?
+  createdAt             DateTime      @default(now())
+
+  atsAnalyses  AtsAnalysis[]
+  jobMatches   JobMatch[]
+  generatedCVs GeneratedCV[]
+
+  @@index([userId, createdAt])
+  @@index([storedCvId])
+  @@index([sourceObjectExpiresAt])
+  @@map("cv_revision")
+}
+
+/**
+ * A CV-centric ATS result. It never represents vacancy fit.
+ */
+model AtsAnalysis {
+  id                  String     @id @default(cuid())
   userId              String
-  user                User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  /**
-   * Which career track this analysis belongs to, so the engineering profile's
-   * history doesn't show warehouse matches. Nullable and SetNull: deleting a
-   * profile must never destroy the user's scoring history, it just unfiles it.
-   */
+  user                User       @relation(fields: [userId], references: [id], onDelete: Cascade)
   profileId           String?
-  profile             Profile?  @relation(fields: [profileId], references: [id], onDelete: SetNull)
-  mode                String
+  profile             Profile?   @relation(fields: [profileId], references: [id], onDelete: SetNull)
+  cvRevisionId        String
+  cvRevision          CvRevision @relation(fields: [cvRevisionId], references: [id], onDelete: Restrict)
   overallScore        Int
-  rawResult           Json
-  jobDescription      String?
-  /**
-   * Sole persisted job-match payload. Null for ATS-only analyses; job-match
-   * rows are validated in application code as JobMatchDataV2 with
-   * schemaVersion = 2. rawResult never contains a second copy.
-   */
-  jobMatchData        Json?
-  /**
-   * Version stamps for interpreting stored results. Null on rows written
-   * before the occupation-aware rebuild (scoring v2) — readers treat those as
-   * legacy shape.
-   */
-  scoringVersion      Int?
+  resultJson          Json
+  scoringVersion      String
   profileVersion      String?
   dictionaryVersion   String?
-  /**
-   * Promoted classification columns for querying/filtering history without
-   * deserialising rawResult; `classification` holds the full object including
-   * confidence, source, alternatives, and reason codes.
-   */
   occupation          String?
   applicationWorkflow String?
   classification      Json?
-  /**
-   * Role title and hiring company extracted from the job description by the
-   * matcher itself (see ai-analyser.ts). Stored as columns rather than dug out
-   * of `jobMatchData` so history lists can render "Senior Data Engineer at
-   * FinCore" without deserialising the whole match blob for every row.
-   */
-  jobTitle            String?
-  jobCompany          String?
-  sourceFileName      String?
-  sourceFileKey       String?
-  /**
-   * Bytes of the archived source upload, so quota is computed without listing R2.
-   */
-  sourceFileSize      Int?
-  /**
-   * When the archived source file becomes eligible for pruning, set from the
-   * user's tier retention window at upload time. Null means keep indefinitely.
-   * Only the R2 object expires — the Analysis row and its scores are retained.
-   */
-  sourceExpiresAt     DateTime?
-  createdAt           DateTime  @default(now())
+  aiEnhanced          Boolean    @default(false)
+  aiProvider          String?
+  aiModel             String?
+  promptVersion       String?
+  createdAt           DateTime   @default(now())
+
+  @@index([userId, createdAt])
+  @@index([profileId])
+  @@index([cvRevisionId])
+  @@map("ats_analysis")
+}
+
+/**
+ * Exact immutable vacancy text and metadata used for one or more matches.
+ */
+model JobRevision {
+  id                      String               @id @default(cuid())
+  userId                  String?
+  user                    User?                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  jobSnapshotId           String?
+  jobSnapshot             JobSnapshot?         @relation(fields: [jobSnapshotId], references: [id], onDelete: SetNull)
+  title                   String
+  company                 String
+  location                String?
+  description             String
+  descriptionSource       JobDescriptionSource
+  descriptionHash         String
+  providerMetadataJson    Json?
+  sponsorshipMetadataJson Json?
+  createdAt               DateTime             @default(now())
+
+  jobMatches   JobMatch[]
+  generatedCVs GeneratedCV[]
+
+  @@index([jobSnapshotId])
+  @@index([userId, createdAt])
+  @@index([descriptionHash])
+  @@map("job_revision")
+}
+
+/**
+ * Immutable match-time copy of the selected Career Profile and practical facts.
+ */
+model CareerProfileSnapshot {
+  id               String   @id @default(cuid())
+  userId           String
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sourceProfileId  String?
+  sourceProfile    Profile? @relation(fields: [sourceProfileId], references: [id], onDelete: SetNull)
+  profileLabel     String
+  targetRole       String?
+  targetOccupation String?
+  targetSeniority  String?
+  targetIndustry   String?
+  snapshotJson     Json
+  schemaVersion    Int      @default(1)
+  contentHash      String
+  createdAt        DateTime @default(now())
+
+  jobMatches   JobMatch[]
+  generatedCVs GeneratedCV[]
+
+  @@index([userId, createdAt])
+  @@index([sourceProfileId])
+  @@map("career_profile_snapshot")
+}
+
+/**
+ * Candidate-to-vacancy result over three exact immutable inputs.
+ */
+model JobMatch {
+  id                String                @id @default(cuid())
+  userId            String
+  user              User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  cvRevisionId      String
+  cvRevision        CvRevision            @relation(fields: [cvRevisionId], references: [id], onDelete: Restrict)
+  jobRevisionId     String
+  jobRevision       JobRevision           @relation(fields: [jobRevisionId], references: [id], onDelete: Restrict)
+  profileSnapshotId String
+  profileSnapshot   CareerProfileSnapshot @relation(fields: [profileSnapshotId], references: [id], onDelete: Restrict)
+  requestId         String?               @unique
+  request           JobMatchRequest?      @relation(fields: [requestId], references: [id], onDelete: SetNull)
+  matchScore        Int
+  resultJson        Json
+  algorithmVersion  String
+  promptVersion     String
+  aiProvider        String?
+  aiModel           String?
+  createdAt         DateTime              @default(now())
 
   generatedCVs                GeneratedCV[]
   applicationEvidenceContexts ApplicationEvidenceContext[]
   profileEvidenceApprovals    ProfileEvidenceApproval[]
 
-  @@index([userId])
-  @@index([profileId])
-  @@index([sourceExpiresAt])
-  @@map("analysis")
+  @@index([userId, createdAt])
+  @@index([cvRevisionId])
+  @@index([jobRevisionId])
+  @@index([profileSnapshotId])
+  @@map("job_match")
+}
+
+enum AnonymousAtsStatus {
+  PROCESSING
+  READY
+  CLAIMED
+  EXPIRED
+  FAILED
+}
+
+/**
+ * Short-lived anonymous ATS demo. Access requires the opaque cookie token.
+ */
+model AnonymousAtsResult {
+  id              String             @id @default(cuid())
+  tokenHash       String             @unique
+  sessionHash     String             @unique
+  ipHash          String
+  status          AnonymousAtsStatus @default(PROCESSING)
+  filename        String
+  mimeType        String
+  byteSize        Int
+  checksum        String
+  extractedText   String
+  pageCount       Int?
+  resultJson      Json?
+  overallScore    Int?
+  expiresAt       DateTime
+  claimedAt       DateTime?
+  claimedByUserId String?
+  claimedByUser   User?              @relation(fields: [claimedByUserId], references: [id], onDelete: SetNull)
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+
+  @@index([ipHash, createdAt])
+  @@index([expiresAt, status])
+  @@map("anonymous_ats_result")
 }
 
 enum JobProvider {
@@ -889,6 +1018,8 @@ enum JobDescriptionSource {
 
 enum JobSnapshotStatus {
   ACTIVE
+  STALE
+  ARCHIVED
   EXPIRED
   REMOVED
   UNKNOWN
@@ -911,17 +1042,17 @@ enum JobMatchRequestStatus {
 }
 
 model JobSnapshot {
-  id                        String                     @id @default(cuid())
-  canonicalJobId            String                     @unique
-  title                     String
-  normalisedTitle           String
-  employerName              String
-  normalisedEmployerName    String
+  id                     String  @id @default(cuid())
+  canonicalJobId         String  @unique
+  title                  String
+  normalisedTitle        String
+  employerName           String
+  normalisedEmployerName String
   // Vacancies brought in by a user are private, unlike discovery snapshots.
   // Null means the snapshot came from a shared provider feed.
-  importedByUserId          String?
-  importedByUser            User?                      @relation("ImportedJobSnapshots", fields: [importedByUserId], references: [id], onDelete: Cascade)
-  importedUrl               String?
+  importedByUserId       String?
+  importedByUser         User?   @relation("ImportedJobSnapshots", fields: [importedByUserId], references: [id], onDelete: Cascade)
+  importedUrl            String?
 
   companyRecordId           String?
   // Why this snapshot is (or is not) linked to a company. Retained even when no
@@ -968,6 +1099,7 @@ model JobSnapshot {
   employerSource            EmployerJobSource?         @relation("EmployerSourceSnapshots", fields: [employerSourceId], references: [id], onDelete: SetNull)
   savedJobs                 SavedJob[]
   matchRequests             JobMatchRequest[]
+  revisions                 JobRevision[]
 
   @@index([dedupeFingerprint])
   @@index([importedByUserId, createdAt])
@@ -1114,11 +1246,13 @@ model JobMatchRequest {
   jobSnapshot                JobSnapshot           @relation(fields: [jobSnapshotId], references: [id], onDelete: Cascade)
   selectedDescriptionSource  JobDescriptionSource
   selectedDescriptionHash    String
+  descriptionText            String
   partialDescriptionAccepted Boolean               @default(false)
   status                     JobMatchRequestStatus @default(PREPARED)
   createdAt                  DateTime              @default(now())
   expiresAt                  DateTime?
   consumedAt                 DateTime?
+  jobMatch                   JobMatch?
 
   @@index([userId, createdAt])
   @@index([jobSnapshotId])
@@ -1253,38 +1387,52 @@ model CapabilityReservation {
 // was generated from, so "regenerate from this job-match analysis" can reuse
 // jobMatchData.cv_build_spec without re-running AI.
 model GeneratedCV {
-  id         String    @id @default(cuid())
-  userId     String
-  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  analysisId String?
-  analysis   Analysis? @relation(fields: [analysisId], references: [id], onDelete: SetNull)
+  id                  String                 @id @default(cuid())
+  userId              String
+  user                User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  jobMatchId          String?
+  jobMatch            JobMatch?              @relation(fields: [jobMatchId], references: [id], onDelete: SetNull)
+  sourceCvRevisionId  String?
+  sourceCvRevision    CvRevision?            @relation(fields: [sourceCvRevisionId], references: [id], onDelete: SetNull)
+  profileSnapshotId   String?
+  profileSnapshot     CareerProfileSnapshot? @relation(fields: [profileSnapshotId], references: [id], onDelete: SetNull)
+  jobRevisionId       String?
+  jobRevision         JobRevision?           @relation(fields: [jobRevisionId], references: [id], onDelete: SetNull)
+  parentGeneratedCvId String?
+  parentGeneratedCv   GeneratedCV?           @relation("GeneratedCvVersions", fields: [parentGeneratedCvId], references: [id], onDelete: SetNull)
+  childVersions       GeneratedCV[]          @relation("GeneratedCvVersions")
+  versionNumber       Int                    @default(1)
   /**
    * Which profile produced this CV, when it came from a profile-based path.
    */
-  profileId  String?
-  profile    Profile?  @relation(fields: [profileId], references: [id], onDelete: SetNull)
-  template   String
+  profileId           String?
+  profile             Profile?               @relation(fields: [profileId], references: [id], onDelete: SetNull)
+  template            String
   /**
    * Headline for this document, snapshotted from the rewritten CV's tagline at
    * generation time. Denormalised deliberately: the dashboard lists up to 250
    * CVs and rendering a card title should not mean deserialising 250 full CV
    * payloads out of `data`.
    */
-  title      String?
-  data       Json
+  title               String?
+  data                Json
   /**
    * Generation-time source and approval metadata; never mixed into CV content.
    */
-  provenance Json?
-  fileKey    String?
+  provenance          Json?
+  fileKey             String?
   /**
    * Bytes of the archived DOCX, so quota is computed without listing R2.
    */
-  fileSize   Int?
-  createdAt  DateTime  @default(now())
+  fileSize            Int?
+  createdAt           DateTime               @default(now())
 
   @@index([userId])
-  @@index([analysisId])
+  @@index([jobMatchId])
+  @@index([sourceCvRevisionId])
+  @@index([profileSnapshotId])
+  @@index([jobRevisionId])
+  @@index([parentGeneratedCvId])
   @@index([profileId])
   @@map("generated_cv")
 }
@@ -1418,6 +1566,7 @@ model StoredCv {
 
   extractions    CvExtraction[]
   importSessions CvImportSession[]
+  revisions      CvRevision[]
 
   @@unique([userId, checksum])
   @@index([userId, status])
@@ -1476,6 +1625,7 @@ model CvExtraction {
 
   importSessions CvImportSession[]
   candidates     CvImportCandidate[]
+  revisions      CvRevision[]
 
   @@unique([storedCvId, parserVersion, attempt])
   @@index([storedCvId, status])

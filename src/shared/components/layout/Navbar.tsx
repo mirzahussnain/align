@@ -27,15 +27,18 @@ export default function Navbar() {
   const isScrolled = pathname !== '/' || scrolledPastTop;
 
   useEffect(() => {
-    setScrolledPastTop(window.scrollY > 20);
     if (pathname !== '/') return;
 
     const handleScroll = () => {
       setScrolledPastTop(window.scrollY > 20);
     };
 
+    const frame = window.requestAnimationFrame(handleScroll);
     window.addEventListener('scroll', handleScroll);
-    return () => window.removeEventListener('scroll', handleScroll);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.removeEventListener('scroll', handleScroll);
+    };
   }, [pathname]);
 
   return (

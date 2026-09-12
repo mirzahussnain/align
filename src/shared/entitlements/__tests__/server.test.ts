@@ -73,29 +73,19 @@ describe('server entitlement decisions', () => {
     );
   });
 
-  it('reports quota usage and remaining units from the reservation ledger', async () => {
-    // Free job-match analyses are 2/month at launch.
+  it('denies Job Match on Free before consulting quota usage', async () => {
     mocks.used = 1;
     await expect(checkCapability('u1', 'job_match_analysis')).resolves.toMatchObject({
-      allowed: true,
-      used: 1,
-      limit: 2,
-      remaining: 1,
-      reason: 'quota_available',
-    });
-    mocks.used = 2;
-    await expect(checkCapability('u1', 'job_match_analysis')).resolves.toMatchObject({
       allowed: false,
-      remaining: 0,
-      reason: 'quota_exhausted',
+      mode: 'disabled',
+      reason: 'plan_required',
+      upgradeTarget: 'PRO',
     });
   });
 
   it('counts each quota capability independently', async () => {
-    // AI-enhanced ATS and job-match are independent launch quotas (1 and 2/month);
-    // the reservation ledger counts each capability's own rows, so exhausting one
-    // must not affect the other. The mock returns the same used for both, but the
-    // per-capability limits still resolve from the registry.
+    // AI-enhanced ATS remains an independent Free quota. Job Match is a disabled
+    // capability on Free and must fail closed before any reservation is made.
     mocks.used = 0;
     await expect(checkCapability('u1', 'ai_enhanced_ats_analysis')).resolves.toMatchObject({
       allowed: true,
@@ -103,9 +93,9 @@ describe('server entitlement decisions', () => {
       reason: 'quota_available',
     });
     await expect(checkCapability('u1', 'job_match_analysis')).resolves.toMatchObject({
-      allowed: true,
-      limit: 2,
-      reason: 'quota_available',
+      allowed: false,
+      mode: 'disabled',
+      reason: 'plan_required',
     });
   });
 

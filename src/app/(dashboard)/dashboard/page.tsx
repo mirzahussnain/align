@@ -1,332 +1,155 @@
-import { headers } from "next/headers";
-import { redirect } from "next/navigation";
-import { auth } from "@/shared/lib/auth";
-import { prisma } from "@/shared/lib/prisma";
-import DashboardShell from "@/features/dashboard/components/DashboardShell";
+import { headers } from 'next/headers';
+import { redirect } from 'next/navigation';
+import { auth } from '@/shared/lib/auth';
+import { prisma } from '@/shared/lib/prisma';
+import DashboardShell from '@/features/dashboard/components/DashboardShell';
 import {
   loadProfileData,
   listProfiles,
   isProfileComplete,
   profileCompleteness,
   resolveProfileId,
-} from "@/features/dashboard/data/load-profile";
-import { getStorageUsage } from "@/shared/services/storage-quota";
-import { getUsage } from "@/shared/services/usage-meter";
-import { parseStoredAnalysisResult } from "@/shared/schemas/analysis-result";
-import {
-  getOccupationProfile,
-  isKnownOccupation,
-} from "@/shared/occupations/registry";
-import { parseStoredJobMatchData } from "@/shared/schemas/ai-output";
-import { getRequirementSummary } from "@/shared/utils/job-match-view";
-import type { CategoryScore } from "@/shared/types/cv";
-import { getEntitlementSnapshot } from "@/shared/entitlements/server";
-import { resolveBillingAccess } from "@/shared/billing/access";
+} from '@/features/dashboard/data/load-profile';
+import { getStorageUsage } from '@/shared/services/storage-quota';
+import { getUsage } from '@/shared/services/usage-meter';
+import { getEntitlementSnapshot } from '@/shared/entitlements/server';
+import { resolveBillingAccess } from '@/shared/billing/access';
 
-/** Best-scoring non-excellent-only pick — direction flips which end of the sort wins. */
-function pickCategory(
-  categories: CategoryScore[],
-  direction: "weakest" | "strongest",
-) {
-  const ranked = categories
-    .filter((c) => c.maxScore > 0)
-    .sort((a, b) => a.score / a.maxScore - b.score / b.maxScore);
-  if (direction === "weakest")
-    return ranked.find((c) => c.status !== "excellent") ?? null;
-  return [...ranked].reverse().find((c) => c.status === "excellent") ?? null;
-}
-
-export const dynamic = "force-dynamic";
+export const dynamic = 'force-dynamic';
 
 export default async function DashboardPage({
   searchParams,
 }: {
-  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const session = await auth.api.getSession({ headers: await headers() });
-  if (!session) redirect("/login");
-
+  if (!session) redirect('/login');
+  const params = await searchParams;
+  const requestedProfile = Array.isArray(params.profile) ? params.profile[0] : params.profile;
+  const requestedTab = Array.isArray(params.tab) ? params.tab[0] : params.tab;
+  const requestedAnalysis = Array.isArray(params.analysis) ? params.analysis[0] : params.analysis;
+  const tabs = ['overview', 'analyze', 'profile', 'ats', 'job_matches', 'cvs', 'billing'] as const;
+  const initialTab = tabs.find((tab) => tab === requestedTab);
   const userId = session.user.id;
+  const profileId = await resolveProfileId(userId, requestedProfile);
 
-  // Switching career track is a soft navigation to ?profile=<id>, so the
-  // server reloads that profile's content while client tab state survives.
-  const resolvedSearchParams = await searchParams;
-  const requestedProfile = resolvedSearchParams.profile;
-  const activeProfileId = Array.isArray(requestedProfile)
-    ? requestedProfile[0]
-    : requestedProfile;
-
-  // A checkout return (or the upgrade CTA) deep-links straight to the billing
-  // tab; the Job Board deep-links to a stored analysis it found for a vacancy.
-  const requestedTab = Array.isArray(resolvedSearchParams.tab)
-    ? resolvedSearchParams.tab[0]
-    : resolvedSearchParams.tab;
-  const dashboardTabs = [
-    "overview",
-    "analyze",
-    "profile",
-    "analyses",
-    "cvs",
-    "billing",
-  ] as const;
-  const initialTab = dashboardTabs.find((tab) => tab === requestedTab);
-
-  /**
-   * A specific stored analysis to open on arrival. Only the id travels in the
-   * URL — the report itself is loaded by the existing analyses view, which is
-   * ownership-checked server-side, so an id belonging to someone else opens
-   * nothing rather than leaking a row.
-   */
-  const requestedAnalysis = Array.isArray(resolvedSearchParams.analysis)
-    ? resolvedSearchParams.analysis[0]
-    : resolvedSearchParams.analysis;
-  const initialAnalysisId =
-    initialTab === "analyses" && requestedAnalysis
-      ? requestedAnalysis
-      : undefined;
-
-  // Resolved before the queries because everything below is scoped to it, and
-  // because an id belonging to another user must be rejected rather than used.
-  const scopedProfileId = await resolveProfileId(userId, activeProfileId);
-
-  /**
-   * History is filed per career track, so the engineering profile doesn't list
-   * warehouse matches. Rows with a null `profileId` are included in every track:
-   * they are analyses whose profile was later deleted, and hiding them would
-   * look to the user like their history had silently disappeared.
-   */
-  const scope = {
-    userId,
-    OR: [{ profileId: scopedProfileId }, { profileId: null }],
-  };
-
-  const [analyses, scoreAgg, cvs, profileData, profiles] = await Promise.all([
-    prisma.analysis.findMany({
-      where: scope,
-      orderBy: { createdAt: "desc" },
+  const [atsAnalyses, jobMatches, cvs, profileData, profiles, entitlements] = await Promise.all([
+    prisma.atsAnalysis.findMany({
+      where: { userId, OR: [{ profileId }, { profileId: null }] },
+      orderBy: { createdAt: 'desc' },
+      take: 100,
       select: {
         id: true,
         createdAt: true,
-        mode: true,
         overallScore: true,
-        sourceFileName: true,
-        jobTitle: true,
-        jobCompany: true,
         occupation: true,
+        aiEnhanced: true,
+        cvRevision: { select: { filename: true } },
       },
     }),
-    prisma.analysis.aggregate({
-      where: scope,
-      _count: { _all: true },
+    prisma.jobMatch.findMany({
+      where: { userId, profileSnapshot: { sourceProfileId: profileId } },
+      orderBy: { createdAt: 'desc' },
+      take: 100,
+      select: {
+        id: true,
+        createdAt: true,
+        matchScore: true,
+        cvRevision: { select: { filename: true } },
+        jobRevision: { select: { title: true, company: true } },
+        profileSnapshot: { select: { profileLabel: true } },
+      },
     }),
     prisma.generatedCV.findMany({
-      where: scope,
-      orderBy: { createdAt: "desc" },
+      where: {
+        userId,
+        OR: [{ profileId }, { profileSnapshot: { sourceProfileId: profileId } }],
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 250,
       select: {
         id: true,
         template: true,
         title: true,
         createdAt: true,
-        analysisId: true,
-        // Provenance for the card's pills: which CV this was rewritten from, and
-        // which role it was targeted at. `data` is deliberately NOT selected —
-        // the title column exists precisely so listing CVs stays cheap.
-        analysis: {
-          select: {
-            sourceFileName: true,
-            jobTitle: true,
-            jobCompany: true,
-            overallScore: true,
-          },
-        },
+        jobMatchId: true,
+        versionNumber: true,
+        sourceCvRevision: { select: { filename: true } },
+        jobRevision: { select: { title: true, company: true } },
+        jobMatch: { select: { matchScore: true } },
+        profileSnapshot: { select: { profileLabel: true } },
         profile: { select: { label: true } },
       },
     }),
-    loadProfileData(userId, activeProfileId),
+    loadProfileData(userId, requestedProfile),
     listProfiles(userId),
+    getEntitlementSnapshot(userId),
   ]);
 
-  const entitlementSnapshot = await getEntitlementSnapshot(userId);
-  const [storage, usage, billingAccess] = await Promise.all([
-    getStorageUsage(userId, entitlementSnapshot.plan),
+  const [storage, usage, billing] = await Promise.all([
+    getStorageUsage(userId, entitlements.plan),
     getUsage(userId),
     resolveBillingAccess(userId),
   ]);
-
-  // Surfaced in the wizard so the reasoning opt-in can say how many runs are
-  // left, rather than letting the user pick it and then fail at the API.
-  const profileReconciliation =
-    entitlementSnapshot.capabilities.profile_reconciliation;
-  const reasoningRemaining =
-    profileReconciliation.mode === "quota"
-      ? (profileReconciliation.remaining ?? 0)
-      : profileReconciliation.allowed
-        ? null
-        : 0;
-
-  /**
-   * A job-match score and an ATS score answer different questions — "will this
-   * beat the competition for THIS role" vs "will this clear a parser at all" —
-   * so they must never be blended into one number or one hero label. The hero
-   * always prefers the most recent job match (it's the closer proxy for
-   * "application readiness"); only when none exists does the ATS result stand
-   * in, and it's labelled as CV readiness rather than application readiness.
-   */
-  const jobMatchAnalyses = analyses.filter((a) => a.mode === "job_match");
-  const atsAnalyses = analyses.filter((a) => a.mode !== "job_match");
-  const heroAnalysis = jobMatchAnalyses[0] ?? atsAnalyses[0] ?? null;
-  const heroPrevious = heroAnalysis
-    ? ((heroAnalysis.mode === "job_match"
-        ? jobMatchAnalyses
-        : atsAnalyses
-      ).find((a) => a.id !== heroAnalysis.id) ?? null)
-    : null;
-
-  const average = (rows: typeof analyses) =>
-    rows.length
-      ? rows.reduce((sum, a) => sum + a.overallScore, 0) / rows.length
-      : null;
-  const best = (rows: typeof analyses) =>
-    rows.length
-      ? rows.reduce((top, a) => (a.overallScore > top.overallScore ? a : top))
-      : null;
-
-  const readinessSplit = {
-    atsCount: atsAnalyses.length,
-    jobMatchCount: jobMatchAnalyses.length,
-    avgAtsScore: average(atsAnalyses),
-    avgJobMatchScore: average(jobMatchAnalyses),
-    latestAtsScore: atsAnalyses[0]?.overallScore ?? null,
-    bestJobMatchScore: best(jobMatchAnalyses)?.overallScore ?? null,
-  };
-
-  // One extra, targeted read of the hero's own stored result — cheap (single
-  // row) and lets the hero surface real engine output instead of decorating
-  // the score with nothing. Job-match facts come from the structured
-  // canonical requirement ledger, never from a
-  // raw dictionary miss count — that number conflates "not in our keyword
-  // list" with "actually required for this role" and reads as alarming
-  // (hundreds of "missing" terms) without being actionable.
-  let heroInsight: {
-    occupationLabel: string | null;
-    weakestCategoryLabel: string | null;
-    strongestCategoryLabel: string | null;
-    credentialsStatus: "ready" | "attention" | null;
-    essentialMatched: number | null;
-    essentialTotal: number | null;
-    primaryGap: string | null;
-    domainStatus: "aligned" | "partial" | "mismatch" | null;
-  } | null = null;
-
-  if (heroAnalysis) {
-    const heroRow = await prisma.analysis.findUnique({
-      where: { id: heroAnalysis.id },
-      select: { rawResult: true, jobMatchData: true },
-    });
-    const parsed = heroRow
-      ? parseStoredAnalysisResult(heroRow.rawResult)
-      : null;
-    const categories = parsed?.result.categories ?? [];
-    // Legacy (pre-rebuild) rows carry the old dictionary-era category labels —
-    // surfacing those would undo the "evidence coverage" rebrand, so category
-    // facts are simply withheld on legacy rows rather than shown stale.
-    const weakest =
-      parsed && !parsed.legacy ? pickCategory(categories, "weakest") : null;
-    const strongest =
-      parsed && !parsed.legacy ? pickCategory(categories, "strongest") : null;
-    const credentials = categories.find((c) => c.id === "credentials") ?? null;
-
-    let essentialMatched: number | null = null;
-    let essentialTotal: number | null = null;
-    let primaryGap: string | null = null;
-    let domainStatus: "aligned" | "partial" | "mismatch" | null = null;
-
-    if (heroAnalysis.mode === "job_match" && heroRow) {
-      const jobMatch = parseStoredJobMatchData(heroRow.jobMatchData);
-      if (jobMatch) {
-        const summary = getRequirementSummary(jobMatch);
-        essentialMatched = summary.essentialMatched;
-        essentialTotal = summary.essentialTotal;
-        primaryGap = summary.primaryGap;
-        domainStatus = summary.domainStatus;
-      }
-    }
-
-    heroInsight = {
-      occupationLabel: isKnownOccupation(heroAnalysis.occupation)
-        ? getOccupationProfile(heroAnalysis.occupation).label
-        : null,
-      weakestCategoryLabel: weakest?.label || null,
-      strongestCategoryLabel: strongest?.label || null,
-      credentialsStatus: credentials
-        ? credentials.status === "excellent" || credentials.status === "good"
-          ? "ready"
-          : "attention"
-        : null,
-      essentialMatched,
-      essentialTotal,
-      primaryGap,
-      domainStatus,
-    };
-  }
+  const reconciliation = entitlements.capabilities.profile_reconciliation;
 
   return (
     <DashboardShell
-      user={{
-        name: session.user.name,
-        email: session.user.email,
-        image: session.user.image,
-      }}
-      tier={entitlementSnapshot.plan.toLowerCase()}
-      entitlementSnapshot={entitlementSnapshot}
+      user={{ name: session.user.name, email: session.user.email, image: session.user.image }}
+      tier={entitlements.plan.toLowerCase()}
+      entitlementSnapshot={entitlements}
       initialTab={initialTab}
-      initialAnalysisId={initialAnalysisId}
+      initialAnalysisId={requestedAnalysis}
       data={{
-        analyses: analyses.map((a) => ({
-          ...a,
-          createdAt: a.createdAt.toISOString(),
+        atsAnalyses: atsAnalyses.map((row) => ({
+          id: row.id,
+          createdAt: row.createdAt.toISOString(),
+          overallScore: row.overallScore,
+          sourceFileName: row.cvRevision.filename,
+          occupation: row.occupation,
+          aiEnhanced: row.aiEnhanced,
         })),
-        totalAnalyses: scoreAgg._count._all,
-        cvs: cvs.map(({ analysis, profile, ...c }) => ({
-          ...c,
-          createdAt: c.createdAt.toISOString(),
-          sourceFileName: analysis?.sourceFileName ?? null,
-          jobTitle: analysis?.jobTitle ?? null,
-          jobCompany: analysis?.jobCompany ?? null,
-          matchScore: analysis?.overallScore ?? null,
-          profileLabel: profile?.label ?? null,
+        jobMatches: jobMatches.map((row) => ({
+          id: row.id,
+          createdAt: row.createdAt.toISOString(),
+          matchScore: row.matchScore,
+          sourceFileName: row.cvRevision.filename,
+          jobTitle: row.jobRevision.title,
+          jobCompany: row.jobRevision.company,
+          profileLabel: row.profileSnapshot.profileLabel,
+        })),
+        cvs: cvs.map((row) => ({
+          id: row.id,
+          createdAt: row.createdAt.toISOString(),
+          template: row.template,
+          title: row.title,
+          jobMatchId: row.jobMatchId,
+          versionNumber: row.versionNumber,
+          sourceFileName: row.sourceCvRevision?.filename ?? null,
+          jobTitle: row.jobRevision?.title ?? null,
+          jobCompany: row.jobRevision?.company ?? null,
+          matchScore: row.jobMatch?.matchScore ?? null,
+          profileLabel: row.profileSnapshot?.profileLabel ?? row.profile?.label ?? null,
         })),
         profile: profileData,
         profiles,
-        maxProfiles:
-          entitlementSnapshot.capabilities.additional_career_profiles.limit ??
-          1,
-        profileReasoning: profileReconciliation.allowed,
-        reasoningRemaining,
+        maxProfiles: entitlements.capabilities.additional_career_profiles.limit ?? 1,
+        profileReasoning: reconciliation.allowed,
+        reasoningRemaining: reconciliation.mode === 'quota' ? (reconciliation.remaining ?? 0) : reconciliation.allowed ? null : 0,
+        storage,
         usage,
         profileComplete: isProfileComplete(profileData),
         profileCompleteness: profileCompleteness(profileData),
-        aiAnalysesLimit:
-          entitlementSnapshot.capabilities.ai_enhanced_ats_analysis.limit ??
-          null,
-        storage,
+        aiAnalysesLimit: entitlements.capabilities.ai_enhanced_ats_analysis.limit ?? null,
         billing: {
-          plan: billingAccess.effectivePlan,
-          status: billingAccess.status,
-          cancelAtPeriodEnd: billingAccess.cancelAtPeriodEnd,
-          accessEndsAt: billingAccess.accessEndsAt?.toISOString() ?? null,
-          graceEndsAt: billingAccess.graceEndsAt?.toISOString() ?? null,
-          checkoutAvailable: billingAccess.checkoutAvailable,
-          portalAvailable: billingAccess.portalAvailable,
+          plan: billing.effectivePlan,
+          status: billing.status,
+          cancelAtPeriodEnd: billing.cancelAtPeriodEnd,
+          accessEndsAt: billing.accessEndsAt?.toISOString() ?? null,
+          graceEndsAt: billing.graceEndsAt?.toISOString() ?? null,
+          checkoutAvailable: billing.checkoutAvailable,
+          portalAvailable: billing.portalAvailable,
         },
-        heroAnalysis: heroAnalysis
-          ? { ...heroAnalysis, createdAt: heroAnalysis.createdAt.toISOString() }
-          : null,
-        heroPrevious: heroPrevious
-          ? { ...heroPrevious, createdAt: heroPrevious.createdAt.toISOString() }
-          : null,
-        heroInsight,
-        readinessSplit,
       }}
     />
   );

@@ -175,27 +175,14 @@ export function CheckMatchModal({
   // held the previous vacancy's step, track and pasted text.
   if (!open) return null;
 
-  /**
-   * Persist the pasted description and let the server reassess it.
-   *
-   * The route replaces the selected description, recomputes its hash and clears
-   * the intelligence derived from the old text, so the reassessment is the
-   * server's, not a client-side guess. Nothing here overwrites the provider's
-   * own description.
-   */
+  /** Mark a private match-time override ready; it is not written to the shared vacancy. */
   const saveAndReassess = async () => {
     if (!pasteIsUsable) return;
     setSaving(true);
     setError(null);
     try {
-      await readJson(`/api/jobs/${encodeURIComponent(jobId)}/description`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ description: trimmedPaste }),
-      });
       setSavedDescription(true);
       setPartialAccepted(false);
-      onDescriptionSaved?.();
     } catch (caught) {
       setError(
         caught instanceof Error
@@ -255,6 +242,7 @@ export function CheckMatchModal({
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             profileId: selectedTrack || undefined,
+            descriptionOverride: savedDescription ? trimmedPaste : undefined,
             // The user's ACTUAL answer. This used to be `!isFullDescription`,
             // which auto-accepted the reduced-confidence warning on their
             // behalf and defeated the server-side guard entirely. It is now
@@ -276,7 +264,7 @@ export function CheckMatchModal({
       if (cvOption === "UPLOAD" && uploadFile) form.append("file", uploadFile);
       else form.append("storedCvId", selectedStoredCvId);
 
-      const response = await fetch("/api/analyze", {
+      const response = await fetch("/api/job-matches", {
         method: "POST",
         headers: { "x-operation-id": operationId() },
         body: form,
@@ -493,7 +481,7 @@ export function CheckMatchModal({
                 */}
                 {completed.analysisId ? (
                   <a
-                    href={`/dashboard?tab=analyses&analysis=${encodeURIComponent(
+                    href={`/dashboard?tab=job_matches&analysis=${encodeURIComponent(
                       completed.analysisId,
                     )}`}
                     className="px-6 py-3 rounded-xl bg-gradient-to-r from-purple-600 to-accent-purple text-white text-xs font-bold shadow-md hover:opacity-95 transition flex items-center justify-center gap-2"

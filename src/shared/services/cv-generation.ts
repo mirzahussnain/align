@@ -71,7 +71,11 @@ export async function persistAndArchiveCv(args: {
   templateId: string;
   fileName: string;
   docxBuffer: Buffer;
-  analysisId?: string | null;
+  jobMatchId?: string | null;
+  sourceCvRevisionId?: string | null;
+  profileSnapshotId?: string | null;
+  jobRevisionId?: string | null;
+  parentGeneratedCvId?: string | null;
   /** Career track this CV was built from, when it came from a profile path. */
   profileId?: string | null;
   /** Optional generation-time source/approval snapshot, separate from CV data. */
@@ -88,12 +92,19 @@ export async function persistAndArchiveCv(args: {
     templateId,
     fileName,
     docxBuffer,
-    analysisId,
+    jobMatchId,
+    sourceCvRevisionId,
+    profileSnapshotId,
+    jobRevisionId,
+    parentGeneratedCvId,
     profileId,
     provenance,
     entitlements,
   } = args;
 
+  const versionNumber = jobMatchId
+    ? (await prisma.generatedCV.aggregate({ where: { userId, jobMatchId }, _max: { versionNumber: true } }))._max.versionNumber ?? 0
+    : 0;
   const generatedCV = await prisma.generatedCV.create({
     data: {
       userId,
@@ -101,7 +112,12 @@ export async function persistAndArchiveCv(args: {
       title: cvTitleFrom(data),
       data: JSON.parse(JSON.stringify(data)),
       provenance: provenance ? JSON.parse(JSON.stringify(provenance)) : undefined,
-      analysisId: analysisId ?? null,
+      jobMatchId: jobMatchId ?? null,
+      sourceCvRevisionId: sourceCvRevisionId ?? null,
+      profileSnapshotId: profileSnapshotId ?? null,
+      jobRevisionId: jobRevisionId ?? null,
+      parentGeneratedCvId: parentGeneratedCvId ?? null,
+      versionNumber: versionNumber + 1,
       profileId: profileId ?? null,
     },
   });

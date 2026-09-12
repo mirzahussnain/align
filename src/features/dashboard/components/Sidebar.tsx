@@ -49,7 +49,8 @@ const TAB_GROUPS: { label: string; items: TabItem[] }[] = [
   {
     label: "Library",
     items: [
-      { tab: "analyses", label: "Analyses", icon: FileSearch },
+      { tab: "ats", label: "ATS analyses", icon: FileSearch },
+      { tab: "job_matches", label: "Job matches", icon: Briefcase },
       { tab: "cvs", label: "Generated CVs", icon: FileStack },
       { tab: "billing", label: "Plan & billing", icon: CreditCard },
     ],
@@ -58,7 +59,7 @@ const TAB_GROUPS: { label: string; items: TabItem[] }[] = [
 
 // Route-backed tools stay real links so browser navigation and active state remain canonical.
 const EXTERNAL_LINKS: LinkItem[] = [
-  { href: "/dashboard/jobs", label: "Jobs & Analysis", icon: Briefcase },
+  { href: "/dashboard/jobs", label: "Jobs", icon: Briefcase },
   { href: "/immigration", label: "Sponsorship", icon: Stamp },
 ];
 

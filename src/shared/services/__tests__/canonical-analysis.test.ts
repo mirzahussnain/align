@@ -1,11 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-// The canonical loader is the single trusted, UNPROJECTED read for internal
-// workflows. These tests prove it verifies ownership, validates the stored
-// blobs, returns the full ledger, and maps failures precisely — and never
-// applies plan projection.
 vi.mock('@/shared/lib/prisma', () => ({
-  prisma: { analysis: { findUnique: vi.fn() } },
+  prisma: { jobMatch: { findFirst: vi.fn() } },
 }));
 vi.mock('@/shared/schemas/analysis-result', () => ({
   parseStoredAnalysisResult: vi.fn(),
@@ -16,81 +12,57 @@ vi.mock('@/shared/schemas/ai-output', () => ({
 
 import { loadCanonicalAnalysis } from '../canonical-analysis';
 import { prisma } from '@/shared/lib/prisma';
-import { parseStoredAnalysisResult } from '@/shared/schemas/analysis-result';
 import { parseStoredJobMatchData } from '@/shared/schemas/ai-output';
+import { parseStoredAnalysisResult } from '@/shared/schemas/analysis-result';
 
-const jobMatch = { schemaVersion: 2, requirements: [{ id: 'r1', text: 'SQL', status: 'not_met' }], matchScore: 40 };
-
-function row(overrides: Record<string, unknown> = {}) {
-  return {
-    id: 'an-1',
-    userId: 'u1',
-    mode: 'job_match',
-    profileId: 'p1',
-    rawResult: { some: 'blob' },
-    jobDescription: 'JD text long enough',
-    jobMatchData: jobMatch,
-    ...overrides,
-  };
-}
+const ledger = { schemaVersion: 2, requirements: [{ id: 'r1', text: 'SQL', status: 'not_met' }] };
+const storedResult = { rawText: 'CV body', categories: [], recommendations: [], keywords: { present: [], missing: [] }, jobMatchData: ledger };
+const row = () => ({
+  id: 'match-1',
+  userId: 'u1',
+  resultJson: storedResult,
+  cvRevisionId: 'cv-1',
+  jobRevisionId: 'job-1',
+  profileSnapshotId: 'profile-snapshot-1',
+  cvRevision: { extractedText: 'Exact CV body' },
+  jobRevision: { description: 'Exact vacancy description' },
+  profileSnapshot: { sourceProfileId: 'profile-1' },
+});
 
 beforeEach(() => {
   vi.clearAllMocks();
-  vi.mocked(parseStoredAnalysisResult).mockReturnValue({ result: { rawText: 'CV body', categories: [], recommendations: [], keywords: { present: [], missing: [] } }, legacy: false } as never);
-  vi.mocked(parseStoredJobMatchData).mockReturnValue(jobMatch as never);
+  vi.mocked(parseStoredAnalysisResult).mockReturnValue({ result: storedResult, legacy: false } as never);
+  vi.mocked(parseStoredJobMatchData).mockReturnValue(ledger as never);
 });
 
 describe('loadCanonicalAnalysis', () => {
-  it('returns the complete canonical analysis for the owner, including the full ledger', async () => {
-    vi.mocked(prisma.analysis.findUnique).mockResolvedValue(row() as never);
-    const result = await loadCanonicalAnalysis({ userId: 'u1', analysisId: 'an-1', requireJobMatch: true });
+  it('returns the exact three immutable inputs for an owned Job Match', async () => {
+    vi.mocked(prisma.jobMatch.findFirst).mockResolvedValue(row() as never);
+    const result = await loadCanonicalAnalysis({ userId: 'u1', analysisId: 'match-1', requireJobMatch: true });
     expect(result.ok).toBe(true);
-    if (result.ok) {
-      expect(result.analysis.jobMatchData).toEqual(jobMatch);
-      expect(result.analysis.cvText).toBe('CV body');
-      expect(result.analysis.jobDescription).toBe('JD text long enough');
-      // The full requirement ledger is present — nothing projected/stripped.
-      expect(result.analysis.jobMatchData?.requirements).toHaveLength(1);
-    }
+    if (!result.ok) return;
+    expect(result.analysis.cvText).toBe('Exact CV body');
+    expect(result.analysis.jobDescription).toBe('Exact vacancy description');
+    expect(result.analysis.cvRevisionId).toBe('cv-1');
+    expect(result.analysis.jobRevisionId).toBe('job-1');
+    expect(result.analysis.profileSnapshotId).toBe('profile-snapshot-1');
+    expect(result.analysis.jobMatchData).toEqual(ledger);
   });
 
-  it('treats an unowned row as not_found (never leaks another user\'s result)', async () => {
-    vi.mocked(prisma.analysis.findUnique).mockResolvedValue(row({ userId: 'someone_else' }) as never);
-    const result = await loadCanonicalAnalysis({ userId: 'u1', analysisId: 'an-1' });
-    expect(result).toEqual({ ok: false, error: 'not_found' });
+  it('fails closed when ownership lookup finds no row', async () => {
+    vi.mocked(prisma.jobMatch.findFirst).mockResolvedValue(null);
+    await expect(loadCanonicalAnalysis({ userId: 'u1', analysisId: 'other' })).resolves.toEqual({ ok: false, error: 'not_found' });
   });
 
-  it('returns not_found for a missing row', async () => {
-    vi.mocked(prisma.analysis.findUnique).mockResolvedValue(null as never);
-    const result = await loadCanonicalAnalysis({ userId: 'u1', analysisId: 'missing' });
-    expect(result).toEqual({ ok: false, error: 'not_found' });
-  });
-
-  it('rejects a non-job-match analysis when a job match is required', async () => {
-    vi.mocked(prisma.analysis.findUnique).mockResolvedValue(row({ mode: 'ats' }) as never);
-    const result = await loadCanonicalAnalysis({ userId: 'u1', analysisId: 'an-1', requireJobMatch: true });
-    expect(result).toEqual({ ok: false, error: 'wrong_mode' });
-  });
-
-  it('rejects an unparseable stored result', async () => {
-    vi.mocked(prisma.analysis.findUnique).mockResolvedValue(row() as never);
+  it('rejects an invalid stored result', async () => {
+    vi.mocked(prisma.jobMatch.findFirst).mockResolvedValue(row() as never);
     vi.mocked(parseStoredAnalysisResult).mockReturnValue(null);
-    const result = await loadCanonicalAnalysis({ userId: 'u1', analysisId: 'an-1' });
-    expect(result).toEqual({ ok: false, error: 'invalid_result' });
+    await expect(loadCanonicalAnalysis({ userId: 'u1', analysisId: 'match-1' })).resolves.toEqual({ ok: false, error: 'invalid_result' });
   });
 
-  it('rejects a job match whose ledger fails schemaVersion-2 validation', async () => {
-    vi.mocked(prisma.analysis.findUnique).mockResolvedValue(row() as never);
+  it('rejects an invalid requirement ledger', async () => {
+    vi.mocked(prisma.jobMatch.findFirst).mockResolvedValue(row() as never);
     vi.mocked(parseStoredJobMatchData).mockReturnValue(null);
-    const result = await loadCanonicalAnalysis({ userId: 'u1', analysisId: 'an-1', requireJobMatch: true });
-    expect(result).toEqual({ ok: false, error: 'invalid_job_match' });
-  });
-
-  it('allows an ATS analysis with no ledger when a job match is not required', async () => {
-    vi.mocked(prisma.analysis.findUnique).mockResolvedValue(row({ mode: 'ats', jobMatchData: null }) as never);
-    vi.mocked(parseStoredJobMatchData).mockReturnValue(null);
-    const result = await loadCanonicalAnalysis({ userId: 'u1', analysisId: 'an-1' });
-    expect(result.ok).toBe(true);
-    if (result.ok) expect(result.analysis.jobMatchData).toBeNull();
+    await expect(loadCanonicalAnalysis({ userId: 'u1', analysisId: 'match-1' })).resolves.toEqual({ ok: false, error: 'invalid_job_match' });
   });
 });

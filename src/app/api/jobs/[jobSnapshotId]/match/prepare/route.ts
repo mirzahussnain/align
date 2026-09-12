@@ -7,7 +7,11 @@ import { assessAndPersistJobIntelligence } from '@/shared/services/job-intellige
 import { buildConfirmedCandidateFacts } from '@/shared/services/practical-compatibility-store';
 import { APIError, withErrorHandler } from '@/shared/utils/api-error';
 
-const Input = z.object({ profileId: z.string().optional(), partialDescriptionAccepted: z.boolean().default(false) });
+const Input = z.object({
+  profileId: z.string().optional(),
+  partialDescriptionAccepted: z.boolean().default(false),
+  descriptionOverride: z.string().trim().min(50).max(50_000).optional(),
+});
 export async function POST(request: NextRequest, context: RouteContext<'/api/jobs/[jobSnapshotId]/match/prepare'>) {
   return withErrorHandler(async () => {
     const session = await auth.api.getSession({ headers: request.headers });
@@ -29,7 +33,7 @@ export async function POST(request: NextRequest, context: RouteContext<'/api/job
     });
     let matchRequest;
     try {
-      matchRequest = await createMatchRequest({ userId: session.user.id, profileId, jobSnapshotId, partialDescriptionAccepted: parsed.data.partialDescriptionAccepted });
+      matchRequest = await createMatchRequest({ userId: session.user.id, profileId, jobSnapshotId, partialDescriptionAccepted: parsed.data.partialDescriptionAccepted, descriptionOverride: parsed.data.descriptionOverride });
     } catch (error) {
       throw new APIError(error instanceof Error ? error.message : 'Unable to prepare this job match.', 400);
     }

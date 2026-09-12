@@ -154,7 +154,7 @@ export const PLAN_ENTITLEMENTS = {
     stored_generated_cvs: resourceLimit(3),
     stored_analyses: resourceLimit(10),
     saved_jobs: resourceLimit(10),
-    source_file_retention: partial('30_days'),
+    source_file_retention: partial('180_days'),
     advanced_tools: disabled('Advanced tools require Pro.'),
     supporting_statement_generation: disabled('Supporting statements are not available yet.'),
   },

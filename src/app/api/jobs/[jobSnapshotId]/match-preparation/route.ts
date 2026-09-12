@@ -7,7 +7,11 @@ import { buildConfirmedCandidateFacts } from '@/shared/services/practical-compat
 import { getJobDetailsView } from '@/shared/services/job-board-api';
 import { createMatchRequest } from '@/shared/services/job-snapshot';
 import { APIError, withErrorHandler } from '@/shared/utils/api-error';
-const Input = z.object({ profileId: z.string().optional(), partialDescriptionAccepted: z.boolean().default(false) });
+const Input = z.object({
+  profileId: z.string().optional(),
+  partialDescriptionAccepted: z.boolean().default(false),
+  descriptionOverride: z.string().trim().min(50).max(50_000).optional(),
+});
 /**
  * Preparation returns EVIDENCE and readiness, never a canonical match score.
  *
@@ -30,6 +34,6 @@ export async function POST(request: NextRequest, context: { params: Promise<{ jo
   const [track, candidateFacts] = await Promise.all([loadProfileTarget(session.user.id, profileId), buildConfirmedCandidateFacts(session.user.id, profileId)]);
   const intelligence = await assessAndPersistJobIntelligence({ jobSnapshotId, userId: session.user.id, careerTrack: track ? { targetRoleTitle: track.targetRoleTitle, occupationFamily: track.targetOccupation, industry: track.targetIndustry, seniority: track.targetSeniority } : null, candidateFacts });
   const refreshed = await getJobDetailsView(jobSnapshotId, session.user.id, { profileId }); if (!refreshed?.description.text) throw new APIError('A usable job description is required before formal analysis.', 409, undefined, 'DESCRIPTION_INCOMPLETE');
-  let requestId: string | undefined; try { const matchRequest = await createMatchRequest({ userId: session.user.id, profileId, jobSnapshotId, partialDescriptionAccepted: parsed.data.partialDescriptionAccepted }); if (!matchRequest) throw new Error('Vacancy not found.'); requestId = matchRequest.id; } catch (error) { throw new APIError(error instanceof Error ? error.message : 'Unable to prepare this match.', 409, undefined, 'DESCRIPTION_INCOMPLETE'); }
+  let requestId: string | undefined; try { const matchRequest = await createMatchRequest({ userId: session.user.id, profileId, jobSnapshotId, partialDescriptionAccepted: parsed.data.partialDescriptionAccepted, descriptionOverride: parsed.data.descriptionOverride }); if (!matchRequest) throw new Error('Vacancy not found.'); requestId = matchRequest.id; } catch (error) { throw new APIError(error instanceof Error ? error.message : 'Unable to prepare this match.', 409, undefined, 'DESCRIPTION_INCOMPLETE'); }
   return NextResponse.json({ ...refreshed, careerTracks, selectedCareerTrackId: profileId, practicalCompatibility: intelligence?.practicalCompatibility ?? refreshed.practicalCompatibility, canProceed: true, warnings: refreshed.description.completeness === 'PARTIAL' ? ['The provider supplied a partial description; requirements may be incomplete.'] : [], matchRequestId: requestId });
 }); }

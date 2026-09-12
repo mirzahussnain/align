@@ -8,6 +8,6 @@
  */
 export type CvProvenance = 'analysis' | 'profile';
 
-export function cvProvenance(cv: { analysisId?: string | null }): CvProvenance {
-  return cv.analysisId ? 'analysis' : 'profile';
+export function cvProvenance(cv: { analysisId?: string | null; jobMatchId?: string | null }): CvProvenance {
+  return cv.jobMatchId || cv.analysisId ? 'analysis' : 'profile';
 }

@@ -247,11 +247,11 @@ async function recoverGeneratedCv(args: {
   if (!resultRef) throw unavailable();
   const cv = await prisma.generatedCV.findUnique({
     where: { id: resultRef },
-    select: { userId: true, analysisId: true, fileKey: true },
+    select: { userId: true, jobMatchId: true, fileKey: true },
   });
   if (!cv || cv.userId !== userId) throw unavailable();
   // The recovered document must belong to the analysis this request rebuilds.
-  if (cv.analysisId && cv.analysisId !== analysisId) throw unavailable();
+  if (cv.jobMatchId && cv.jobMatchId !== analysisId) throw unavailable();
   if (!cv.fileKey) throw unavailable();
 
   let bytes: Buffer;
@@ -397,7 +397,7 @@ export async function POST(request: Request) {
     let approvedEvidenceOverlay: ApprovedProfileEvidenceOverlay[] = [];
     const snapshotApprovalIds = approvedProfileEvidence.map((approval) => approval.approvalId).filter((id): id is string => Boolean(id));
     if (snapshotApprovalIds.length > 0) {
-      const rows = await prisma.profileEvidenceApproval.findMany({ where: { id: { in: snapshotApprovalIds }, userId: session.user.id, analysisId, ...(scopedProfileId ? { profileId: scopedProfileId } : {}) } });
+      const rows = await prisma.profileEvidenceApproval.findMany({ where: { id: { in: snapshotApprovalIds }, userId: session.user.id, jobMatchId: analysisId, ...(scopedProfileId ? { profileId: scopedProfileId } : {}) } });
       if (rows.length !== snapshotApprovalIds.length) throw new APIError('Approved evidence snapshot is unavailable.', 409);
       const requirements = new Map(storedJobMatch.requirements.map((item) => [item.id, item]));
       approvedEvidenceOverlay = rows.map((row) => {
@@ -754,7 +754,10 @@ export async function POST(request: Request) {
         templateId,
         fileName: 'Tailored_CV.docx',
         docxBuffer,
-        analysisId,
+        jobMatchId: analysisId,
+        sourceCvRevisionId: canonical.analysis.cvRevisionId,
+        profileSnapshotId: canonical.analysis.profileSnapshotId,
+        jobRevisionId: canonical.analysis.jobRevisionId,
         profileId: scopedProfileId,
         // Full generation provenance — how this CV was made, kept separate from
         // its content. Never duplicates the ledger; only the ids supplied.

@@ -332,10 +332,17 @@ export async function loadOwnedExtraction(
 export async function deleteStoredCv(userId: string, storedCvId: string): Promise<void> {
   const storedCv = await loadOwnedStoredCv(userId, storedCvId);
   if (!storedCv.objectDeletedAt) await storage.delete(STORAGE_BUCKET, storedCv.storageKey);
-  await prisma.storedCv.update({
-    where: { id: storedCv.id },
-    data: { status: StoredCvStatus.DELETED, objectDeletedAt: new Date(), deletedAt: new Date() },
-  });
+  const deletedAt = new Date();
+  await prisma.$transaction([
+    prisma.storedCv.update({
+      where: { id: storedCv.id },
+      data: { status: StoredCvStatus.DELETED, objectDeletedAt: deletedAt, deletedAt },
+    }),
+    prisma.cvRevision.updateMany({
+      where: { storedCvId: storedCv.id },
+      data: { sourceObjectKey: null, sourceObjectDeletedAt: deletedAt },
+    }),
+  ]);
 }
 
 /**
@@ -364,10 +371,17 @@ export async function sweepExpiredStoredCvs(userId?: string, limit = 50): Promis
     if (expired.length === 0) return 0;
 
     await Promise.all(expired.map((row) => storage.delete(STORAGE_BUCKET, row.storageKey)));
-    await prisma.storedCv.updateMany({
-      where: { id: { in: expired.map((row) => row.id) } },
-      data: { status: StoredCvStatus.EXPIRED, objectDeletedAt: new Date() },
-    });
+    const deletedAt = new Date();
+    await prisma.$transaction([
+      prisma.storedCv.updateMany({
+        where: { id: { in: expired.map((row) => row.id) } },
+        data: { status: StoredCvStatus.EXPIRED, objectDeletedAt: deletedAt },
+      }),
+      prisma.cvRevision.updateMany({
+        where: { storedCvId: { in: expired.map((row) => row.id) } },
+        data: { sourceObjectKey: null, sourceObjectDeletedAt: deletedAt },
+      }),
+    ]);
     console.info(`[stored-cv] Swept ${expired.length} expired stored CV object(s).`);
     return expired.length;
   } catch (error) {

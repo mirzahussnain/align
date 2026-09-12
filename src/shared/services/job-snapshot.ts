@@ -7,6 +7,7 @@ import { logJobBoardEvent } from '@/shared/services/job-board-observability';
 import { normaliseCompanyName, normaliseLocation, normaliseTitle } from '@/shared/services/job-normalisation';
 import type { NormalisedJob } from '@/shared/types/job';
 import type { CompanyResolutionResult } from '@/shared/types/sponsor-evidence';
+import { ANALYSIS_LIMITS } from '@/shared/config/analysis-domain';
 
 const MATCH_REQUEST_TTL_MS = 30 * 60_000;
 const descriptionHash = (value: string) => createHash('sha256').update(value).digest('hex');
@@ -362,6 +363,9 @@ export async function attachUserDescription(input: { userId: string; jobSnapshot
   if (!description) throw new Error('A job description is required.');
   const snapshot = await getSnapshotDetails(input.jobSnapshotId, input.userId);
   if (!snapshot) return null;
+  if (!snapshot.importedByUserId) {
+    throw new Error('A fuller description for a shared vacancy must be attached to a private match request.');
+  }
   const selected = { text: description, source: 'USER_PASTED' as const, hash: descriptionHash(description) };
   return prisma.jobSnapshot.update({
     where: { id: snapshot.id },
@@ -383,10 +387,19 @@ export async function removeSavedJob(userId: string, id: string) {
   return prisma.savedJob.deleteMany({ where: { id, userId } });
 }
 
-export async function createMatchRequest(input: { userId: string; profileId: string; jobSnapshotId: string; partialDescriptionAccepted: boolean }) {
+export async function createMatchRequest(input: { userId: string; profileId: string; jobSnapshotId: string; partialDescriptionAccepted: boolean; descriptionOverride?: string }) {
   const snapshot = await getSnapshotDetails(input.jobSnapshotId, input.userId);
   if (!snapshot) return null;
-  const selected = resolveSelectedDescription(snapshot);
+  const override = input.descriptionOverride?.trim();
+  if (override && override.length > ANALYSIS_LIMITS.maxJobDescriptionCharacters) {
+    throw new Error('The job description is too long.');
+  }
+  const selected = override
+    ? (() => {
+        const assessed = assessDescriptionCompleteness({ description: override, userSupplied: true });
+        return { text: override, source: 'USER_PASTED' as const, hash: descriptionHash(override), partial: assessed.availability !== 'FULL', availability: assessed.availability };
+      })()
+    : resolveSelectedDescription(snapshot);
   if (!selected) throw new Error('Add a job description before preparing a match.');
   if (selected.partial && !input.partialDescriptionAccepted) throw new Error('Confirm that you understand this is a partial description.');
   const expiresAt = new Date(Date.now() + MATCH_REQUEST_TTL_MS);
@@ -395,7 +408,7 @@ export async function createMatchRequest(input: { userId: string; profileId: str
     orderBy: { createdAt: 'desc' },
   });
   if (existing) return existing;
-  return prisma.jobMatchRequest.create({ data: { userId: input.userId, profileId: input.profileId, jobSnapshotId: input.jobSnapshotId, selectedDescriptionSource: selected.source, selectedDescriptionHash: selected.hash, partialDescriptionAccepted: input.partialDescriptionAccepted, expiresAt } });
+  return prisma.jobMatchRequest.create({ data: { userId: input.userId, profileId: input.profileId, jobSnapshotId: input.jobSnapshotId, selectedDescriptionSource: selected.source, selectedDescriptionHash: selected.hash, descriptionText: selected.text, partialDescriptionAccepted: input.partialDescriptionAccepted, expiresAt } });
 }
 
 export async function resolveMatchRequest(userId: string, id: string) {
@@ -404,8 +417,13 @@ export async function resolveMatchRequest(userId: string, id: string) {
     include: { jobSnapshot: { include: { providerReferences: true } } },
   });
   if (!request || request.status !== 'PREPARED' || (request.expiresAt && request.expiresAt <= new Date())) return null;
-  const selected = resolveSelectedDescription(request.jobSnapshot);
-  if (!selected || selected.source !== request.selectedDescriptionSource || selected.hash !== request.selectedDescriptionHash) return null;
+  const selected = {
+    text: request.descriptionText,
+    source: request.selectedDescriptionSource,
+    hash: request.selectedDescriptionHash,
+    partial: request.selectedDescriptionSource === 'PROVIDER_PARTIAL',
+    availability: request.selectedDescriptionSource === 'PROVIDER_PARTIAL' ? 'PARTIAL' as const : 'FULL' as const,
+  };
   return { request, selected };
 }
 

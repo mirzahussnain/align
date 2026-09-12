@@ -555,12 +555,6 @@ export function DiscoverBoard({
   const [activeJobSnapshotId, setActiveJobSnapshotId] = useState<string | undefined>(initialJobSnapshotId);
 
   useEffect(() => {
-    if (urlSelectedId !== undefined) {
-      setActiveJobSnapshotId(urlSelectedId);
-    }
-  }, [urlSelectedId]);
-
-  useEffect(() => {
     const handlePopState = () => {
       const currentPath = window.location.pathname;
       const prefix = `${JOB_BOARD_ROUTES.discover}/`;
@@ -584,7 +578,7 @@ export function DiscoverBoard({
     return () => window.removeEventListener("popstate", handlePopState);
   }, []);
 
-  const selectedJobSnapshotId = activeJobSnapshotId;
+  const selectedJobSnapshotId = urlSelectedId ?? activeJobSnapshotId;
   const initialFiltersRef = useRef(filters);
   const initialDetailsRef = useRef(Boolean(initialJobSnapshotId));
   const defaultSearchQueryRef = useRef<string>("");

@@ -35,9 +35,9 @@ export async function approveProfileEvidenceSnapshot(input: {
   if (!session) throw new Error('Not authenticated');
   const [profile, analysis] = await Promise.all([
     loadOwnedProfileData(session.user.id, input.profileId),
-    prisma.analysis.findFirst({ where: { id: input.analysisId, userId: session.user.id }, select: { jobMatchData: true } }),
+    prisma.jobMatch.findFirst({ where: { id: input.analysisId, userId: session.user.id }, select: { resultJson: true } }),
   ]);
-  const jobMatch = parseStoredJobMatchData(analysis?.jobMatchData);
+  const jobMatch = parseStoredJobMatchData((analysis?.resultJson as Record<string, unknown> | undefined)?.jobMatchData);
   if (!profile || !jobMatch) throw new Error('Profile evidence cannot be approved.');
   const [resolved] = resolveApprovedProfileEvidence(profile, [{ requirementId: input.requirementId, evidenceRef: input.evidenceRef, rationale: input.rationale }], jobMatch.requirements);
   if (!resolved?.evidenceSnapshot) throw new Error('Profile evidence snapshot could not be captured.');
@@ -47,7 +47,7 @@ export async function approveProfileEvidenceSnapshot(input: {
       await assertApplicationApprovalLimit(session.user.id, input.analysisId, tx);
       return tx.profileEvidenceApproval.create({
         data: {
-          userId: session.user.id, analysisId: input.analysisId, profileId: profile.profileId,
+          userId: session.user.id, jobMatchId: input.analysisId, profileId: profile.profileId,
           requirementId: input.requirementId, evidenceType: input.evidenceRef.type, evidenceId: input.evidenceRef.id,
           snapshot: JSON.parse(JSON.stringify({ ...resolved.evidenceSnapshot, schemaVersion: 1, evidenceType: input.evidenceRef.type, evidenceId: input.evidenceRef.id, displayTitle: resolved.evidenceLocation, displaySummary: resolved.resolvedEvidenceText, capturedAt: new Date().toISOString() })), snapshotVersion: 1,
         }, select: { id: true },

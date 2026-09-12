@@ -132,7 +132,7 @@ describe('CVUploader ATS flow — detect then target-select then analyze', () =>
 
     await waitFor(() => expect(onComplete).toHaveBeenCalledWith({ overallScore: 71, analysisId: 'an-1' }));
     // The analyze call carries the explicit selection.
-    expect(fetchMock.mock.calls[1][0]).toBe('/api/analyze');
+    expect(fetchMock.mock.calls[1][0]).toBe('/api/ats-analyses');
     const body = fetchMock.mock.calls[1][1].body as FormData;
     expect(body.get('targetSelection')).toBe('detected');
     expect(body.get('mode')).toBe('ats');
@@ -227,7 +227,7 @@ describe('CVUploader job-match flow — no target step, JD is the target', () =>
     await waitFor(() => expect(onComplete).toHaveBeenCalled());
     // Only the analyze endpoint was hit — no detect, no target step.
     expect(fetchMock).toHaveBeenCalledTimes(1);
-    expect(fetchMock.mock.calls[0][0]).toBe('/api/analyze');
+    expect(fetchMock.mock.calls[0][0]).toBe('/api/job-matches');
     expect(
       screen.queryByRole('heading', { name: /what is this cv intended for/i })
     ).not.toBeInTheDocument();

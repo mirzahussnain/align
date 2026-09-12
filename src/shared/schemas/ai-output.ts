@@ -85,7 +85,7 @@ const cvBuildSpec = z.looseObject({
 const nonNegativePoints = z.coerce.number().int().min(0);
 
 const requirementEvidence = z.looseObject({
-  source: z.enum(['cv', 'profile', 'user_context']),
+  source: z.enum(['cv', 'profile', 'practical_fact', 'user_context']),
   sourceRef: z.string().optional(),
   text: z.string().min(1),
   location: z.string().optional(),

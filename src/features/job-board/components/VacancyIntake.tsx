@@ -65,23 +65,15 @@ export function VacancyIntake() {
   const [error, setError] = useState<string | null>(null);
   const operationId = useRef<string>("");
 
-  // Safely hook into EntitlementProvider
-  let isRestricted = false;
-  let handleOpenUpgrade: (() => void) | undefined = undefined;
-
-  try {
-    const { decisionFor, openUpgrade } = useEntitlements();
-    const decision = decisionFor("job_match_analysis");
-    isRestricted = !decision.allowed;
-    handleOpenUpgrade = () =>
-      openUpgrade({
-        capability: "job_match_analysis",
-        decision,
-        source: "analysis",
-      });
-  } catch {
-    // Graceful fallback if outside provider
-  }
+  const { decisionFor, openUpgrade } = useEntitlements();
+  const jobMatchDecision = decisionFor("job_match_analysis");
+  const isRestricted = !jobMatchDecision.allowed;
+  const handleOpenUpgrade = () =>
+    openUpgrade({
+      capability: "job_match_analysis",
+      decision: jobMatchDecision,
+      source: "analysis",
+    });
 
   useEffect(() => {
     let active = true;
@@ -266,7 +258,7 @@ export function VacancyIntake() {
         form.append("file", uploadFile);
       }
       if (!operationId.current) operationId.current = crypto.randomUUID();
-      const response = await fetch("/api/analyze", {
+      const response = await fetch("/api/job-matches", {
         method: "POST",
         headers: { "x-operation-id": operationId.current },
         body: form,

@@ -1,42 +1,35 @@
 import { create } from 'zustand';
 
-export type DashboardTab = 'overview' | 'analyze' | 'profile' | 'analyses' | 'cvs' | 'billing';
+export type DashboardTab = 'overview' | 'analyze' | 'profile' | 'ats' | 'job_matches' | 'cvs' | 'billing';
+export type AnalysisDomain = 'ats' | 'job_match';
 
 interface DashboardState {
   tab: DashboardTab;
   setTab: (tab: DashboardTab) => void;
-  /** The saved analysis whose full report is open, or null for the list view. */
   selectedAnalysisId: string | null;
-  /** Open a stored analysis's full report (jumps to the Analyses tab). */
+  selectedAnalysisDomain: AnalysisDomain | null;
+  openAtsAnalysis: (id: string) => void;
+  openJobMatch: (id: string) => void;
   openAnalysis: (id: string) => void;
-  /** Return from a report back to the analyses list. */
   closeAnalysis: () => void;
-  /**
-   * Sidebar collapsed to icons only. On mobile the rail is always icon-only, so
-   * this drives the desktop toggle; on mobile it drives the slide-over instead.
-   */
   sidebarCollapsed: boolean;
   toggleSidebar: () => void;
-  /** Mobile slide-over visibility, kept separate so the two never fight. */
   mobileNavOpen: boolean;
   setMobileNavOpen: (open: boolean) => void;
 }
 
-/**
- * Which dashboard section is showing. Tabs switch this client-side instead of
- * navigating to a separate route, so an in-progress analysis (held in the
- * analysis store) is never torn down by a page load.
- */
 export const useDashboardStore = create<DashboardState>((set) => ({
   tab: 'overview',
-  // Switching tabs also dismisses the mobile slide-over — otherwise the panel
-  // stays over the view the user just navigated to.
-  setTab: (tab) => set({ tab, selectedAnalysisId: null, mobileNavOpen: false }),
+  setTab: (tab) => set({ tab, selectedAnalysisId: null, selectedAnalysisDomain: null, mobileNavOpen: false }),
   selectedAnalysisId: null,
-  openAnalysis: (id) => set({ tab: 'analyses', selectedAnalysisId: id, mobileNavOpen: false }),
-  closeAnalysis: () => set({ selectedAnalysisId: null }),
+  selectedAnalysisDomain: null,
+  openAtsAnalysis: (id) => set({ tab: 'ats', selectedAnalysisId: id, selectedAnalysisDomain: 'ats', mobileNavOpen: false }),
+  openJobMatch: (id) => set({ tab: 'job_matches', selectedAnalysisId: id, selectedAnalysisDomain: 'job_match', mobileNavOpen: false }),
+  // Compatibility for existing job-board deep links; analyses opened there are Job Matches.
+  openAnalysis: (id) => set({ tab: 'job_matches', selectedAnalysisId: id, selectedAnalysisDomain: 'job_match', mobileNavOpen: false }),
+  closeAnalysis: () => set({ selectedAnalysisId: null, selectedAnalysisDomain: null }),
   sidebarCollapsed: false,
-  toggleSidebar: () => set((s) => ({ sidebarCollapsed: !s.sidebarCollapsed })),
+  toggleSidebar: () => set((state) => ({ sidebarCollapsed: !state.sidebarCollapsed })),
   mobileNavOpen: false,
   setMobileNavOpen: (open) => set({ mobileNavOpen: open }),
 }));

@@ -23,7 +23,7 @@ export default function AnalyzeView({ activeProfileId }: { activeProfileId?: str
 
   return (
     <>
-      <DashboardTopBar title="Analyze CV" subtitle="Score a CV or match it against a job" showNewAnalysis={false} />
+      <DashboardTopBar title="Analyze CV" subtitle="Check CV readiness independently of a vacancy" showNewAnalysis={false} />
       <div className="px-4 py-8 sm:px-6 lg:px-8">
         <AnalyzeWorkspace compact profileId={activeProfileId} />
       </div>

@@ -124,11 +124,11 @@ const CaptureSchema = z.object({
 });
 
 async function assertEligible(userId: string, analysisId: string, requirementId: string) {
-  const analysis = await prisma.analysis.findFirst({
+  const analysis = await prisma.jobMatch.findFirst({
     where: { id: analysisId, userId },
-    select: { jobMatchData: true },
+    select: { resultJson: true },
   });
-  const requirement = parseStoredJobMatchData(analysis?.jobMatchData)?.requirements.find(
+  const requirement = parseStoredJobMatchData((analysis?.resultJson as Record<string, unknown> | undefined)?.jobMatchData)?.requirements.find(
     (item) => item.id === requirementId
   );
   if (!requirement) throw new APIError('Requirement not found for this analysis.', 404);
@@ -323,7 +323,7 @@ export async function POST(request: Request) {
           const saved = await tx.applicationEvidenceContext.create({
             data: {
               userId: session.user.id,
-              analysisId: input.analysisId,
+              jobMatchId: input.analysisId,
               profileId: profile.profileId,
               requirementId: input.requirementId,
               kind: parsedEvidence.kind.toUpperCase() as never,

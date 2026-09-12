@@ -173,7 +173,7 @@ export function Step3AnalysisOrUpgrade({
           <div className="grid gap-3 border-t border-emerald-200 p-4 sm:grid-cols-2 dark:border-emerald-900/40">
             {result.analysisId && (
               <Link
-                href={`/dashboard?tab=analyses&analysis=${encodeURIComponent(result.analysisId)}`}
+                href={`/dashboard?tab=job_matches&analysis=${encodeURIComponent(result.analysisId)}`}
                 className="flex min-h-11 items-center justify-center gap-2 rounded-xl bg-emerald-700 px-4 text-sm font-bold text-white transition hover:bg-emerald-800"
               >
                 Review & Tailor CV

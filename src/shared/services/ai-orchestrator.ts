@@ -2,6 +2,7 @@ import { GoogleGenAI } from '@google/genai';
 import Groq from 'groq-sdk';
 import type { ZodType } from 'zod';
 import { AI_CONFIG } from '@/shared/lib/config';
+import { AI_BOUNDS } from '@/shared/config/analysis-domain';
 
 const geminiClient = AI_CONFIG.gemini.apiKey ? new GoogleGenAI({ apiKey: AI_CONFIG.gemini.apiKey }) : null;
 const groqClient = AI_CONFIG.groq.apiKey ? new Groq({ apiKey: AI_CONFIG.groq.apiKey }) : null;
@@ -23,6 +24,8 @@ interface AIOrchestratorOptions {
    * multi-step prompts — the job matcher's deduction arithmetic needs it.
    */
   thinkingBudget?: number;
+  timeoutMs?: number;
+  maxOutputTokens?: number;
 }
 
 interface AIOrchestratorOptionsWithSchema<T> extends AIOrchestratorOptions {
@@ -84,9 +87,16 @@ export async function generateJSONFromAI<T>(options: AIOrchestratorOptionsWithSc
 export async function generateJSONFromAIWithProvenance<T>(
   options: AIOrchestratorOptionsWithSchema<T>
 ): Promise<AIResultWithProvenance<T> | null> {
-  const { prompt, temperature = 0.1, thinkingBudget, schema } = options;
+  const {
+    prompt,
+    temperature = 0.1,
+    thinkingBudget,
+    schema,
+    timeoutMs = AI_BOUNDS.timeoutMs,
+    maxOutputTokens = AI_BOUNDS.maxOutputTokens,
+  } = options;
 
-  const attempts: { label: string; provider: string; model: string; run: () => Promise<string> }[] = [];
+  const attempts: { label: string; provider: string; model: string; run: (signal: AbortSignal) => Promise<string> }[] = [];
 
   if (geminiClient) {
     for (const model of [AI_CONFIG.gemini.model, AI_CONFIG.gemini.fallbackModel]) {
@@ -94,13 +104,15 @@ export async function generateJSONFromAIWithProvenance<T>(
         label: `Gemini ${model}`,
         provider: 'gemini',
         model,
-        run: async () => {
+        run: async (signal) => {
           const response = await geminiClient.models.generateContent({
             model,
             contents: prompt,
             config: {
               responseMimeType: 'application/json',
               temperature,
+              maxOutputTokens,
+              abortSignal: signal,
               ...(thinkingBudget !== undefined ? { thinkingConfig: { thinkingBudget } } : {}),
             },
           });
@@ -115,13 +127,14 @@ export async function generateJSONFromAIWithProvenance<T>(
       label: `Groq ${AI_CONFIG.groq.model}`,
       provider: 'groq',
       model: AI_CONFIG.groq.model,
-      run: async () => {
+      run: async (signal) => {
         const chatCompletion = await groqClient.chat.completions.create({
           messages: [{ role: 'user', content: prompt }],
           model: AI_CONFIG.groq.model,
           response_format: { type: 'json_object' },
           temperature,
-        });
+          max_tokens: maxOutputTokens,
+        }, { signal });
         return chatCompletion.choices[0]?.message?.content || '';
       },
     });
@@ -143,7 +156,15 @@ export async function generateJSONFromAIWithProvenance<T>(
 
     try {
       console.info(`[ai-orchestrator] Querying ${attempt.label} (attempt ${index + 1}/${attempts.length}).`);
-      const parsed = parseJSONContent<T>(await attempt.run());
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), timeoutMs);
+      let raw: string;
+      try {
+        raw = await attempt.run(controller.signal);
+      } finally {
+        clearTimeout(timeout);
+      }
+      const parsed = parseJSONContent<T>(raw);
       if (parsed !== null) {
         if (!schema) return { data: parsed, provenance };
 

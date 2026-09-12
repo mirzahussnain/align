@@ -24,9 +24,9 @@ console.log(dryRun ? 'DRY RUN — nothing will be deleted. Pass --confirm to exe
 
 // ── Collect storage keys while the rows that point at them still exist ────────────
 const [uploads, rewrites, users] = await Promise.all([
-  prisma.analysis.findMany({
-    where: { sourceFileKey: { not: null } },
-    select: { sourceFileKey: true },
+  prisma.cvRevision.findMany({
+    where: { sourceObjectKey: { not: null } },
+    select: { sourceObjectKey: true },
   }),
   prisma.generatedCV.findMany({
     where: { fileKey: { not: null } },
@@ -60,7 +60,7 @@ if (dryRun) {
 let deleted = 0;
 let failed = 0;
 const results = await Promise.all([
-  ...uploads.map((a) => storage.delete('uploads', a.sourceFileKey as string)),
+  ...uploads.map((revision) => storage.delete('uploads', revision.sourceObjectKey as string)),
   ...rewrites.map((c) => storage.delete('rewrites', c.fileKey as string)),
   ...avatarKeys.map((k) => storage.delete('avatars', k)),
 ]);
@@ -97,7 +97,12 @@ async function tableCounts() {
     education: await prisma.education.count(),
     skillGroup: await prisma.skillGroup.count(),
     certification: await prisma.certification.count(),
-    analysis: await prisma.analysis.count(),
+    cvRevision: await prisma.cvRevision.count(),
+    atsAnalysis: await prisma.atsAnalysis.count(),
+    jobRevision: await prisma.jobRevision.count(),
+    careerProfileSnapshot: await prisma.careerProfileSnapshot.count(),
+    jobMatch: await prisma.jobMatch.count(),
+    anonymousAtsResult: await prisma.anonymousAtsResult.count(),
     generatedCV: await prisma.generatedCV.count(),
     usageCounter: await prisma.usageCounter.count(),
     verification: await prisma.verification.count(),

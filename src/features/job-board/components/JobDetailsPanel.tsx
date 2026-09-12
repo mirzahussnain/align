@@ -275,7 +275,7 @@ function SponsorEvidenceCard({ data }: { data: JobDetailsViewModel }) {
   const status = evidence.status ?? evidence.summary.status;
   const Icon = sponsorIcons[status];
   const checkState = status === "NOT_CHECKED" ? evidence.checkState : undefined;
-  const companyQuery = evidence.matchedOrganisationName || data.company?.displayName;
+  const companyQuery = evidence.matchedOrganisationName || data.job.company.displayName;
 
   return (
     <Card

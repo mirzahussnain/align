@@ -32,6 +32,7 @@ const createRateLimiter = (requests: number, window: `${number} s` | `${number} 
 // 🔴 Expensive AI compute — strict limits
 export const analysisLimiter = createRateLimiter(5, '1 m');  // 5 analyses per minute
 export const rewriteLimiter  = createRateLimiter(3, '1 m');  // 3 rewrites per minute
+export const publicAtsLimiter = createRateLimiter(3, '24 h'); // network-level anonymous abuse guard
 
 // 🟡 Billing — user-initiated checkout/portal actions (webhooks are NOT limited)
 export const billingLimiter  = createRateLimiter(10, '1 m'); // 10 billing actions per minute
@@ -55,6 +56,12 @@ export async function applyRateLimit(
 ): Promise<NextResponse | null> {
   // If Upstash is not configured, skip rate limiting silently
   if (!limiter) {
+    if (process.env.NODE_ENV === 'production') {
+      return NextResponse.json(
+        { error: 'Request protection is temporarily unavailable.', code: 'RATE_LIMIT_UNAVAILABLE' },
+        { status: 503 }
+      );
+    }
     if (!isConfigured) {
       console.warn('[rate-limit] Upstash not configured. Rate limiting is disabled. Set UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN to enable.');
     }

@@ -150,7 +150,7 @@ export default function AtsAnalysisDashboard({
       {/* The rule-based score below is complete and unaffected, but the AI
           sections (summary, impact, rewrites) are missing. Saying so beats
           letting the report look mysteriously thin. */}
-      {result.aiSkipped === 'quota' && (
+      {result.viewerMode !== 'anonymous_demo' && result.aiSkipped === 'quota' && (
         <AlertBanner title="AI insights paused — monthly limit reached" type="info">
           You&apos;ve used all the AI analyses included in your plan this month, so this report
           shows the rule-based ATS results only: formatting, sections, keywords and compliance

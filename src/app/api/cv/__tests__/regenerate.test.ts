@@ -15,7 +15,7 @@ vi.mock('@/shared/lib/rate-limit', () => ({
 vi.mock('@/shared/lib/prisma', () => ({
   prisma: {
     user: { findUnique: vi.fn(async () => ({ subscriptionTier: null })) },
-    analysis: { findUnique: vi.fn() },
+    jobMatch: { findFirst: vi.fn() },
     profileEvidenceApproval: { findMany: vi.fn() },
     generatedCV: { findUnique: vi.fn() },
   },
@@ -193,13 +193,22 @@ function regenRequest(body: Record<string, unknown>) {
 
 /** A stored job-match analysis with everything a rebuild needs. */
 function storedJobMatchAnalysis(overrides: Record<string, unknown> = {}) {
+  const {
+    rawResult = {},
+    jobMatchData = v2JobMatchData,
+    ...rest
+  } = overrides;
   return {
+    id: 'an-1',
     userId: USER.id,
-    mode: 'job_match',
-    rawResult: {},
-    jobDescription: 'Senior Data Engineer with strong streaming experience required.',
-    jobMatchData: v2JobMatchData,
-    ...overrides,
+    cvRevisionId: 'cv-revision-1',
+    jobRevisionId: 'job-revision-1',
+    profileSnapshotId: 'profile-snapshot-1',
+    resultJson: { ...(rawResult as object), jobMatchData },
+    cvRevision: { extractedText: 'x'.repeat(120) },
+    jobRevision: { description: 'Senior Data Engineer with strong streaming experience required.' },
+    profileSnapshot: { sourceProfileId: 'profile-123' },
+    ...rest,
   };
 }
 
@@ -207,7 +216,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(auth.api.getSession).mockResolvedValue({ user: USER } as never);
   vi.mocked(prisma.user.findUnique).mockResolvedValue({ subscriptionTier: null } as never);
-  vi.mocked(prisma.analysis.findUnique).mockResolvedValue(storedJobMatchAnalysis() as never);
+  vi.mocked(prisma.jobMatch.findFirst).mockResolvedValue(storedJobMatchAnalysis() as never);
   vi.mocked(prisma.profileEvidenceApproval.findMany).mockResolvedValue([] as never);
   vi.mocked(assertCapability).mockResolvedValue({ allowed: true, capability: 'cv_regeneration', plan: 'FREE', mode: 'quota' } as never);
   vi.mocked(reserveCapability).mockResolvedValue({ status: 'reserved', reservation: { operationStatus: 'PENDING', resultRef: null } } as never);
@@ -273,7 +282,7 @@ describe('POST /api/cv/regenerate', () => {
 
     expect(persistAndArchiveCv).toHaveBeenCalledTimes(1);
     const args = vi.mocked(persistAndArchiveCv).mock.calls[0][0];
-    expect(args.analysisId).toBe('an-1');
+    expect(args.jobMatchId).toBe('an-1');
     expect(args.profileId).toBe('profile-123');
     expect(args.provenance).toEqual(
       expect.objectContaining({
@@ -497,7 +506,7 @@ describe('POST /api/cv/regenerate', () => {
   it('rejects versionless canonical data and never falls back to a nested rawResult copy', async () => {
     const versionless: { schemaVersion?: number } & Record<string, unknown> = { ...v2JobMatchData };
     delete versionless.schemaVersion;
-    vi.mocked(prisma.analysis.findUnique).mockResolvedValue(
+    vi.mocked(prisma.jobMatch.findFirst).mockResolvedValue(
       storedJobMatchAnalysis({
         jobMatchData: versionless,
         rawResult: { jobMatchData: v2JobMatchData },
@@ -658,9 +667,9 @@ describe('POST /api/cv/regenerate', () => {
   });
 
   it('rejects an analysis that belongs to another user', async () => {
-    vi.mocked(prisma.analysis.findUnique).mockResolvedValue(
-      storedJobMatchAnalysis({ userId: 'someone-else' }) as never
-    );
+    // The canonical lookup includes the owner in its where clause, so an
+    // unowned id is indistinguishable from a missing row.
+    vi.mocked(prisma.jobMatch.findFirst).mockResolvedValue(null);
 
     const res = await POST(regenRequest({ analysisId: 'an-1' }));
 
@@ -738,7 +747,7 @@ describe('POST /api/cv/regenerate', () => {
     } as never);
     vi.mocked(prisma.generatedCV.findUnique).mockResolvedValue({
       userId: USER.id,
-      analysisId: 'an-1',
+      jobMatchId: 'an-1',
       fileKey: 'users/u1/cv-1/Tailored_CV.docx',
     } as never);
 
@@ -774,7 +783,7 @@ describe('POST /api/cv/regenerate', () => {
     } as never);
     vi.mocked(prisma.generatedCV.findUnique).mockResolvedValue({
       userId: USER.id,
-      analysisId: 'an-1',
+      jobMatchId: 'an-1',
       fileKey: 'users/u1/cv-1/Tailored_CV.docx',
     } as never);
     vi.mocked(storage.download).mockRejectedValueOnce(new Error('NoSuchKey'));

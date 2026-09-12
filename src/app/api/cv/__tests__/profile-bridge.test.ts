@@ -10,7 +10,7 @@ vi.mock('@/shared/lib/rate-limit', () => ({
   rewriteLimiter: {},
 }));
 vi.mock('@/shared/lib/prisma', () => ({
-  prisma: { analysis: { findUnique: vi.fn() } },
+  prisma: { jobMatch: { findFirst: vi.fn() } },
 }));
 vi.mock('@/features/dashboard/data/load-profile', () => ({
   loadOwnedProfileData: vi.fn(async () => ({ profileId: 'profile-123', label: 'Default' })),
@@ -62,12 +62,16 @@ function bridgeRequest(body: Record<string, unknown>) {
 beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(auth.api.getSession).mockResolvedValue({ user: USER } as never);
-  vi.mocked(prisma.analysis.findUnique).mockResolvedValue({
+  vi.mocked(prisma.jobMatch.findFirst).mockResolvedValue({
+    id: 'an-1',
     userId: USER.id,
-    mode: 'job_match',
-    rawResult: {},
-    jobDescription: 'Senior Data Engineer with streaming experience required.',
-    jobMatchData: { schemaVersion: 2 },
+    cvRevisionId: 'cv-revision-1',
+    jobRevisionId: 'job-revision-1',
+    profileSnapshotId: 'profile-snapshot-1',
+    resultJson: { jobMatchData: { schemaVersion: 2 } },
+    cvRevision: { extractedText: 'x'.repeat(120) },
+    jobRevision: { description: 'Senior Data Engineer with streaming experience required.' },
+    profileSnapshot: { sourceProfileId: 'profile-123' },
   } as never);
   vi.mocked(reserveCapability).mockResolvedValue({ status: 'reserved', reservation: { operationStatus: 'PENDING', resultRef: null } } as never);
   vi.mocked(commitCapability).mockResolvedValue({ status: 'committed', reservation: {} } as never);

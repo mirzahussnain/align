@@ -8,7 +8,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 // commit-FAILURE retry (result recorded, commit lost) finalises without creating
 // a duplicate. The ledger module is mocked; its atomicity is proven elsewhere.
 const prismaMock = vi.hoisted(() => ({
-  analysis: { findFirst: vi.fn() },
+  jobMatch: { findFirst: vi.fn() },
   applicationEvidenceContext: { create: vi.fn(), findFirst: vi.fn() },
 }));
 
@@ -101,7 +101,7 @@ function captureRequest(overrides: Record<string, unknown> = {}, operationId?: s
 beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(auth.api.getSession).mockResolvedValue({ user: USER } as never);
-  vi.mocked(prisma.analysis.findFirst).mockResolvedValue({ jobMatchData: { schemaVersion: 2 } } as never);
+  vi.mocked(prisma.jobMatch.findFirst).mockResolvedValue({ resultJson: { jobMatchData: { schemaVersion: 2 } } } as never);
   vi.mocked(prisma.applicationEvidenceContext.create).mockResolvedValue({ id: 'ctx-1' } as never);
   vi.mocked(reserveCapability).mockResolvedValue({ status: 'reserved', reservation: { operationStatus: 'PENDING', resultRef: null } } as never);
   vi.mocked(commitCapability).mockResolvedValue({ status: 'committed', reservation: {} } as never);

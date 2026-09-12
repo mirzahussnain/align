@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 vi.mock('@/shared/lib/prisma', () => ({
   prisma: {
     generatedCV: {
+      aggregate: vi.fn(async () => ({ _max: { versionNumber: null } })),
       create: vi.fn(async () => ({ id: 'cv-1' })),
       update: vi.fn(async () => ({})),
     },
@@ -40,7 +41,7 @@ describe('generated CV evidence provenance', () => {
       templateId: 'architect',
       fileName: 'Tailored_CV.docx',
       docxBuffer: Buffer.from('docx'),
-      analysisId: 'analysis-1',
+      jobMatchId: 'analysis-1',
       profileId: 'profile-1',
       provenance: { approvedProfileEvidence },
     });

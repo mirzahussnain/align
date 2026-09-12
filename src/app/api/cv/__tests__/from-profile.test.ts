@@ -118,7 +118,7 @@ describe('POST /api/cv/from-profile', () => {
     expect(persistAndArchiveCv).toHaveBeenCalledTimes(1);
     const args = vi.mocked(persistAndArchiveCv).mock.calls[0][0];
     expect(args.profileId).toBe('profile-abc');
-    expect(args.analysisId ?? null).toBeNull();
+    expect(args.jobMatchId ?? null).toBeNull();
     // Deterministic path now records the trusted-context + unsupported-claim guarantees.
     expect(args.provenance).toEqual(
       expect.objectContaining({

@@ -207,6 +207,9 @@ if (process.env.STRIPE_SECRET_KEY) {
 }
 
 if (process.env.NODE_ENV === 'production') {
+  if (!process.env.UPSTASH_REDIS_REST_URL || !process.env.UPSTASH_REDIS_REST_TOKEN) {
+    errors.push('UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN are required in production');
+  }
   if (endpoint.includes('localhost')) {
     errors.push('S3_ENDPOINT points at localhost in a production build');
   }

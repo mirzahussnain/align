@@ -24,7 +24,7 @@ export default function ReusableEvidenceUsage() {
       </p>
       {!decision.allowed && (
         <p className="mt-2 text-xs text-neutral-600">
-          You&apos;ve reached your reusable evidence limit. You can edit or delete existing evidence, or{' '}
+          You’ve reached your reusable evidence limit. You can edit or delete existing evidence, or{' '}
           <button
             type="button"
             onClick={() => openPricingDetails({ capability: 'profile_evidence_storage', decision })}
