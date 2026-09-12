@@ -8,7 +8,6 @@ import {
   MapPin,
   ShieldCheck,
   Upload,
-  Sparkles,
 } from "lucide-react";
 import { type ChangeEvent, type FormEvent, useRef } from "react";
 import type { CareerTrack } from "@/features/job-board/lib/job-board";
@@ -90,20 +89,6 @@ export function Step1VacancyForm({
       onSubmit={onCheckSubmit}
       className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm dark:border-border-subtle dark:bg-bg-secondary sm:p-6 space-y-6"
     >
-      <div className="border-b border-neutral-100 pb-5 dark:border-border-subtle">
-        <div className="flex items-center gap-2">
-          <span className="inline-flex h-6 items-center gap-1 rounded-full bg-accent-purple/10 px-2.5 text-xs font-extrabold uppercase tracking-wide text-accent-purple">
-            <Sparkles className="h-3 w-3" />
-            Bring a vacancy from anywhere
-          </span>
-        </div>
-        <h1 className="mt-2 text-2xl font-black tracking-tight text-neutral-900 dark:text-text-primary">
-          Analyse your own job
-        </h1>
-        <p className="mt-1 text-sm text-neutral-500 dark:text-text-secondary">
-          Import a public job page, or paste the complete advert yourself. Align checks practical requirements before measuring CV fit.
-        </p>
-      </div>
 
       {/* URL Import Section */}
       <div className="rounded-xl border border-neutral-200/80 bg-neutral-50/50 p-4 dark:border-border-subtle dark:bg-bg-tertiary/30 space-y-2">
@@ -137,7 +122,7 @@ export function Step1VacancyForm({
             ) : (
               <Download className="h-4 w-4" />
             )}
-            {importingUrl ? "Importing..." : "Import vacancy"}
+            {importingUrl ? "Importing..." : "Import Vacancy"}
           </button>
         </div>
         <p className="text-[11px] text-neutral-400">
@@ -172,9 +157,12 @@ export function Step1VacancyForm({
             aria-label="Employer"
             value={employerName}
             onChange={(e) => setEmployerName(e.target.value)}
-            placeholder="Needed for sponsor check"
+            placeholder="Example Ltd"
             className={inputClass}
           />
+          <span className="mt-1.5 block text-[11px] font-normal normal-case tracking-normal text-neutral-400">
+            Employer name helps Align check sponsorship information.
+          </span>
         </label>
       </div>
 
@@ -327,7 +315,7 @@ export function Step1VacancyForm({
         ) : (
           <ShieldCheck className="h-4 w-4" />
         )}
-        {checking ? "Checking vacancy..." : "Check sponsorship & requirements"}
+        {checking ? "Checking Profile & Requirements..." : "Check Profile & Requirements"}
       </button>
     </form>
   );

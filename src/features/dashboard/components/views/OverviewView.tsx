@@ -107,7 +107,7 @@ export default function OverviewView({ user, data }: { user: { name: string }; d
 
   return (
     <>
-      <DashboardTopBar title={`Welcome back, ${user.name.split(' ')[0]}`} subtitle={`Viewing career track: ${profile.label}`} />
+      <DashboardTopBar title={`Welcome Back, ${user.name.split(' ')[0]}`} subtitle={`Viewing career track: ${profile.label}`} />
       <div className="flex flex-col gap-5 px-4 py-6 sm:px-6 lg:px-8">
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-5">
           <section className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-[hsl(262_55%_16%)] via-[hsl(250_50%_14%)] to-[hsl(199_55%_14%)] p-6 text-white lg:col-span-3">
@@ -160,13 +160,13 @@ export default function OverviewView({ user, data }: { user: { name: string }; d
             {chartData.length >= CHART_MIN_POINTS ? (
               <>
                 <div className="flex items-start justify-between gap-4">
-                  <div><h2 className="text-sm font-bold text-neutral-900">Scores over time</h2><p className="mt-0.5 text-xs text-neutral-400">ATS and Job Match remain separate series</p></div>
+                  <div><h2 className="text-sm font-bold text-neutral-900">Scores over Time</h2><p className="mt-0.5 text-xs text-neutral-400">ATS and Job Match remain separate series</p></div>
                 </div>
                 <div className="mt-4"><ScoreTrendChart data={chartData} /></div>
               </>
             ) : (
               <>
-                <h2 className="text-sm font-bold text-neutral-900">Your progress so far</h2>
+                <h2 className="text-sm font-bold text-neutral-900">Your Progress so Far</h2>
                 <p className="mt-0.5 text-xs text-neutral-400">{total ? `A trend needs ${CHART_MIN_POINTS}+ results. These signals stay separate until then.` : 'Run an ATS analysis to begin your history.'}</p>
                 <div className="mt-4 flex flex-col divide-y divide-neutral-100">
                   <DigestRow icon={FileSearch} tint="bg-accent-purple/10 text-accent-purple" label="Latest CV readiness" value={latestAts ? `${latestAts.overallScore}/100 · ${latestAts.sourceFileName}` : 'No ATS analysis yet'} />
@@ -177,7 +177,7 @@ export default function OverviewView({ user, data }: { user: { name: string }; d
             )}
           </section>
           <section className="rounded-2xl border border-neutral-200 bg-white p-5 lg:col-span-2">
-            <div className="flex items-center gap-2"><ListChecks className="h-4 w-4 text-accent-purple" /><h2 className="text-sm font-bold text-neutral-900">Recommended next steps</h2></div>
+            <div className="flex items-center gap-2"><ListChecks className="h-4 w-4 text-accent-purple" /><h2 className="text-sm font-bold text-neutral-900">Recommended Next Steps</h2></div>
             <ul className="mt-4 flex flex-col gap-3">
               {nextSteps.slice(0, 4).map((step) => (
                 <li key={step.title} className="flex gap-3 rounded-xl bg-neutral-50 p-3.5">
@@ -191,12 +191,12 @@ export default function OverviewView({ user, data }: { user: { name: string }; d
 
         <section className="rounded-2xl border border-neutral-200 bg-white">
           <div className="border-b border-neutral-200 px-6 py-4">
-            <h2 className="text-sm font-bold text-neutral-900">Recent analysis activity</h2>
+            <h2 className="text-sm font-bold text-neutral-900">Recent Analysis Activity</h2>
             <p className="mt-0.5 text-xs text-neutral-400">CV readiness and vacancy fit are filed independently</p>
           </div>
           <div className="grid divide-y divide-neutral-100 lg:grid-cols-2 lg:divide-x lg:divide-y-0">
-            <RecentList title="ATS analyses" empty="No CV readiness checks yet" rows={atsAnalyses.slice(0, 3).map((row) => ({ id: row.id, title: row.sourceFileName, detail: 'CV-only readiness', score: row.overallScore, date: row.createdAt }))} onOpen={openAts} onAll={() => setTab('ats')} />
-            <RecentList title="Job matches" empty="No vacancy fit checks yet" rows={jobMatches.slice(0, 3).map((row) => ({ id: row.id, title: row.jobTitle, detail: row.jobCompany, score: row.matchScore, date: row.createdAt }))} onOpen={openMatch} onAll={() => setTab('job_matches')} />
+            <RecentList title="ATS Analyses" empty="No CV readiness checks yet" rows={atsAnalyses.slice(0, 3).map((row) => ({ id: row.id, title: row.sourceFileName, detail: 'CV-only readiness', score: row.overallScore, date: row.createdAt }))} onOpen={openAts} onAll={() => setTab('ats')} />
+            <RecentList title="Job Matches" empty="No vacancy fit checks yet" rows={jobMatches.slice(0, 3).map((row) => ({ id: row.id, title: row.jobTitle, detail: row.jobCompany, score: row.matchScore, date: row.createdAt }))} onOpen={openMatch} onAll={() => setTab('job_matches')} />
           </div>
         </section>
       </div>
@@ -219,7 +219,7 @@ function DigestRow({ icon: Icon, tint, label, value }: { icon: ComponentType<{ c
 }
 
 function RecentList({ title, empty, rows, onOpen, onAll }: { title: string; empty: string; rows: Array<{ id: string; title: string; detail: string; score: number; date: string }>; onOpen: (id: string) => void; onAll: () => void }) {
-  return <div className="p-5"><div className="flex items-center justify-between"><h3 className="text-xs font-bold text-neutral-900">{title}</h3><button type="button" onClick={onAll} className="text-[11px] font-bold text-accent-purple hover:underline">View all</button></div>{rows.length ? <div className="mt-3 divide-y divide-neutral-100">{rows.map((row) => <button key={row.id} type="button" onClick={() => onOpen(row.id)} className="flex min-h-14 w-full items-center gap-3 py-3 text-left hover:bg-neutral-50"><span className="w-9 text-sm font-black tabular-nums text-neutral-900">{row.score}</span><span className="min-w-0 flex-1"><span className="block truncate text-xs font-semibold text-neutral-900">{row.title}</span><span className="block truncate text-xs text-neutral-400">{row.detail} · {new Date(row.date).toLocaleDateString('en-GB')}</span></span><ArrowRight className="h-3.5 w-3.5 text-neutral-300" /></button>)}</div> : <p className="mt-6 text-xs text-neutral-400">{empty}</p>}</div>;
+  return <div className="p-5"><div className="flex items-center justify-between"><h3 className="text-xs font-bold text-neutral-900">{title}</h3><button type="button" onClick={onAll} className="text-[11px] font-bold text-accent-purple hover:underline">View All</button></div>{rows.length ? <div className="mt-3 divide-y divide-neutral-100">{rows.map((row) => <button key={row.id} type="button" onClick={() => onOpen(row.id)} className="flex min-h-14 w-full items-center gap-3 py-3 text-left hover:bg-neutral-50"><span className="w-9 text-sm font-black tabular-nums text-neutral-900">{row.score}</span><span className="min-w-0 flex-1"><span className="block truncate text-xs font-semibold text-neutral-900">{row.title}</span><span className="block truncate text-xs text-neutral-400">{row.detail} · {new Date(row.date).toLocaleDateString('en-GB')}</span></span><ArrowRight className="h-3.5 w-3.5 text-neutral-300" /></button>)}</div> : <p className="mt-6 text-xs text-neutral-400">{empty}</p>}</div>;
 }
 
 function ScoreRing({ score }: { score: number }) {

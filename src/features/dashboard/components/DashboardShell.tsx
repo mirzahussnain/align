@@ -5,6 +5,7 @@ import Sidebar from './Sidebar';
 import ProfileCompletionBanner from './ProfileCompletionBanner';
 import OverviewView from './views/OverviewView';
 import AnalyzeView from './views/AnalyzeView';
+import JobMatchView from './views/JobMatchView';
 import ProfileView from './views/ProfileView';
 import DomainHistoryView from './views/DomainHistoryView';
 import CvsView from './views/CvsView';
@@ -120,6 +121,7 @@ export default function DashboardShell({
           <ProfileCompletionBanner percent={data.profileCompleteness} label={data.profile.label} onProfileTab={tab === 'profile'} />
           {tab === 'overview' && <OverviewView user={user} data={data} />}
           {tab === 'analyze' && <AnalyzeView activeProfileId={data.profile.profileId} />}
+          {tab === 'job_match' && <JobMatchView />}
           {tab === 'profile' && <ProfileView key={data.profile.profileId} initial={data.profile} name={user.name} email={user.email} image={user.image} />}
           {tab === 'ats' && <DomainHistoryView domain="ats" atsAnalyses={data.atsAnalyses} jobMatches={[]} />}
           {tab === 'job_matches' && <DomainHistoryView domain="job_match" atsAnalyses={[]} jobMatches={data.jobMatches} />}

@@ -42,22 +42,23 @@ const TAB_GROUPS: { label: string; items: TabItem[] }[] = [
     label: "Workspace",
     items: [
       { tab: "overview", label: "Overview", icon: LayoutDashboard },
-      { tab: "analyze", label: "Analyze CV", icon: FileSearch },
+      { tab: "analyze", label: "CV Analysis", icon: FileSearch },
+      { tab: "job_match", label: "Job Match", icon: Briefcase },
       { tab: "profile", label: "Profile", icon: UserRound },
     ],
   },
   {
     label: "Library",
     items: [
-      { tab: "ats", label: "ATS analyses", icon: FileSearch },
-      { tab: "job_matches", label: "Job matches", icon: Briefcase },
+      { tab: "ats", label: "ATS Analyses", icon: FileSearch },
+      { tab: "job_matches", label: "Job Matches", icon: Briefcase },
       { tab: "cvs", label: "Generated CVs", icon: FileStack },
-      { tab: "billing", label: "Plan & billing", icon: CreditCard },
+      { tab: "billing", label: "Plan & Billing", icon: CreditCard },
     ],
   },
 ];
 
-// Route-backed tools stay real links so browser navigation and active state remain canonical.
+// Route-backed exploration stays as real links so browser navigation and active state remain canonical.
 const EXTERNAL_LINKS: LinkItem[] = [
   { href: "/dashboard/jobs", label: "Jobs", icon: Briefcase },
   { href: "/immigration", label: "Sponsorship", icon: Stamp },
@@ -109,7 +110,7 @@ export default function Sidebar({
         <div className="fixed inset-0 z-40 md:hidden">
           <button
             type="button"
-            aria-label="Close navigation"
+            aria-label="Close Navigation"
             onClick={() => setMobileNavOpen(false)}
             className="absolute inset-0 bg-neutral-900/40 backdrop-blur-sm"
           />
@@ -120,7 +121,7 @@ export default function Sidebar({
               collapsed={false}
               onToggle={() => setMobileNavOpen(false)}
               toggleIcon={X}
-              toggleLabel="Close navigation"
+              toggleLabel="Close Navigation"
               profiles={profiles}
               activeProfileId={activeProfileId}
               maxProfiles={maxProfiles}
@@ -222,10 +223,10 @@ function SidebarContent({
           type="button"
           onClick={onToggle}
           aria-label={
-            toggleLabel ?? (collapsed ? "Expand sidebar" : "Collapse sidebar")
+            toggleLabel ?? (collapsed ? "Expand Sidebar" : "Collapse Sidebar")
           }
           title={
-            toggleLabel ?? (collapsed ? "Expand sidebar" : "Collapse sidebar")
+            toggleLabel ?? (collapsed ? "Expand Sidebar" : "Collapse Sidebar")
           }
           className="rounded-md p-1.5 text-neutral-400 transition-colors hover:bg-neutral-100 hover:text-neutral-700"
         >
@@ -282,7 +283,7 @@ function SidebarContent({
             <div className="mx-auto mb-1 h-px w-6 bg-neutral-200" aria-hidden />
           ) : (
             <p className="px-3 pb-1 text-[10px] font-bold uppercase tracking-[0.12em] text-neutral-400">
-              Tools
+              Explore
             </p>
           )}
           {EXTERNAL_LINKS.map(({ href, label, icon: Icon }) => {
@@ -346,8 +347,8 @@ function SidebarContent({
         <button
           type="button"
           onClick={handleSignOut}
-          aria-label="Sign out"
-          title="Sign out"
+          aria-label="Sign Out"
+          title="Sign Out"
           className="rounded-md p-1.5 text-neutral-400 transition-colors hover:bg-neutral-100 hover:text-neutral-700"
         >
           <LogOut className="h-4 w-4" />

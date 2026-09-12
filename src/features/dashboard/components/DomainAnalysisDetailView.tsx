@@ -38,7 +38,7 @@ export default function DomainAnalysisDetailView({ id, domain }: { id: string; d
   const result = payload?.analysis ?? payload?.match;
   return (
     <>
-      <DashboardTopBar title={domain === 'ats' ? 'ATS analysis' : 'Job match'} subtitle={payload?.cvUsed.filename ?? 'Loading result…'} />
+      <DashboardTopBar title={domain === 'ats' ? 'ATS Analysis' : 'Job Match'} subtitle={payload?.cvUsed.filename ?? 'Loading result…'} />
       <div className="px-4 py-6 sm:px-6 lg:px-8">
         <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
           <button type="button" onClick={close} className="inline-flex min-h-11 items-center gap-2 rounded-xl px-3 text-sm font-semibold text-slate-600 hover:bg-slate-100">
@@ -57,7 +57,7 @@ export default function DomainAnalysisDetailView({ id, domain }: { id: string; d
             <h2 className="text-lg font-semibold">{payload.jobUsed.title}</h2>
             <p className="mt-1 text-sm text-slate-300">{payload.jobUsed.company} · {payload.jobUsed.source.replaceAll('_', ' ').toLowerCase()}</p>
             <details className="mt-4">
-              <summary className="cursor-pointer text-sm font-semibold text-white">Exact job description used</summary>
+              <summary className="cursor-pointer text-sm font-semibold text-white">Exact Job Description Used</summary>
               <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-slate-300">{payload.jobUsed.description}</p>
             </details>
           </section>

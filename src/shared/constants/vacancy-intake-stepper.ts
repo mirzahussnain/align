@@ -8,21 +8,21 @@ export interface IntakeStepDefinition {
 export const INTAKE_STEPS: IntakeStepDefinition[] = [
   {
     step: 1,
-    title: "Import & Vacancy Intake",
-    shortTitle: "Intake",
-    description: "Import from URL or paste advert details",
+    title: "Add Job",
+    shortTitle: "Add Job",
+    description: "Import from URL or paste the advert",
   },
   {
     step: 2,
-    title: "Sponsorship & Requirements Check",
-    shortTitle: "Practical Check",
-    description: "Employer evidence and profile compatibility",
+    title: "Profile & Requirements",
+    shortTitle: "Profile Check",
+    description: "Check role requirements, eligibility and practical fit",
   },
   {
     step: 3,
-    title: "AI Analysis & CV Tailoring",
-    shortTitle: "AI Match & Tailor",
-    description: "In-depth AI matching report & CV tailoring",
+    title: "Match & Tailor",
+    shortTitle: "Match & Tailor",
+    description: "Run Job Match and prepare CV recommendations",
   },
 ];
 

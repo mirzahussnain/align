@@ -195,7 +195,7 @@ export default function BillingView({
 
   return (
     <>
-      <DashboardTopBar title="Plan & billing" subtitle="Your subscription" showNewAnalysis={false} />
+      <DashboardTopBar title="Plan & Billing" subtitle="Your subscription" showNewAnalysis={false} />
 
       <div className="px-4 py-6 sm:px-6 lg:px-8">
         <div className="mb-5 rounded-xl border border-neutral-200 bg-white px-4 py-3">
@@ -223,7 +223,7 @@ export default function BillingView({
         {isPro && billing.portalAvailable && (
           <div className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-neutral-200 bg-white p-5">
             <div>
-              <p className="text-sm font-bold text-neutral-900">Manage billing</p>
+              <p className="text-sm font-bold text-neutral-900">Manage Billing</p>
               <p className="mt-1 text-xs text-neutral-500">
                 Update your payment method, view invoices or cancel — all in the secure billing portal.
               </p>
@@ -235,7 +235,7 @@ export default function BillingView({
               className="inline-flex items-center gap-2 rounded-full bg-neutral-900 px-4 py-2 text-xs font-bold text-white hover:bg-neutral-800 disabled:opacity-60"
             >
               {busy === 'portal' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ExternalLink className="h-3.5 w-3.5" />}
-              Manage billing
+              Manage Billing
             </button>
           </div>
         )}
@@ -340,7 +340,7 @@ function renderCta({
           disabled={busy !== null}
           className="w-full rounded-full bg-neutral-900 px-4 py-2 text-xs font-bold text-white hover:bg-neutral-800 disabled:opacity-60"
         >
-          {busy === 'portal' ? 'Opening…' : 'Manage billing'}
+          {busy === 'portal' ? 'Opening…' : 'Manage Billing'}
         </button>
       );
     }

@@ -2,7 +2,7 @@ export const JOB_BOARD_ROUTES = {
   discover: "/dashboard/jobs",
   saved: "/dashboard/jobs/saved",
   companies: "/dashboard/jobs/companies",
-  intake: "/dashboard/jobs/analyze",
+  intake: "/dashboard?tab=job_match",
   details: (jobSnapshotId: string) =>
     `/dashboard/jobs/${encodeURIComponent(jobSnapshotId)}`,
   company: (companyRecordId: string) =>

@@ -272,7 +272,7 @@ function FilterDialog({
             </select>
           </label>
           <label className="text-xs font-semibold text-neutral-700 dark:text-text-secondary sm:col-span-2">
-            Sponsor-register evidence
+            Sponsor-Register Evidence
             <select
               value={filters.sponsorStatus}
               onChange={(event) =>
@@ -310,7 +310,7 @@ function FilterDialog({
             onClick={onApply}
             className="h-9 rounded-xl bg-accent-purple px-4 text-xs font-semibold text-white hover:bg-accent-purple/90 transition shadow-sm"
           >
-            Apply filters
+            Apply Filters
           </button>
         </div>
       </div>
@@ -1503,7 +1503,7 @@ export function CompaniesBoard() {
               type="submit"
               className="h-9 w-full rounded-xl bg-accent-purple px-4 text-xs font-semibold text-white hover:bg-accent-purple/90 transition shadow-sm"
             >
-              Apply filters
+              Apply Filters
             </button>
           </div>
         </div>
@@ -1573,7 +1573,7 @@ export function CompaniesBoard() {
                 href={JOB_BOARD_ROUTES.company(company.id)}
                 className="mt-4 inline-flex min-h-11 items-center text-sm font-semibold text-accent-purple"
               >
-                View company
+                View Company
               </Link>
             </article>
           ))}
@@ -1587,7 +1587,7 @@ export function CompaniesBoard() {
             onClick={() => loadMore(data.page.nextCursor!)}
             className="min-h-11 rounded-lg border px-4 text-sm font-semibold dark:border-border-subtle"
           >
-            {loadingMore ? "Loading…" : "Load more companies"}
+            {loadingMore ? "Loading…" : "Load More Companies"}
           </button>
         </div>
       )}
@@ -1684,11 +1684,11 @@ export function CompanyDetailsBoard({
         className="mb-4 inline-flex min-h-11 items-center gap-1 text-sm font-semibold text-accent-purple"
       >
         <ChevronLeft className="h-4 w-4" />
-        Back to companies
+        Back to Companies
       </Link>
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1.5fr)_minmax(18rem,.7fr)]">
         <div>
-          <Card title="Company identity">
+          <Card title="Company Identity">
             <div className="flex flex-wrap gap-3 text-sm">
               {data.company.websiteUrl && (
                 <a
@@ -1737,7 +1737,7 @@ export function CompanyDetailsBoard({
           </section>
         </div>
         <aside className="space-y-4">
-          <Card title="Sponsor-register evidence">
+          <Card title="Sponsor-Register Evidence">
             <SponsorEvidenceLine status={data.sponsorEvidence.summary.status} />
             {data.sponsorEvidence.matchedOrganisationName && (
               <p className="mt-2 text-sm font-medium text-neutral-700 dark:text-text-secondary">
@@ -1749,7 +1749,7 @@ export function CompanyDetailsBoard({
             </p>
           </Card>
           {(data.sponsorHistory?.length ?? 0) > 0 && (
-            <Card title="Sponsorship history">
+            <Card title="Sponsorship History">
               <div className="space-y-4">
                 {data.sponsorHistory?.map((entry) => (
                   <div
@@ -1782,7 +1782,7 @@ export function CompanyDetailsBoard({
               </div>
             </Card>
           )}
-          <Card title="Source health">
+          <Card title="Source Health">
             <div className="space-y-2 text-sm">
               {data.sources.map((source) => (
                 <p key={source.provider}>

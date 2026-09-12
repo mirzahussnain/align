@@ -66,7 +66,7 @@ export default function AnalysisDetailView({ analysisId }: { analysisId: string 
 
   return (
     <>
-      <DashboardTopBar title="Analysis report" subtitle={subtitle} />
+      <DashboardTopBar title="Analysis Report" subtitle={subtitle} />
 
       <div className="px-4 py-6 sm:px-6 lg:px-8">
         <button

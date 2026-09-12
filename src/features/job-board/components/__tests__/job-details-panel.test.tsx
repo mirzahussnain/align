@@ -149,7 +149,7 @@ describe("redesigned vacancy details", () => {
     expect(screen.queryByText(/licence status/i)).not.toBeInTheDocument();
   });
 
-  it("moves between detail tabs and opens Check Match modal from Check match", async () => {
+  it("moves between detail tabs and opens Check Match modal from Check Match", async () => {
     const user = userEvent.setup();
     render(<JobDetailsBoard jobSnapshotId="snapshot-42" />);
     await screen.findByRole("heading", { name: "IT Support Apprentice" });
@@ -159,7 +159,7 @@ describe("redesigned vacancy details", () => {
       screen.getByText(/Applicants must have the right to work in the UK/),
     ).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "Check match" }));
+    await user.click(screen.getByRole("button", { name: "Check Match" }));
     expect(
       await screen.findByRole("dialog", { name: "Check Vacancy Match" }),
     ).toBeInTheDocument();

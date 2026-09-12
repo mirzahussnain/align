@@ -8,7 +8,7 @@ interface DashboardTopBarProps {
   title: string;
   subtitle?: string;
   showNewAnalysis?: boolean;
-  /** Custom action rendered on the right instead of the default "New analysis". */
+  /** Custom action rendered on the right instead of the default "New Job Match". */
   rightSlot?: ReactNode;
 }
 
@@ -23,7 +23,7 @@ export default function DashboardTopBar({ title, subtitle, showNewAnalysis = tru
         <button
           type="button"
           onClick={() => setMobileNavOpen(true)}
-          aria-label="Open navigation"
+          aria-label="Open Navigation"
           className="-ml-1 shrink-0 rounded-md p-2 text-neutral-500 transition-colors hover:bg-neutral-200/60 hover:text-neutral-900 md:hidden"
         >
           <Menu className="h-5 w-5" />
@@ -40,12 +40,12 @@ export default function DashboardTopBar({ title, subtitle, showNewAnalysis = tru
       {!rightSlot && showNewAnalysis && (
         <button
           type="button"
-          onClick={() => setTab('analyze')}
+          onClick={() => setTab('job_match')}
           className="inline-flex shrink-0 items-center gap-2 rounded-full bg-accent-purple px-3 py-2.5 text-xs font-bold text-white transition-all hover:bg-accent-purple/90 hover:shadow-[0_0_24px_-4px_hsl(262_83%_58%/0.6)] sm:px-4"
         >
           <Plus className="h-3.5 w-3.5" strokeWidth={2.5} />
-          <span className="hidden sm:inline">New analysis</span>
-          <span className="sr-only sm:hidden">New analysis</span>
+          <span className="hidden sm:inline">New Job Match</span>
+          <span className="sr-only sm:hidden">New Job Match</span>
         </button>
       )}
     </header>

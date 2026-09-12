@@ -37,7 +37,7 @@ export default function AnalysesTable({ rows }: { rows: AnalysisRow[] }) {
         <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-neutral-100 text-neutral-400">
           <FileSearch className="h-5 w-5" />
         </span>
-        <p className="mt-4 text-sm font-semibold text-neutral-900">No analyses yet</p>
+        <p className="mt-4 text-sm font-semibold text-neutral-900">No Analyses Yet</p>
         <p className="mt-1 max-w-xs text-xs text-neutral-500">
           Upload a CV to get an ATS score, or paste a job description to see how you match it.
         </p>
@@ -67,7 +67,7 @@ export default function AnalysesTable({ rows }: { rows: AnalysisRow[] }) {
               </th>
             ))}
             <th scope="col" className="w-10 px-6 py-3">
-              <span className="sr-only">View report</span>
+              <span className="sr-only">View Report</span>
             </th>
           </tr>
         </thead>
@@ -78,7 +78,7 @@ export default function AnalysesTable({ rows }: { rows: AnalysisRow[] }) {
               onClick={() => openAnalysis(row.id)}
               tabIndex={0}
               role="button"
-              aria-label={`View report for ${describeAnalysis(row)}`}
+              aria-label={`View Report for ${describeAnalysis(row)}`}
               onKeyDown={(e) => {
                 if (e.key === 'Enter' || e.key === ' ') {
                   e.preventDefault();

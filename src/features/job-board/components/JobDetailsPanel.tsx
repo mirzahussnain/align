@@ -593,7 +593,7 @@ function OverviewTab({
                   <span>
                     {data.description.completeness === "EXTERNAL_ONLY"
                       ? "This job source did not supply a description. The complete advert is only available on the employer site."
-                      : "This is a partial description from the job source, not the complete advert. Paste the full text in Check match before relying on an analysis."}
+                      : "This is a partial description from the job source, not the complete advert. Paste the full text in Check Match before relying on an analysis."}
                   </span>
                 </div>
                 <ExternalDescriptionLink
@@ -989,7 +989,7 @@ export function JobDetailsPanel({
           <Notice tone="warning">
             This is a partial description from the job source, not the complete
             advert. Read the full text on the employer&apos;s site, or paste it
-            into Check match for a reliable analysis.
+            into Check Match for a reliable analysis.
           </Notice>
         ) : null}
         <DescriptionBody description={data.description} />
@@ -1043,8 +1043,8 @@ export function JobDetailsPanel({
               >
                 <span>
                   {data.applicationUrl
-                    ? "Apply on employer site"
-                    : "View the original advert"}
+                    ? "Apply on Employer Site"
+                    : "View the Original Advert"}
                 </span>
                 <ExternalLink className="h-3.5 w-3.5 shrink-0" />
               </a>
@@ -1078,7 +1078,7 @@ export function JobDetailsPanel({
               className="h-10 px-5 bg-sky-50 border border-sky-200/80 text-sky-700 text-xs font-semibold rounded-xl flex items-center justify-center gap-2 hover:bg-sky-100 transition dark:border-sky-800/40 dark:bg-sky-950/40 dark:text-sky-300 whitespace-nowrap"
             >
               <Sparkles className="h-3.5 w-3.5 text-sky-500 shrink-0" />
-              Check match
+              Check Match
             </button>
           </div>
 

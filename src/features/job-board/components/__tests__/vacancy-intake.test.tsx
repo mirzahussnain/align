@@ -72,16 +72,15 @@ describe("universal vacancy intake", () => {
   it("collects the external vacancy, Career Track and CV before analysis", async () => {
     render(<VacancyIntake />);
 
-    expect(
-      screen.getByRole("heading", { name: "Analyse your own job" }),
-    ).toBeInTheDocument();
+    expect(screen.getAllByText("Add Job").length).toBeGreaterThan(0);
     expect(screen.getByLabelText(/Job URL/)).toBeInTheDocument();
     expect(screen.getByLabelText("Job title")).toBeInTheDocument();
-    expect(screen.getByLabelText("Employer")).toBeInTheDocument();
+    expect(screen.getByLabelText("Employer")).toHaveAttribute("placeholder", "Example Ltd");
+    expect(screen.getByText("Employer name helps Align check sponsorship information.")).toBeInTheDocument();
     expect(screen.getByLabelText(/Full job description/)).toBeInTheDocument();
     expect(
       screen.getByRole("button", {
-        name: "Check sponsorship & requirements",
+        name: "Check Profile & Requirements",
       }),
     ).toBeDisabled();
 
@@ -98,7 +97,7 @@ describe("universal vacancy intake", () => {
       target: { value: "https://jobs.example/vacancy/123" },
     });
     fireEvent.click(
-      screen.getByRole("button", { name: "Import vacancy" }),
+      screen.getByRole("button", { name: "Import Vacancy" }),
     );
 
     await waitFor(() => {

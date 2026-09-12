@@ -28,7 +28,7 @@ export default async function DashboardPage({
   const requestedProfile = Array.isArray(params.profile) ? params.profile[0] : params.profile;
   const requestedTab = Array.isArray(params.tab) ? params.tab[0] : params.tab;
   const requestedAnalysis = Array.isArray(params.analysis) ? params.analysis[0] : params.analysis;
-  const tabs = ['overview', 'analyze', 'profile', 'ats', 'job_matches', 'cvs', 'billing'] as const;
+  const tabs = ['overview', 'analyze', 'job_match', 'profile', 'ats', 'job_matches', 'cvs', 'billing'] as const;
   const initialTab = tabs.find((tab) => tab === requestedTab);
   const userId = session.user.id;
   const profileId = await resolveProfileId(userId, requestedProfile);
