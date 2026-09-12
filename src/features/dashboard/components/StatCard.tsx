@@ -13,7 +13,7 @@ interface StatCardProps {
 }
 
 const TINTS = {
-  purple: 'bg-accent-purple/10 text-accent-purple',
+  purple: 'bg-accent-cyan/10 text-accent-cyan',
   cyan: 'bg-accent-cyan/10 text-accent-cyan',
   amber: 'bg-amber-100 text-amber-600',
   emerald: 'bg-emerald-100 text-emerald-600',

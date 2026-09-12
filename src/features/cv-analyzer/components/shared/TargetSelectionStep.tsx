@@ -235,7 +235,7 @@ export default function TargetSelectionStep({
                 className={cn(
                   'flex items-start gap-3 p-3.5 rounded-xl border cursor-pointer transition-colors',
                   checked
-                    ? 'border-accent-purple bg-purple-50/60'
+                    ? 'border-accent-cyan bg-sky-50/60'
                     : 'border-slate-200 hover:border-slate-300',
                   disabled && 'opacity-50 cursor-not-allowed hover:border-slate-200'
                 )}
@@ -247,7 +247,7 @@ export default function TargetSelectionStep({
                   checked={checked}
                   disabled={disabled}
                   onChange={() => selectOption(option.value)}
-                  className="mt-1 h-4 w-4 accent-accent-purple"
+                  className="mt-1 h-4 w-4 accent-accent-cyan"
                 />
                 <span className="flex flex-col">
                   <span className="text-sm font-semibold text-slate-800">{option.title}</span>
@@ -269,7 +269,7 @@ export default function TargetSelectionStep({
               value={savedProfileId}
               disabled={isSubmitting}
               onChange={(e) => setSavedProfileId(e.target.value)}
-              className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-700 focus:outline-none focus:border-accent-purple/50 focus:ring-2 focus:ring-accent-purple/20"
+              className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-700 focus:outline-none focus:border-accent-cyan/50 focus:ring-2 focus:ring-accent-cyan/20"
             >
               {otherSavedProfiles.map((p) => (
                 <option key={p.profileId} value={p.profileId}>
@@ -301,7 +301,7 @@ export default function TargetSelectionStep({
                 'w-full p-2.5 bg-slate-50 border rounded-xl text-sm text-slate-700 focus:outline-none focus:ring-2',
                 customRoleError
                   ? 'border-rose-300 focus:border-rose-400 focus:ring-rose-200'
-                  : 'border-slate-200 focus:border-accent-purple/50 focus:ring-accent-purple/20'
+                  : 'border-slate-200 focus:border-accent-cyan/50 focus:ring-accent-cyan/20'
               )}
             />
             {customRoleError && (
@@ -353,7 +353,7 @@ export default function TargetSelectionStep({
             className={cn(
               'flex-1 py-3.5 rounded-xl font-bold text-base flex items-center justify-center gap-2 transition-all duration-300',
               canSubmit()
-                ? 'bg-accent-purple text-white hover:bg-purple-700 hover:shadow-lg hover:shadow-purple-500/30'
+                ? 'bg-slate-900 text-white hover:bg-slate-800 shadow-sm'
                 : 'bg-slate-100 text-slate-400 cursor-not-allowed'
             )}
           >

@@ -19,12 +19,12 @@ const CONFIG: Record<AnalysisSource, { label: string; icon: typeof Cpu; classes:
   ai: {
     label: 'AI-generated',
     icon: Sparkles,
-    classes: 'bg-accent-purple/10 text-accent-purple border-accent-purple/20',
+    classes: 'bg-accent-cyan/10 text-accent-cyan border-accent-cyan/20',
   },
   hybrid: {
     label: 'AI + rules',
     icon: Sparkles,
-    classes: 'bg-accent-purple/5 text-accent-purple/90 border-accent-purple/15',
+    classes: 'bg-accent-cyan/5 text-accent-cyan border-accent-cyan/15',
   },
 };
 

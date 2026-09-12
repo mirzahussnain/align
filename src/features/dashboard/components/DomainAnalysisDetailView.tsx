@@ -50,7 +50,7 @@ export default function DomainAnalysisDetailView({ id, domain }: { id: string; d
             </a>
           )}
         </div>
-        {!payload && !error && <div className="flex h-64 items-center justify-center"><Loader2 className="h-6 w-6 animate-spin text-accent-purple" /></div>}
+        {!payload && !error && <div className="flex h-64 items-center justify-center"><Loader2 className="h-6 w-6 animate-spin text-accent-cyan" /></div>}
         {error && <div role="alert" className="flex min-h-40 items-center justify-center gap-3 rounded-2xl bg-rose-50 p-6 text-sm text-rose-700"><AlertTriangle className="h-5 w-5" />{error}</div>}
         {payload?.jobUsed && (
           <section className="mb-5 rounded-2xl bg-[#111827] p-5 text-white">

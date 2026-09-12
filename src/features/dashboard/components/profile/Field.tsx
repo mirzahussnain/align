@@ -2,7 +2,7 @@ import { ChevronDown } from 'lucide-react';
 import { cn } from '@/shared/utils/cn';
 
 const baseField =
-  'w-full rounded-xl border border-neutral-300 bg-white px-4 py-2.5 text-sm text-neutral-900 placeholder:text-neutral-400 transition-colors focus:border-accent-purple focus:outline-none focus:ring-2 focus:ring-accent-purple/15';
+  'w-full rounded-xl border border-neutral-300 bg-white px-4 py-2.5 text-sm text-neutral-900 placeholder:text-neutral-400 transition-colors focus:border-accent-cyan focus:outline-none focus:ring-2 focus:ring-accent-cyan/15';
 
 /** Field label with a single, shared convention for required vs optional. */
 export function Label({
@@ -190,7 +190,7 @@ export function PresentCheckbox({
         type="checkbox"
         checked={checked}
         onChange={(e) => onChange(e.target.checked)}
-        className="h-3.5 w-3.5 rounded border-neutral-300 text-accent-purple focus:ring-accent-purple/30"
+        className="h-3.5 w-3.5 rounded border-neutral-300 text-accent-cyan focus:ring-accent-cyan/30"
       />
       {label}
     </label>

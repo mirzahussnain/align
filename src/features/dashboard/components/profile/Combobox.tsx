@@ -35,7 +35,7 @@ function Flag({ iso2, className }: { iso2?: string; className?: string }) {
 // is a real leading flex child and the input is a `.combo-input` reset that drops
 // its own border/bg so the whole control reads as one cohesive field.
 const fieldWrap =
-  'flex items-center gap-2 rounded-[10px] border border-border-subtle bg-bg-tertiary px-3.5 py-2.5 text-sm text-neutral-900 transition-colors focus-within:border-accent-purple focus-within:ring-2 focus-within:ring-accent-purple/15';
+  'flex items-center gap-2 rounded-[10px] border border-border-subtle bg-bg-tertiary px-3.5 py-2.5 text-sm text-neutral-900 transition-colors focus-within:border-accent-cyan focus-within:ring-2 focus-within:ring-accent-cyan/15';
 const bareInput = 'combo-input min-w-0 flex-1 placeholder:text-neutral-400 focus:outline-none';
 
 /**
@@ -131,7 +131,7 @@ export default function Combobox({
                   onClick={() => commit(o.value)}
                   className={cn(
                     'flex w-full items-center gap-2 px-4 py-2 text-left text-sm transition-colors hover:bg-neutral-100',
-                    o.value === value ? 'font-semibold text-accent-purple' : 'text-neutral-700'
+                    o.value === value ? 'font-semibold text-accent-cyan' : 'text-neutral-700'
                   )}
                 >
                   <Flag iso2={o.iso2} />

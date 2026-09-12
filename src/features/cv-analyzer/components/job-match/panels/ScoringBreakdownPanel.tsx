@@ -103,7 +103,7 @@ export default function ScoringBreakdownPanel({ view, contentVariants }: Scoring
         </div>
 
         {/* Final score — reconciles with the canonical ledger. */}
-        <div className="mt-6 flex items-center justify-between rounded-2xl bg-gradient-to-r from-accent-purple to-blue-600 text-white px-5 py-4">
+        <div className="mt-6 flex items-center justify-between rounded-2xl bg-gradient-to-r from-slate-900 to-slate-800 text-white px-5 py-4">
           <span className="text-sm font-bold">Final match score</span>
           <span className="text-2xl font-black">{score.total} / 100</span>
         </div>

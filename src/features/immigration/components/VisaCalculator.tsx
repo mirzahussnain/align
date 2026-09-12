@@ -58,7 +58,7 @@ export default function VisaCalculator({ className }: VisaCalculatorProps = {}) 
           <select 
             value={visaType} 
             onChange={(e) => handleVisaChange(e.target.value)}
-            className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm font-medium focus:border-accent-purple/50 focus:ring-1 focus:ring-accent-purple/20 outline-none"
+            className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm font-medium focus:border-accent-cyan/50 focus:ring-1 focus:ring-accent-cyan/20 outline-none"
           >
             <option value="Skilled Worker">Skilled Worker Visa</option>
             <option value="Graduate">Graduate Route</option>
@@ -72,7 +72,7 @@ export default function VisaCalculator({ className }: VisaCalculatorProps = {}) 
           <select 
             value={years} 
             onChange={(e) => setYears(Number(e.target.value))}
-            className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm font-medium focus:border-accent-purple/50 focus:ring-1 focus:ring-accent-purple/20 outline-none"
+            className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm font-medium focus:border-accent-cyan/50 focus:ring-1 focus:ring-accent-cyan/20 outline-none"
           >
             {availableYears.map(y => (
               <option key={y} value={y}>{y} Year{y > 1 ? 's' : ''}</option>
@@ -104,7 +104,7 @@ export default function VisaCalculator({ className }: VisaCalculatorProps = {}) 
 
         <div className="pt-4 border-t border-slate-100 flex justify-between items-end">
           <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Estimated Total</span>
-          <span className="text-2xl font-black text-accent-purple flex items-center">
+          <span className="text-2xl font-black text-accent-cyan flex items-center">
             <PoundSterling size={20} strokeWidth={3} className="mr-0.5" />
             {total.toLocaleString()}
           </span>

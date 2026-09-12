@@ -181,8 +181,8 @@ function SidebarContent({
       "relative flex items-center rounded-lg py-2 text-sm font-medium transition-colors",
       collapsed ? "justify-center px-0" : "gap-3 px-3",
       isActive
-        ? "bg-accent-purple/10 font-semibold text-accent-purple before:absolute before:-left-3 before:top-1/2 before:h-4 before:w-1 before:-translate-y-1/2 before:rounded-r-full before:bg-accent-purple"
-        : "text-neutral-600 hover:bg-white hover:text-neutral-900",
+        ? "bg-slate-900/5 font-semibold text-slate-900 before:absolute before:-left-3 before:top-1/2 before:h-4 before:w-1 before:-translate-y-1/2 before:rounded-r-full before:bg-accent-cyan dark:bg-white/10 dark:text-white"
+        : "text-slate-600 hover:bg-white hover:text-slate-900",
     );
 
   const openDashboardTab = (tab: DashboardTab) => {
@@ -328,7 +328,7 @@ function SidebarContent({
           />
         ) : (
           <span
-            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-accent-purple to-accent-cyan text-xs font-bold text-white"
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-slate-900 text-xs font-bold text-white shadow-sm"
             title={collapsed ? `${user.name} — ${tier} plan` : undefined}
           >
             {user.name.charAt(0).toUpperCase()}

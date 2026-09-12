@@ -57,8 +57,8 @@ export default function HubsSection() {
 
       {/* Core Star Flare visuals */}
       <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 flex items-center justify-center z-10">
-        <div className="w-1 h-1 bg-white rounded-full [box-shadow:0_0_20px_4px_#fff,0_0_40px_10px_hsla(199,89%,48%,0.8),0_0_80px_20px_hsla(262,83%,58%,0.5)] relative">
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[1px] bg-[linear-gradient(to_bottom,transparent,hsla(199,89%,48%,0.5)_45%,#fff_50%,hsla(262,83%,58%,0.5)_55%,transparent)] h-[600px] pointer-events-none" />
+        <div className="w-1 h-1 bg-white rounded-full [box-shadow:0_0_20px_4px_#fff,0_0_40px_10px_hsla(199,89%,48%,0.8),0_0_80px_20px_hsla(199,89%,48%,0.4)] relative">
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[1px] bg-[linear-gradient(to_bottom,transparent,hsla(199,89%,48%,0.5)_45%,#fff_50%,hsla(199,89%,48%,0.5)_55%,transparent)] h-[600px] pointer-events-none" />
         </div>
       </div>
 

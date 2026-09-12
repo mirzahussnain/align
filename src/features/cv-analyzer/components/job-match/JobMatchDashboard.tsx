@@ -160,10 +160,10 @@ export default function JobMatchDashboard({ result }: JobMatchDashboardProps) {
             onClick={() => setIsWizardOpen(true)}
             className="w-full relative group overflow-hidden rounded-2xl p-[1px] font-semibold"
           >
-            <span className="absolute inset-0 bg-gradient-to-r from-accent-purple via-blue-500 to-accent-purple opacity-70 group-hover:opacity-100 transition-opacity duration-300"></span>
+            <span className="absolute inset-0 bg-gradient-to-r from-slate-900 via-accent-cyan to-slate-900 opacity-70 group-hover:opacity-100 transition-opacity duration-300"></span>
             <div className="relative bg-white/90 backdrop-blur-sm group-hover:bg-transparent transition-colors duration-300 rounded-2xl px-4 py-3 flex items-center justify-center gap-2">
-              <Sparkles size={16} className="text-accent-purple group-hover:text-white transition-colors duration-300" />
-              <span className="bg-gradient-to-r from-accent-purple to-blue-600 bg-clip-text text-transparent group-hover:text-white transition-colors duration-300">
+              <Sparkles size={16} className="text-accent-cyan group-hover:text-white transition-colors duration-300" />
+              <span className="bg-gradient-to-r from-slate-900 to-accent-cyan bg-clip-text text-transparent group-hover:text-white transition-colors duration-300">
                 Rewrite CV
               </span>
             </div>
@@ -227,10 +227,10 @@ export default function JobMatchDashboard({ result }: JobMatchDashboardProps) {
                 onClick={() => setIsWizardOpen(true)}
                 className="w-full relative group overflow-hidden rounded-2xl p-[1px] font-semibold"
               >
-                <span className="absolute inset-0 bg-gradient-to-r from-accent-purple via-blue-500 to-accent-purple opacity-70 group-hover:opacity-100 transition-opacity duration-300"></span>
+                <span className="absolute inset-0 bg-gradient-to-r from-slate-900 via-accent-cyan to-slate-900 opacity-70 group-hover:opacity-100 transition-opacity duration-300"></span>
                 <div className="relative bg-white/90 backdrop-blur-sm group-hover:bg-transparent transition-colors duration-300 rounded-2xl px-4 py-2 flex items-center justify-center gap-2">
-                  <Sparkles size={14} className="text-accent-purple group-hover:text-white transition-colors duration-300" />
-                  <span className="bg-gradient-to-r from-accent-purple to-blue-600 bg-clip-text text-transparent group-hover:text-white transition-colors duration-300 text-sm">
+                  <Sparkles size={14} className="text-accent-cyan group-hover:text-white transition-colors duration-300" />
+                  <span className="bg-gradient-to-r from-slate-900 to-accent-cyan bg-clip-text text-transparent group-hover:text-white transition-colors duration-300 text-sm">
                     Rewrite
                   </span>
                 </div>

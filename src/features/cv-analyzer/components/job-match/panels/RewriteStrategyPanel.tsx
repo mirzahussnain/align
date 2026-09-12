@@ -77,7 +77,7 @@ export default function RewriteStrategyPanel({ view, contentVariants }: RewriteS
         {/* Recommended Template */}
         <div className="bg-white rounded-3xl border border-slate-100 p-5 shadow-sm">
           <div className="flex items-center gap-3 mb-4">
-            <div className="w-10 h-10 rounded-xl bg-purple-50 flex items-center justify-center text-accent-purple">
+            <div className="w-10 h-10 rounded-xl bg-sky-50 flex items-center justify-center text-accent-cyan">
               <FileSignature size={20} />
             </div>
             <div>
@@ -194,13 +194,13 @@ export default function RewriteStrategyPanel({ view, contentVariants }: RewriteS
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="md:col-span-2 bg-white rounded-3xl border border-slate-100 p-5 shadow-sm">
           <h4 className="flex items-center gap-2 font-bold text-slate-800 mb-4">
-            <LayoutList size={20} className="text-accent-purple" /> Optimal Section Order
+            <LayoutList size={20} className="text-accent-cyan" /> Optimal Section Order
           </h4>
           {sectionOrder ? (
             <div className="flex flex-wrap items-center gap-2">
               {sectionOrder.map((section, idx) => (
                 <div key={idx} className="flex items-center gap-2">
-                  <span className="px-3 py-1 bg-purple-50 text-accent-purple font-medium text-sm rounded-lg border border-purple-100">
+                  <span className="px-3 py-1 bg-sky-50 text-accent-cyan font-medium text-sm rounded-lg border border-purple-100">
                     {idx + 1}. {section}
                   </span>
                   {idx < sectionOrder.length - 1 && <span className="text-slate-300 text-lg">→</span>}

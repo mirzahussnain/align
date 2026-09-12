@@ -50,7 +50,7 @@ export default function CvsView({
     <button
       type="button"
       onClick={() => setWizardOpen(true)}
-      className="inline-flex shrink-0 items-center gap-2 rounded-full bg-accent-purple px-4 py-2.5 text-xs font-bold text-white transition-all hover:bg-accent-purple/90 hover:shadow-[0_0_24px_-4px_hsl(262_83%_58%/0.6)]"
+      className="inline-flex shrink-0 items-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-xs font-bold text-white shadow-sm transition-all hover:bg-slate-800"
     >
       <Plus className="h-3.5 w-3.5" strokeWidth={2.5} />
       Generate new CV
@@ -67,19 +67,19 @@ export default function CvsView({
 
       <div className="px-4 py-6 sm:px-6 lg:px-8">
         {cvs.length === 0 ? (
-          <div className="flex flex-col items-center justify-center rounded-2xl border border-neutral-200 bg-white px-6 py-16 text-center">
-            <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-neutral-100 text-neutral-400">
+          <div className="flex flex-col items-center justify-center rounded-2xl border border-slate-200 bg-white px-6 py-16 text-center">
+            <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-slate-100 text-slate-400">
               <FileStack className="h-5 w-5" />
             </span>
-            <p className="mt-4 text-sm font-semibold text-neutral-900">No CVs generated yet</p>
-            <p className="mt-1 max-w-sm text-xs text-neutral-500">
+            <p className="mt-4 text-sm font-semibold text-slate-900">No CVs generated yet</p>
+            <p className="mt-1 max-w-sm text-xs text-slate-500">
               Build a CV straight from your profile, or rebuild one tailored to a job you&apos;ve already analysed.
               Saved versions will appear here.
             </p>
             <button
               type="button"
               onClick={() => setWizardOpen(true)}
-              className="mt-5 inline-flex items-center gap-2 rounded-full bg-accent-purple px-4 py-2 text-xs font-bold text-white transition-colors hover:bg-accent-purple/90"
+              className="mt-5 inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-xs font-bold text-white shadow-sm transition-colors hover:bg-slate-800"
             >
               <Plus className="h-3.5 w-3.5" strokeWidth={2.5} />
               Generate new CV
@@ -88,17 +88,17 @@ export default function CvsView({
         ) : (
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
             {cvs.map((cv) => (
-              <article key={cv.id} className="flex flex-col rounded-2xl border border-neutral-200 bg-white p-5">
+              <article key={cv.id} className="flex flex-col rounded-2xl border border-slate-200 bg-white p-5">
                 <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-accent-cyan/10 text-accent-cyan">
                   <FileText className="h-4 w-4" />
                 </span>
                 {/* The document's own tagline, not the renderer's name. Falls
                     back to the role it was targeted at, then to the template,
                     so a card always says something true. */}
-                <h2 className="mt-3 text-sm font-bold text-neutral-900">
+                <h2 className="mt-3 text-sm font-bold text-slate-900">
                   {cv.title ?? cv.jobTitle ?? <span className="capitalize">{cv.template} template</span>}
                 </h2>
-                <p className="mt-1 text-xs text-neutral-400">
+                <p className="mt-1 text-xs text-slate-400">
                   {new Date(cv.createdAt).toLocaleDateString('en-GB', {
                     day: 'numeric',
                     month: 'short',
@@ -107,44 +107,44 @@ export default function CvsView({
                 </p>
 
                 <div className="mt-3 flex flex-wrap gap-1.5">
-                  <Pill className="bg-neutral-100 text-neutral-600 capitalize">{cv.template}</Pill>
+                  <Pill className="bg-slate-100 text-slate-600 capitalize">{cv.template}</Pill>
 
                   {cvProvenance(cv) === 'analysis' ? (
                     <>
                       {cv.jobTitle && (
-                        <Pill className="bg-purple-50 text-accent-purple">
+                        <Pill className="bg-sky-50 text-accent-cyan">
                           <Target className="h-3 w-3" />
                           {cv.jobTitle}
                           {cv.jobCompany ? ` · ${cv.jobCompany}` : ''}
                         </Pill>
                       )}
                       {cv.sourceFileName && (
-                        <Pill className="bg-neutral-100 text-neutral-600">
+                        <Pill className="bg-slate-100 text-slate-600">
                           <FileUp className="h-3 w-3" />
                           {cv.sourceFileName}
                         </Pill>
                       )}
                       {cv.matchScore !== null && (
-                        <Pill className="bg-neutral-100 text-neutral-600">
+                        <Pill className="bg-slate-100 text-slate-600">
                           Match {cv.matchScore}
                         </Pill>
                       )}
                     </>
                   ) : (
-                    <Pill className="bg-neutral-100 text-neutral-600">
+                    <Pill className="bg-slate-100 text-slate-600">
                       <UserRound className="h-3 w-3" />
                       Built from profile
                     </Pill>
                   )}
 
                   {cv.profileLabel && (
-                    <Pill className="bg-neutral-100 text-neutral-600">{cv.profileLabel}</Pill>
+                    <Pill className="bg-slate-100 text-slate-600">{cv.profileLabel}</Pill>
                   )}
                 </div>
 
                 <a
                   href={`/api/cv/${cv.id}/download`}
-                  className="mt-4 inline-flex items-center justify-center gap-2 rounded-full border border-neutral-200 px-3 py-2 text-xs font-semibold text-neutral-700 transition-colors hover:bg-neutral-100"
+                  className="mt-4 inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700 transition-colors hover:bg-slate-100 hover:text-slate-900"
                 >
                   <Download className="h-3.5 w-3.5" />
                   Download

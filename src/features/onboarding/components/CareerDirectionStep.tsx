@@ -159,7 +159,7 @@ export function CareerDirectionStep({
           onClick={() => setShowAdvanced((open) => !open)}
           aria-expanded={showAdvanced}
           aria-controls="onboarding-advanced-direction"
-          className="inline-flex items-center gap-1.5 rounded-lg px-1 py-1 text-xs font-semibold text-neutral-600 transition-colors hover:text-neutral-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-purple/40"
+          className="inline-flex items-center gap-1.5 rounded-lg px-1 py-1 text-xs font-semibold text-neutral-600 transition-colors hover:text-neutral-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-cyan/40"
         >
           <ChevronDown
             className={`h-3.5 w-3.5 transition-transform ${showAdvanced ? 'rotate-180' : ''}`}
@@ -179,7 +179,7 @@ export function CareerDirectionStep({
                   id="onboarding-occupation"
                   value={form.targetOccupation}
                   onChange={(event) => set('targetOccupation', event.target.value)}
-                  className="w-full appearance-none rounded-xl border border-neutral-300 bg-white px-4 py-2.5 pr-9 text-sm text-neutral-900 transition-colors focus:border-accent-purple focus:outline-none focus:ring-2 focus:ring-accent-purple/15"
+                  className="w-full appearance-none rounded-xl border border-neutral-300 bg-white px-4 py-2.5 pr-9 text-sm text-neutral-900 transition-colors focus:border-accent-cyan focus:outline-none focus:ring-2 focus:ring-accent-cyan/15"
                 >
                   <option value="">Work it out from my CV</option>
                   {occupationOptions.map((option) => (
@@ -205,7 +205,7 @@ export function CareerDirectionStep({
                   id="onboarding-seniority"
                   value={form.targetSeniority}
                   onChange={(event) => set('targetSeniority', event.target.value)}
-                  className="w-full appearance-none rounded-xl border border-neutral-300 bg-white px-4 py-2.5 pr-9 text-sm text-neutral-900 transition-colors focus:border-accent-purple focus:outline-none focus:ring-2 focus:ring-accent-purple/15"
+                  className="w-full appearance-none rounded-xl border border-neutral-300 bg-white px-4 py-2.5 pr-9 text-sm text-neutral-900 transition-colors focus:border-accent-cyan focus:outline-none focus:ring-2 focus:ring-accent-cyan/15"
                 >
                   <option value="">Not specified</option>
                   {seniorityOptions.map((option) => (

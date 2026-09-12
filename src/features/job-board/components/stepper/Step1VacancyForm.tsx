@@ -50,7 +50,7 @@ interface Step1VacancyFormProps {
 }
 
 const inputClass =
-  "mt-1.5 min-h-11 w-full rounded-xl border border-neutral-200 bg-neutral-50/50 px-3.5 text-sm text-neutral-900 outline-none transition placeholder:text-neutral-400 focus:border-accent-purple focus:bg-white focus:ring-2 focus:ring-accent-purple/15 dark:border-border-subtle dark:bg-bg-tertiary dark:text-text-primary dark:focus:bg-bg-secondary";
+  "mt-1.5 min-h-11 w-full rounded-xl border border-neutral-200 bg-neutral-50/50 px-3.5 text-sm text-neutral-900 outline-none transition placeholder:text-neutral-400 focus:border-accent-cyan focus:bg-white focus:ring-2 focus:ring-accent-cyan/20 dark:border-border-subtle dark:bg-bg-tertiary dark:text-text-primary dark:focus:bg-bg-secondary";
 
 export function Step1VacancyForm({
   sourceUrl,
@@ -115,7 +115,7 @@ export function Step1VacancyForm({
             type="button"
             onClick={() => importFromUrl(sourceUrl)}
             disabled={!sourceUrl.trim() || importingUrl}
-            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-accent-purple/30 bg-accent-purple/10 px-4 text-sm font-bold text-accent-purple transition hover:bg-accent-purple/20 disabled:cursor-not-allowed disabled:opacity-40"
+            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-accent-cyan/30 bg-accent-cyan/10 px-4 text-sm font-bold text-accent-cyan transition hover:bg-accent-cyan/20 disabled:cursor-not-allowed disabled:opacity-40"
           >
             {importingUrl ? (
               <Loader2 className="h-4 w-4 animate-spin" />
@@ -236,7 +236,7 @@ export function Step1VacancyForm({
               aria-pressed={cvSource === "STORED"}
               className={`min-h-11 rounded-xl border px-3 text-xs font-bold transition ${
                 cvSource === "STORED"
-                  ? "border-accent-purple bg-accent-purple/10 text-accent-purple"
+                  ? "border-accent-cyan bg-accent-cyan/10 text-accent-cyan"
                   : "border-neutral-200 text-neutral-600 hover:bg-neutral-50 dark:border-border-subtle dark:text-text-secondary"
               } disabled:opacity-40`}
             >
@@ -248,7 +248,7 @@ export function Step1VacancyForm({
               aria-pressed={cvSource === "UPLOAD"}
               className={`min-h-11 rounded-xl border px-3 text-xs font-bold transition ${
                 cvSource === "UPLOAD"
-                  ? "border-accent-purple bg-accent-purple/10 text-accent-purple"
+                  ? "border-accent-cyan bg-accent-cyan/10 text-accent-cyan"
                   : "border-neutral-200 text-neutral-600 hover:bg-neutral-50 dark:border-border-subtle dark:text-text-secondary"
               }`}
             >
@@ -308,7 +308,7 @@ export function Step1VacancyForm({
       <button
         type="submit"
         disabled={!canCheck}
-        className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-neutral-900 px-5 text-sm font-bold text-white shadow-sm transition hover:bg-neutral-800 disabled:cursor-not-allowed disabled:opacity-45 dark:bg-white dark:text-neutral-900 dark:hover:bg-neutral-100"
+        className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-slate-900 px-5 text-sm font-bold text-white shadow-sm transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-45 dark:bg-white dark:text-slate-900 dark:hover:bg-slate-100"
       >
         {checking ? (
           <Loader2 className="h-4 w-4 animate-spin" />

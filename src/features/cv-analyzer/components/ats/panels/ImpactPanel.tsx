@@ -54,7 +54,7 @@ export default function ImpactPanel({ result }: { result: CVAnalysisResult }) {
       {aiRewrites.length > 0 && (
         <div className="space-y-4 mt-8">
           <h3 className="text-lg font-bold text-text-primary flex items-center gap-2">
-            <Lightbulb size={18} className="text-accent-purple" />
+            <Lightbulb size={18} className="text-accent-cyan" />
             Suggested Bullet Rewrites
           </h3>
           <div className="space-y-4">

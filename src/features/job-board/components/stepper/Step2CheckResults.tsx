@@ -82,7 +82,7 @@ export function Step2CheckResults({
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="rounded-xl border border-neutral-200/80 bg-neutral-50/50 p-4 dark:border-border-subtle dark:bg-bg-tertiary/30">
           <p className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-neutral-500">
-            <ShieldCheck className="h-4 w-4 text-accent-purple" />
+            <ShieldCheck className="h-4 w-4 text-accent-cyan" />
             Sponsor Register Status
           </p>
           <p className="mt-2 text-base font-bold text-neutral-900 dark:text-text-primary">
@@ -153,7 +153,7 @@ export function Step2CheckResults({
             type="checkbox"
             checked={partialAccepted}
             onChange={(e) => setPartialAccepted(e.target.checked)}
-            className="mt-0.5 h-4 w-4 shrink-0 rounded border-amber-300 text-accent-purple focus:ring-accent-purple"
+            className="mt-0.5 h-4 w-4 shrink-0 rounded border-amber-300 text-accent-cyan focus:ring-accent-cyan"
           />
           <span>
             This text shows signs of being incomplete. Check this box to proceed with a reduced-confidence AI analysis.
@@ -167,7 +167,7 @@ export function Step2CheckResults({
           type="button"
           onClick={onAnalyse}
           disabled={!cvReady || !partialAccepted || analysing}
-          className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-purple-600 to-accent-purple px-5 text-sm font-bold text-white shadow-md transition hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-45"
+          className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-slate-900 px-5 text-sm font-bold text-white shadow-sm transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-45"
         >
           {analysing ? (
             <Loader2 className="h-4 w-4 animate-spin" />

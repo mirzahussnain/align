@@ -38,7 +38,7 @@ export default function TargetRolePicker({
           id="targetOccupation"
           value={value.targetOccupation}
           onChange={(e) => onChange({ targetOccupation: e.target.value })}
-          className="w-full rounded-lg border border-neutral-200 bg-white px-3 py-2 text-sm outline-none focus:border-accent-purple"
+          className="w-full rounded-lg border border-neutral-200 bg-white px-3 py-2 text-sm outline-none focus:border-accent-cyan"
         >
           <option value="">No preference — analyse automatically</option>
           {occupationOptionsFor(value.targetOccupation).map((o) => (
@@ -70,7 +70,7 @@ export default function TargetRolePicker({
           id="targetSeniority"
           value={value.targetSeniority}
           onChange={(e) => onChange({ targetSeniority: e.target.value })}
-          className="w-full rounded-lg border border-neutral-200 bg-white px-3 py-2 text-sm outline-none focus:border-accent-purple"
+          className="w-full rounded-lg border border-neutral-200 bg-white px-3 py-2 text-sm outline-none focus:border-accent-cyan"
         >
           <option value="">Not sure</option>
           {SENIORITY_OPTIONS.map((o) => (
@@ -86,7 +86,7 @@ export default function TargetRolePicker({
           id="targetIndustry"
           value={value.targetIndustry}
           onChange={(e) => onChange({ targetIndustry: e.target.value })}
-          className="w-full rounded-lg border border-neutral-200 bg-white px-3 py-2 text-sm outline-none focus:border-accent-purple"
+          className="w-full rounded-lg border border-neutral-200 bg-white px-3 py-2 text-sm outline-none focus:border-accent-cyan"
         >
           <option value="">Not sure</option>
           {INDUSTRY_IDS.map((id) => (

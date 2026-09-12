@@ -76,12 +76,12 @@ export default function ProfileReasoningOptInStep({
           className={cn(
             'relative text-left p-5 rounded-2xl border-2 transition-all duration-200',
             enabled
-              ? 'border-accent-purple bg-purple-50/30'
+              ? 'border-accent-cyan bg-sky-50/30'
               : 'border-slate-200 hover:border-slate-300 bg-white'
           )}
         >
           {enabled && (
-            <div className="absolute -top-3 -right-3 bg-accent-purple text-white text-[10px] font-bold px-3 py-1 rounded-full uppercase tracking-wider shadow-sm">
+            <div className="absolute -top-3 -right-3 bg-slate-900 text-white text-[10px] font-bold px-3 py-1 rounded-full uppercase tracking-wider shadow-sm">
               Recommended
             </div>
           )}
@@ -89,7 +89,7 @@ export default function ProfileReasoningOptInStep({
             <div
               className={cn(
                 'p-2 rounded-xl',
-                enabled ? 'bg-purple-100 text-accent-purple' : 'bg-slate-100 text-slate-500'
+                enabled ? 'bg-sky-100 text-accent-cyan' : 'bg-slate-100 text-slate-500'
               )}
             >
               <Layers size={20} />
@@ -100,10 +100,10 @@ export default function ProfileReasoningOptInStep({
           </div>
           <ul className="space-y-2">
             <li className="flex items-center gap-2 text-sm text-slate-600">
-              <CheckCircle2 size={16} className="text-accent-purple" /> Finds better-fitting projects
+              <CheckCircle2 size={16} className="text-accent-cyan" /> Finds better-fitting projects
             </li>
             <li className="flex items-center gap-2 text-sm text-slate-600">
-              <CheckCircle2 size={16} className="text-accent-purple" /> Surfaces skills the CV buried
+              <CheckCircle2 size={16} className="text-accent-cyan" /> Surfaces skills the CV buried
             </li>
             <li className="flex items-center gap-2 text-sm text-slate-600">
               <Clock size={16} className="text-slate-400" /> Adds ~10 seconds

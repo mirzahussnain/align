@@ -101,7 +101,7 @@ export function ExtractionStep({
     >
       {!error && (
         <div className="flex items-center gap-3 rounded-xl border border-neutral-200 bg-neutral-50 px-4 py-6">
-          <FileSearch className="h-5 w-5 shrink-0 animate-pulse text-accent-purple" aria-hidden="true" />
+          <FileSearch className="h-5 w-5 shrink-0 animate-pulse text-accent-cyan" aria-hidden="true" />
           <p className="text-xs leading-relaxed text-neutral-600">
             Finding your experience, education, skills and qualifications. We only read what the document
             actually says — anything it does not state, we will ask you for.

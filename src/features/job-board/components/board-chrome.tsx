@@ -31,7 +31,7 @@ export function BoardNavigation({ action }: { action?: ReactNode }) {
             aria-current={active ? "page" : undefined}
             className={`min-h-11 shrink-0 border-b-2 px-4 py-3 text-sm font-semibold transition-colors ${
               active
-                ? "border-accent-purple text-accent-purple"
+                ? "border-accent-cyan text-accent-cyan"
                 : "border-transparent text-neutral-500 hover:text-neutral-900 dark:text-text-secondary dark:hover:text-text-primary"
             }`}
           >
@@ -144,9 +144,9 @@ export function Pill({
     neutral:
       "bg-neutral-100 text-neutral-600 border border-neutral-200/60 dark:bg-bg-tertiary dark:text-text-secondary dark:border-border-subtle",
     accent:
-      "bg-purple-50 text-accent-purple border border-purple-200/60 dark:bg-accent-purple/10 dark:text-purple-300 dark:border-accent-purple/30",
+      "bg-sky-50 text-accent-cyan border border-accent-cyan/20 dark:bg-accent-cyan/10 dark:text-accent-cyan dark:border-accent-cyan/30",
     purple:
-      "bg-purple-50 text-purple-700 border border-purple-200/60 dark:bg-purple-950/40 dark:text-purple-300 dark:border-purple-800/40",
+      "bg-sky-50 text-accent-cyan border border-accent-cyan/20 dark:bg-accent-cyan/10 dark:text-accent-cyan dark:border-accent-cyan/30",
     success:
       "bg-emerald-50 text-emerald-700 border border-emerald-200/60 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800/40",
     emerald:
@@ -229,7 +229,7 @@ export function SponsorEvidenceLine({
           onClick={(e) => e.stopPropagation()}
           target="_blank"
           rel="noopener noreferrer"
-          className="inline-flex items-center gap-0.5 text-[11px] font-medium text-accent-purple hover:underline shrink-0 ml-1"
+          className="inline-flex items-center gap-0.5 text-[11px] font-medium text-accent-cyan hover:underline shrink-0 ml-1"
           title={`Check ${companyName} on Immigration Hub`}
         >
           <span>Verify</span>

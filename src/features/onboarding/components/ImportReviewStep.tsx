@@ -421,7 +421,7 @@ export function ImportReviewStep({
       )}
 
       {outstanding.length > 0 && (
-        <div className="mb-5 flex flex-col gap-2 rounded-xl border border-accent-purple/30 bg-accent-purple/5 p-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="mb-5 flex flex-col gap-2 rounded-xl border border-accent-cyan/30 bg-accent-cyan/5 p-3 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-xs font-medium text-neutral-700">
             {outstanding.length} detail{outstanding.length === 1 ? '' : 's'} ready to add.
           </p>
@@ -707,7 +707,7 @@ export function ImportReviewStep({
             onClick={() => setExpanded(expanded === 'all' ? null : 'all')}
             aria-expanded={expanded === 'all'}
             aria-controls="import-detail-list"
-            className="inline-flex items-center gap-1.5 text-xs font-semibold text-neutral-600 transition-colors hover:text-neutral-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-purple/40"
+            className="inline-flex items-center gap-1.5 text-xs font-semibold text-neutral-600 transition-colors hover:text-neutral-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-cyan/40"
           >
             <ChevronDown
               className={`h-3.5 w-3.5 transition-transform ${expanded === 'all' ? 'rotate-180' : ''}`}

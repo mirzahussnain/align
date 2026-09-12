@@ -56,14 +56,14 @@ export default function HeroSection() {
               >
                 <Link
                   href="/analyze"
-                  className="bg-neutral-950 text-white rounded-full px-6 py-3 border border-white/10 hover:bg-neutral-900 hover:shadow-2xl transition-all duration-300 text-xs font-bold flex items-center gap-2"
+                  className="bg-slate-900 text-white rounded-full px-6 py-3 border border-white/10 hover:bg-slate-800 hover:shadow-2xl transition-all duration-300 text-xs font-bold flex items-center gap-2"
                 >
                   <Globe size={14} className="text-white" />
                   <span>Start Free Analysis</span>
                 </Link>
                 <Link
                   href="/jobs"
-                  className="bg-sky-500 hover:bg-sky-600 text-white rounded-full px-6 py-3 border border-white/10 hover:shadow-2xl transition-all duration-300 text-xs font-bold flex items-center gap-2"
+                  className="bg-accent-cyan hover:bg-accent-cyan/90 text-white rounded-full px-6 py-3 border border-white/10 hover:shadow-[0_0_25px_hsla(var(--accent-cyan),0.45)] transition-all duration-300 text-xs font-bold flex items-center gap-2"
                 >
                   <Sparkles size={14} className="text-white animate-pulse" />
                   <span>Search Tech Jobs</span>
@@ -78,7 +78,7 @@ export default function HeroSection() {
 
             {/* Mobile Simplified Single Card Preview */}
             <div className="md:hidden relative w-full h-[280px] flex items-center justify-center mt-6 z-10">
-              <div className="w-[250px] h-[270px] bg-neutral-950/90 border border-white/25 rounded-2xl p-5 flex flex-col justify-between text-left text-white shadow-2xl">
+              <div className="w-[250px] h-[270px] bg-slate-900/90 border border-white/25 rounded-2xl p-5 flex flex-col justify-between text-left text-white shadow-2xl">
                 <div>
                   <span className="text-[9px] text-accent-cyan uppercase font-bold tracking-wider">ATS CV Calibration</span>
                   <h3 className="text-sm font-bold mt-1">Calibrate your tech profile effortlessly</h3>

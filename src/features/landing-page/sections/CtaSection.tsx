@@ -51,7 +51,7 @@ export default function CtaSection() {
           <div className="flex flex-wrap items-center justify-center gap-4">
             <Link
               href={CTA_DATA.primaryButton.href}
-              className="bg-sky-500 hover:bg-sky-600 text-white rounded-full px-8 py-4 text-xs sm:text-sm font-bold flex items-center gap-2 hover:shadow-[0_0_25px_rgba(14,165,233,0.45)] transition-all duration-300 transform hover:-translate-y-0.5"
+              className="bg-accent-cyan hover:bg-accent-cyan/90 text-white rounded-full px-8 py-4 text-xs sm:text-sm font-bold flex items-center gap-2 hover:shadow-[0_0_25px_hsla(var(--accent-cyan),0.45)] transition-all duration-300 transform hover:-translate-y-0.5"
             >
               <FileText size={16} />
               <span>{CTA_DATA.primaryButton.text}</span>

@@ -2,8 +2,9 @@ import React from 'react';
 import { cn } from '@/shared/utils/cn';
 
 interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
-  variant?: 'primary' | 'secondary' | 'outline' | 'ghost' | 'danger';
+  variant?: 'primary' | 'accent' | 'secondary-primary' | 'secondary' | 'outline' | 'ghost' | 'danger';
   size?: 'sm' | 'md' | 'lg' | 'icon';
+  shape?: 'capsule' | 'rounded';
   isLoading?: boolean;
   children: React.ReactNode;
 }
@@ -11,21 +12,28 @@ interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
 export default function Button({
   variant = 'primary',
   size = 'md',
+  shape = 'capsule',
   isLoading,
   className,
   children,
   disabled,
   ...props
 }: ButtonProps) {
+  const baseStyles = 'inline-flex items-center justify-center font-bold transition-all duration-300 transform border select-none cursor-pointer';
 
-  const baseStyles = 'inline-flex items-center justify-center font-bold transition-all duration-300 transform rounded-full border';
-  
+  const shapeStyles = {
+    capsule: 'rounded-full',
+    rounded: 'rounded-xl',
+  };
+
   const variants = {
-    primary: 'bg-accent-cyan hover:bg-accent-cyan/90 text-white border-transparent hover:shadow-[0_0_25px_rgba(var(--accent-cyan),0.45)] hover:-translate-y-0.5',
-    secondary: 'bg-white/10 hover:bg-white/20 text-white border-white/20 hover:shadow-[0_0_25px_rgba(255,255,255,0.15)] hover:-translate-y-0.5 backdrop-blur-md',
-    outline: 'bg-transparent text-text-primary border-border-subtle hover:bg-bg-tertiary hover:border-text-tertiary',
+    primary: 'bg-slate-900 hover:bg-slate-800 text-white border-transparent shadow-sm hover:shadow-md hover:-translate-y-0.5',
+    accent: 'bg-accent-cyan hover:bg-accent-cyan/90 text-white border-transparent shadow-[0_0_20px_hsla(var(--accent-cyan),0.35)] hover:-translate-y-0.5',
+    'secondary-primary': 'bg-accent-cyan hover:bg-accent-cyan/90 text-white border-transparent shadow-[0_0_20px_hsla(var(--accent-cyan),0.35)] hover:-translate-y-0.5',
+    secondary: 'bg-white/10 hover:bg-white/20 text-white border-white/20 hover:shadow-[0_0_20px_rgba(255,255,255,0.15)] hover:-translate-y-0.5 backdrop-blur-md',
+    outline: 'bg-transparent text-text-primary border-border-subtle hover:bg-bg-tertiary hover:border-border-default',
     ghost: 'bg-transparent text-text-secondary border-transparent hover:bg-bg-tertiary hover:text-text-primary',
-    danger: 'bg-error hover:bg-error/90 text-white border-transparent hover:shadow-[0_0_25px_rgba(var(--error),0.45)] hover:-translate-y-0.5',
+    danger: 'bg-error hover:bg-error/90 text-white border-transparent hover:shadow-[0_0_20px_hsla(var(--error),0.35)] hover:-translate-y-0.5',
   };
 
   const sizes = {
@@ -39,6 +47,7 @@ export default function Button({
     <button
       className={cn(
         baseStyles,
+        shapeStyles[shape],
         variants[variant],
         sizes[size],
         disabled || isLoading ? 'opacity-50 cursor-not-allowed transform-none hover:shadow-none hover:translate-y-0' : '',

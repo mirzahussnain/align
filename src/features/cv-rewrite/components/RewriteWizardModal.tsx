@@ -216,7 +216,7 @@ export default function RewriteWizardModal({
             )}
 
             {currentStep === 'format' && (
-              <Button onClick={handleRewriteSubmit} className="bg-gradient-to-r from-accent-purple to-blue-600">
+              <Button onClick={handleRewriteSubmit} className="bg-slate-900 hover:bg-slate-800">
                 Start AI Rewrite
               </Button>
             )}

@@ -7,7 +7,7 @@
   --bg-primary: 210 20% 98%;
   /* #f8fafc */
   --bg-secondary: 0 0% 100%;
-  /* #f8fafc */
+  /* #ffffff */
   --bg-tertiary: 220 14% 96%;
   /* #f1f5f9 */
   --bg-elevated: 220 13% 91%;
@@ -27,7 +27,7 @@
   --bg-panel: 0 0% 100%;
   --bg-card: 210 20% 98%;
 
-  /* Chart Colors (Light) */
+  /* Chart Colors (Light) - preserved */
   --chart-1: 262 83% 58%; /* Purple */
   --chart-2: 199 89% 48%; /* Cyan */
   --chart-3: 38 92% 50%;  /* Amber */
@@ -38,21 +38,26 @@
   --glass-border: rgba(15, 23, 42, 0.08);
   --glass-shadow: rgba(15, 23, 42, 0.05);
 
-  --accent-purple: 262 83% 58%;
-  --accent-cyan: 199 89% 48%;
+  /* Brand Colors */
+  --brand-primary: 222 47% 11%;      /* Slate-900 (#0f172a) */
+  --brand-primary-hover: 222 47% 16%;/* Slate-800 (#1e293b) */
+  --accent-cyan: 199 89% 48%;        /* Electric Cyan (#0ea5e9) */
+  --accent-cyan-hover: 199 89% 43%;  /* Electric Cyan Hover (#0284c7) */
+  --accent-purple: 199 89% 48%;      /* Unified with Electric Cyan */
 
-  --success: 142 71% 45%;
-  --warning: 38 92% 50%;
-  --error: 346 84% 61%;
-  --info: 217 91% 60%;
+  /* Semantic Status Tokens */
+  --success: 142 71% 45%;            /* Emerald (#10b981 / #059669) */
+  --warning: 38 92% 50%;             /* Amber (#f59e0b) */
+  --error: 346 84% 61%;              /* Rose (#f43f5e) */
+  --info: 199 89% 48%;               /* Sky/Cyan (#0ea5e9) */
 
   /* Effects */
   --shimmer-color: var(--accent-cyan);
 
   /* Dynamic Gradients for Light Mode */
-  --gradient-purple: linear-gradient(135deg, hsl(262, 83%, 58%), hsl(280, 85%, 55%));
   --gradient-cyan: linear-gradient(135deg, hsl(199, 89%, 48%), hsl(190, 75%, 45%));
-  --gradient-hero: linear-gradient(135deg, hsl(210, 40%, 98%) 0%, hsl(220, 25%, 96%) 50%, hsl(210, 40%, 98%) 100%);
+  --gradient-purple: var(--gradient-cyan);
+  --gradient-hero: linear-gradient(135deg, hsl(210, 40% 98%) 0%, hsl(220, 25%, 96%) 50%, hsl(210, 40%, 98%) 100%);
   --gradient-card: linear-gradient(145deg, hsl(0, 0%, 100%), hsl(210, 20%, 98%));
 
   --background: hsl(var(--bg-primary));
@@ -78,7 +83,7 @@
   --bg-panel: 222 30% 10%;
   --bg-card: 222 25% 14%;
 
-  /* Chart Colors (Dark) */
+  /* Chart Colors (Dark) - preserved */
   --chart-1: 262 83% 65%;
   --chart-2: 199 89% 55%;
   --chart-3: 38 92% 55%;
@@ -88,6 +93,13 @@
   --glass-bg: rgba(15, 20, 35, 0.6);
   --glass-border: rgba(255, 255, 255, 0.08);
   --glass-shadow: rgba(0, 0, 0, 0.3);
+
+  /* Brand Colors (Dark) */
+  --brand-primary: 210 40% 95%;
+  --brand-primary-hover: 210 40% 85%;
+  --accent-cyan: 199 89% 55%;
+  --accent-cyan-hover: 199 89% 50%;
+  --accent-purple: 199 89% 55%;
 
   /* Effects */
   --shimmer-color: 199 89% 55%;
@@ -112,8 +124,11 @@
   --color-text-secondary: hsl(var(--text-secondary));
   --color-text-tertiary: hsl(var(--text-tertiary));
 
-  --color-accent-purple: hsl(var(--accent-purple));
+  --color-brand-primary: hsl(var(--brand-primary));
+  --color-brand-primary-hover: hsl(var(--brand-primary-hover));
   --color-accent-cyan: hsl(var(--accent-cyan));
+  --color-accent-cyan-hover: hsl(var(--accent-cyan-hover));
+  --color-accent-purple: hsl(var(--accent-purple));
 
   --color-success: hsl(var(--success));
   --color-warning: hsl(var(--warning));
@@ -134,7 +149,7 @@
   /* Complex Backgrounds */
   --background-image-flow-grid: radial-gradient(circle at 15% 25%, rgba(148, 163, 184, 0.18) 0 2px, transparent 3px), radial-gradient(circle at 85% 15%, rgba(148, 163, 184, 0.14) 0 2px, transparent 3px), radial-gradient(circle at 75% 75%, rgba(148, 163, 184, 0.18) 0 2px, transparent 3px), radial-gradient(circle at 25% 70%, rgba(148, 163, 184, 0.14) 0 2px, transparent 3px), linear-gradient(180deg, rgba(248, 250, 252, 0.96) 0%, rgba(255, 255, 255, 0.98) 60%, rgba(248, 250, 252, 1) 100%);
   --background-image-hero-composite: linear-gradient(180deg, rgba(2, 60, 105, 0.85) 0%, rgba(56, 189, 248, 0.15) 100%), url('/assets/images/hero_composite_bg.png');
-  --background-image-cosmic-flare: radial-gradient(circle at center, hsla(199, 89%, 48%, 0.1) 0%, hsla(262, 83%, 58%, 0.03) 45%, transparent 70%);
+  --background-image-cosmic-flare: radial-gradient(circle at center, hsla(199, 89%, 48%, 0.1) 0%, hsla(199, 89%, 48%, 0.04) 45%, transparent 70%);
   --background-image-text-shimmer: linear-gradient(to right, rgba(255, 255, 255, 0.4) 0%, var(--color-shimmer-color) 25%, var(--color-accent-cyan) 50%, var(--color-shimmer-color) 75%, rgba(255, 255, 255, 0.4) 100%);
   --background-image-gradient-purple: var(--gradient-purple);
   --background-image-gradient-cyan: var(--gradient-cyan);
@@ -179,7 +194,7 @@ body {
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: hsl(var(--accent-purple));
+  background: hsl(var(--accent-cyan));
 }
 
 /* ===== Glass Card ===== */
@@ -200,13 +215,13 @@ body {
 
 /* ===== Glow Effects ===== */
 .glow-purple {
-  box-shadow: 0 0 20px hsla(var(--accent-purple), 0.15),
-    0 0 60px hsla(var(--accent-purple), 0.08);
+  box-shadow: 0 0 20px hsla(var(--accent-cyan), 0.2),
+    0 0 60px hsla(var(--accent-cyan), 0.1);
 }
 
 .glow-cyan {
-  box-shadow: 0 0 20px hsla(var(--accent-cyan), 0.15),
-    0 0 60px hsla(var(--accent-cyan), 0.08);
+  box-shadow: 0 0 20px hsla(var(--accent-cyan), 0.2),
+    0 0 60px hsla(var(--accent-cyan), 0.1);
 }
 
 /* ===== Animations ===== */
@@ -228,7 +243,7 @@ body {
 
 /* ===== Utility Classes ===== */
 .text-gradient-purple {
-  background: var(--gradient-purple);
+  background: var(--gradient-cyan);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -247,7 +262,7 @@ body {
 
 /* ===== Focus Styles ===== */
 :focus-visible {
-  outline: 2px solid hsl(var(--accent-purple));
+  outline: 2px solid hsl(var(--accent-cyan));
   outline-offset: 2px;
   border-radius: 4px;
 }
@@ -268,8 +283,8 @@ textarea {
 input:focus,
 select:focus,
 textarea:focus {
-  border-color: hsl(var(--accent-purple));
-  box-shadow: 0 0 0 3px hsla(var(--accent-purple), 0.15);
+  border-color: hsl(var(--accent-cyan));
+  box-shadow: 0 0 0 3px hsla(var(--accent-cyan), 0.2);
   outline: none;
 }
 

@@ -136,7 +136,7 @@ export default function ProfileSwitcher({
                 key={p.id}
                 className={cn(
                   'group flex items-center gap-1 rounded-lg px-1',
-                  p.id === active?.id && 'bg-accent-purple/5'
+                  p.id === active?.id && 'bg-slate-100'
                 )}
               >
                 <button
@@ -158,7 +158,7 @@ export default function ProfileSwitcher({
                     </span>
                   </span>
                   {p.id === active?.id && (
-                    <Check className="h-3.5 w-3.5 shrink-0 text-accent-purple" strokeWidth={3} />
+                    <Check className="h-3.5 w-3.5 shrink-0 text-accent-cyan" strokeWidth={3} />
                   )}
                 </button>
 
@@ -198,12 +198,12 @@ export default function ProfileSwitcher({
                     onChange={(e) => setLabel(e.target.value)}
                     onKeyDown={(e) => e.key === 'Enter' && handleCreate()}
                     placeholder="e.g. Warehouse Applications"
-                    className="rounded-lg border border-neutral-200 px-2.5 py-1.5 text-sm outline-none focus:border-accent-purple"
+                    className="rounded-lg border border-neutral-200 px-2.5 py-1.5 text-sm outline-none focus:border-accent-cyan"
                   />
                   <select
                     value={occupation}
                     onChange={(e) => setOccupation(e.target.value)}
-                    className="rounded-lg border border-neutral-200 px-2.5 py-1.5 text-xs text-neutral-600 outline-none focus:border-accent-purple"
+                    className="rounded-lg border border-neutral-200 px-2.5 py-1.5 text-xs text-neutral-600 outline-none focus:border-accent-cyan"
                   >
                     <option value="">Career area (recommended)</option>
                     {OCCUPATION_OPTIONS.map((o) => (
@@ -215,7 +215,7 @@ export default function ProfileSwitcher({
                   <select
                     value={industry}
                     onChange={(e) => setIndustry(e.target.value)}
-                    className="rounded-lg border border-neutral-200 px-2.5 py-1.5 text-xs text-neutral-600 outline-none focus:border-accent-purple"
+                    className="rounded-lg border border-neutral-200 px-2.5 py-1.5 text-xs text-neutral-600 outline-none focus:border-accent-cyan"
                   >
                     <option value="">Target industry (optional)</option>
                     {INDUSTRY_IDS.map((id) => (
@@ -229,7 +229,7 @@ export default function ProfileSwitcher({
                       type="button"
                       onClick={handleCreate}
                       disabled={pending || !label.trim()}
-                      className="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-accent-purple px-3 py-1.5 text-xs font-bold text-white disabled:opacity-50"
+                      className="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-slate-900 px-3 py-1.5 text-xs font-bold text-white shadow-sm transition-colors hover:bg-slate-800 disabled:opacity-50"
                     >
                       {pending && <Loader2 className="h-3 w-3 animate-spin" />}
                       Create

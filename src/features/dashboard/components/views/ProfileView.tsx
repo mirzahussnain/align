@@ -23,7 +23,7 @@ const NAV: { id: Section; label: string; icon: LucideIcon }[] = [
 export default function ProfileView({ initial, name, email, image }: { initial: ProfileData; name: string; email: string; image?: string | null }) {
   const [section, setSection] = useState<Section>('personal');
   return <><DashboardTopBar title="Profile" subtitle={`${initial.label} — the source Align rebuilds your CVs from`} showNewAnalysis={false} />
-    <div className="px-4 py-4 sm:px-6 sm:py-6 lg:px-8"><div className="grid grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-[260px_1fr]"><aside className="min-w-0"><div className="rounded-2xl border border-neutral-200 bg-white p-3 sm:p-4"><AvatarUploader name={name} image={image} /><p className="mt-2 truncate px-1 text-[11px] text-neutral-400">{email}</p><nav aria-label="Profile sections" className="mt-3 flex max-w-full gap-1 overflow-x-auto overscroll-x-contain pb-1 [scrollbar-width:thin] lg:flex-col lg:overflow-visible lg:pb-0">{NAV.map(({ id, label, icon: Icon }) => <button key={id} type="button" onClick={() => setSection(id)} className={cn('flex shrink-0 items-center gap-2 whitespace-nowrap rounded-lg px-3 py-2 text-sm font-medium transition-colors lg:w-full lg:gap-3', section === id ? 'bg-accent-purple/10 text-accent-purple' : 'text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900')}><Icon className="h-4 w-4 shrink-0" strokeWidth={2} />{label}</button>)}</nav></div></aside>
+    <div className="px-4 py-4 sm:px-6 sm:py-6 lg:px-8"><div className="grid grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-[260px_1fr]"><aside className="min-w-0"><div className="rounded-2xl border border-slate-200 bg-white p-3 sm:p-4"><AvatarUploader name={name} image={image} /><p className="mt-2 truncate px-1 text-[11px] text-slate-400">{email}</p><nav aria-label="Profile sections" className="mt-3 flex max-w-full gap-1 overflow-x-auto overscroll-x-contain pb-1 [scrollbar-width:thin] lg:flex-col lg:overflow-visible lg:pb-0">{NAV.map(({ id, label, icon: Icon }) => <button key={id} type="button" onClick={() => setSection(id)} className={cn('flex shrink-0 items-center gap-2 whitespace-nowrap rounded-lg px-3 py-2 text-sm font-medium transition-colors lg:w-full lg:gap-3', section === id ? 'bg-slate-900/5 font-semibold text-slate-900 dark:bg-white/10 dark:text-white' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900')}><Icon className="h-4 w-4 shrink-0" strokeWidth={2} />{label}</button>)}</nav></div></aside>
       <section className="min-w-0">
       {/*
         The two ways to fill a profile that are not this form. Kept beside the
@@ -31,28 +31,28 @@ export default function ProfileView({ initial, name, email, image }: { initial: 
         finishing a profile by hand are things people do repeatedly — not once,
         on their first day.
       */}
-      <div className="mb-4 flex flex-col gap-2 rounded-2xl border border-neutral-200 bg-white p-4 sm:flex-row sm:items-center sm:justify-between">
-        <p className="text-xs leading-relaxed text-neutral-500">
+      <div className="mb-4 flex flex-col gap-2 rounded-2xl border border-slate-200 bg-white p-4 sm:flex-row sm:items-center sm:justify-between">
+        <p className="text-xs leading-relaxed text-slate-500">
           Fill this profile in faster by importing a CV, or work through it step by step.
         </p>
         <div className="flex shrink-0 flex-col gap-2 sm:flex-row">
           <Link
             href="/dashboard/import-cv"
-            className="inline-flex items-center justify-center gap-1.5 rounded-full bg-accent-purple px-4 py-2 text-xs font-bold text-white transition-colors hover:bg-accent-purple/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-purple/40"
+            className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-slate-900 px-4 py-2 text-xs font-bold text-white shadow-sm transition-colors hover:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-cyan/40"
           >
             <FileUp className="h-3.5 w-3.5" aria-hidden="true" />
             Import a CV
           </Link>
           <Link
             href={`/onboarding/manual?profile=${initial.profileId}`}
-            className="inline-flex items-center justify-center gap-1.5 rounded-full border border-neutral-300 bg-white px-4 py-2 text-xs font-semibold text-neutral-700 transition-colors hover:border-neutral-400 hover:text-neutral-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-purple/30"
+            className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-slate-300 bg-white px-4 py-2 text-xs font-semibold text-slate-700 transition-colors hover:border-slate-400 hover:bg-slate-50 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-cyan/30"
           >
             <PencilLine className="h-3.5 w-3.5" aria-hidden="true" />
             Complete manually
           </Link>
         </div>
       </div>
-      <div className="rounded-2xl border border-neutral-200 bg-white p-4 sm:p-6 lg:p-8">
+      <div className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-6 lg:p-8">
         {section === 'personal' && <PersonalInfoForm initial={initial.personal} profileId={initial.profileId} />}
         {section === 'experience' && <ExperienceForm key={`${initial.profileId}:experience`} initial={initial.experience} profileId={initial.profileId} />}
         {section === 'projects' && <ProjectsForm key={`${initial.profileId}:projects`} initial={initial.projects} skills={initial.skills} profileId={initial.profileId} />}

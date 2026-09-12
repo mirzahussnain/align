@@ -212,7 +212,7 @@ function FilterDialog({
                   event.target.value as DiscoverFilters["workplace"],
                 )
               }
-              className="mt-1 w-full h-9 rounded-lg border border-neutral-200 bg-neutral-50 px-2.5 text-xs font-medium text-neutral-900 focus:outline-none focus:ring-2 focus:ring-accent-purple dark:border-border-subtle dark:bg-bg-tertiary dark:text-text-primary"
+              className="mt-1 w-full h-9 rounded-lg border border-neutral-200 bg-neutral-50 px-2.5 text-xs font-medium text-neutral-900 focus:outline-none focus:ring-2 focus:ring-accent-cyan dark:border-border-subtle dark:bg-bg-tertiary dark:text-text-primary"
             >
               <option value="all">Any workplace</option>
               <option value="REMOTE">Remote</option>
@@ -230,7 +230,7 @@ function FilterDialog({
                   event.target.value as DiscoverFilters["employmentType"],
                 )
               }
-              className="mt-1 w-full h-9 rounded-lg border border-neutral-200 bg-neutral-50 px-2.5 text-xs font-medium text-neutral-900 focus:outline-none focus:ring-2 focus:ring-accent-purple dark:border-border-subtle dark:bg-bg-tertiary dark:text-text-primary"
+              className="mt-1 w-full h-9 rounded-lg border border-neutral-200 bg-neutral-50 px-2.5 text-xs font-medium text-neutral-900 focus:outline-none focus:ring-2 focus:ring-accent-cyan dark:border-border-subtle dark:bg-bg-tertiary dark:text-text-primary"
             >
               <option value="all">Any type</option>
               <option value="permanent">Permanent</option>
@@ -250,7 +250,7 @@ function FilterDialog({
                 )
               }
               placeholder="e.g. 40000"
-              className="mt-1 w-full h-9 rounded-lg border border-neutral-200 bg-neutral-50 px-2.5 text-xs font-medium text-neutral-900 focus:outline-none focus:ring-2 focus:ring-accent-purple dark:border-border-subtle dark:bg-bg-tertiary dark:text-text-primary"
+              className="mt-1 w-full h-9 rounded-lg border border-neutral-200 bg-neutral-50 px-2.5 text-xs font-medium text-neutral-900 focus:outline-none focus:ring-2 focus:ring-accent-cyan dark:border-border-subtle dark:bg-bg-tertiary dark:text-text-primary"
             />
           </label>
           <label className="text-xs font-semibold text-neutral-700 dark:text-text-secondary">
@@ -263,7 +263,7 @@ function FilterDialog({
                   event.target.value as DiscoverFilters["freshness"],
                 )
               }
-              className="mt-1 w-full h-9 rounded-lg border border-neutral-200 bg-neutral-50 px-2.5 text-xs font-medium text-neutral-900 focus:outline-none focus:ring-2 focus:ring-accent-purple dark:border-border-subtle dark:bg-bg-tertiary dark:text-text-primary"
+              className="mt-1 w-full h-9 rounded-lg border border-neutral-200 bg-neutral-50 px-2.5 text-xs font-medium text-neutral-900 focus:outline-none focus:ring-2 focus:ring-accent-cyan dark:border-border-subtle dark:bg-bg-tertiary dark:text-text-primary"
             >
               <option value="">Any date</option>
               <option value="1">Past day</option>
@@ -281,7 +281,7 @@ function FilterDialog({
                   event.target.value as DiscoverFilters["sponsorStatus"],
                 )
               }
-              className="mt-1 w-full h-9 rounded-lg border border-neutral-200 bg-neutral-50 px-2.5 text-xs font-medium text-neutral-900 focus:outline-none focus:ring-2 focus:ring-accent-purple dark:border-border-subtle dark:bg-bg-tertiary dark:text-text-primary"
+              className="mt-1 w-full h-9 rounded-lg border border-neutral-200 bg-neutral-50 px-2.5 text-xs font-medium text-neutral-900 focus:outline-none focus:ring-2 focus:ring-accent-cyan dark:border-border-subtle dark:bg-bg-tertiary dark:text-text-primary"
             >
               <option value="all">Any evidence</option>
               <option value="registered">Employer matched</option>
@@ -308,7 +308,7 @@ function FilterDialog({
           <button
             type="button"
             onClick={onApply}
-            className="h-9 rounded-xl bg-accent-purple px-4 text-xs font-semibold text-white hover:bg-accent-purple/90 transition shadow-sm"
+            className="h-9 rounded-xl bg-slate-900 px-4 text-xs font-semibold text-white hover:bg-slate-800 transition shadow-sm"
           >
             Apply Filters
           </button>
@@ -385,7 +385,7 @@ function FilterChips({
           key={key}
           className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs transition ${
             active
-              ? "border-accent-purple/30 bg-purple-50 font-semibold text-accent-purple dark:border-accent-purple/40 dark:bg-accent-purple/10"
+              ? "border-accent-cyan/30 bg-sky-50 font-semibold text-accent-cyan dark:border-accent-cyan/40 dark:bg-accent-cyan/10"
               : "border-neutral-200/80 bg-neutral-50 text-neutral-600 dark:border-border-subtle dark:bg-bg-tertiary dark:text-text-secondary"
           }`}
         >
@@ -406,7 +406,7 @@ function FilterChips({
       <button
         type="button"
         onClick={onClearAll}
-        className="ml-auto text-xs font-semibold text-accent-purple hover:underline"
+        className="ml-auto text-xs font-semibold text-accent-cyan hover:underline"
       >
         Clear all
       </button>
@@ -453,7 +453,7 @@ function Pagination({
           aria-label={`Page ${index + 1}`}
           className={`h-8 min-w-8 rounded-lg border px-2 text-xs font-semibold ${
             index === pageIndex
-              ? "border-accent-purple bg-accent-purple/10 text-accent-purple"
+              ? "border-accent-cyan bg-accent-cyan/10 text-accent-cyan"
               : "border-neutral-200 bg-white text-neutral-600 hover:bg-neutral-50 dark:border-border-subtle dark:bg-bg-secondary dark:text-text-secondary"
           }`}
         >
@@ -950,7 +950,7 @@ export function DiscoverBoard({
                   }
                   placeholder="e.g. IT Analyst"
                   style={{ paddingLeft: "2.75rem" }}
-                  className="w-full rounded-xl !pl-11 pr-3.5 py-2.5 text-sm border border-neutral-200 focus:outline-none focus:ring-2 focus:ring-accent-purple/30 dark:border-border-subtle dark:bg-bg-tertiary dark:text-text-primary"
+                  className="w-full rounded-xl !pl-11 pr-3.5 py-2.5 text-sm border border-neutral-200 focus:outline-none focus:ring-2 focus:ring-accent-cyan/30 dark:border-border-subtle dark:bg-bg-tertiary dark:text-text-primary"
                 />
               </span>
             </label>
@@ -967,7 +967,7 @@ export function DiscoverBoard({
                   }
                   placeholder="City or region"
                   style={{ paddingLeft: "2.75rem" }}
-                  className="w-full rounded-xl !pl-11 pr-3.5 py-2.5 text-sm border border-neutral-200 focus:outline-none focus:ring-2 focus:ring-accent-purple/30 dark:border-border-subtle dark:bg-bg-tertiary dark:text-text-primary"
+                  className="w-full rounded-xl !pl-11 pr-3.5 py-2.5 text-sm border border-neutral-200 focus:outline-none focus:ring-2 focus:ring-accent-cyan/30 dark:border-border-subtle dark:bg-bg-tertiary dark:text-text-primary"
                 />
               </span>
             </label>
@@ -984,7 +984,7 @@ export function DiscoverBoard({
                 onChange={(event) =>
                   setDraft({ ...draft, careerTrackId: event.target.value })
                 }
-                className="mt-1 w-full rounded-xl border border-neutral-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent-purple/30 dark:border-border-subtle dark:bg-bg-tertiary dark:text-text-primary"
+                className="mt-1 w-full rounded-xl border border-neutral-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent-cyan/30 dark:border-border-subtle dark:bg-bg-tertiary dark:text-text-primary"
               >
                 <option value="">Select a Career Track</option>
                 {tracks.map((track) => (
@@ -1000,7 +1000,7 @@ export function DiscoverBoard({
               <button
                 type="submit"
                 disabled={!draft.query.trim()}
-                className="inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-xl bg-accent-purple px-5 text-sm font-semibold text-white shadow-sm transition hover:bg-accent-purple/90 disabled:opacity-60"
+                className="inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-xl bg-slate-900 px-5 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800 disabled:opacity-60"
               >
                 <Search className="h-4 w-4" />
                 Search
@@ -1108,7 +1108,7 @@ export function DiscoverBoard({
                   })
                 }
                 aria-label="Sort results"
-                className="h-9 px-2.5 py-1 text-xs font-medium text-neutral-800 rounded-lg border border-neutral-200 bg-neutral-50/80 focus:outline-none focus:ring-2 focus:ring-accent-purple/30 dark:border-border-subtle dark:bg-bg-tertiary dark:text-text-primary shrink-0 min-w-0 max-w-[130px] sm:max-w-none"
+                className="h-9 px-2.5 py-1 text-xs font-medium text-neutral-800 rounded-lg border border-neutral-200 bg-neutral-50/80 focus:outline-none focus:ring-2 focus:ring-accent-cyan/30 dark:border-border-subtle dark:bg-bg-tertiary dark:text-text-primary shrink-0 min-w-0 max-w-[130px] sm:max-w-none"
               >
                 <option value="relevance">Relevance</option>
                 <option value="date">Most recent</option>
@@ -1447,7 +1447,7 @@ export function CompaniesBoard() {
               value={search}
               onChange={(event) => setSearch(event.target.value)}
               placeholder="Company name"
-              className="mt-1 h-9 w-full rounded-lg border border-neutral-200 bg-neutral-50 px-2.5 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-accent-purple dark:border-border-subtle dark:bg-bg-tertiary dark:text-text-primary"
+              className="mt-1 h-9 w-full rounded-lg border border-neutral-200 bg-neutral-50 px-2.5 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-accent-cyan dark:border-border-subtle dark:bg-bg-tertiary dark:text-text-primary"
             />
           </label>
           <label className="text-xs font-semibold text-neutral-700 dark:text-text-secondary">
@@ -1455,7 +1455,7 @@ export function CompaniesBoard() {
             <select
               value={provider}
               onChange={(event) => setProvider(event.target.value)}
-              className="mt-1 h-9 w-full rounded-lg border border-neutral-200 bg-neutral-50 px-2.5 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-accent-purple dark:border-border-subtle dark:bg-bg-tertiary dark:text-text-primary"
+              className="mt-1 h-9 w-full rounded-lg border border-neutral-200 bg-neutral-50 px-2.5 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-accent-cyan dark:border-border-subtle dark:bg-bg-tertiary dark:text-text-primary"
             >
               <option value="">All providers</option>
               <option value="GREENHOUSE">Greenhouse</option>
@@ -1469,7 +1469,7 @@ export function CompaniesBoard() {
               value={industry}
               onChange={(event) => setIndustry(event.target.value)}
               placeholder="Industry"
-              className="mt-1 h-9 w-full rounded-lg border border-neutral-200 bg-neutral-50 px-2.5 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-accent-purple dark:border-border-subtle dark:bg-bg-tertiary dark:text-text-primary"
+              className="mt-1 h-9 w-full rounded-lg border border-neutral-200 bg-neutral-50 px-2.5 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-accent-cyan dark:border-border-subtle dark:bg-bg-tertiary dark:text-text-primary"
             />
           </label>
           <label className="text-xs font-semibold text-neutral-700 dark:text-text-secondary">
@@ -1477,7 +1477,7 @@ export function CompaniesBoard() {
             <select
               value={sponsor}
               onChange={(event) => setSponsor(event.target.value)}
-              className="mt-1 h-9 w-full rounded-lg border border-neutral-200 bg-neutral-50 px-2.5 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-accent-purple dark:border-border-subtle dark:bg-bg-tertiary dark:text-text-primary"
+              className="mt-1 h-9 w-full rounded-lg border border-neutral-200 bg-neutral-50 px-2.5 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-accent-cyan dark:border-border-subtle dark:bg-bg-tertiary dark:text-text-primary"
             >
               <option value="">Any</option>
               <option value="MATCHED">Matched</option>
@@ -1491,7 +1491,7 @@ export function CompaniesBoard() {
             <select
               value={sort}
               onChange={(event) => setSort(event.target.value)}
-              className="mt-1 h-9 w-full rounded-lg border border-neutral-200 bg-neutral-50 px-2.5 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-accent-purple dark:border-border-subtle dark:bg-bg-tertiary dark:text-text-primary"
+              className="mt-1 h-9 w-full rounded-lg border border-neutral-200 bg-neutral-50 px-2.5 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-accent-cyan dark:border-border-subtle dark:bg-bg-tertiary dark:text-text-primary"
             >
               <option value="NAME">Name</option>
               <option value="ACTIVE_JOBS">Active vacancies</option>
@@ -1501,7 +1501,7 @@ export function CompaniesBoard() {
           <div className="flex items-end">
             <button
               type="submit"
-              className="h-9 w-full rounded-xl bg-accent-purple px-4 text-xs font-semibold text-white hover:bg-accent-purple/90 transition shadow-sm"
+              className="h-9 w-full rounded-xl bg-slate-900 px-4 text-xs font-semibold text-white hover:bg-slate-800 transition shadow-sm"
             >
               Apply Filters
             </button>
@@ -1571,7 +1571,7 @@ export function CompaniesBoard() {
               </p>
               <Link
                 href={JOB_BOARD_ROUTES.company(company.id)}
-                className="mt-4 inline-flex min-h-11 items-center text-sm font-semibold text-accent-purple"
+                className="mt-4 inline-flex min-h-11 items-center text-sm font-semibold text-accent-cyan"
               >
                 View Company
               </Link>
@@ -1681,7 +1681,7 @@ export function CompanyDetailsBoard({
     >
       <Link
         href={JOB_BOARD_ROUTES.companies}
-        className="mb-4 inline-flex min-h-11 items-center gap-1 text-sm font-semibold text-accent-purple"
+        className="mb-4 inline-flex min-h-11 items-center gap-1 text-sm font-semibold text-accent-cyan"
       >
         <ChevronLeft className="h-4 w-4" />
         Back to Companies
@@ -1695,7 +1695,7 @@ export function CompanyDetailsBoard({
                   href={data.company.websiteUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex min-h-11 items-center gap-1 text-accent-purple"
+                  className="inline-flex min-h-11 items-center gap-1 text-accent-cyan"
                 >
                   Website <ExternalLink className="h-4 w-4" />
                 </a>
@@ -1705,7 +1705,7 @@ export function CompanyDetailsBoard({
                   href={data.company.careersUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex min-h-11 items-center gap-1 text-accent-purple"
+                  className="inline-flex min-h-11 items-center gap-1 text-accent-cyan"
                 >
                   Careers <ExternalLink className="h-4 w-4" />
                 </a>
@@ -1759,7 +1759,7 @@ export function CompanyDetailsBoard({
                     <div className="flex items-start justify-between gap-3">
                       <SponsorEvidenceLine status={entry.status} />
                       {entry.current && (
-                        <span className="rounded-full bg-accent-purple/10 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-accent-purple">
+                        <span className="rounded-full bg-accent-cyan/10 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-accent-cyan">
                           Current
                         </span>
                       )}

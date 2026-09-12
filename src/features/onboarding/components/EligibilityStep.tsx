@@ -119,7 +119,7 @@ export function EligibilityStep({
               value={form.visaStatus}
               onChange={(event) => set('visaStatus', event.target.value)}
               aria-describedby="eligibility-visa-hint"
-              className="w-full appearance-none rounded-xl border border-neutral-300 bg-white px-4 py-2.5 pr-9 text-sm text-neutral-900 transition-colors focus:border-accent-purple focus:outline-none focus:ring-2 focus:ring-accent-purple/15"
+              className="w-full appearance-none rounded-xl border border-neutral-300 bg-white px-4 py-2.5 pr-9 text-sm text-neutral-900 transition-colors focus:border-accent-cyan focus:outline-none focus:ring-2 focus:ring-accent-cyan/15"
             >
               <option value="">Prefer not to say yet</option>
               {VISA_STATUSES.map((option) => (

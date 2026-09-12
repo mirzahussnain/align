@@ -94,8 +94,8 @@ export default function ProfileBridgeStep({
 
   return (
     <div>
-      <div className="mb-5 flex items-start gap-2.5 rounded-xl border border-accent-purple/20 bg-purple-50/50 p-3.5">
-        <Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-accent-purple" />
+      <div className="mb-5 flex items-start gap-2.5 rounded-xl border border-accent-cyan/20 bg-sky-50/50 p-3.5">
+        <Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-accent-cyan" />
         <p className="text-xs leading-relaxed text-slate-600">
           Align found saved evidence that may support this job. Review each link and choose whether
           to use it. Confidence is guidance only; nothing is selected automatically.
@@ -119,7 +119,7 @@ export default function ProfileBridgeStep({
               className={cn(
                 'rounded-xl border p-4 transition-colors',
                 isApproved
-                  ? 'border-accent-purple bg-purple-50/30'
+                  ? 'border-accent-cyan bg-sky-50/30'
                   : 'border-slate-200 bg-white'
               )}
             >
@@ -153,7 +153,7 @@ export default function ProfileBridgeStep({
               <p className="mt-1.5 text-[11px] text-slate-400">
                 Suggested match confidence: {Math.round(suggestion.confidence * 100)}%
               </p>
-              {onCapture && <button type="button" className="mt-2 text-xs font-semibold text-accent-purple" onClick={() => onCapture(requirement)}>I have different relevant evidence</button>}
+              {onCapture && <button type="button" className="mt-2 text-xs font-semibold text-accent-cyan" onClick={() => onCapture(requirement)}>I have different relevant evidence</button>}
 
               <div className="mt-4 flex flex-wrap gap-2">
                 <button
@@ -165,8 +165,8 @@ export default function ProfileBridgeStep({
                   className={cn(
                     'inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-semibold transition-colors',
                     isApproved
-                      ? 'border-accent-purple bg-accent-purple text-white'
-                      : 'border-slate-300 bg-white text-slate-700 hover:border-accent-purple'
+                      ? 'border-accent-cyan bg-slate-900 text-white'
+                      : 'border-slate-300 bg-white text-slate-700 hover:border-accent-cyan'
                   )}
                 >
                   <Check size={14} /> Use this evidence
@@ -210,9 +210,9 @@ export default function ProfileBridgeStep({
       )}
 
       {onCapture && requirements.length > 0 && (
-        <div className="mt-5 rounded-xl border border-purple-200 bg-purple-50/40 p-4">
+        <div className="mt-5 rounded-xl border border-sky-200 bg-sky-50/40 p-4">
           <p className="text-xs font-semibold text-slate-700">Have evidence we did not find?</p>
-          <div className="mt-2 flex flex-wrap gap-2">{requirements.map((requirement) => <button key={requirement.id} type="button" className="rounded border border-purple-200 bg-white px-2 py-1 text-xs text-accent-purple" onClick={() => onCapture(requirement)}>I have relevant evidence: {requirement.text}</button>)}</div>
+          <div className="mt-2 flex flex-wrap gap-2">{requirements.map((requirement) => <button key={requirement.id} type="button" className="rounded border border-sky-200 bg-white px-2 py-1 text-xs text-accent-cyan" onClick={() => onCapture(requirement)}>I have relevant evidence: {requirement.text}</button>)}</div>
         </div>
       )}
 

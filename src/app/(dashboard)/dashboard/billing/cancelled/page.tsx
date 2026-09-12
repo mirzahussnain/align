@@ -19,7 +19,7 @@ export default function CheckoutCancelledPage() {
         </p>
         <Link
           href="/dashboard?tab=billing"
-          className="mt-6 inline-block w-full rounded-full bg-accent-purple px-4 py-2.5 text-sm font-bold text-white hover:bg-accent-purple/90"
+          className="mt-6 inline-block w-full rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-bold text-white hover:bg-slate-800 shadow-sm transition"
         >
           Back to billing
         </Link>

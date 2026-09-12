@@ -30,7 +30,7 @@ export function VacancyStepIndicator({
                 onClick={() => isClickable && onSelectStep(stepDef.step)}
                 className={`group flex w-full flex-col items-center justify-center rounded-xl p-2 text-center transition-all sm:items-start sm:justify-start sm:rounded-2xl sm:p-4 sm:text-left border ${
                   isActive
-                    ? "border-accent-purple bg-accent-purple/5 shadow-sm ring-2 ring-accent-purple/20 dark:bg-accent-purple/10"
+                    ? "border-accent-cyan bg-accent-cyan/5 shadow-sm ring-2 ring-accent-cyan/20 dark:bg-accent-cyan/10"
                     : isCompleted
                       ? "border-emerald-200 bg-emerald-50/60 hover:bg-emerald-50 dark:border-emerald-900/40 dark:bg-emerald-950/20"
                       : "border-neutral-200 bg-neutral-50/50 opacity-60 dark:border-border-subtle dark:bg-bg-tertiary/20"
@@ -41,7 +41,7 @@ export function VacancyStepIndicator({
                   <span
                     className={`flex h-6 w-6 sm:h-7 sm:w-7 shrink-0 items-center justify-center rounded-lg sm:rounded-xl text-[11px] sm:text-xs font-black transition-colors ${
                       isActive
-                        ? "bg-accent-purple text-white"
+                        ? "bg-accent-cyan text-white"
                         : isCompleted
                           ? "bg-emerald-600 text-white"
                           : "bg-neutral-200 text-neutral-600 dark:bg-neutral-700 dark:text-neutral-300"
@@ -52,7 +52,7 @@ export function VacancyStepIndicator({
                   <span
                     className={`hidden text-[10px] font-bold uppercase tracking-wider sm:inline ${
                       isActive
-                        ? "text-accent-purple"
+                        ? "text-accent-cyan"
                         : isCompleted
                           ? "text-emerald-700 dark:text-emerald-400"
                           : "text-neutral-400"
@@ -66,7 +66,7 @@ export function VacancyStepIndicator({
                 <span
                   className={`mt-1 text-[10px] font-bold leading-tight sm:hidden line-clamp-1 ${
                     isActive
-                      ? "text-accent-purple"
+                      ? "text-accent-cyan"
                       : isCompleted
                         ? "text-emerald-700 dark:text-emerald-400"
                         : "text-neutral-500 dark:text-text-secondary"

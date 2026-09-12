@@ -63,7 +63,7 @@ export default function SkillAlignmentPanel({ view, contentVariants }: SkillAlig
   return (
     <motion.div variants={contentVariants} initial="hidden" animate="visible" exit="exit" className="bg-bg-panel rounded-[32px] border border-slate-200/60 shadow-sm p-6 sm:p-8">
       <div className="flex items-center gap-4 mb-6">
-        <div className="w-12 h-12 rounded-2xl bg-purple-50 flex items-center justify-center text-purple-600">
+        <div className="w-12 h-12 rounded-2xl bg-sky-50 flex items-center justify-center text-accent-cyan">
           <Target size={24} />
         </div>
         <div>

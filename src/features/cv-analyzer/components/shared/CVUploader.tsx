@@ -274,7 +274,7 @@ export default function CVUploader({ mode = 'ats', onAnalysisComplete, profileId
               <div className="flex flex-col">
                 <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 flex flex-col min-h-[160px]">
                   <h3 className="text-sm font-bold text-slate-800 mb-2 flex items-center gap-2">
-                    <FileText size={16} className="text-accent-purple" />
+                    <FileText size={16} className="text-accent-cyan" />
                     Target Job Description
                   </h3>
                   <p className="text-xs text-slate-500 mb-4">Paste the full job description here to tailor your analysis.</p>
@@ -282,7 +282,7 @@ export default function CVUploader({ mode = 'ats', onAnalysisComplete, profileId
                     value={jobDescription}
                     onChange={(e) => setJobDescription(e.target.value)}
                     placeholder="Paste the full job advert — e.g. 'We are looking for a Warehouse Operative with an FLT licence…' or 'Senior Frontend Engineer with React experience…'"
-                    className="flex-1 w-full p-4 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-700 focus:outline-none focus:border-accent-purple/50 focus:ring-2 focus:ring-accent-purple/20 resize-none"
+                    className="flex-1 w-full p-4 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-700 focus:outline-none focus:border-accent-cyan/50 focus:ring-2 focus:ring-accent-cyan/20 resize-none"
                   />
                 </div>
               </div>
@@ -296,8 +296,8 @@ export default function CVUploader({ mode = 'ats', onAnalysisComplete, profileId
                   className={cn(
                     'w-full min-h-[200px] flex flex-col items-center justify-center relative border-2 border-dashed rounded-2xl p-8 text-center cursor-pointer transition-all duration-300 group bg-white',
                     isDragActive
-                      ? 'border-accent-purple bg-purple-50/50 scale-[1.02]'
-                      : 'border-slate-300 hover:border-accent-purple/50 hover:bg-slate-50'
+                      ? 'border-accent-cyan bg-sky-50/50 scale-[1.02]'
+                      : 'border-slate-300 hover:border-accent-cyan/50 hover:bg-slate-50'
                   )}
                 >
                   <input {...getInputProps()} />
@@ -306,14 +306,14 @@ export default function CVUploader({ mode = 'ats', onAnalysisComplete, profileId
                     <div className={cn(
                       'w-16 h-16 rounded-2xl flex items-center justify-center transition-all duration-300',
                       isDragActive
-                        ? 'bg-accent-purple/20 scale-110'
-                        : 'bg-slate-100 group-hover:bg-accent-purple/10'
+                        ? 'bg-accent-cyan/20 scale-110'
+                        : 'bg-slate-100 group-hover:bg-accent-cyan/10'
                     )}>
                       <Upload
                         size={28}
                         className={cn(
                           'transition-colors duration-300',
-                          isDragActive ? 'text-accent-purple' : 'text-slate-400 group-hover:text-accent-purple'
+                          isDragActive ? 'text-accent-cyan' : 'text-slate-400 group-hover:text-accent-cyan'
                         )}
                       />
                     </div>
@@ -329,14 +329,14 @@ export default function CVUploader({ mode = 'ats', onAnalysisComplete, profileId
                   </div>
 
                   {isDragActive && (
-                    <div className="absolute inset-0 rounded-2xl border-2 border-accent-purple animate-pulse pointer-events-none" />
+                    <div className="absolute inset-0 rounded-2xl border-2 border-accent-cyan animate-pulse pointer-events-none" />
                   )}
                 </div>
               ) : (
                 <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 flex flex-col justify-center min-h-[200px]">
                   <div className="flex items-center gap-4 mb-8">
-                    <div className="w-14 h-14 rounded-xl bg-accent-purple/10 flex items-center justify-center flex-shrink-0">
-                      <FileText size={26} className="text-accent-purple" />
+                    <div className="w-14 h-14 rounded-xl bg-accent-cyan/10 flex items-center justify-center flex-shrink-0">
+                      <FileText size={26} className="text-accent-cyan" />
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-base font-semibold text-slate-800 truncate">{file.name}</p>
@@ -368,7 +368,7 @@ export default function CVUploader({ mode = 'ats', onAnalysisComplete, profileId
                       'w-full py-4 rounded-xl font-bold text-base flex items-center justify-center gap-2 transition-all duration-300',
                       (isAnalyzing || isDetecting || (mode === 'job_match' && !jobDescription.trim()))
                         ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
-                        : 'bg-accent-purple text-white hover:bg-purple-700 hover:shadow-lg hover:shadow-purple-500/30 hover:scale-[1.02] active:scale-[0.98]'
+                        : 'bg-slate-900 text-white hover:bg-slate-800 shadow-sm hover:scale-[1.02] active:scale-[0.98]'
                     )}
                   >
                     {isDetecting ? (

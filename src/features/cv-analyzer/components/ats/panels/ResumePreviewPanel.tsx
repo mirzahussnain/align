@@ -38,12 +38,12 @@ export default function ResumePreviewPanel({
             { 
               label: (
                 <>
-                  <Sparkles size={10} className={cn(cvViewMode === 'annotated' ? "text-accent-purple" : "text-slate-400")} />
+                  <Sparkles size={10} className={cn(cvViewMode === 'annotated' ? "text-accent-cyan" : "text-slate-400")} />
                   Annotated Mode
                 </>
               ),
               value: 'annotated',
-              activeClassName: 'text-accent-purple'
+              activeClassName: 'text-accent-cyan'
             }
           ]}
         />
@@ -58,7 +58,7 @@ export default function ResumePreviewPanel({
               Professional Summary
             </span>
             <span className="flex items-center gap-1.5 font-semibold">
-              <span className="w-2.5 h-2.5 rounded bg-purple-100/70 border border-purple-200 flex-shrink-0" />
+              <span className="w-2.5 h-2.5 rounded bg-sky-100/70 border border-purple-200 flex-shrink-0" />
               ATS Keywords
             </span>
             <span className="flex items-center gap-1.5 font-semibold">
@@ -71,7 +71,7 @@ export default function ResumePreviewPanel({
 
       <div className="bg-white border border-slate-200/80 rounded-2xl shadow-xl shadow-slate-100/40 p-10 md:p-12 min-h-[750px] max-w-[800px] mx-auto text-left font-sans text-xs md:text-sm text-slate-700 leading-relaxed relative overflow-hidden">
         {/* Visual Header Grid Accent */}
-        <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-accent-purple via-accent-cyan to-success" />
+        <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-slate-900 via-accent-cyan to-success" />
 
         <div className="space-y-1.5">
           {formattedCVLines.map((line, idx) => {

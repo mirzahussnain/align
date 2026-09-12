@@ -489,11 +489,11 @@ export default function GenerateCvWizardModal({
                         className={cn(
                           'w-full flex items-center gap-4 rounded-xl border p-4 text-left transition-all',
                           selectedAnalysisId === a.id
-                            ? 'border-accent-purple bg-purple-50/40'
+                            ? 'border-accent-cyan bg-sky-50/40'
                             : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50'
                         )}
                       >
-                        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-accent-purple/10 text-accent-purple">
+                        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-accent-cyan/10 text-accent-cyan">
                           <FileSearch size={18} />
                         </span>
                         <div className="min-w-0 flex-1">
@@ -638,7 +638,7 @@ export default function GenerateCvWizardModal({
               </div>
             )}
             {step === 'format' && (
-              <Button onClick={handleSubmit} className="bg-gradient-to-r from-accent-purple to-blue-600">
+              <Button onClick={handleSubmit} className="bg-slate-900 hover:bg-slate-800">
                 Generate CV
               </Button>
             )}
@@ -702,13 +702,13 @@ function RouteCard({ icon: Icon, title, description, disabled, disabledNote, onC
         'relative flex flex-col items-start rounded-2xl border-2 p-5 text-left transition-all',
         disabled
           ? 'cursor-not-allowed border-slate-100 bg-slate-50 opacity-70'
-          : 'border-slate-200 hover:border-accent-purple hover:bg-purple-50/40'
+          : 'border-slate-200 hover:border-accent-cyan hover:bg-sky-50/40'
       )}
     >
       <span
         className={cn(
           'mb-4 flex h-12 w-12 items-center justify-center rounded-xl',
-          disabled ? 'bg-slate-200 text-slate-400' : 'bg-accent-purple/10 text-accent-purple'
+          disabled ? 'bg-slate-200 text-slate-400' : 'bg-accent-cyan/10 text-accent-cyan'
         )}
       >
         <Icon size={22} />

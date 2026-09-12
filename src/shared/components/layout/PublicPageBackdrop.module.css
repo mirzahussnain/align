@@ -1,0 +1,171 @@
+.backdrop {
+  --artifact-primary: hsl(var(--accent-purple) / 0.22);
+  --artifact-secondary: hsl(var(--accent-cyan) / 0.2);
+  --artifact-muted: hsl(var(--text-primary) / 0.1);
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.ambient {
+  position: fixed;
+  inset: 0;
+  background:
+    radial-gradient(circle at 78% 19%, hsl(var(--accent-purple) / 0.09), transparent 31rem),
+    radial-gradient(circle at 12% 76%, hsl(var(--accent-cyan) / 0.07), transparent 27rem);
+}
+
+.artifact {
+  position: fixed;
+  top: clamp(3.5rem, 8vh, 7rem);
+  right: clamp(-22rem, -18vw, -7rem);
+  width: clamp(42rem, 68vw, 68rem);
+  height: auto;
+  opacity: 0.72;
+  filter: drop-shadow(0 24px 48px hsl(var(--accent-purple) / 0.04));
+  animation: artifactDrift 18s cubic-bezier(0.45, 0, 0.55, 1) infinite alternate;
+}
+
+.frame,
+.muted,
+.signal,
+.corner,
+.route,
+.routeSecondary,
+.orbit,
+.axis,
+.guide,
+.bars {
+  vector-effect: non-scaling-stroke;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.frame { stroke: var(--artifact-primary); stroke-width: 1.5; }
+.muted { stroke: var(--artifact-muted); stroke-width: 1; }
+.signal { stroke: var(--artifact-secondary); stroke-width: 2; }
+.corner { stroke: var(--artifact-secondary); stroke-width: 1.5; }
+.route { stroke: var(--artifact-primary); stroke-width: 2; stroke-dasharray: 10 12; animation: routeFlow 14s linear infinite; }
+.routeSecondary { stroke: var(--artifact-secondary); stroke-width: 1.5; stroke-dasharray: 3 13; animation: routeFlow 18s linear infinite reverse; }
+.orbit { stroke: var(--artifact-primary); stroke-width: 1.5; stroke-dasharray: 2 12; transform-origin: 450px 354px; animation: orbitTurn 34s linear infinite; }
+.axis { stroke: var(--artifact-muted); stroke-width: 1.5; }
+.guide { stroke: var(--artifact-muted); stroke-width: 1; stroke-dasharray: 4 12; }
+.bars { stroke: var(--artifact-secondary); stroke-width: 18; opacity: 0.12; }
+.area { fill: hsl(var(--accent-purple) / 0.035); }
+.node { fill: hsl(var(--bg-primary)); stroke: var(--artifact-secondary); stroke-width: 2; vector-effect: non-scaling-stroke; }
+.pulse,
+.dataPulse { fill: none; stroke: var(--artifact-secondary); stroke-width: 1.5; transform-box: fill-box; transform-origin: center; animation: signalPulse 3.8s ease-out infinite; }
+
+.scan {
+  stroke: var(--artifact-secondary);
+  stroke-width: 1.5;
+  vector-effect: non-scaling-stroke;
+  filter: drop-shadow(0 5px 8px hsl(var(--accent-cyan) / 0.24));
+  animation: documentScan 5.8s cubic-bezier(0.45, 0, 0.55, 1) infinite alternate;
+}
+
+.traveller {
+  fill: hsl(var(--accent-cyan) / 0.8);
+  offset-path: path("M126 471C238 288 354 520 447 321S635 181 778 274");
+  animation: travelRoute 9s cubic-bezier(0.45, 0, 0.55, 1) infinite;
+}
+
+.cardOne { animation: cardBreath 8s ease-in-out infinite; }
+.cardTwo { animation: cardBreath 8s 1.2s ease-in-out infinite; }
+.cardThree { animation: cardBreath 8s 2.4s ease-in-out infinite; }
+.seal { transform-origin: 450px 354px; animation: sealSettle 9s cubic-bezier(0.16, 1, 0.3, 1) infinite; }
+
+.registrationMark,
+.registrationMarkSecondary {
+  position: fixed;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: hsl(var(--accent-cyan) / 0.38);
+  box-shadow: 0 10px 24px hsl(var(--accent-cyan) / 0.14);
+  animation: signalPulse 4.6s ease-out infinite;
+}
+
+.registrationMark { top: 21%; left: 8%; }
+.registrationMarkSecondary { right: 12%; bottom: 14%; animation-delay: 1.7s; }
+
+.jobs { --artifact-primary: hsl(var(--accent-purple) / 0.19); }
+.immigration { --artifact-primary: hsl(var(--accent-cyan) / 0.2); --artifact-secondary: hsl(var(--accent-purple) / 0.22); }
+.insights { --artifact-primary: hsl(var(--accent-cyan) / 0.22); --artifact-secondary: hsl(var(--accent-purple) / 0.18); }
+
+@keyframes artifactDrift {
+  from { transform: translate3d(0, 0, 0) rotate(-0.4deg); }
+  to { transform: translate3d(-1.5rem, 1rem, 0) rotate(0.4deg); }
+}
+
+@keyframes routeFlow { to { stroke-dashoffset: -220; } }
+@keyframes orbitTurn { to { transform: rotate(360deg); } }
+
+@keyframes documentScan {
+  from { transform: translateY(0); opacity: 0.25; }
+  38%, 62% { opacity: 0.9; }
+  to { transform: translateY(248px); opacity: 0.25; }
+}
+
+@keyframes signalPulse {
+  0%, 18% { transform: scale(0.65); opacity: 0; }
+  38% { opacity: 0.65; }
+  75%, 100% { transform: scale(1.45); opacity: 0; }
+}
+
+@keyframes travelRoute {
+  0%, 8% { offset-distance: 0%; opacity: 0; }
+  18%, 82% { opacity: 0.8; }
+  92%, 100% { offset-distance: 100%; opacity: 0; }
+}
+
+@keyframes cardBreath {
+  0%, 100% { transform: translateY(0); opacity: 0.72; }
+  50% { transform: translateY(-7px); opacity: 1; }
+}
+
+@keyframes sealSettle {
+  0%, 15% { transform: scale(0.92) rotate(-3deg); opacity: 0.42; }
+  28%, 78% { transform: scale(1) rotate(0); opacity: 1; }
+  100% { transform: scale(0.92) rotate(3deg); opacity: 0.42; }
+}
+
+:global(.dark) .backdrop {
+  --artifact-muted: hsl(var(--text-primary) / 0.09);
+}
+
+@media (max-width: 767px) {
+  .artifact {
+    top: 5rem;
+    right: -25rem;
+    width: 52rem;
+    opacity: 0.5;
+  }
+
+  .ambient { opacity: 0.72; }
+  .registrationMark { left: 4%; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .artifact,
+  .route,
+  .routeSecondary,
+  .orbit,
+  .scan,
+  .traveller,
+  .cardOne,
+  .cardTwo,
+  .cardThree,
+  .seal,
+  .pulse,
+  .dataPulse,
+  .registrationMark,
+  .registrationMarkSecondary {
+    animation: none;
+  }
+
+  .traveller { opacity: 0.55; offset-distance: 54%; }
+  .scan { transform: translateY(124px); opacity: 0.45; }
+}

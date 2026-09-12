@@ -8,6 +8,7 @@ import {
   Sparkles,
 } from "lucide-react";
 import Navbar from "@/shared/components/layout/Navbar";
+import PublicPageBackdrop from "@/shared/components/layout/PublicPageBackdrop";
 
 const features = [
   {
@@ -44,11 +45,12 @@ const features = [
 
 export default function JobsLandingPage() {
   return (
-    <main className="min-h-screen bg-hero-gradient">
+    <main className="relative isolate min-h-screen overflow-hidden bg-hero-gradient">
       <Navbar />
-      <section className="mx-auto max-w-6xl px-4 pb-16 pt-28 sm:px-6 lg:px-8">
+      <PublicPageBackdrop variant="jobs" />
+      <section className="relative z-10 mx-auto max-w-6xl px-4 pb-16 pt-28 sm:px-6 lg:px-8">
         <div className="mx-auto max-w-3xl text-center">
-          <p className="text-sm font-bold uppercase tracking-[0.18em] text-accent-purple">
+          <p className="text-sm font-bold uppercase tracking-[0.18em] text-accent-cyan">
             Align Job Board
           </p>
           <h1 className="mt-4 text-4xl font-black tracking-tight text-text-primary sm:text-5xl">
@@ -62,7 +64,7 @@ export default function JobsLandingPage() {
           <div className="mt-8 flex flex-wrap justify-center gap-3">
             <Link
               href="/dashboard/jobs"
-              className="inline-flex min-h-12 items-center rounded-full bg-accent-purple px-6 text-sm font-bold text-white hover:opacity-90"
+              className="inline-flex min-h-12 items-center rounded-full bg-slate-900 px-6 text-sm font-bold text-white shadow-sm hover:bg-slate-800"
             >
               Open Job Board
             </Link>
@@ -81,7 +83,7 @@ export default function JobsLandingPage() {
               key={title}
               className="rounded-2xl border border-border-subtle bg-bg-primary/80 p-5 shadow-sm backdrop-blur"
             >
-              <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-accent-purple/10 text-accent-purple">
+              <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-accent-cyan/10 text-accent-cyan">
                 <Icon className="h-5 w-5" />
               </span>
               <h2 className="mt-4 text-lg font-bold text-text-primary">

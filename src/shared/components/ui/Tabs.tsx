@@ -52,7 +52,7 @@ export default function Tabs({ tabs, activeTab, onChange, className, variant = '
           className={cn(
             "flex-1 py-3 px-4 text-sm font-bold transition-all duration-300 border-b-2",
             activeTab === tab.value
-              ? "text-accent-purple border-accent-purple"
+              ? "text-slate-900 border-slate-900 dark:text-accent-cyan dark:border-accent-cyan"
               : "text-text-tertiary border-transparent hover:text-text-secondary hover:border-border-subtle"
           )}
         >

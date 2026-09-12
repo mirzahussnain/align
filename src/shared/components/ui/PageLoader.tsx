@@ -4,7 +4,7 @@ import { motion } from 'framer-motion';
 
 export default function PageLoader() {
   return (
-    <div className="fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-neutral-950 select-none overflow-hidden">
+    <div className="fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-slate-900 select-none overflow-hidden">
       {/* Background radial glowing flare */}
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(6,182,212,0.12)_0%,rgba(15,23,42,0.01)_60%,transparent_100%)] pointer-events-none" />
 

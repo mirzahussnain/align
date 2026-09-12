@@ -98,7 +98,7 @@ export function SidebarNavItem({ label, status, isActive, badgeText, onClick, ic
         "w-full flex items-center justify-between gap-3 px-3 py-2 rounded-xl text-xs font-semibold transition-all duration-200 border text-left relative",
         isPremium ? "opacity-75 cursor-not-allowed animate-none" : "cursor-pointer",
         isActive
-          ? "bg-accent-purple/5 text-accent-purple border-accent-purple/10"
+          ? "bg-accent-cyan/5 text-accent-cyan border-accent-cyan/10"
           : "text-slate-600 border-transparent hover:bg-slate-50 hover:text-slate-800"
       )}
     >

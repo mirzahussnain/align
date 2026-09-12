@@ -57,7 +57,7 @@ export default function AvatarUploader({ name, image }: AvatarUploaderProps) {
           onClick={() => inputRef.current?.click()}
           disabled={uploading}
           aria-label="Change profile picture"
-          className="group relative flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br from-accent-purple to-accent-cyan text-sm font-bold text-white"
+          className="group relative flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-full bg-slate-900 text-sm font-bold text-white"
         >
           {preview ? (
             // eslint-disable-next-line @next/next/no-img-element
@@ -81,7 +81,7 @@ export default function AvatarUploader({ name, image }: AvatarUploaderProps) {
           type="button"
           onClick={() => inputRef.current?.click()}
           disabled={uploading}
-          className="text-[11px] font-medium text-accent-purple hover:underline disabled:opacity-50"
+          className="text-[11px] font-medium text-accent-cyan hover:underline disabled:opacity-50"
         >
           {uploading ? 'Uploading…' : 'Change photo'}
         </button>

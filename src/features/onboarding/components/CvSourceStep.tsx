@@ -96,13 +96,13 @@ function SourceChoice({
       onClick={onClick}
       disabled={disabled}
       whileTap={disabled ? undefined : { scale: 0.99 }}
-      className={`group flex min-h-44 flex-col items-start rounded-2xl border p-5 text-left transition-[border-color,background-color,box-shadow] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#6757d9]/40 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 ${
+      className={`group flex min-h-44 flex-col items-start rounded-2xl border p-5 text-left transition-[border-color,background-color,box-shadow] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-cyan/40 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 ${
         featured
-          ? 'border-[#6757d9]/50 bg-[#f7f6ff] shadow-[0_12px_34px_rgba(74,63,159,0.09)] hover:border-[#6757d9]'
+          ? 'border-accent-cyan/50 bg-sky-50/50 shadow-[0_12px_34px_rgba(2,132,199,0.08)] hover:border-accent-cyan'
           : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50'
       }`}
     >
-      <span className={`flex h-11 w-11 items-center justify-center rounded-xl ${featured ? 'bg-[#6757d9] text-white' : 'bg-slate-100 text-slate-600'}`}>
+      <span className={`flex h-11 w-11 items-center justify-center rounded-xl ${featured ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-600'}`}>
         <Icon className="h-5 w-5" strokeWidth={1.8} aria-hidden="true" />
       </span>
       <span className="mt-5 flex w-full items-center justify-between gap-3">

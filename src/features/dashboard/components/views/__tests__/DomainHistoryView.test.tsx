@@ -20,3 +20,15 @@ describe('Job Match history', () => {
     expect(screen.queryByRole('link')).not.toBeInTheDocument();
   });
 });
+
+describe('ATS Analysis history', () => {
+  it('renders New ATS Analysis button and redirects to CV Analysis', () => {
+    render(<DomainHistoryView domain="ats" atsAnalyses={[]} jobMatches={[]} />);
+
+    expect(screen.getByRole('heading', { name: 'No ATS Analyses Yet' })).toBeInTheDocument();
+    const buttons = screen.getAllByRole('button', { name: /New ATS Analysis/i });
+    expect(buttons.length).toBeGreaterThan(0);
+    buttons[0].click();
+    expect(useDashboardStore.getState().tab).toBe('analyze');
+  });
+});

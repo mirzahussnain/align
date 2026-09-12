@@ -77,11 +77,11 @@ export function PricingDetailsDialog({
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
-        className="relative z-10 flex max-h-[92dvh] w-full max-w-3xl flex-col overflow-hidden rounded-t-[22px] border border-slate-200 bg-[#fbfcfd] shadow-[0_24px_90px_rgba(15,23,42,0.24)] sm:rounded-[22px]"
+        className="relative z-10 flex max-h-[92dvh] w-full max-w-3xl flex-col overflow-hidden rounded-t-[22px] border border-slate-200 bg-white shadow-[0_24px_90px_rgba(15,23,42,0.24)] sm:rounded-[22px]"
       >
         <div className="flex items-start justify-between gap-5 border-b border-slate-200 bg-white px-5 py-5 sm:px-7 sm:py-6">
           <div className="flex min-w-0 items-start gap-3.5">
-            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#f7f6ff] text-[#6757d9] ring-1 ring-[#6757d9]/12">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-sky-50 text-accent-cyan ring-1 ring-accent-cyan/20">
               <Sparkles className="h-5 w-5" strokeWidth={1.9} aria-hidden="true" />
             </span>
             <div>
@@ -96,7 +96,7 @@ export function PricingDetailsDialog({
             type="button"
             onClick={onClose}
             aria-label="Close pricing details"
-            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-500 transition-colors hover:border-slate-300 hover:bg-slate-50 hover:text-slate-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#6757d9]/45 focus-visible:ring-offset-2"
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-500 transition-colors hover:border-slate-300 hover:bg-slate-50 hover:text-slate-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-cyan/45 focus-visible:ring-offset-2"
           >
             <X className="h-4 w-4" aria-hidden="true" />
           </button>
@@ -111,21 +111,21 @@ export function PricingDetailsDialog({
                   key={plan.id}
                   className={`flex min-h-full flex-col rounded-2xl border p-5 ${
                     isPro
-                      ? 'border-[#6757d9]/45 bg-[#f7f6ff] shadow-[0_10px_30px_rgba(74,63,159,0.08)]'
+                      ? 'border-accent-cyan/45 bg-sky-50/50 shadow-[0_10px_30px_rgba(2,132,199,0.08)]'
                       : 'border-slate-200 bg-white'
                   }`}
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div>
-                      <p className={`text-sm font-semibold ${isPro ? 'text-[#5143bb]' : 'text-slate-900'}`}>{plan.name}</p>
+                      <p className={`text-sm font-semibold ${isPro ? 'text-accent-cyan' : 'text-slate-900'}`}>{plan.name}</p>
                       <p className="mt-2 text-2xl font-semibold tracking-[-0.035em] text-slate-950">
                         {plan.price}
                         {plan.period && <span className="ml-1 text-xs font-medium tracking-normal text-slate-500">{plan.period}</span>}
                       </p>
                     </div>
                     {isPro && (
-                      <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#6757d9] text-white shadow-[0_7px_18px_rgba(103,87,217,0.2)]">
-                        <Crown className="h-4 w-4" strokeWidth={1.9} aria-hidden="true" />
+                      <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-slate-900 text-white shadow-sm">
+                        <Crown className="h-4 w-4 text-white" strokeWidth={1.9} aria-hidden="true" />
                       </span>
                     )}
                   </div>
@@ -133,7 +133,7 @@ export function PricingDetailsDialog({
                   <ul className="mt-4 space-y-2.5 border-t border-slate-200/80 pt-4">
                     {plan.features.slice(0, 5).map((feature) => (
                       <li key={feature} className="flex items-start gap-2 text-xs leading-5 text-slate-700">
-                        <Check className={`mt-0.5 h-3.5 w-3.5 shrink-0 ${isPro ? 'text-[#6757d9]' : 'text-slate-400'}`} strokeWidth={2.5} aria-hidden="true" />
+                        <Check className={`mt-0.5 h-3.5 w-3.5 shrink-0 ${isPro ? 'text-accent-cyan' : 'text-slate-400'}`} strokeWidth={2.5} aria-hidden="true" />
                         <span>{feature}</span>
                       </li>
                     ))}
@@ -149,7 +149,7 @@ export function PricingDetailsDialog({
           <button
             type="button"
             onClick={onClose}
-            className="min-h-11 rounded-xl px-4 text-sm font-semibold text-slate-600 transition-colors hover:bg-slate-50 hover:text-slate-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#6757d9]/35 focus-visible:ring-offset-2"
+            className="min-h-11 rounded-xl px-4 text-sm font-semibold text-slate-600 transition-colors hover:bg-slate-50 hover:text-slate-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-cyan/35 focus-visible:ring-offset-2"
           >
             Not now
           </button>
@@ -159,7 +159,7 @@ export function PricingDetailsDialog({
               onClose();
               onViewPlans?.();
             }}
-            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-[#6757d9] px-5 py-2.5 text-sm font-semibold text-white shadow-[0_8px_24px_rgba(103,87,217,0.2)] transition-colors hover:bg-[#5948cf] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#6757d9]/45 focus-visible:ring-offset-2"
+            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-cyan/45 focus-visible:ring-offset-2"
           >
             View full plan &amp; billing
             <ChevronRight className="h-4 w-4" aria-hidden="true" />

@@ -20,6 +20,7 @@ import { profileCompleteness } from '@/features/dashboard/data/profile-completen
 import { getOccupationProfile, isKnownOccupation } from '@/shared/occupations/registry';
 import { getIndustryDictionary, isKnownIndustry } from '@/shared/constants/sector-keywords';
 import { cn } from '@/shared/utils/cn';
+import { scoreTone } from '@/shared/utils/score-tone';
 
 const SENIORITY_LABELS: Record<string, string> = {
   entry: 'Entry-level',
@@ -110,11 +111,11 @@ export default function OverviewView({ user, data }: { user: { name: string }; d
       <DashboardTopBar title={`Welcome Back, ${user.name.split(' ')[0]}`} subtitle={`Viewing career track: ${profile.label}`} />
       <div className="flex flex-col gap-5 px-4 py-6 sm:px-6 lg:px-8">
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-5">
-          <section className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-[hsl(262_55%_16%)] via-[hsl(250_50%_14%)] to-[hsl(199_55%_14%)] p-6 text-white lg:col-span-3">
+          <section className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-slate-900 via-slate-800 to-slate-950 p-6 text-white lg:col-span-3">
             <div className="pointer-events-none absolute -right-24 -top-24 h-64 w-64 rounded-full bg-accent-cyan/20 blur-3xl" aria-hidden />
-            <div className="pointer-events-none absolute -bottom-20 -left-10 h-52 w-52 rounded-full bg-accent-purple/25 blur-3xl" aria-hidden />
+            <div className="pointer-events-none absolute -bottom-20 -left-10 h-52 w-52 rounded-full bg-accent-cyan/15 blur-3xl" aria-hidden />
             <div className="relative flex items-center gap-2 text-xs font-bold uppercase tracking-[0.14em] text-white/60">
-              <Sparkles className="h-3.5 w-3.5" />
+              <Sparkles className="h-3.5 w-3.5 text-accent-cyan" />
               {hero?.domain === 'job_match' ? 'Latest vacancy fit' : 'Latest CV readiness'}
             </div>
             {hero && heroCopy && heroScore != null ? (
@@ -135,7 +136,7 @@ export default function OverviewView({ user, data }: { user: { name: string }; d
                     <HeroFact label="Signal" value={hero.domain === 'ats' ? 'CV-only readiness' : 'Vacancy-specific fit'} />
                     {hero.domain === 'job_match' && <HeroFact label="Career Profile" value={hero.row.profileLabel} />}
                   </dl>
-                  <button type="button" onClick={() => hero.domain === 'ats' ? openAts(hero.row.id) : openMatch(hero.row.id)} className="mt-5 inline-flex min-h-11 items-center gap-2 rounded-xl bg-white px-4 text-xs font-bold text-[hsl(262_55%_18%)] transition-transform hover:scale-[1.02]">
+                  <button type="button" onClick={() => hero.domain === 'ats' ? openAts(hero.row.id) : openMatch(hero.row.id)} className="mt-5 inline-flex min-h-11 items-center gap-2 rounded-xl bg-white px-4 text-xs font-bold text-slate-900 transition-transform hover:scale-[1.02]">
                     View {hero.domain === 'ats' ? 'ATS breakdown' : 'match breakdown'} <ArrowRight className="h-3.5 w-3.5" />
                   </button>
                 </div>
@@ -144,14 +145,14 @@ export default function OverviewView({ user, data }: { user: { name: string }; d
               <div className="relative mt-4">
                 <p className="text-2xl font-black tracking-tight">No results yet</p>
                 <p className="mt-1.5 max-w-sm text-xs leading-relaxed text-white/60">Start with a CV-only ATS analysis, then assess vacancy fit from Jobs.</p>
-                <button type="button" onClick={() => setTab('analyze')} className="mt-5 inline-flex min-h-11 items-center gap-2 rounded-xl bg-white px-4 text-xs font-bold text-[hsl(262_55%_18%)]">Analyze your CV <ArrowRight className="h-3.5 w-3.5" /></button>
+                <button type="button" onClick={() => setTab('analyze')} className="mt-5 inline-flex min-h-11 items-center gap-2 rounded-xl bg-white px-4 text-xs font-bold text-slate-900">Analyze your CV <ArrowRight className="h-3.5 w-3.5" /></button>
               </div>
             )}
           </section>
           <div className="flex flex-col gap-3 lg:col-span-2">
             <MiniStat icon={Target} label="Current career target" value={targetRole || 'Not set yet'} tint="slate" sublabel={targetDetail || 'Set your target role in Profile'} onClick={() => setTab('profile')} />
             <MiniStat icon={Gauge} label="Analysis histories" value={`${atsAnalyses.length} ATS · ${jobMatches.length} matches`} tint="cyan" sublabel={remaining == null ? `${usage.aiAnalyses} AI runs used this month` : `${remaining} AI runs remaining this month`} />
-            <MiniStat icon={FileStack} label="Application documents" value={cvs.length ? `${cvs.length} ready` : '0 ready'} tint="purple" sublabel={cvs.length ? 'Versioned and traceable' : 'Generate from a Job Match'} onClick={() => setTab('cvs')} />
+            <MiniStat icon={FileStack} label="Application documents" value={cvs.length ? `${cvs.length} ready` : '0 ready'} tint="cyan" sublabel={cvs.length ? 'Versioned and traceable' : 'Generate from a Job Match'} onClick={() => setTab('cvs')} />
           </div>
         </div>
 
@@ -169,7 +170,7 @@ export default function OverviewView({ user, data }: { user: { name: string }; d
                 <h2 className="text-sm font-bold text-neutral-900">Your Progress so Far</h2>
                 <p className="mt-0.5 text-xs text-neutral-400">{total ? `A trend needs ${CHART_MIN_POINTS}+ results. These signals stay separate until then.` : 'Run an ATS analysis to begin your history.'}</p>
                 <div className="mt-4 flex flex-col divide-y divide-neutral-100">
-                  <DigestRow icon={FileSearch} tint="bg-accent-purple/10 text-accent-purple" label="Latest CV readiness" value={latestAts ? `${latestAts.overallScore}/100 · ${latestAts.sourceFileName}` : 'No ATS analysis yet'} />
+                  <DigestRow icon={FileSearch} tint="bg-accent-cyan/10 text-accent-cyan" label="Latest CV readiness" value={latestAts ? `${latestAts.overallScore}/100 · ${latestAts.sourceFileName}` : 'No ATS analysis yet'} />
                   <DigestRow icon={Briefcase} tint="bg-accent-cyan/10 text-accent-cyan" label="Latest vacancy fit" value={latestMatch ? `${latestMatch.matchScore}/100 · ${latestMatch.jobTitle}` : 'No Job Match yet'} />
                   <DigestRow icon={FileStack} tint="bg-neutral-100 text-neutral-500" label="Generated CV versions" value={cvs.length ? `${cvs.length} saved` : 'None yet'} />
                 </div>
@@ -177,12 +178,12 @@ export default function OverviewView({ user, data }: { user: { name: string }; d
             )}
           </section>
           <section className="rounded-2xl border border-neutral-200 bg-white p-5 lg:col-span-2">
-            <div className="flex items-center gap-2"><ListChecks className="h-4 w-4 text-accent-purple" /><h2 className="text-sm font-bold text-neutral-900">Recommended Next Steps</h2></div>
+            <div className="flex items-center gap-2"><ListChecks className="h-4 w-4 text-accent-cyan" /><h2 className="text-sm font-bold text-neutral-900">Recommended Next Steps</h2></div>
             <ul className="mt-4 flex flex-col gap-3">
               {nextSteps.slice(0, 4).map((step) => (
                 <li key={step.title} className="flex gap-3 rounded-xl bg-neutral-50 p-3.5">
-                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-accent-purple/10 text-accent-purple"><step.icon className="h-3.5 w-3.5" /></span>
-                  <div className="min-w-0 flex-1"><p className="text-xs font-semibold text-neutral-900">{step.title}</p><p className="mt-1 text-[11px] leading-relaxed text-neutral-500">{step.detail}</p><button type="button" onClick={step.action} className="mt-2 inline-flex items-center gap-1 text-[11px] font-bold text-accent-purple hover:underline">{step.cta}<ArrowRight className="h-3 w-3" /></button></div>
+                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-accent-cyan/10 text-accent-cyan"><step.icon className="h-3.5 w-3.5" /></span>
+                  <div className="min-w-0 flex-1"><p className="text-xs font-semibold text-neutral-900">{step.title}</p><p className="mt-1 text-[11px] leading-relaxed text-neutral-500">{step.detail}</p><button type="button" onClick={step.action} className="mt-2 inline-flex items-center gap-1 text-[11px] font-bold text-accent-cyan hover:underline">{step.cta}<ArrowRight className="h-3 w-3" /></button></div>
                 </li>
               ))}
             </ul>
@@ -209,7 +210,7 @@ function HeroFact({ label, value }: { label: string; value: string }) {
 }
 
 function MiniStat({ icon: Icon, label, value, sublabel, tint, onClick }: { icon: ComponentType<{ className?: string; strokeWidth?: number }>; label: string; value: string; sublabel?: string; tint: 'purple' | 'cyan' | 'slate'; onClick?: () => void }) {
-  const tints = { purple: 'bg-accent-purple/10 text-accent-purple', cyan: 'bg-accent-cyan/10 text-accent-cyan', slate: 'bg-neutral-100 text-neutral-500' };
+  const tints = { purple: 'bg-accent-cyan/10 text-accent-cyan', cyan: 'bg-accent-cyan/10 text-accent-cyan', slate: 'bg-neutral-100 text-neutral-500' };
   const Wrapper = onClick ? 'button' : 'div';
   return <Wrapper {...(onClick ? { type: 'button', onClick } : {})} className={cn('flex items-center gap-3 rounded-2xl border border-neutral-200 bg-white p-3.5 text-left', onClick && 'transition-colors hover:border-neutral-300 hover:bg-neutral-50')}><span className={cn('flex h-9 w-9 shrink-0 items-center justify-center rounded-xl', tints[tint])}><Icon className="h-4 w-4" strokeWidth={2.2} /></span><div className="min-w-0 flex-1"><p className="truncate text-[11px] font-semibold text-neutral-500">{label}</p><p className="truncate text-lg font-black tracking-tight text-neutral-900 tabular-nums">{value}</p>{sublabel && <p className="truncate text-xs font-medium text-neutral-400">{sublabel}</p>}</div></Wrapper>;
 }
@@ -218,8 +219,61 @@ function DigestRow({ icon: Icon, tint, label, value }: { icon: ComponentType<{ c
   return <div className="flex items-center gap-3 py-3 first:pt-0 last:pb-0"><span className={cn('flex h-8 w-8 shrink-0 items-center justify-center rounded-lg', tint)}><Icon className="h-3.5 w-3.5" /></span><div className="min-w-0 flex-1"><p className="text-[11px] font-semibold text-neutral-500">{label}</p><p className="truncate text-xs font-bold text-neutral-900">{value}</p></div></div>;
 }
 
-function RecentList({ title, empty, rows, onOpen, onAll }: { title: string; empty: string; rows: Array<{ id: string; title: string; detail: string; score: number; date: string }>; onOpen: (id: string) => void; onAll: () => void }) {
-  return <div className="p-5"><div className="flex items-center justify-between"><h3 className="text-xs font-bold text-neutral-900">{title}</h3><button type="button" onClick={onAll} className="text-[11px] font-bold text-accent-purple hover:underline">View All</button></div>{rows.length ? <div className="mt-3 divide-y divide-neutral-100">{rows.map((row) => <button key={row.id} type="button" onClick={() => onOpen(row.id)} className="flex min-h-14 w-full items-center gap-3 py-3 text-left hover:bg-neutral-50"><span className="w-9 text-sm font-black tabular-nums text-neutral-900">{row.score}</span><span className="min-w-0 flex-1"><span className="block truncate text-xs font-semibold text-neutral-900">{row.title}</span><span className="block truncate text-xs text-neutral-400">{row.detail} · {new Date(row.date).toLocaleDateString('en-GB')}</span></span><ArrowRight className="h-3.5 w-3.5 text-neutral-300" /></button>)}</div> : <p className="mt-6 text-xs text-neutral-400">{empty}</p>}</div>;
+function RecentList({
+  title,
+  empty,
+  rows,
+  onOpen,
+  onAll,
+}: {
+  title: string;
+  empty: string;
+  rows: Array<{ id: string; title: string; detail: string; score: number; date: string }>;
+  onOpen: (id: string) => void;
+  onAll: () => void;
+}) {
+  return (
+    <div className="p-5">
+      <div className="flex items-center justify-between">
+        <h3 className="text-xs font-bold text-neutral-900">{title}</h3>
+        <button type="button" onClick={onAll} className="text-[11px] font-bold text-accent-cyan hover:underline">
+          View All
+        </button>
+      </div>
+      {rows.length ? (
+        <div className="mt-3 flex flex-col gap-1">
+          {rows.map((row) => (
+            <button
+              key={row.id}
+              type="button"
+              onClick={() => onOpen(row.id)}
+              className="group flex min-h-14 w-full items-center gap-3.5 rounded-xl px-2.5 py-2 text-left transition-colors hover:bg-neutral-100/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-cyan"
+            >
+              <span
+                className={cn(
+                  'flex h-8 min-w-10 shrink-0 items-center justify-center rounded-xl px-2 text-xs font-bold tabular-nums',
+                  scoreTone(row.score)
+                )}
+              >
+                {row.score}
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-xs font-semibold text-neutral-900 group-hover:text-neutral-950">
+                  {row.title}
+                </span>
+                <span className="block truncate text-xs text-neutral-400">
+                  {row.detail} · {new Date(row.date).toLocaleDateString('en-GB')}
+                </span>
+              </span>
+              <ArrowRight className="h-3.5 w-3.5 text-neutral-300 transition-transform group-hover:translate-x-0.5 group-hover:text-neutral-500" />
+            </button>
+          ))}
+        </div>
+      ) : (
+        <p className="mt-6 text-xs text-neutral-400">{empty}</p>
+      )}
+    </div>
+  );
 }
 
 function ScoreRing({ score }: { score: number }) {

@@ -23,13 +23,13 @@ export default function FormatSelectionStep({ selected, onSelect }: Props) {
           className={cn(
             "relative p-5 rounded-2xl border-2 transition-all cursor-pointer flex flex-col items-center text-center",
             selected === 'docx' 
-              ? "border-accent-purple bg-purple-50/50 shadow-md scale-[1.02]" 
+              ? "border-accent-cyan bg-sky-50/50 shadow-md scale-[1.02]" 
               : "border-slate-200 hover:border-slate-300 hover:bg-slate-50"
           )}
         >
           {selected === 'docx' && (
-            <div className="absolute top-4 right-4 text-accent-purple">
-              <CheckCircle2 size={24} className="fill-purple-100" />
+            <div className="absolute top-4 right-4 text-accent-cyan">
+              <CheckCircle2 size={24} className="fill-sky-100" />
             </div>
           )}
           

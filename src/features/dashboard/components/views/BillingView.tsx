@@ -74,11 +74,11 @@ function UsageMeter({ label, used, limit }: { label: string; used: number; limit
           {unlimited ? ' / Unlimited' : ` / ${limit}`}
         </p>
       </div>
-      <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-neutral-200">
+      <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-slate-100">
         <div
           className={cn(
             'h-full rounded-full transition-all',
-            unlimited ? 'w-full bg-neutral-300' : nearLimit ? 'bg-amber-500' : 'bg-accent-purple'
+            unlimited ? 'w-full bg-slate-200' : nearLimit ? 'bg-amber-500' : 'bg-accent-cyan'
           )}
           style={unlimited ? undefined : { width: `${pct}%` }}
         />
@@ -232,7 +232,7 @@ export default function BillingView({
               type="button"
               onClick={openPortal}
               disabled={busy !== null}
-              className="inline-flex items-center gap-2 rounded-full bg-neutral-900 px-4 py-2 text-xs font-bold text-white hover:bg-neutral-800 disabled:opacity-60"
+              className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2 text-xs font-bold text-white shadow-sm transition-colors hover:bg-slate-800 disabled:opacity-60"
             >
               {busy === 'portal' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ExternalLink className="h-3.5 w-3.5" />}
               Manage Billing
@@ -240,10 +240,10 @@ export default function BillingView({
           </div>
         )}
 
-        <div className="mb-6 rounded-2xl border border-neutral-200 bg-white p-6">
+        <div className="mb-6 rounded-2xl border border-slate-200 bg-white p-6">
           <div className="mb-4 flex items-baseline justify-between gap-3">
-            <h2 className="text-sm font-bold text-neutral-900">Storage</h2>
-            <p className="text-[11px] text-neutral-400">{formatBytes(storage.bytesUsed)} archived</p>
+            <h2 className="text-sm font-bold text-slate-900">Storage</h2>
+            <p className="text-[11px] text-slate-400">{formatBytes(storage.bytesUsed)} archived</p>
           </div>
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
@@ -252,7 +252,7 @@ export default function BillingView({
             <UsageMeter label="Analyses kept" used={storage.storedAnalyses} limit={storage.maxStoredAnalyses} />
           </div>
 
-          <p className="mt-4 text-[11px] leading-relaxed text-neutral-500">
+          <p className="mt-4 text-[11px] leading-relaxed text-slate-500">
             {storage.sourceRetentionDays === null
               ? 'Your uploaded CV files are kept indefinitely.'
               : `Uploaded CV files are kept for ${storage.sourceRetentionDays} days, then removed. Your analysis results and scores are always kept.`}{' '}
@@ -269,26 +269,26 @@ export default function BillingView({
                 key={t.id}
                 className={cn(
                   'flex flex-col rounded-2xl border bg-white p-6',
-                  isCurrent ? 'border-accent-purple ring-1 ring-accent-purple' : 'border-neutral-200'
+                  isCurrent ? 'border-accent-cyan ring-1 ring-accent-cyan shadow-sm' : 'border-slate-200'
                 )}
               >
                 <div className="flex items-center justify-between">
-                  <p className="text-xs font-bold uppercase tracking-wider text-neutral-500">{t.name}</p>
+                  <p className="text-xs font-bold uppercase tracking-wider text-slate-500">{t.name}</p>
                   {isCurrent && (
-                    <span className="rounded-full bg-accent-purple/10 px-2 py-0.5 text-xs font-bold text-accent-purple">
+                    <span className="rounded-md bg-slate-100 px-2 py-0.5 text-xs font-bold text-slate-700">
                       Current
                     </span>
                   )}
                 </div>
-                <p className="mt-3 text-3xl font-black tracking-tight text-neutral-900">
+                <p className="mt-3 text-3xl font-black tracking-tight text-slate-900">
                   {t.price}
-                  <span className="text-sm font-medium text-neutral-400">{t.period}</span>
+                  <span className="text-sm font-medium text-slate-400">{t.period}</span>
                 </p>
-                <p className="mt-2 text-xs leading-relaxed text-neutral-500">{t.tagline}</p>
+                <p className="mt-2 text-xs leading-relaxed text-slate-500">{t.tagline}</p>
                 <ul className="mb-6 mt-5 flex flex-col gap-2.5">
                   {t.features.map((f) => (
-                    <li key={f} className="flex items-start gap-2 text-xs text-neutral-600">
-                      <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-accent-purple" strokeWidth={2.5} />
+                    <li key={f} className="flex items-start gap-2 text-xs text-slate-600">
+                      <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-accent-cyan" strokeWidth={2.5} />
                       {f}
                     </li>
                   ))}
@@ -324,7 +324,7 @@ function renderCta({
   // The Free card, or the current plan, never offers an action here.
   if (!isProCard) {
     return (
-      <span className="block rounded-full border border-neutral-200 px-4 py-2 text-center text-xs font-bold text-neutral-400">
+      <span className="block rounded-xl border border-slate-200 px-4 py-2 text-center text-xs font-bold text-slate-400">
         {isCurrent ? 'Current plan' : 'Free forever'}
       </span>
     );
@@ -338,14 +338,14 @@ function renderCta({
           type="button"
           onClick={openPortal}
           disabled={busy !== null}
-          className="w-full rounded-full bg-neutral-900 px-4 py-2 text-xs font-bold text-white hover:bg-neutral-800 disabled:opacity-60"
+          className="w-full rounded-xl bg-slate-900 px-4 py-2 text-xs font-bold text-white shadow-sm transition-colors hover:bg-slate-800 disabled:opacity-60"
         >
           {busy === 'portal' ? 'Opening…' : 'Manage Billing'}
         </button>
       );
     }
     return (
-      <span className="block rounded-full border border-accent-purple/30 bg-accent-purple/5 px-4 py-2 text-center text-xs font-bold text-accent-purple">
+      <span className="block rounded-xl border border-slate-200 bg-slate-100 px-4 py-2 text-center text-xs font-bold text-slate-700">
         Current plan
       </span>
     );
@@ -354,7 +354,7 @@ function renderCta({
   // Free/lapsed user viewing the Pro card → upgrade, if checkout is available.
   if (!billing.checkoutAvailable) {
     return (
-      <span className="block rounded-full border border-neutral-200 px-4 py-2 text-center text-xs font-bold text-neutral-400">
+      <span className="block rounded-xl border border-slate-200 px-4 py-2 text-center text-xs font-bold text-slate-400">
         Upgrade unavailable
       </span>
     );
@@ -364,7 +364,7 @@ function renderCta({
       type="button"
       onClick={startCheckout}
       disabled={busy !== null}
-      className="w-full rounded-full bg-accent-purple px-4 py-2 text-xs font-bold text-white hover:bg-accent-purple/90 disabled:opacity-60"
+      className="w-full rounded-xl bg-slate-900 px-4 py-2.5 text-xs font-bold text-white shadow-sm transition-all hover:bg-slate-800 disabled:opacity-60"
     >
       {busy === 'checkout' ? 'Starting…' : 'Upgrade to Pro'}
     </button>

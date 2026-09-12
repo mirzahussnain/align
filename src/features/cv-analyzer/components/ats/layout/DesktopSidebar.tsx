@@ -65,11 +65,11 @@ export default function DesktopSidebar({
                 onClick={() => toggleGroup(group.id)}
                 className={cn(
                   "w-full flex items-center justify-between px-3 py-2 text-[11px] font-bold tracking-wider transition-colors text-left cursor-pointer group rounded-xl",
-                  activeGroupId === group.id ? "bg-purple-50/50 text-slate-800" : "text-slate-600 hover:text-slate-800"
+                  activeGroupId === group.id ? "bg-sky-50/50 text-slate-800" : "text-slate-600 hover:text-slate-800"
                 )}
               >
                 <div className="flex items-center gap-2">
-                  <span className={cn("transition-colors font-bold uppercase", activeGroupId === group.id ? "text-purple-700" : "text-slate-400 group-hover:text-slate-700")}>{group.label}</span>
+                  <span className={cn("transition-colors font-bold uppercase", activeGroupId === group.id ? "text-accent-cyan" : "text-slate-400 group-hover:text-slate-700")}>{group.label}</span>
                   <span className={cn(
                     "px-1.5 py-0.5 rounded-full text-[9px] font-black border",
                     groupScore >= 90

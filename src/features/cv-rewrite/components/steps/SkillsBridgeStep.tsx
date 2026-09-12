@@ -65,14 +65,14 @@ export default function SkillsBridgeStep({ missingSkills, contextData, onChange 
               key={skill} 
               className={cn(
                 "rounded-xl border transition-all duration-200 overflow-hidden",
-                isSelected ? "border-accent-purple bg-purple-50/30" : "border-slate-200 bg-white hover:border-slate-300"
+                isSelected ? "border-accent-cyan bg-sky-50/30" : "border-slate-200 bg-white hover:border-slate-300"
               )}
             >
               <div 
                 onClick={() => handleToggleSkill(skill)}
                 className="flex items-center gap-3 p-4 cursor-pointer"
               >
-                <div className={cn("shrink-0", isSelected ? "text-accent-purple" : "text-slate-300")}>
+                <div className={cn("shrink-0", isSelected ? "text-accent-cyan" : "text-slate-300")}>
                   {isSelected ? <CheckSquare size={20} /> : <Square size={20} />}
                 </div>
                 <span className={cn("font-medium select-none", isSelected ? "text-slate-900" : "text-slate-600")}>
@@ -95,7 +95,7 @@ export default function SkillsBridgeStep({ missingSkills, contextData, onChange 
                           value={contextData[skill]}
                           onChange={(e) => handleTextChange(skill, e.target.value)}
                           placeholder="E.g., I used this extensively at TechCorp to build microservices, or in a personal project..."
-                          className="w-full min-h-[80px] p-3 text-sm bg-white border border-purple-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-accent-purple/20 focus:border-accent-purple resize-none placeholder-slate-400 text-slate-700"
+                          className="w-full min-h-[80px] p-3 text-sm bg-white border border-sky-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-accent-cyan/20 focus:border-accent-cyan resize-none placeholder-slate-400 text-slate-700"
                         />
                       </div>
                     </div>

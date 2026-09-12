@@ -1,14 +1,12 @@
 'use client';
 
-import { ChevronRight, FileSearch, Target } from 'lucide-react';
+import { ChevronRight, FileSearch, Target, Plus } from 'lucide-react';
 import DashboardTopBar from '../DashboardTopBar';
 import DomainAnalysisDetailView from '../DomainAnalysisDetailView';
 import { useDashboardStore } from '@/shared/stores/dashboard-store';
 import type { AtsAnalysisRow, JobMatchRow } from '../DashboardShell';
 import { cn } from '@/shared/utils/cn';
-
-const scoreTone = (score: number) =>
-  score >= 85 ? 'bg-emerald-100 text-emerald-700' : score >= 70 ? 'bg-sky-100 text-sky-700' : score >= 50 ? 'bg-amber-100 text-amber-700' : 'bg-rose-100 text-rose-700';
+import { scoreTone } from '@/shared/utils/score-tone';
 
 export default function DomainHistoryView({
   domain,
@@ -19,6 +17,7 @@ export default function DomainHistoryView({
   atsAnalyses: AtsAnalysisRow[];
   jobMatches: JobMatchRow[];
 }) {
+  const setTab = useDashboardStore((state) => state.setTab);
   const selected = useDashboardStore((state) => state.selectedAnalysisId);
   const selectedDomain = useDashboardStore((state) => state.selectedAnalysisDomain);
   const open = useDashboardStore((state) => domain === 'ats' ? state.openAtsAnalysis : state.openJobMatch);
@@ -32,6 +31,19 @@ export default function DomainHistoryView({
       <DashboardTopBar
         title={title}
         subtitle={rows.length ? `${rows.length} saved ${rows.length === 1 ? 'result' : 'results'}` : domain === 'ats' ? 'CV readiness history' : 'Vacancy-specific fit history'}
+        showNewAnalysis={domain === 'ats'}
+        rightSlot={
+          domain === 'ats' ? (
+            <button
+              type="button"
+              onClick={() => setTab('analyze')}
+              className="inline-flex shrink-0 items-center gap-2 rounded-xl bg-slate-900 px-3.5 py-2.5 text-xs font-bold text-white shadow-sm transition-all hover:bg-slate-800 sm:px-4"
+            >
+              <Plus className="h-3.5 w-3.5" strokeWidth={2.5} />
+              <span>New ATS Analysis</span>
+            </button>
+          ) : null
+        }
       />
       <div className="px-4 py-6 sm:px-6 lg:px-8">
 
@@ -43,9 +55,19 @@ export default function DomainHistoryView({
               <p className="mt-1 max-w-sm text-xs leading-5 text-slate-500">
                 {domain === 'ats' ? 'Analyze a CV to build its independent readiness history.' : 'Open a vacancy in Jobs and choose Check Match.'}
               </p>
+              {domain === 'ats' && (
+                <button
+                  type="button"
+                  onClick={() => setTab('analyze')}
+                  className="mt-5 inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-xs font-bold text-white shadow-sm transition-all hover:bg-slate-800"
+                >
+                  <Plus className="h-3.5 w-3.5" strokeWidth={2.5} />
+                  <span>New ATS Analysis</span>
+                </button>
+              )}
             </div>
           ) : (
-            <div className="divide-y divide-slate-100">
+            <div className="divide-y divide-slate-100 p-2">
               {rows.map((row) => {
                 const score = domain === 'ats' ? (row as AtsAnalysisRow).overallScore : (row as JobMatchRow).matchScore;
                 const heading = domain === 'ats' ? (row as AtsAnalysisRow).sourceFileName : `${(row as JobMatchRow).jobTitle} · ${(row as JobMatchRow).jobCompany}`;
@@ -55,9 +77,9 @@ export default function DomainHistoryView({
                     key={row.id}
                     type="button"
                     onClick={() => open(row.id)}
-                    className="flex min-h-16 w-full items-center gap-4 px-5 py-4 text-left transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent-purple"
+                    className="flex min-h-16 w-full items-center gap-4 rounded-xl px-4 py-3.5 text-left transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent-cyan"
                   >
-                    <span className={cn('rounded-lg px-2.5 py-1 text-sm font-bold tabular-nums', scoreTone(score))}>{score}</span>
+                    <span className={cn('flex h-8 min-w-10 shrink-0 items-center justify-center rounded-xl px-2.5 text-sm font-bold tabular-nums', scoreTone(score))}>{score}</span>
                     <span className="min-w-0 flex-1">
                       <span className="block truncate text-sm font-semibold text-slate-900">{heading}</span>
                       <span className="mt-0.5 block truncate text-xs text-slate-500">{detail} · {new Date(row.createdAt).toLocaleDateString('en-GB')}</span>

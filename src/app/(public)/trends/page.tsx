@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { TrendingUp, PoundSterling, Code2, Map, LineChart, Loader2 } from 'lucide-react';
 import Navbar from '@/shared/components/layout/Navbar';
+import PublicPageBackdrop from '@/shared/components/layout/PublicPageBackdrop';
 import GlassCard from '@/shared/components/ui/GlassCard';
 import Toast from '@/shared/components/ui/Toast';
 import { 
@@ -88,10 +89,11 @@ export default function TrendsPage() {
   }, []);
 
   return (
-    <main className="min-h-screen bg-hero-gradient">
+    <main className="relative isolate min-h-screen overflow-hidden bg-hero-gradient">
       <Navbar />
+      <PublicPageBackdrop variant="insights" />
 
-      <section className="pt-24 pb-12 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
+      <section className="relative z-10 pt-24 pb-12 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -126,7 +128,7 @@ export default function TrendsPage() {
             >
               <GlassCard hover={false} className="h-[400px] flex flex-col">
                 <div className="flex items-center gap-2 mb-6">
-                  <Code2 className="text-accent-purple" size={20} />
+                  <Code2 className="text-accent-cyan" size={20} />
                   <h2 className="text-lg font-bold text-text-primary">Tech Stack Demand</h2>
                 </div>
                 <div className="flex-1 w-full min-h-0">
@@ -162,7 +164,7 @@ export default function TrendsPage() {
             >
               <GlassCard hover={false} className="h-[400px] flex flex-col">
                 <div className="flex items-center gap-2 mb-6">
-                  <PoundSterling className="text-accent-purple" size={20} />
+                  <PoundSterling className="text-accent-cyan" size={20} />
                   <h2 className="text-lg font-bold text-text-primary">Salary Bands (Software Eng)</h2>
                 </div>
                 <div className="flex-1 w-full min-h-0">
@@ -199,7 +201,7 @@ export default function TrendsPage() {
             >
               <GlassCard hover={false} className="h-[400px] flex flex-col">
                 <div className="flex items-center gap-2 mb-6">
-                  <LineChart className="text-accent-purple" size={20} />
+                  <LineChart className="text-accent-cyan" size={20} />
                   <h2 className="text-lg font-bold text-text-primary">Skill Mention Frequency</h2>
                 </div>
                 <div className="flex-1 w-full min-h-0">
@@ -226,7 +228,7 @@ export default function TrendsPage() {
             >
               <GlassCard hover={false} className="h-[400px] flex flex-col">
                 <div className="flex items-center gap-2 mb-6">
-                  <Map className="text-accent-purple" size={20} />
+                  <Map className="text-accent-cyan" size={20} />
                   <h2 className="text-lg font-bold text-text-primary">Tech Hub Distribution</h2>
                 </div>
                 <div className="flex-1 overflow-y-auto pr-2 space-y-4">
@@ -234,11 +236,11 @@ export default function TrendsPage() {
                     <div key={region.city} className="flex flex-col gap-1.5 p-3 rounded-xl bg-bg-tertiary/50 border border-border-subtle hover:border-accent-cyan/30 transition-colors">
                       <div className="flex justify-between items-center">
                         <span className="font-bold text-text-primary">{region.city}</span>
-                        <span className="text-sm font-mono text-accent-purple">{region.jobs}% of roles</span>
+                        <span className="text-sm font-mono text-accent-cyan">{region.jobs}% of roles</span>
                       </div>
                       <div className="w-full bg-bg-elevated h-1.5 rounded-full overflow-hidden">
                         <motion.div 
-                          className="h-full bg-accent-purple rounded-full"
+                          className="h-full bg-accent-cyan rounded-full"
                           initial={{ width: 0 }}
                           animate={{ width: `${region.jobs}%` }}
                           transition={{ duration: 1, delay: 0.5 + (i * 0.1) }}

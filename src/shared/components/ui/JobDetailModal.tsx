@@ -51,7 +51,7 @@ export function JobDetailModal({
             onClick={onClose}
             className="inline-flex items-center gap-1 shrink-0 rounded-xl border border-neutral-200 bg-neutral-100 dark:bg-bg-tertiary px-2.5 py-1.5 text-xs font-bold text-neutral-800 dark:border-border-subtle dark:text-text-primary transition hover:bg-neutral-200"
           >
-            <ChevronLeft className="h-4 w-4 text-accent-purple shrink-0" />
+            <ChevronLeft className="h-4 w-4 text-slate-700 dark:text-slate-200 shrink-0" />
             <span>Back</span>
           </button>
 

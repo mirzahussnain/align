@@ -192,7 +192,7 @@ describe("authenticated Job Board API wiring", () => {
     render(<CompanyDetailsBoard companyRecordId="company-42" />);
 
     expect(await screen.findByText("Example Ltd")).toBeInTheDocument();
-    expect(screen.getByText("Sponsorship history")).toBeInTheDocument();
+    expect(screen.getByText(/Sponsorship history/i)).toBeInTheDocument();
     expect(screen.getByText("Version 2 · 29 Jul 2026")).toBeInTheDocument();
     expect(screen.getByText("Matched as EXAMPLE LTD")).toBeInTheDocument();
     expect(urls).toEqual(

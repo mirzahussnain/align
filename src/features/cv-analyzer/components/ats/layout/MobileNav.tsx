@@ -65,17 +65,17 @@ export default function MobileNav({
                 className={cn(
                   "flex items-center gap-1.5 px-3 py-2 rounded-xl whitespace-nowrap text-xs font-bold transition-all border",
                   isActive 
-                    ? "bg-purple-100/80 text-purple-800 border-purple-200 shadow-sm"
+                    ? "bg-sky-100/80 text-purple-800 border-purple-200 shadow-sm"
                     : "bg-white text-slate-500 border-slate-200 hover:bg-slate-50"
                 )}
               >
-                <span className={cn(isActive ? "text-purple-700" : "text-slate-400")}>
+                <span className={cn(isActive ? "text-accent-cyan" : "text-slate-400")}>
                   {getGroupIcon(group.id)}
                 </span>
                 {group.label}
                 <span className={cn(
                   "ml-1 px-1.5 py-0.5 rounded text-[10px]",
-                  isActive ? "bg-white text-purple-700 font-black" : "text-slate-400 bg-slate-100 font-semibold"
+                  isActive ? "bg-white text-accent-cyan font-black" : "text-slate-400 bg-slate-100 font-semibold"
                 )}>
                   {score}%
                 </span>

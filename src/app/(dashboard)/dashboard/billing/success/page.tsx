@@ -68,7 +68,7 @@ export default function CheckoutSuccessPage() {
       <div className="w-full max-w-md rounded-3xl border border-neutral-200 bg-white p-8 text-center shadow-sm">
         {phase === 'confirming' && (
           <>
-            <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-purple-50 text-accent-purple">
+            <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-sky-50 text-accent-cyan">
               <Loader2 className="h-6 w-6 animate-spin" />
             </span>
             <h1 className="mt-5 text-xl font-black text-neutral-900">Payment is being confirmed</h1>
@@ -90,7 +90,7 @@ export default function CheckoutSuccessPage() {
             </p>
             <Link
               href="/dashboard?tab=billing"
-              className="mt-6 inline-block w-full rounded-full bg-accent-purple px-4 py-2.5 text-sm font-bold text-white hover:bg-accent-purple/90"
+              className="mt-6 inline-block w-full rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-bold text-white hover:bg-slate-800 shadow-sm transition"
             >
               Go to billing
             </Link>
@@ -110,7 +110,7 @@ export default function CheckoutSuccessPage() {
             <button
               type="button"
               onClick={retry}
-              className="mt-6 w-full rounded-full bg-accent-purple px-4 py-2.5 text-sm font-bold text-white hover:bg-accent-purple/90"
+              className="mt-6 w-full rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-bold text-white hover:bg-slate-800 shadow-sm transition"
             >
               Check again
             </button>

@@ -37,7 +37,7 @@ export function FormattedJobDescription({
 
         if (block.type === "list" && block.items?.length) {
           return (
-            <ul key={idx} className="my-2.5 space-y-1.5 pl-4 list-disc marker:text-accent-purple">
+            <ul key={idx} className="my-2.5 space-y-1.5 pl-4 list-disc marker:text-accent-cyan">
               {block.items.map((item, itemIdx) => (
                 <li key={itemIdx} className="leading-normal">
                   {item}

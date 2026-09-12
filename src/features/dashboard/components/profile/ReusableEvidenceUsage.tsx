@@ -28,7 +28,7 @@ export default function ReusableEvidenceUsage() {
           <button
             type="button"
             onClick={() => openPricingDetails({ capability: 'profile_evidence_storage', decision })}
-            className="font-semibold text-accent-purple underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-purple/40"
+            className="font-semibold text-accent-cyan underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-cyan/40"
           >
             see what Pro includes
           </button>

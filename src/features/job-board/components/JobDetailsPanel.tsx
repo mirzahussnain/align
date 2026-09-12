@@ -156,7 +156,7 @@ function ExternalDescriptionLink({
       target="_blank"
       rel="noopener noreferrer"
       aria-label="View the complete job description on the employer site (opens in a new tab)"
-      className="inline-flex min-h-11 max-w-full items-center gap-2 rounded-lg border border-neutral-200 px-3 py-2 text-sm font-semibold text-accent-purple transition hover:bg-neutral-50 focus-visible:ring-2 focus-visible:ring-accent-purple dark:border-border-subtle dark:hover:bg-bg-tertiary"
+      className="inline-flex min-h-11 max-w-full items-center gap-2 rounded-lg border border-neutral-200 px-3 py-2 text-sm font-semibold text-accent-cyan transition hover:bg-neutral-50 focus-visible:ring-2 focus-visible:ring-accent-cyan dark:border-border-subtle dark:hover:bg-bg-tertiary"
     >
       <span className="whitespace-normal break-words text-left">
         {completeness === "FULL"
@@ -253,7 +253,7 @@ function MatchPreparationPanel({
         type="button"
         onClick={prepare}
         disabled={!track || running || !eligible}
-        className="min-h-11 rounded-lg bg-accent-purple px-4 text-sm font-semibold text-white disabled:opacity-60"
+        className="min-h-11 rounded-xl bg-slate-900 px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800 disabled:opacity-60"
       >
         {running ? "Preparing…" : "Continue to analysis"}
       </button>
@@ -286,7 +286,7 @@ function SponsorEvidenceCard({ data }: { data: JobDetailsViewModel }) {
             href={`/immigration?q=${encodeURIComponent(companyQuery)}`}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center gap-1 text-xs font-semibold text-accent-purple hover:underline"
+            className="inline-flex items-center gap-1 text-xs font-semibold text-accent-cyan hover:underline"
           >
             Check on Immigration Hub <ExternalLink className="h-3 w-3" />
           </a>
@@ -436,7 +436,7 @@ function PracticalCompatibilityCard({
       {compatibility.summary.unknown > 0 && (
         <a
           href={profileHref}
-          className="mt-3 inline-flex min-h-11 items-center rounded-lg border border-neutral-200 px-3 text-sm font-semibold text-accent-purple transition hover:bg-neutral-50 dark:border-border-subtle dark:hover:bg-bg-tertiary"
+          className="mt-3 inline-flex min-h-11 items-center rounded-lg border border-neutral-200 px-3 text-sm font-semibold text-accent-cyan transition hover:bg-neutral-50 dark:border-border-subtle dark:hover:bg-bg-tertiary"
         >
           Update profile
         </a>
@@ -459,7 +459,7 @@ function SourceCard({ data }: { data: JobDetailsViewModel }) {
               href={data.hostedUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center gap-1 text-accent-purple"
+              className="inline-flex items-center gap-1 text-accent-cyan"
             >
               {humanise(primary?.provider) ?? "Source advert"}
               <ExternalLink className="h-3 w-3" />
@@ -570,7 +570,7 @@ function OverviewTab({
                 type="button"
                 onClick={() => setExpanded((prev) => !prev)}
                 aria-expanded={expanded}
-                className="mt-3 inline-flex min-h-11 max-w-full items-center gap-1.5 text-sm font-semibold text-accent-purple hover:underline focus-visible:ring-2 focus-visible:ring-accent-purple"
+                className="mt-3 inline-flex min-h-11 max-w-full items-center gap-1.5 text-sm font-semibold text-accent-cyan hover:underline focus-visible:ring-2 focus-visible:ring-accent-cyan"
               >
                 <span className="whitespace-normal text-left">
                   {expanded
@@ -653,7 +653,7 @@ function OverviewTab({
                       {item.requirement === "NOT_DETECTED" ? (
                         <Circle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-neutral-300" />
                       ) : (
-                        <CircleCheck className="mt-0.5 h-3.5 w-3.5 shrink-0 text-accent-purple" />
+                        <CircleCheck className="mt-0.5 h-3.5 w-3.5 shrink-0 text-accent-cyan" />
                       )}
                       {requirementLine(item)}
                     </li>
@@ -662,7 +662,7 @@ function OverviewTab({
                 <button
                   type="button"
                   onClick={() => onOpenTab("Requirements")}
-                  className="mt-3 text-xs font-semibold text-accent-purple"
+                  className="mt-3 text-xs font-semibold text-accent-cyan"
                 >
                   View all requirements
                 </button>
@@ -807,7 +807,7 @@ function SourceTab({ data }: { data: JobDetailsViewModel }) {
                   href={source.hostedUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1 font-semibold text-accent-purple"
+                  className="inline-flex items-center gap-1 font-semibold text-accent-cyan"
                 >
                   Open advert <ExternalLink className="h-3 w-3" />
                 </a>
@@ -918,7 +918,7 @@ export function JobDetailsPanel({
     <button
       type="button"
       onClick={onBack}
-      className="mb-3 inline-flex items-center gap-1 text-sm font-semibold text-accent-purple hover:underline"
+      className="mb-3 inline-flex items-center gap-1 text-sm font-semibold text-accent-cyan hover:underline"
     >
       <ChevronLeft className="h-4 w-4" />
       Back to results
@@ -1039,7 +1039,7 @@ export function JobDetailsPanel({
                 target="_blank"
                 rel="noopener noreferrer"
                 aria-label={`${data.applicationUrl ? "Apply for" : "View the original advert for"} ${data.job.title}`}
-                className="h-10 px-5 bg-accent-purple text-white text-xs font-semibold rounded-xl flex items-center justify-center gap-2 shadow-sm transition hover:bg-accent-purple/90 whitespace-nowrap"
+                className="h-10 px-5 bg-slate-900 text-white text-xs font-semibold rounded-xl flex items-center justify-center gap-2 shadow-sm transition hover:bg-slate-800 whitespace-nowrap"
               >
                 <span>
                   {data.applicationUrl
@@ -1103,7 +1103,7 @@ export function JobDetailsPanel({
                 onClick={() => setTab(item)}
                 className={`min-h-11 shrink-0 border-b-2 px-4 text-sm font-semibold transition-colors ${
                   tab === item
-                    ? "border-accent-purple text-accent-purple"
+                    ? "border-accent-cyan text-accent-cyan"
                     : "border-transparent text-neutral-500 hover:text-neutral-900 dark:text-text-secondary dark:hover:text-text-primary"
                 }`}
               >

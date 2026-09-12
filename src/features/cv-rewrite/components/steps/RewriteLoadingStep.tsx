@@ -29,7 +29,7 @@ export default function RewriteLoadingStep() {
         <motion.div
           animate={{ rotate: 360 }}
           transition={{ duration: 8, repeat: Infinity, ease: "linear" }}
-          className="w-24 h-24 rounded-full border-t-2 border-r-2 border-accent-purple/30"
+          className="w-24 h-24 rounded-full border-t-2 border-r-2 border-accent-cyan/30"
         />
         <motion.div
           animate={{ rotate: -360 }}
@@ -42,7 +42,7 @@ export default function RewriteLoadingStep() {
             initial={{ scale: 0.5, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
             exit={{ scale: 0.5, opacity: 0 }}
-            className="text-accent-purple"
+            className="text-accent-cyan"
           >
             <CurrentIcon size={32} />
           </motion.div>

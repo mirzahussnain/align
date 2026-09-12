@@ -47,7 +47,7 @@ export default function AnalyzeWorkspace({
           <div className="flex flex-col items-start justify-between gap-4 border-b border-border-subtle pb-6 sm:flex-row sm:items-center">
             <div>
               <h1 className="flex items-center gap-2 text-3xl font-semibold tracking-tight text-text-primary">
-                <ShieldCheck className="text-accent-purple" />
+                <ShieldCheck className="text-accent-cyan" />
                 ATS analysis
               </h1>
               <p className="mt-1 text-xs text-text-tertiary">CV readiness, independent of any vacancy</p>

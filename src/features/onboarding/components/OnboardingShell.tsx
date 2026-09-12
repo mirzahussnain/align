@@ -208,23 +208,23 @@ export function OnboardingExperience({
 
   return (
     <JourneyContext.Provider value={context}>
-      <div className="relative min-h-[100dvh] overflow-hidden bg-[#e9edf2] p-0 lg:p-5 xl:p-7">
+      <div className="relative min-h-[100dvh] overflow-hidden bg-slate-100 p-0 lg:p-5 xl:p-7">
         <template
           data-impeccable-contract="code-led-align-profile-rail"
           dangerouslySetInnerHTML={{
             __html:
-              '<!-- THESIS: Onboarding is a guided assembly of a trustworthy Career Profile, not a long form. OWN-WORLD: Ink-slate contextual rail, paper-white workspace, cyan detail and restrained violet actions; 12-16px surfaces and compact controls. STORY: Choose an outcome, bring relevant evidence, approve what is recorded, then use the profile immediately. FIRST VIEWPORT: A stable dark context rail occupies one third; a focused decision surface occupies the rest with actions anchored below. FORM: Split workspace, selected from the existing-flow structural study; seed code-led-align-profile-rail. FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, DESIGN.md, and every shipping raster carrying its provenance -->',
+              '<!-- THESIS: Onboarding is a guided assembly of a trustworthy Career Profile, not a long form. OWN-WORLD: Ink-slate contextual rail, paper-white workspace, cyan detail and restrained actions; 12-16px surfaces and compact controls. STORY: Choose an outcome, bring relevant evidence, approve what is recorded, then use the profile immediately. FIRST VIEWPORT: A stable dark context rail occupies one third; a focused decision surface occupies the rest with actions anchored below. FORM: Split workspace, selected from the existing-flow structural study; seed code-led-align-profile-rail. FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, DESIGN.md, and every shipping raster carrying its provenance -->',
           }}
         />
         <div
           aria-hidden="true"
-          className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_14%_18%,rgba(82,207,226,0.11),transparent_28%),radial-gradient(circle_at_86%_86%,rgba(111,78,231,0.08),transparent_30%)]"
+          className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_14%_18%,rgba(82,207,226,0.11),transparent_28%),radial-gradient(circle_at_86%_86%,rgba(14,165,233,0.06),transparent_30%)]"
         />
 
-        <div className="relative mx-auto grid min-h-[100dvh] max-w-[1480px] overflow-hidden bg-[#fbfcfd] shadow-[0_24px_90px_rgba(31,41,55,0.13)] lg:h-[calc(100dvh-2.5rem)] lg:min-h-0 lg:grid-cols-[minmax(300px,0.8fr)_minmax(0,1.65fr)] lg:rounded-2xl xl:h-[calc(100dvh-3.5rem)]">
-          <aside className="relative hidden overflow-hidden bg-[#111827] px-8 py-8 text-white lg:flex lg:flex-col xl:px-10 xl:py-10">
+        <div className="relative mx-auto grid min-h-[100dvh] max-w-[1480px] overflow-hidden bg-white shadow-[0_24px_90px_rgba(31,41,55,0.13)] lg:h-[calc(100dvh-2.5rem)] lg:min-h-0 lg:grid-cols-[minmax(300px,0.8fr)_minmax(0,1.65fr)] lg:rounded-2xl xl:h-[calc(100dvh-3.5rem)]">
+          <aside className="relative hidden overflow-hidden bg-slate-900 px-8 py-8 text-white lg:flex lg:flex-col xl:px-10 xl:py-10">
             <div aria-hidden="true" className="pointer-events-none absolute -right-28 -top-24 h-80 w-80 rounded-full bg-cyan-300/10 blur-3xl" />
-            <div aria-hidden="true" className="pointer-events-none absolute -bottom-40 -left-28 h-96 w-96 rounded-full bg-violet-500/10 blur-3xl" />
+            <div aria-hidden="true" className="pointer-events-none absolute -bottom-40 -left-28 h-96 w-96 rounded-full bg-cyan-500/10 blur-3xl" />
 
             <div className="relative flex items-center gap-3">
               <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/8 ring-1 ring-white/12">
@@ -325,7 +325,7 @@ export function OnboardingExperience({
                 className="mt-3 h-1 overflow-hidden rounded-full bg-slate-200"
               >
                 <motion.div
-                  className="h-full rounded-full bg-[#6757d9]"
+                  className="h-full rounded-full bg-accent-cyan"
                   animate={{ width: `${progressPercentage}%` }}
                   transition={{ duration: reduceMotion ? 0 : 0.3, ease: [0.22, 1, 0.36, 1] }}
                 />
@@ -383,7 +383,7 @@ export function OnboardingShell({
             aria-label={`Setup progress: step ${stageIndex + 1} of ${totalStages}`}
             className="mt-3 h-1 overflow-hidden rounded-full bg-slate-200"
           >
-            <div className="h-full rounded-full bg-[#6757d9]" style={{ width: `${Math.round(((stageIndex + 1) / totalStages) * 100)}%` }} />
+            <div className="h-full rounded-full bg-accent-cyan" style={{ width: `${Math.round(((stageIndex + 1) / totalStages) * 100)}%` }} />
           </div>
         </div>
       )}
@@ -404,7 +404,7 @@ export function OnboardingShell({
 
         {busy && busyLabel && (
           <p className="mt-5 flex items-center gap-2 text-xs font-medium text-slate-600">
-            <Loader2 className="h-3.5 w-3.5 animate-spin text-[#6757d9] motion-reduce:animate-none" aria-hidden="true" />
+            <Loader2 className="h-3.5 w-3.5 animate-spin text-accent-cyan motion-reduce:animate-none" aria-hidden="true" />
             {busyLabel}
           </p>
         )}
@@ -424,7 +424,7 @@ export function OnboardingShell({
         </AnimatePresence>
 
         {footer && (
-          <div className="sticky bottom-0 mt-9 flex flex-col-reverse gap-3 border-t border-slate-200/90 bg-[#fbfcfd]/95 py-5 backdrop-blur-md sm:flex-row sm:items-center sm:justify-between">
+          <div className="mt-9 flex flex-col-reverse gap-3 pt-4 sm:flex-row sm:items-center sm:justify-between">
             {footer}
           </div>
         )}
@@ -438,7 +438,7 @@ export function PrimaryButton({ children, className, ...props }: React.ButtonHTM
     <button
       type="button"
       className={cn(
-        'inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-[#6757d9] px-5 py-2.5 text-sm font-semibold text-white shadow-[0_8px_24px_rgba(103,87,217,0.2)] transition-[background-color,transform,box-shadow] duration-200 hover:bg-[#5948cf] hover:shadow-[0_10px_28px_rgba(103,87,217,0.26)] active:translate-y-px active:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#6757d9]/45 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-45 disabled:shadow-none sm:w-auto',
+        'inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-[background-color,transform,box-shadow] duration-200 hover:bg-slate-800 active:translate-y-px active:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-cyan/45 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-45 disabled:shadow-none sm:w-auto',
         className
       )}
       {...props}
@@ -453,7 +453,7 @@ export function SecondaryButton({ children, className, ...props }: React.ButtonH
     <button
       type="button"
       className={cn(
-        'inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition-[border-color,background-color,color,transform] duration-200 hover:border-slate-400 hover:bg-slate-50 hover:text-slate-950 active:translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#6757d9]/35 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-45 sm:w-auto',
+        'inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition-[border-color,background-color,color,transform] duration-200 hover:border-slate-400 hover:bg-slate-50 hover:text-slate-950 active:translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-cyan/35 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-45 sm:w-auto',
         className
       )}
       {...props}
@@ -489,9 +489,9 @@ export function ChoiceCard({
       layout={!reduceMotion}
       whileTap={disabled || reduceMotion ? undefined : { scale: 0.992 }}
       className={cn(
-        'group relative flex min-h-[82px] cursor-pointer items-start gap-4 overflow-hidden rounded-2xl border px-4 py-4 transition-[border-color,background-color,box-shadow] duration-200 focus-within:outline-none focus-within:ring-2 focus-within:ring-[#6757d9]/45 focus-within:ring-offset-2 sm:px-5',
+        'group relative flex min-h-[82px] cursor-pointer items-start gap-4 overflow-hidden rounded-2xl border px-4 py-4 transition-[border-color,background-color,box-shadow] duration-200 focus-within:outline-none focus-within:ring-2 focus-within:ring-accent-cyan/45 focus-within:ring-offset-2 sm:px-5',
         checked
-          ? 'border-[#6757d9] bg-[#f7f6ff] shadow-[0_10px_30px_rgba(74,63,159,0.09)] ring-1 ring-[#6757d9]/15'
+          ? 'border-accent-cyan/60 bg-sky-50/50 shadow-[0_10px_30px_rgba(2,132,199,0.06)] ring-1 ring-accent-cyan/20'
           : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50/75',
         disabled && 'cursor-not-allowed opacity-50'
       )}
@@ -500,7 +500,7 @@ export function ChoiceCard({
       <span
         className={cn(
           'flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border transition-colors',
-          checked ? 'border-[#6757d9]/20 bg-[#6757d9] text-white' : 'border-slate-200 bg-slate-50 text-slate-500 group-hover:bg-white'
+          checked ? 'border-accent-cyan/25 bg-accent-cyan text-white' : 'border-slate-200 bg-slate-50 text-slate-500 group-hover:bg-white'
         )}
       >
         {icon}
@@ -512,7 +512,7 @@ export function ChoiceCard({
       <span
         className={cn(
           'mt-2 flex h-7 w-7 shrink-0 items-center justify-center rounded-full transition-all',
-          checked ? 'bg-[#6757d9] text-white' : 'bg-slate-100 text-slate-400 group-hover:text-slate-600'
+          checked ? 'bg-accent-cyan text-white' : 'bg-slate-100 text-slate-400 group-hover:text-slate-600'
         )}
       >
         {checked ? <Check className="h-3.5 w-3.5" strokeWidth={2.4} aria-hidden="true" /> : <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />}

@@ -78,7 +78,7 @@ export function JobResultCard({
       aria-label={job.title}
       className={`group cursor-pointer rounded-2xl border p-3.5 sm:p-4 shadow-sm transition-all overflow-hidden min-w-0 w-full max-w-full ${
         selected
-          ? "border-accent-purple bg-accent-purple/[0.02] ring-1 ring-accent-purple/30 dark:bg-accent-purple/10"
+          ? "border-accent-cyan bg-accent-cyan/[0.02] ring-1 ring-accent-cyan/30 dark:bg-accent-cyan/10"
           : "border-neutral-200 bg-white hover:border-neutral-300 hover:shadow-md dark:border-border-subtle dark:bg-bg-secondary"
       }`}
     >
@@ -90,7 +90,7 @@ export function JobResultCard({
           {companyInitials(job.company.displayName)}
         </span>
         <div className="min-w-0 flex-1 overflow-hidden">
-          <h2 className="text-xs sm:text-sm font-bold leading-snug text-neutral-900 group-hover:text-accent-purple transition-colors dark:text-text-primary min-w-0 w-full break-words">
+          <h2 className="text-xs sm:text-sm font-bold leading-snug text-neutral-900 group-hover:text-accent-cyan transition-colors dark:text-text-primary min-w-0 w-full break-words">
             <span className="block w-full min-w-0 text-left break-words [overflow-wrap:anywhere]">
               {job.title}
             </span>
@@ -110,7 +110,7 @@ export function JobResultCard({
           disabled={saving}
           aria-pressed={job.saved}
           aria-label={job.saved ? `Unsave ${job.title}` : `Save ${job.title}`}
-          className="-mr-1 -mt-1 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-neutral-400 transition-colors hover:bg-neutral-100 hover:text-neutral-700 focus-visible:ring-2 focus-visible:ring-accent-purple disabled:opacity-60 dark:hover:bg-bg-tertiary dark:hover:text-text-primary"
+          className="-mr-1 -mt-1 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-neutral-400 transition-colors hover:bg-neutral-100 hover:text-neutral-700 focus-visible:ring-2 focus-visible:ring-accent-cyan disabled:opacity-60 dark:hover:bg-bg-tertiary dark:hover:text-text-primary"
         >
           {saving ? (
             <Loader2 className="h-4 w-4 animate-spin" />
@@ -125,7 +125,7 @@ export function JobResultCard({
 
       <div className="mt-2.5 sm:mt-3 flex flex-wrap items-center gap-1.5 sm:pl-12 min-w-0 w-full max-w-full">
         {salaryText ? (
-          <Pill tone="purple">{salaryText}</Pill>
+          <Pill tone="accent">{salaryText}</Pill>
         ) : (
           <Pill tone="neutral">Salary not stated</Pill>
         )}

@@ -373,7 +373,7 @@ export function CheckMatchModal({
               aria-live="polite"
             >
               <Loader2
-                className="h-8 w-8 animate-spin text-accent-purple"
+                className="h-8 w-8 animate-spin text-accent-cyan"
                 aria-hidden
               />
               <p className="text-sm font-bold text-neutral-900 dark:text-text-primary">
@@ -484,7 +484,7 @@ export function CheckMatchModal({
                     href={`/dashboard?tab=job_matches&analysis=${encodeURIComponent(
                       completed.analysisId,
                     )}`}
-                    className="px-6 py-3 rounded-xl bg-gradient-to-r from-purple-600 to-accent-purple text-white text-xs font-bold shadow-md hover:opacity-95 transition flex items-center justify-center gap-2"
+                    className="px-6 py-3 rounded-xl bg-slate-900 text-white text-xs font-bold shadow-sm hover:bg-slate-800 transition flex items-center justify-center gap-2"
                   >
                     View Full Analysis
                     <ArrowRight className="h-4 w-4" aria-hidden />
@@ -518,7 +518,7 @@ export function CheckMatchModal({
                       key={track.id}
                       className={`flex items-center justify-between p-3 rounded-xl border cursor-pointer transition ${
                         selectedTrack === track.id
-                          ? "border-accent-purple bg-accent-purple/5 dark:bg-accent-purple/10 text-accent-purple font-semibold"
+                          ? "border-accent-cyan bg-accent-cyan/5 dark:bg-accent-cyan/10 text-accent-cyan font-semibold"
                           : "border-neutral-200 dark:border-border-subtle bg-white dark:bg-bg-tertiary text-neutral-700 dark:text-text-secondary hover:border-neutral-300"
                       }`}
                     >
@@ -529,7 +529,7 @@ export function CheckMatchModal({
                         value={track.id}
                         checked={selectedTrack === track.id}
                         onChange={() => setSelectedTrack(track.id)}
-                        className="h-4 w-4 text-accent-purple focus:ring-accent-purple"
+                        className="h-4 w-4 text-accent-cyan focus:ring-accent-cyan"
                       />
                     </label>
                   ))}
@@ -554,7 +554,7 @@ export function CheckMatchModal({
                 <button
                   type="button"
                   onClick={() => setStep("CV")}
-                  className="px-5 py-2.5 rounded-xl bg-accent-purple text-white text-xs font-semibold hover:bg-accent-purple/90 shadow-sm transition flex items-center gap-1.5"
+                  className="px-5 py-2.5 rounded-xl bg-slate-900 text-white text-xs font-semibold hover:bg-slate-800 shadow-sm transition flex items-center gap-1.5"
                 >
                   Continue
                   <ChevronRight className="h-4 w-4" />
@@ -579,19 +579,19 @@ export function CheckMatchModal({
                 <label
                   className={`flex flex-col p-4 rounded-xl border cursor-pointer transition ${
                     cvOption === "PROFILE"
-                      ? "border-accent-purple bg-accent-purple/5 dark:bg-accent-purple/10 text-accent-purple font-semibold"
+                      ? "border-accent-cyan bg-accent-cyan/5 dark:bg-accent-cyan/10 text-accent-cyan font-semibold"
                       : "border-neutral-200 dark:border-border-subtle bg-white dark:bg-bg-tertiary text-neutral-700 dark:text-text-secondary hover:border-neutral-300"
                   }`}
                 >
                   <div className="flex items-center justify-between mb-2">
-                    <FileText className="h-5 w-5 text-accent-purple" />
+                    <FileText className="h-5 w-5 text-accent-cyan" />
                     <input
                       type="radio"
                       name="cvOption"
                       value="PROFILE"
                       checked={cvOption === "PROFILE"}
                       onChange={() => setCvOption("PROFILE")}
-                      className="h-4 w-4 text-accent-purple focus:ring-accent-purple"
+                      className="h-4 w-4 text-accent-cyan focus:ring-accent-cyan"
                     />
                   </div>
                   <span className="text-sm font-bold">Stored CV</span>
@@ -603,19 +603,19 @@ export function CheckMatchModal({
                 <label
                   className={`flex flex-col p-4 rounded-xl border cursor-pointer transition ${
                     cvOption === "UPLOAD"
-                      ? "border-accent-purple bg-accent-purple/5 dark:bg-accent-purple/10 text-accent-purple font-semibold"
+                      ? "border-accent-cyan bg-accent-cyan/5 dark:bg-accent-cyan/10 text-accent-cyan font-semibold"
                       : "border-neutral-200 dark:border-border-subtle bg-white dark:bg-bg-tertiary text-neutral-700 dark:text-text-secondary hover:border-neutral-300"
                   }`}
                 >
                   <div className="flex items-center justify-between mb-2">
-                    <Upload className="h-5 w-5 text-accent-purple" />
+                    <Upload className="h-5 w-5 text-accent-cyan" />
                     <input
                       type="radio"
                       name="cvOption"
                       value="UPLOAD"
                       checked={cvOption === "UPLOAD"}
                       onChange={() => setCvOption("UPLOAD")}
-                      className="h-4 w-4 text-accent-purple focus:ring-accent-purple"
+                      className="h-4 w-4 text-accent-cyan focus:ring-accent-cyan"
                     />
                   </div>
                   <span className="text-sm font-bold">Upload New CV</span>
@@ -645,7 +645,7 @@ export function CheckMatchModal({
                         key={cv.id}
                         className={`flex items-center justify-between gap-3 p-3 rounded-xl border cursor-pointer transition ${
                           selectedStoredCvId === cv.id
-                            ? "border-accent-purple bg-accent-purple/5 dark:bg-accent-purple/10 text-accent-purple font-semibold"
+                            ? "border-accent-cyan bg-accent-cyan/5 dark:bg-accent-cyan/10 text-accent-cyan font-semibold"
                             : "border-neutral-200 dark:border-border-subtle bg-white dark:bg-bg-tertiary text-neutral-700 dark:text-text-secondary hover:border-neutral-300"
                         }`}
                       >
@@ -668,7 +668,7 @@ export function CheckMatchModal({
                           value={cv.id}
                           checked={selectedStoredCvId === cv.id}
                           onChange={() => setSelectedStoredCvId(cv.id)}
-                          className="h-4 w-4 shrink-0 text-accent-purple focus:ring-accent-purple"
+                          className="h-4 w-4 shrink-0 text-accent-cyan focus:ring-accent-cyan"
                         />
                       </label>
                     ))}
@@ -724,7 +724,7 @@ export function CheckMatchModal({
                     }
                   }}
                   disabled={!cvSourceReady}
-                  className="px-5 py-2.5 rounded-xl bg-accent-purple text-white text-xs font-semibold hover:bg-accent-purple/90 shadow-sm transition flex items-center gap-1.5 disabled:opacity-50"
+                  className="px-5 py-2.5 rounded-xl bg-slate-900 text-white text-xs font-semibold hover:bg-slate-800 shadow-sm transition flex items-center gap-1.5 disabled:opacity-50"
                 >
                   Continue
                   <ChevronRight className="h-4 w-4" />
@@ -786,7 +786,7 @@ export function CheckMatchModal({
                     href={sourceUrl}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-lg border border-purple-200/60 bg-purple-50 px-3 text-xs font-semibold text-accent-purple transition hover:bg-purple-100"
+                    className="inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-lg border border-sky-200/60 bg-sky-50 px-3 text-xs font-semibold text-accent-cyan transition hover:bg-sky-100"
                   >
                     <span className="whitespace-normal text-left">
                       View description on employer site
@@ -802,7 +802,7 @@ export function CheckMatchModal({
                 onChange={(e) => setPastedDescription(e.target.value)}
                 aria-describedby="pasted-description-help"
                 placeholder="Paste the complete advert from the employer website…"
-                className="w-full min-h-40 rounded-xl border border-neutral-200 dark:border-border-subtle bg-white dark:bg-bg-tertiary p-3 text-xs text-neutral-800 dark:text-text-primary focus:outline-none focus:ring-2 focus:ring-accent-purple/30"
+                className="w-full min-h-40 rounded-xl border border-neutral-200 dark:border-border-subtle bg-white dark:bg-bg-tertiary p-3 text-xs text-neutral-800 dark:text-text-primary focus:outline-none focus:ring-2 focus:ring-accent-cyan/30"
               />
 
               <div className="flex flex-wrap items-center gap-2">
@@ -842,7 +842,7 @@ export function CheckMatchModal({
                   type="button"
                   onClick={saveAndReassess}
                   disabled={!pasteIsUsable || saving}
-                  className="inline-flex min-h-11 items-center gap-1.5 rounded-xl bg-accent-purple px-4 text-xs font-semibold text-white transition hover:bg-accent-purple/90 disabled:opacity-50"
+                  className="inline-flex min-h-11 items-center gap-1.5 rounded-xl bg-slate-900 px-4 text-xs font-semibold text-white shadow-sm transition hover:bg-slate-800 disabled:opacity-50"
                 >
                   {saving ? (
                     <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
@@ -910,7 +910,7 @@ export function CheckMatchModal({
                   type="button"
                   onClick={() => setStep("REVIEW")}
                   disabled={!savedDescription && !partialAccepted}
-                  className="px-5 py-2.5 rounded-xl bg-accent-purple text-white text-xs font-semibold hover:bg-accent-purple/90 shadow-sm transition flex items-center gap-1.5 disabled:opacity-50"
+                  className="px-5 py-2.5 rounded-xl bg-slate-900 text-white text-xs font-semibold hover:bg-slate-800 shadow-sm transition flex items-center gap-1.5 disabled:opacity-50"
                 >
                   Continue
                   <ChevronRight className="h-4 w-4" />
@@ -972,7 +972,7 @@ export function CheckMatchModal({
                   type="button"
                   onClick={handleStartAnalysis}
                   disabled={running || !cvSourceReady}
-                  className="w-full sm:w-auto px-6 py-3 rounded-xl bg-gradient-to-r from-purple-600 to-accent-purple text-white text-xs font-bold shadow-md hover:opacity-95 transition flex items-center justify-center gap-2 disabled:opacity-60"
+                  className="w-full sm:w-auto px-6 py-3 rounded-xl bg-slate-900 text-white text-xs font-bold shadow-sm hover:bg-slate-800 transition flex items-center justify-center gap-2 disabled:opacity-60"
                 >
                   <Sparkles className="h-4 w-4" />
                   Start Analysis

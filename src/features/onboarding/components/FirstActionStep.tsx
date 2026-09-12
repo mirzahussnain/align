@@ -91,8 +91,8 @@ export function FirstActionStep({
 
 function ReadyPanel({ title, description }: { title: string; description: string }) {
   return (
-    <div className="flex items-start gap-4 rounded-2xl bg-[#f4f2ff] p-5 ring-1 ring-inset ring-[#6757d9]/15 sm:p-6">
-      <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#6757d9] text-white shadow-[0_8px_24px_rgba(103,87,217,0.22)]">
+    <div className="flex items-start gap-4 rounded-2xl bg-sky-50/50 p-5 ring-1 ring-inset ring-accent-cyan/20 border border-accent-cyan/20 sm:p-6">
+      <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-accent-cyan text-white shadow-sm">
         <Check className="h-5 w-5" strokeWidth={2.4} aria-hidden="true" />
       </span>
       <div>

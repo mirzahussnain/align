@@ -88,7 +88,7 @@ export default function PublicAtsDemo() {
           </div>
           <div className="mt-5 flex shrink-0 flex-col gap-2 sm:mt-0 sm:flex-row">
             <Link href="/login?redirect=/analyze?claim=1" className="inline-flex min-h-11 items-center justify-center rounded-xl border border-violet-300 bg-white px-5 text-sm font-semibold text-violet-800 hover:bg-violet-100">Sign in</Link>
-            <Link href="/signup?redirect=/analyze?claim=1" className="inline-flex min-h-11 items-center justify-center rounded-xl bg-accent-purple px-5 text-sm font-semibold text-white hover:bg-accent-purple/90">Create account</Link>
+            <Link href="/signup?redirect=/analyze?claim=1" className="inline-flex min-h-11 items-center justify-center rounded-xl bg-slate-900 px-5 text-sm font-semibold text-white shadow-sm hover:bg-slate-800">Create account</Link>
           </div>
         </section>
       </div>
@@ -107,8 +107,8 @@ export default function PublicAtsDemo() {
         </p>
       </div>
       <form onSubmit={submit} className="mt-10 rounded-2xl bg-white p-6 shadow-[0_24px_90px_rgba(31,41,55,0.13)] sm:p-8">
-        <label className="flex min-h-48 cursor-pointer flex-col items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-6 text-center focus-within:ring-2 focus-within:ring-accent-purple">
-          <FileUp className="h-7 w-7 text-accent-purple" />
+        <label className="flex min-h-48 cursor-pointer flex-col items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-6 text-center focus-within:ring-2 focus-within:ring-accent-cyan">
+          <FileUp className="h-7 w-7 text-accent-cyan" />
           <span className="mt-4 text-sm font-semibold text-slate-900">
             {file ? file.name : 'Choose a PDF or DOCX CV'}
           </span>
@@ -128,7 +128,7 @@ export default function PublicAtsDemo() {
         <button
           type="submit"
           disabled={!file || loading}
-          className="mt-5 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-accent-purple px-5 text-sm font-semibold text-white transition-colors hover:bg-accent-purple/90 disabled:cursor-not-allowed disabled:opacity-50"
+          className="mt-5 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-slate-900 px-5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
         >
           {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />}
           {loading ? 'Checking your CV…' : 'Run free ATS check'}

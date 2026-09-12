@@ -88,14 +88,14 @@ export default function CriterionMappingPanel({
     <motion.div variants={contentVariants} initial="hidden" animate="visible" exit="exit" className="space-y-6">
       <div>
         <h2 className="text-2xl font-bold text-text-primary flex items-center gap-2">
-          <ClipboardList className="text-accent-purple" size={22} /> Person Specification
+          <ClipboardList className="text-accent-cyan" size={22} /> Person Specification
         </h2>
         <p className="text-text-secondary text-sm mt-1">
           Criteria extracted from the advert, mapped against the evidence found in your CV
         </p>
       </div>
 
-      <GlassCard className="p-5 border-accent-purple/20 bg-accent-purple/5" hover={false}>
+      <GlassCard className="p-5 border-accent-cyan/20 bg-accent-cyan/5" hover={false}>
         <p className="text-xs text-text-secondary leading-relaxed">
           Applications like this are usually shortlisted on a <span className="font-bold">supporting statement</span>,
           not the CV alone. Address every essential criterion explicitly, in the spec&apos;s own wording, with one

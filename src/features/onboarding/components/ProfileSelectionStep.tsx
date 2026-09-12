@@ -160,7 +160,7 @@ export function ProfileSelectionStep({
         <button
           type="button"
           onClick={onUpgrade}
-          className="mt-3 text-xs font-semibold text-accent-purple hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-purple/40"
+          className="mt-3 text-xs font-semibold text-accent-cyan hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-cyan/40"
         >
           See what {profileCapacity.upgradeTarget} includes
         </button>

@@ -161,7 +161,7 @@ export function SaveButton({ isPending, onClick }: { isPending: boolean; onClick
       type="button"
       onClick={onClick}
       disabled={isPending}
-      className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-accent-purple px-5 py-2.5 text-xs font-bold text-white transition-all hover:bg-accent-purple/90 disabled:cursor-not-allowed disabled:opacity-50 sm:ml-auto sm:w-auto"
+      className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-slate-900 px-5 py-2.5 text-xs font-bold text-white shadow-sm transition-all hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50 sm:ml-auto sm:w-auto"
     >
       {isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
       Save changes

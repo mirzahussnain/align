@@ -40,11 +40,11 @@ export function Step3AnalysisOrUpgrade({
 
   if (isRestricted) {
     return (
-      <div className="rounded-2xl border border-purple-200 bg-gradient-to-b from-purple-50/70 via-white to-purple-50/30 p-6 shadow-sm dark:border-purple-900/40 dark:from-purple-950/20 dark:via-bg-secondary dark:to-purple-950/10 space-y-6">
+      <div className="rounded-2xl border border-sky-200 bg-gradient-to-b from-sky-50/70 via-white to-sky-50/30 p-6 shadow-sm dark:border-sky-900/40 dark:from-sky-950/20 dark:via-bg-secondary dark:to-sky-950/10 space-y-6">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <span className="inline-flex h-6 items-center gap-1.5 rounded-full bg-purple-100 px-3 text-xs font-extrabold uppercase tracking-wide text-purple-700 dark:bg-purple-900/50 dark:text-purple-300">
-              <Crown className="h-3.5 w-3.5 text-accent-purple" />
+            <span className="inline-flex h-6 items-center gap-1.5 rounded-full bg-sky-100 px-3 text-xs font-extrabold uppercase tracking-wide text-sky-800 dark:bg-sky-900/50 dark:text-sky-300">
+              <Crown className="h-3.5 w-3.5 text-accent-cyan" />
               Pro Feature
             </span>
             <h2 className="mt-2 text-2xl font-black tracking-tight text-neutral-900 dark:text-text-primary">
@@ -54,26 +54,26 @@ export function Step3AnalysisOrUpgrade({
               In-depth ATS & requirement matching and automated CV tailoring are available on Align Pro.
             </p>
           </div>
-          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-accent-purple/10 text-accent-purple">
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-accent-cyan/10 text-accent-cyan">
             <Lock className="h-6 w-6" />
           </div>
         </div>
 
         {/* Feature Comparison Table */}
-        <div className="overflow-hidden rounded-xl border border-purple-100 bg-white shadow-xs dark:border-border-subtle dark:bg-bg-tertiary/40">
+        <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xs dark:border-border-subtle dark:bg-bg-tertiary/40">
           <table className="w-full text-left text-xs">
             <thead>
-              <tr className="border-b border-purple-100 bg-purple-50/50 dark:border-border-subtle dark:bg-bg-tertiary">
+              <tr className="border-b border-slate-200 bg-slate-50/75 dark:border-border-subtle dark:bg-bg-tertiary">
                 <th className="p-3.5 font-bold text-neutral-900 dark:text-text-primary">Feature</th>
                 <th className="p-3.5 font-bold text-neutral-500">Free Tier</th>
-                <th className="p-3.5 font-bold text-accent-purple">Pro Tier</th>
+                <th className="p-3.5 font-bold text-accent-cyan">Pro Tier</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-purple-50 dark:divide-border-subtle">
+            <tbody className="divide-y divide-slate-100 dark:divide-border-subtle">
               {PLAN_COMPARISON_FEATURES.map((item, idx) => (
                 <tr
                   key={idx}
-                  className={item.highlight ? "bg-purple-50/30 dark:bg-purple-950/10" : ""}
+                  className={item.highlight ? "bg-sky-50/40 dark:bg-sky-950/10" : ""}
                 >
                   <td className="p-3.5 font-semibold text-neutral-800 dark:text-text-primary">
                     {item.feature}
@@ -87,7 +87,7 @@ export function Step3AnalysisOrUpgrade({
                       item.free
                     )}
                   </td>
-                  <td className="p-3.5 font-bold text-accent-purple">
+                  <td className="p-3.5 font-bold text-accent-cyan">
                     <span className="inline-flex items-center gap-1">
                       <Check className="h-3.5 w-3.5 text-emerald-600" /> {item.pro}
                     </span>
@@ -106,17 +106,17 @@ export function Step3AnalysisOrUpgrade({
             <button
               type="button"
               onClick={onOpenUpgrade}
-              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-accent-purple px-6 text-sm font-bold text-white shadow-md transition hover:bg-accent-purple/90"
+              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-slate-900 px-6 text-sm font-bold text-white shadow-sm transition hover:bg-slate-800"
             >
-              <Sparkles className="h-4 w-4" />
+              <Sparkles className="h-4 w-4 text-accent-cyan" />
               Upgrade to Pro
             </button>
           ) : (
             <Link
               href="/dashboard?tab=billing"
-              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-accent-purple px-6 text-sm font-bold text-white shadow-md transition hover:bg-accent-purple/90"
+              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-slate-900 px-6 text-sm font-bold text-white shadow-sm transition hover:bg-slate-800"
             >
-              <Sparkles className="h-4 w-4" />
+              <Sparkles className="h-4 w-4 text-accent-cyan" />
               Upgrade to Pro
             </Link>
           )}
@@ -129,7 +129,7 @@ export function Step3AnalysisOrUpgrade({
     <div className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm dark:border-border-subtle dark:bg-bg-secondary sm:p-6 space-y-6">
       {!result ? (
         <div className="text-center py-6 space-y-4">
-          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-purple-50 text-accent-purple dark:bg-accent-purple/10">
+          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-sky-50 text-accent-cyan dark:bg-accent-cyan/10">
             <Sparkles className="h-7 w-7" />
           </div>
           <div>
@@ -144,12 +144,12 @@ export function Step3AnalysisOrUpgrade({
             type="button"
             onClick={onAnalyse}
             disabled={analysing}
-            className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-accent-purple px-8 text-sm font-bold text-white shadow-md transition hover:bg-accent-purple/90 disabled:opacity-50"
+            className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-slate-900 px-8 text-sm font-bold text-white shadow-sm transition hover:bg-slate-800 disabled:opacity-50"
           >
             {analysing ? (
               <Loader2 className="h-4 w-4 animate-spin" />
             ) : (
-              <Sparkles className="h-4 w-4" />
+              <Sparkles className="h-4 w-4 text-accent-cyan" />
             )}
             {analysing ? "Analysing CV fit..." : "Run AI Analysis Now"}
           </button>

@@ -4,6 +4,7 @@ import { FileSearch, ChevronRight } from 'lucide-react';
 import { cn } from '@/shared/utils/cn';
 import { useDashboardStore } from '@/shared/stores/dashboard-store';
 import { describeAnalysis } from '@/shared/utils/job-title';
+import { scoreTone } from '@/shared/utils/score-tone';
 
 export interface AnalysisRow {
   id: string;
@@ -18,13 +19,6 @@ export interface AnalysisRow {
    */
   jobTitle: string | null;
   jobCompany: string | null;
-}
-
-function scoreTone(score: number) {
-  if (score >= 85) return 'bg-emerald-100 text-emerald-700';
-  if (score >= 70) return 'bg-sky-100 text-sky-700';
-  if (score >= 50) return 'bg-amber-100 text-amber-700';
-  return 'bg-rose-100 text-rose-700';
 }
 
 export default function AnalysesTable({ rows }: { rows: AnalysisRow[] }) {
@@ -44,7 +38,7 @@ export default function AnalysesTable({ rows }: { rows: AnalysisRow[] }) {
         <button
           type="button"
           onClick={() => setTab('analyze')}
-          className="mt-5 inline-flex items-center gap-2 rounded-full bg-accent-purple px-4 py-2 text-xs font-bold text-white transition-colors hover:bg-accent-purple/90"
+          className="mt-5 inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2 text-xs font-bold text-white shadow-sm transition-colors hover:bg-slate-800"
         >
           Run your first analysis
         </button>
@@ -111,7 +105,7 @@ export default function AnalysesTable({ rows }: { rows: AnalysisRow[] }) {
                 </span>
               </td>
               <td className="whitespace-nowrap px-6 py-3.5">
-                <span className={cn('rounded-md px-2 py-1 text-xs font-bold tabular-nums', scoreTone(row.overallScore))}>
+                <span className={cn('rounded-xl px-2.5 py-1 text-xs font-bold tabular-nums', scoreTone(row.overallScore))}>
                   {row.overallScore}
                 </span>
               </td>

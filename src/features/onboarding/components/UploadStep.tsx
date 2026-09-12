@@ -172,7 +172,7 @@ export function UploadStep({
         <div>
           <label
             htmlFor="onboarding-cv-file"
-            className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-neutral-300 bg-neutral-50 px-4 py-10 text-center transition-colors hover:border-accent-purple focus-within:border-accent-purple focus-within:ring-2 focus-within:ring-accent-purple/20"
+            className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-neutral-300 bg-neutral-50 px-4 py-10 text-center transition-colors hover:border-accent-cyan focus-within:border-accent-cyan focus-within:ring-2 focus-within:ring-accent-cyan/20"
           >
             <UploadCloud className="h-6 w-6 text-neutral-400" aria-hidden="true" />
             <span className="text-sm font-semibold text-neutral-800">Choose a file to upload</span>
@@ -221,7 +221,7 @@ export function UploadStep({
                     type="button"
                     onClick={() => onUploaded(storedCv.id, true)}
                     disabled={busy || !storedCv.objectAvailable}
-                    className="rounded-full px-3 py-1.5 text-[11px] font-semibold text-accent-purple transition-colors hover:bg-accent-purple/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-purple/40 disabled:opacity-40"
+                    className="rounded-full px-3 py-1.5 text-[11px] font-semibold text-accent-cyan transition-colors hover:bg-accent-cyan/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-cyan/40 disabled:opacity-40"
                   >
                     Use this
                   </button>

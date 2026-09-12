@@ -59,7 +59,7 @@ export default function RequirementEvidenceCapture({ analysisId, profileId, requ
     } catch (err) { setError(err instanceof Error ? err.message : 'Could not save evidence.'); } finally { setSaving(false); }
   }
 
-  return <div className="mt-3 rounded-xl border border-purple-200 bg-purple-50 p-4">
+  return <div className="mt-3 rounded-xl border border-sky-200 bg-sky-50 p-4">
     <p className="text-sm font-semibold text-slate-800">Evidence for: {requirement.text}</p>
     <div className="mt-3 flex gap-3 text-xs"><label><input type="radio" checked={mode === 'existing'} onChange={() => setMode('existing')} /> Use saved evidence</label><label><input type="radio" checked={mode === 'new'} onChange={() => setMode('new')} /> Add structured evidence</label></div>
     {mode === 'existing' ? <select className="mt-3 w-full rounded border p-2 text-sm" value={selected} onChange={(e) => setSelected(e.target.value)}><option value="">Select profile evidence</option>{candidates.map((candidate) => <option key={`${candidate.evidenceRef.type}:${candidate.evidenceRef.id}`} value={`${candidate.evidenceRef.type}:${candidate.evidenceRef.id}`}>{candidate.evidenceLocation}: {candidate.evidenceText}</option>)}</select> : <>
@@ -68,6 +68,6 @@ export default function RequirementEvidenceCapture({ analysisId, profileId, requ
       <label className="mt-3 block text-xs"><input type="checkbox" checked={reuseInProfile} onChange={(e) => setReuseInProfile(e.target.checked)} /> Save as reusable Career Profile evidence (leave off for this application only)</label>
     </>}
     <label className="mt-3 block text-xs"><input type="checkbox" checked={confirmed} onChange={(e) => setConfirmed(e.target.checked)} /> I confirm this is accurate and approve it for this requirement.</label>
-    {error && <p className="mt-2 text-xs text-red-700">{error}</p>}<div className="mt-3 flex gap-2"><button type="button" className="rounded border px-3 py-1.5 text-xs" onClick={onClose}>Cancel</button><button type="button" className="rounded bg-accent-purple px-3 py-1.5 text-xs text-white disabled:opacity-60" disabled={saving} onClick={save}>Approve evidence</button></div>
+    {error && <p className="mt-2 text-xs text-red-700">{error}</p>}<div className="mt-3 flex gap-2"><button type="button" className="rounded border px-3 py-1.5 text-xs" onClick={onClose}>Cancel</button><button type="button" className="rounded bg-slate-900 px-3 py-1.5 text-xs text-white disabled:opacity-60" disabled={saving} onClick={save}>Approve evidence</button></div>
   </div>;
 }

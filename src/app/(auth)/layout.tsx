@@ -11,7 +11,7 @@ export default function AuthLayout({
       {/* Ambient bloom behind the form column */}
       <div
         aria-hidden
-        className="pointer-events-none absolute left-0 top-1/4 h-[500px] w-[500px] rounded-full bg-accent-purple/20 blur-[130px]"
+        className="pointer-events-none absolute left-0 top-1/4 h-[500px] w-[500px] rounded-full bg-accent-cyan/15 blur-[130px]"
       />
 
       <div className="relative grid min-h-[calc(100vh-1.5rem)] grid-cols-1 gap-4 lg:min-h-[calc(100vh-2rem)] lg:grid-cols-2">

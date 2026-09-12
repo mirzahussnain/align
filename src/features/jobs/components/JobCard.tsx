@@ -49,7 +49,7 @@ export default function JobCard({ job, saved, saving, onToggleSave }: JobCardPro
                 href={`/immigration?q=${encodeURIComponent(job.company)}`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex items-center gap-0.5 ml-1 text-accent-purple hover:underline"
+                className="inline-flex items-center gap-0.5 ml-1 text-accent-cyan hover:underline"
                 title={`Verify ${job.company} on Immigration Hub`}
               >
                 <span>Verify</span>
@@ -63,19 +63,19 @@ export default function JobCard({ job, saved, saving, onToggleSave }: JobCardPro
       </div>
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-border-subtle pt-3 text-xs">
         <Badge variant="default">{job.providerReferences.map((reference) => reference.provider).join(' · ')}</Badge>
-        <a href={job.canonicalUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs text-text-secondary hover:text-accent-purple"><ExternalLink size={13} /> Open original listing</a>
-        <button type="button" onClick={viewDetails} className="text-xs font-semibold text-accent-purple hover:text-accent-cyan">View details</button>
+        <a href={job.canonicalUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs text-text-secondary hover:text-accent-cyan"><ExternalLink size={13} /> Open original listing</a>
+        <button type="button" onClick={viewDetails} className="text-xs font-semibold text-accent-cyan hover:text-accent-cyan">View details</button>
         <button
           type="button"
           onClick={() => onToggleSave(job)}
           disabled={saving}
           aria-pressed={saved}
-          className="inline-flex items-center gap-1 text-xs text-text-secondary hover:text-accent-purple disabled:opacity-60"
+          className="inline-flex items-center gap-1 text-xs text-text-secondary hover:text-accent-cyan disabled:opacity-60"
         >
           {saving ? <Loader2 size={13} className="animate-spin" /> : saved ? <BookmarkCheck size={13} /> : <Bookmark size={13} />}
           {saving ? 'Saving…' : saved ? 'Saved' : 'Save job'}
         </button>
-        <button type="button" onClick={viewDetails} className="text-xs font-semibold text-accent-purple hover:text-accent-cyan">Check match</button>
+        <button type="button" onClick={viewDetails} className="text-xs font-semibold text-accent-cyan hover:text-accent-cyan">Check match</button>
       </div>
     </div>
     {job.descriptionAvailability !== 'FULL' && <p className="mt-3 text-xs text-warning">This provider supplied only part of the vacancy description. Paste the full description from the original listing for a more reliable match.</p>}

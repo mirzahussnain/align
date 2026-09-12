@@ -4,9 +4,9 @@ export const VISAS = [
   {
     title: 'Skilled Worker Visa',
     icon: Briefcase,
-    color: 'text-accent-purple',
-    bg: 'bg-accent-purple/10',
-    border: 'border-accent-purple/20',
+    color: 'text-accent-cyan',
+    bg: 'bg-accent-cyan/10',
+    border: 'border-accent-cyan/20',
     overview: [
       'The primary route for overseas professionals to work in the UK.',
       'Requires sponsorship from a Home Office licensed employer.',

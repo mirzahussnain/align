@@ -41,12 +41,12 @@ export default function PricingSection() {
               className={cn(
                 'glass-card p-8 h-full flex flex-col relative transition-all duration-300 ease-out',
                 plan.highlight
-                  ? 'border-accent-purple/40 shadow-[0_20px_45px_rgba(15,23,42,0.08),_0_0_30px_rgba(139,92,246,0.12)] md:-translate-y-4'
+                  ? 'border-accent-cyan/50 shadow-[0_20px_45px_rgba(15,23,42,0.08),_0_0_30px_hsla(var(--accent-cyan),0.18)] md:-translate-y-4'
                   : 'hover:translate-y-[-6px] hover:border-accent-cyan/40'
               )}
             >
               {plan.highlight && (
-                <span className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-accent-purple px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-white shadow-lg">
+                <span className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-accent-cyan px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-white shadow-lg">
                   Most popular
                 </span>
               )}
@@ -66,7 +66,7 @@ export default function PricingSection() {
                     <Check
                       className={cn(
                         'mt-0.5 h-4 w-4 shrink-0',
-                        plan.highlight ? 'text-accent-purple' : 'text-accent-cyan'
+                        plan.highlight ? 'text-accent-cyan' : 'text-slate-400'
                       )}
                       strokeWidth={2.5}
                     />
@@ -80,7 +80,7 @@ export default function PricingSection() {
                 className={cn(
                   'mt-auto group flex items-center justify-center gap-2 rounded-full px-5 py-3 text-[13px] font-bold transition-all',
                   plan.highlight
-                    ? 'bg-slate-900 text-white hover:bg-black shadow-xl shadow-slate-900/10'
+                    ? 'bg-slate-900 text-white hover:bg-slate-800 shadow-xl shadow-slate-900/10'
                     : 'border border-slate-200 text-slate-700 hover:border-slate-300 hover:bg-slate-50'
                 )}
               >

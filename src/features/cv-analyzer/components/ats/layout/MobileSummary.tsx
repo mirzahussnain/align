@@ -15,7 +15,7 @@ export default function MobileSummary({ overallScore, totalIssues, isMobileDetai
   return (
     <div className={cn("flex flex-col lg:hidden w-full", isMobileDetailView ? "hidden" : "block")}>
       <div className="bg-white rounded-[24px] border border-slate-200 shadow-sm p-6 flex flex-col items-center max-w-sm mx-auto w-full relative overflow-hidden">
-        <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-accent-purple to-accent-cyan" />
+        <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-slate-900 to-accent-cyan" />
         <h2 className="text-sm font-bold text-slate-700 mb-8 mt-2">Resume Checker</h2>
         
         <div className="transform scale-110 mb-6">
@@ -29,7 +29,7 @@ export default function MobileSummary({ overallScore, totalIssues, isMobileDetai
 
         <button 
           onClick={() => setIsMobileDetailView(true)}
-          className="w-full bg-accent-purple hover:bg-purple-700 text-white font-bold py-3.5 px-4 rounded-xl flex items-center justify-center gap-2 transition-colors mb-6"
+          className="w-full bg-slate-900 hover:bg-slate-800 text-white font-bold py-3.5 px-4 rounded-xl flex items-center justify-center gap-2 transition-colors mb-6 shadow-sm"
         >
           View Detailed Analysis <ArrowRight size={18} />
         </button>
