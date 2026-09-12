@@ -1,20 +1,9 @@
 'use client';
 
-import { ArrowRight, FileSearch, Target } from 'lucide-react';
+import { ArrowRight, Check, FileSearch, Target } from 'lucide-react';
 import type { CapabilityDecision } from '@/shared/entitlements/registry';
 import { OnboardingShell, PrimaryButton, SecondaryButton } from './OnboardingShell';
 
-/**
- * The hand-off to a real result.
- *
- * One primary action, chosen from the goal the user picked at the start —
- * offering three equally-weighted buttons here just moves the decision they
- * already made back onto them.
- *
- * Nothing on this screen gates a result behind a paid operation. Deterministic
- * ATS is always available, so a Free user with no AI quota left still reaches a
- * useful outcome and still completes onboarding.
- */
 export function FirstActionStep({
   stageIndex,
   totalStages,
@@ -42,23 +31,23 @@ export function FirstActionStep({
       <OnboardingShell
         stageIndex={stageIndex}
         totalStages={totalStages}
-        title="Your Career Profile is ready to use"
-        subtitle="You can check a CV against it, match it to a job, or keep filling it in."
+        title="Your Career Profile is ready"
+        subtitle="What you confirmed is saved and ready to improve job matching and application guidance."
         footer={
           <>
-            <SecondaryButton onClick={onGoToDashboard}>Go to my dashboard</SecondaryButton>
+            <SecondaryButton onClick={onGoToDashboard}>Go to dashboard</SecondaryButton>
             <PrimaryButton onClick={onRunAts}>
-              <FileSearch className="h-3.5 w-3.5" aria-hidden="true" />
+              <FileSearch className="h-4 w-4" aria-hidden="true" />
               Check a CV
-              <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
+              <ArrowRight className="h-4 w-4" aria-hidden="true" />
             </PrimaryButton>
           </>
         }
       >
-        <p className="text-xs leading-relaxed text-neutral-600">
-          Everything you confirmed is saved. You can add more experience, education and skills at any time from
-          your profile.
-        </p>
+        <ReadyPanel
+          title="A useful foundation, not a finished document"
+          description="You can add more experience, education and skills whenever they become relevant."
+        />
       </OnboardingShell>
     );
   }
@@ -67,45 +56,49 @@ export function FirstActionStep({
     <OnboardingShell
       stageIndex={stageIndex}
       totalStages={totalStages}
-      title={wantsJobMatch ? 'Match your CV to a job' : 'Let’s check your CV'}
+      title={wantsJobMatch ? 'Your profile is ready for a job match' : 'Your profile is ready for a CV check'}
       subtitle={
         wantsJobMatch
-          ? 'Paste a job description and we will compare your experience against what it asks for.'
-          : 'We will review formatting, structure, ATS readability and what to improve.'
+          ? 'Add a job description next and Align will compare it with the experience you confirmed.'
+          : 'Run a review next to see how clearly your CV presents the experience you confirmed.'
       }
       footer={
         <>
-          <SecondaryButton onClick={onGoToDashboard}>I’ll do this later</SecondaryButton>
+          <SecondaryButton onClick={onGoToDashboard}>Do this later</SecondaryButton>
           <PrimaryButton onClick={wantsJobMatch ? onRunJobMatch : onRunAts}>
-            {wantsJobMatch ? (
-              <Target className="h-3.5 w-3.5" aria-hidden="true" />
-            ) : (
-              <FileSearch className="h-3.5 w-3.5" aria-hidden="true" />
-            )}
-            {wantsJobMatch ? 'Start a job match' : 'Check my CV'}
-            <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
+            {wantsJobMatch ? <Target className="h-4 w-4" aria-hidden="true" /> : <FileSearch className="h-4 w-4" aria-hidden="true" />}
+            {wantsJobMatch ? 'Start job match' : 'Check my CV'}
+            <ArrowRight className="h-4 w-4" aria-hidden="true" />
           </PrimaryButton>
         </>
       }
     >
-      <div className="rounded-xl border border-neutral-200 bg-neutral-50 p-4 text-xs leading-relaxed text-neutral-600">
-        {wantsJobMatch ? (
-          <p>
-            {jobMatchDecision.limit !== undefined
-              ? `Your plan includes ${jobMatchDecision.limit} job match${jobMatchDecision.limit === 1 ? '' : 'es'} a month — you have ${jobMatchDecision.remaining} left.`
-              : 'Job matching is included on your plan.'}
-          </p>
-        ) : (
-          <>
-            <p>The formatting and structure review is always included, with no monthly limit.</p>
-            <p className="mt-1.5">
-              {aiAtsDecision.allowed
-                ? `Your plan also includes AI-enhanced review — you have ${aiAtsDecision.remaining} of ${aiAtsDecision.limit} left this month.`
-                : 'You have used your AI-enhanced reviews for this month, so this run will use the standard review. Your result is not affected by that.'}
-            </p>
-          </>
-        )}
-      </div>
+      <ReadyPanel
+        title="Everything you approved is saved"
+        description={
+          wantsJobMatch
+            ? jobMatchDecision.limit !== undefined
+              ? `Your plan includes ${jobMatchDecision.limit} job matches a month, with ${jobMatchDecision.remaining} left.`
+              : 'Job matching is included on your plan.'
+            : aiAtsDecision.allowed
+              ? `The standard review is always included. You also have ${aiAtsDecision.remaining} enhanced reviews remaining this month.`
+              : 'The standard review for formatting and structure is always included, with no monthly limit.'
+        }
+      />
     </OnboardingShell>
+  );
+}
+
+function ReadyPanel({ title, description }: { title: string; description: string }) {
+  return (
+    <div className="flex items-start gap-4 rounded-2xl bg-[#f4f2ff] p-5 ring-1 ring-inset ring-[#6757d9]/15 sm:p-6">
+      <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#6757d9] text-white shadow-[0_8px_24px_rgba(103,87,217,0.22)]">
+        <Check className="h-5 w-5" strokeWidth={2.4} aria-hidden="true" />
+      </span>
+      <div>
+        <h2 className="text-sm font-semibold text-slate-950">{title}</h2>
+        <p className="mt-1 text-xs leading-5 text-slate-600">{description}</p>
+      </div>
+    </div>
   );
 }

@@ -44,6 +44,59 @@ import { recordFirstValueIfOnboarding } from '@/shared/services/onboarding';
 import type { CVAnalysisResult } from '@/shared/types/cv';
 import { JobMatchDataV2Schema } from '@/shared/schemas/ai-output';
 import { consumeMatchRequest, resolveMatchRequest } from '@/shared/services/job-snapshot';
+import { loadOwnedStoredCv } from '@/shared/services/stored-cv';
+import { CvPipelineError, extractStoredCv } from '@/shared/services/cv-extraction';
+
+/**
+ * The CV this request analyses, resolved to bytes and text before anything is
+ * metered. Both sources — this request's upload and an already-stored source CV
+ * — converge here, so everything downstream (fingerprinting, scoring,
+ * persistence, archiving) has exactly one shape to deal with.
+ */
+interface AnalysisSource {
+  text: string;
+  pageCount: number;
+  fileName: string;
+  contentType: string;
+  bytes: Buffer;
+}
+
+/**
+ * Read one of the user's stored source CVs.
+ *
+ * The id is the ONLY thing the client supplies: ownership, the storage key and
+ * the format are all resolved server-side, so a request can neither name an
+ * object it does not own nor route its bytes to the wrong parser. Format is
+ * decided from the bytes by the shared extractor, which is why a stored .docx
+ * works here even though the upload path is PDF-only.
+ */
+async function readStoredSource(userId: string, storedCvId: string): Promise<AnalysisSource> {
+  try {
+    const storedCv = await loadOwnedStoredCv(userId, storedCvId);
+    if (storedCv.objectDeletedAt) throw new CvPipelineError('SOURCE_UNAVAILABLE', 410);
+
+    const bytes = await storage.download('uploads', storedCv.storageKey);
+    const extracted = await extractStoredCv(bytes);
+    return {
+      text: extracted.text,
+      // Deterministic scoring needs a page count and .docx has no fixed
+      // pagination; one page is the honest floor rather than a guess.
+      pageCount: extracted.pageCount ?? 1,
+      fileName: storedCv.originalFilename,
+      contentType: storedCv.mimeType,
+      bytes,
+    };
+  } catch (error) {
+    // The pipeline's codes carry fixed user-facing sentences; anything else is
+    // an internal failure and must not have its message returned.
+    if (error instanceof CvPipelineError) throw new APIError(error.message, error.status);
+    console.warn(
+      '[analyze] Stored CV could not be read:',
+      error instanceof Error ? error.message : error
+    );
+    throw new APIError('We could not read that stored CV. Please try another.', 502);
+  }
+}
 
 /**
  * Persist a completed analysis and archive the original upload to object storage.
@@ -213,7 +266,10 @@ export async function POST(request: NextRequest) {
     const formData = await request.formData();
     
     const parsed = AnalyzeRequestSchema.safeParse({
-      file: formData.get('file'),
+      // `?? undefined` so an absent field reads as "not provided" rather than a
+      // null the optional file schema would reject outright.
+      file: formData.get('file') ?? undefined,
+      storedCvId: formData.get('storedCvId') || undefined,
       mode: formData.get('mode') || 'ats',
       jobDescription: formData.get('jobDescription') || '',
       profileId: formData.get('profileId') || undefined,
@@ -232,6 +288,7 @@ export async function POST(request: NextRequest) {
 
     const {
       file,
+      storedCvId,
       mode,
       jobDescription: submittedJobDescription,
       profileId,
@@ -295,13 +352,26 @@ export async function POST(request: NextRequest) {
       mode === 'job_match' ? 'job_match_analysis' : 'ai_enhanced_ats_analysis';
     const operationId = request.headers.get('x-operation-id') ?? crypto.randomUUID();
 
-    // 1. Decoupled PDF Extraction — deterministic and unmetered, done BEFORE any
-    // reservation so an unreadable file is rejected without ever holding a unit
-    // and so the cleaned text can seed the request fingerprint.
-    const { text, pageCount } = await extractTextFromPDF(file);
+    // 1. Decoupled extraction — deterministic and unmetered, done BEFORE any
+    // reservation so an unreadable source is rejected without ever holding a unit
+    // and so the cleaned text can seed the request fingerprint. An upload and a
+    // stored CV differ only here; everything after this point is identical.
+    const source: AnalysisSource = file
+      ? await (async () => {
+          const bytes = Buffer.from(await file.arrayBuffer());
+          const extracted = await extractTextFromPDF(file);
+          return {
+            ...extracted,
+            fileName: file.name || 'CV.pdf',
+            contentType: file.type || 'application/pdf',
+            bytes,
+          };
+        })()
+      : await readStoredSource(session.user.id, storedCvId!);
+    const { text, pageCount } = source;
 
     if (!text || text.trim().length < 50) {
-      throw new APIError('Could not extract text from PDF. The file may be image-based or corrupted.', 400);
+      throw new APIError('Could not extract text from this CV. The file may be image-based or corrupted.', 400);
     }
 
     // ── Atomic AI reservation (canonical ordering) ──────────────────────────
@@ -478,9 +548,9 @@ export async function POST(request: NextRequest) {
 
     // 3. Local rule-based analysis, occupation-aware from the first pass.
     const result = analyzeCV(text, pageCount, { classification, profile: occupationProfile });
-    // The real uploaded filename, so the File Name check audits it rather than a
+    // The real source filename, so the File Name check audits it rather than a
     // hardcoded placeholder.
-    result.fileName = file.name || undefined;
+    result.fileName = source.fileName;
     result.aiDetectedIndustry = classification.sector;
     result.outOfDomain = classification.confidence < 0.5 || classification.source === 'fallback';
     // The explicit context (evidence source, target source, resolved target,
@@ -632,15 +702,14 @@ export async function POST(request: NextRequest) {
       await releaseAi('provider_unavailable');
     }
 
-    const sourceBuffer = Buffer.from(await file.arrayBuffer());
     const analysisId = await persistAnalysis(
       session.user.id,
       scopedProfileId,
       entitlements,
       result,
-      file.name || 'CV.pdf',
-      sourceBuffer,
-      file.type || 'application/pdf',
+      source.fileName,
+      source.bytes,
+      source.contentType,
       jobMatchRequest ? { jobSnapshotId: jobMatchRequest.request.jobSnapshotId, providerReferences: jobMatchRequest.request.jobSnapshot.providerReferences, selectedDescriptionSource: jobMatchRequest.request.selectedDescriptionSource, selectedDescriptionHash: jobMatchRequest.request.selectedDescriptionHash, descriptionAvailability: jobMatchRequest.selected.partial ? 'PARTIAL' : 'FULL', partialDescriptionAccepted: jobMatchRequest.request.partialDescriptionAccepted, profileId: scopedProfileId } : undefined
     );
 

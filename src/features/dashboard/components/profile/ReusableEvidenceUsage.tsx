@@ -12,7 +12,7 @@ import { useEntitlements } from '@/shared/components/entitlements/EntitlementPro
  * user's career history and do not consume a commercial allowance.
  */
 export default function ReusableEvidenceUsage() {
-  const { decisionFor } = useEntitlements();
+  const { decisionFor, openPricingDetails } = useEntitlements();
   const decision = decisionFor('profile_evidence_storage');
   if (decision?.limit === undefined) return null;
 
@@ -24,8 +24,15 @@ export default function ReusableEvidenceUsage() {
       </p>
       {!decision.allowed && (
         <p className="mt-2 text-xs text-neutral-600">
-          You’ve reached your reusable evidence limit. You can edit or delete existing evidence, or
-          upgrade to add more.
+          You&apos;ve reached your reusable evidence limit. You can edit or delete existing evidence, or{' '}
+          <button
+            type="button"
+            onClick={() => openPricingDetails({ capability: 'profile_evidence_storage', decision })}
+            className="font-semibold text-accent-purple underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-purple/40"
+          >
+            see what Pro includes
+          </button>
+          .
         </p>
       )}
     </div>

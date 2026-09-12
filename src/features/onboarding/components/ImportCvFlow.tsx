@@ -3,6 +3,8 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import type { CapabilityDecision } from '@/shared/entitlements/registry';
+import { OnboardingExperience } from './OnboardingShell';
+import { PricingDetailsDialog } from '@/shared/components/billing/PricingDetailsDialog';
 import { UploadStep } from './UploadStep';
 import { ExtractionStep } from './ExtractionStep';
 import { ProfileSelectionStep, type ProfileOption } from './ProfileSelectionStep';
@@ -20,6 +22,7 @@ import { onboardingApi, OnboardingRequestError, type ImportSession, type StoredC
  * onboarding and a returning user is not repeating it.
  */
 type Stage = 'UPLOAD' | 'EXTRACTION' | 'PROFILE' | 'REVIEW';
+const IMPORT_STAGES: Stage[] = ['UPLOAD', 'EXTRACTION', 'PROFILE', 'REVIEW'];
 
 export function ImportCvFlow({
   profiles,
@@ -38,11 +41,19 @@ export function ImportCvFlow({
 }) {
   const router = useRouter();
   const [stage, setStage] = useState<Stage>('UPLOAD');
+  const [transitionDirection, setTransitionDirection] = useState<1 | -1>(1);
   const [storedCvId, setStoredCvId] = useState<string | null>(null);
   const [extractionId, setExtractionId] = useState<string | null>(null);
+  const [selectedProfileId, setSelectedProfileId] = useState<string | null>(null);
   const [session, setSession] = useState<ImportSession | null>(null);
   const [profileHasRecords, setProfileHasRecords] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [pricingOpen, setPricingOpen] = useState(false);
+
+  function moveTo(nextStage: Stage) {
+    setTransitionDirection(IMPORT_STAGES.indexOf(nextStage) < IMPORT_STAGES.indexOf(stage) ? -1 : 1);
+    setStage(nextStage);
+  }
 
   function goToDashboard() {
     router.push('/dashboard');
@@ -50,6 +61,7 @@ export function ImportCvFlow({
   }
 
   async function openImport(profileId: string) {
+    setSelectedProfileId(profileId);
     if (!storedCvId || !extractionId) return;
     setError(null);
     try {
@@ -61,7 +73,7 @@ export function ImportCvFlow({
       setProfileHasRecords(
         (profiles.find((profile) => profile.id === profileId)?.completeness ?? 0) > 0
       );
-      setStage('REVIEW');
+      moveTo('REVIEW');
     } catch (importError) {
       setError(
         importError instanceof OnboardingRequestError
@@ -71,24 +83,26 @@ export function ImportCvFlow({
     }
   }
 
-  const STEP_COUNT = 4;
+  const stages = IMPORT_STAGES;
+  const stageIndex = stages.indexOf(stage);
 
-  switch (stage) {
+  const content = (() => {
+    switch (stage) {
     case 'UPLOAD':
       return (
         <UploadStep
           stageIndex={0}
-          totalStages={STEP_COUNT}
+          totalStages={stages.length}
           initialStoredCvs={storedCvs}
           initialCapacity={storedCvCapacity}
           maxBytes={maxUploadBytes}
           onUploaded={(id) => {
             setStoredCvId(id);
-            setStage('EXTRACTION');
+            moveTo('EXTRACTION');
           }}
           onManualPath={goToDashboard}
           onBack={goToDashboard}
-          onUpgrade={() => router.push('/dashboard?tab=billing')}
+          onUpgrade={() => setPricingOpen(true)}
         />
       );
 
@@ -96,11 +110,11 @@ export function ImportCvFlow({
       return storedCvId ? (
         <ExtractionStep
           stageIndex={1}
-          totalStages={STEP_COUNT}
+          totalStages={stages.length}
           storedCvId={storedCvId}
           onExtracted={(id) => {
             setExtractionId(id);
-            setStage('PROFILE');
+            moveTo('PROFILE');
           }}
           onManualPath={goToDashboard}
         />
@@ -109,13 +123,14 @@ export function ImportCvFlow({
     case 'PROFILE':
       return (
         <ProfileSelectionStep
+          initialProfileId={selectedProfileId}
           stageIndex={2}
-          totalStages={STEP_COUNT}
+          totalStages={stages.length}
           profiles={profiles}
           profileCapacity={profileCapacity}
           onSelected={(profileId) => void openImport(profileId)}
-          onBack={() => setStage('UPLOAD')}
-          onUpgrade={() => router.push('/dashboard?tab=billing')}
+          onBack={() => moveTo('UPLOAD')}
+          onUpgrade={() => setPricingOpen(true)}
         />
       );
 
@@ -123,12 +138,12 @@ export function ImportCvFlow({
       return session ? (
         <ImportReviewStep
           stageIndex={3}
-          totalStages={STEP_COUNT}
+          totalStages={stages.length}
           session={session}
           evidenceCapacity={evidenceCapacity}
           reconciliationOffered={profileHasRecords}
           onDone={goToDashboard}
-          onBack={() => setStage('PROFILE')}
+          onBack={() => moveTo('PROFILE')}
         />
       ) : (
         <p role="alert" className="mx-auto max-w-3xl px-4 py-10 text-sm text-rose-600">
@@ -136,4 +151,22 @@ export function ImportCvFlow({
         </p>
       );
   }
+  })();
+
+  return (
+    <>
+      <OnboardingExperience stage={stage} stages={stages} stageIndex={stageIndex} direction={transitionDirection} intent="import">
+        {content}
+      </OnboardingExperience>
+      <PricingDetailsDialog
+        open={pricingOpen}
+        onClose={() => setPricingOpen(false)}
+        context={{
+          capability: stage === 'UPLOAD' ? 'stored_source_cvs' : 'additional_career_profiles',
+          decision: stage === 'UPLOAD' ? storedCvCapacity : profileCapacity,
+        }}
+        onViewPlans={() => router.push('/dashboard?tab=billing')}
+      />
+    </>
+  );
 }

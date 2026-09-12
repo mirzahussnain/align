@@ -332,3 +332,17 @@ textarea::placeholder {
   background-position: center 35%;
   clip-path: url(#hero-clip);
 }
+
+/* ===== Fallback Layout Classes ===== */
+/* These classes ensure the job board grid layout functions correctly even if Tailwind JIT fails to extract them */
+@media (min-width: 768px) {
+  .md\:grid-cols-12 { grid-template-columns: repeat(12, minmax(0, 1fr)) !important; }
+  .md\:col-span-5 { grid-column: span 5 / span 5 !important; }
+  .md\:col-span-7 { grid-column: span 7 / span 7 !important; }
+  .md\:col-span-12 { grid-column: span 12 / span 12 !important; }
+}
+
+@media (min-width: 1024px) {
+  .lg\:col-span-4 { grid-column: span 4 / span 4 !important; }
+  .lg\:col-span-8 { grid-column: span 8 / span 8 !important; }
+}

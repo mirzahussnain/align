@@ -19,29 +19,30 @@ const GOALS: { value: OnboardingGoal; title: string; description: string; icon: 
     value: 'CHECK_CV',
     title: 'Check my CV',
     description: 'Review formatting, structure, ATS readability and improvement opportunities.',
-    icon: <FileSearch className="h-4 w-4 text-accent-purple" aria-hidden="true" />,
+    icon: <FileSearch className="h-4 w-4" aria-hidden="true" />,
   },
   {
     value: 'MATCH_JOB',
     title: 'Match my CV to a job',
     description: 'Compare your experience with a job description and identify evidence gaps.',
-    icon: <Target className="h-4 w-4 text-accent-purple" aria-hidden="true" />,
+    icon: <Target className="h-4 w-4" aria-hidden="true" />,
   },
   {
     value: 'BUILD_PROFILE',
     title: 'Build my Career Profile',
     description: 'Create a reusable profile for future applications and tailored CVs.',
-    icon: <Briefcase className="h-4 w-4 text-accent-purple" aria-hidden="true" />,
+    icon: <Briefcase className="h-4 w-4" aria-hidden="true" />,
   },
   {
     value: 'NO_CV',
     title: 'I do not have a CV yet',
     description: 'Build your profile manually and create a CV later.',
-    icon: <PencilLine className="h-4 w-4 text-accent-purple" aria-hidden="true" />,
+    icon: <PencilLine className="h-4 w-4" aria-hidden="true" />,
   },
 ];
 
 export function GoalStep({
+  initialGoal,
   stageIndex,
   totalStages,
   busy,
@@ -49,6 +50,7 @@ export function GoalStep({
   onChoose,
   onDismiss,
 }: {
+  initialGoal?: OnboardingGoal | null;
   stageIndex: number;
   totalStages: number;
   busy: boolean;
@@ -56,14 +58,14 @@ export function GoalStep({
   onChoose: (goal: OnboardingGoal) => void;
   onDismiss: () => void;
 }) {
-  const [selected, setSelected] = useState<OnboardingGoal | null>(null);
+  const [selected, setSelected] = useState<OnboardingGoal | null>(initialGoal ?? null);
 
   return (
     <OnboardingShell
       stageIndex={stageIndex}
       totalStages={totalStages}
-      title="What would you like Align to help you with first?"
-      subtitle="You can do all of these later — this just decides where we start."
+      title="What would you like to do first?"
+      subtitle="Choose the outcome that matters now. You can use every other part of Align later."
       busy={busy}
       busyLabel={busy ? 'Saving your choice…' : undefined}
       error={error}
@@ -79,7 +81,7 @@ export function GoalStep({
         </>
       }
     >
-      <fieldset className="space-y-3">
+      <fieldset className="grid gap-3 sm:grid-cols-2">
         <legend className="sr-only">Choose what you would like to do first</legend>
         {GOALS.map((goal) => (
           <ChoiceCard

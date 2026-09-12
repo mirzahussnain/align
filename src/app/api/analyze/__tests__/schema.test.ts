@@ -50,6 +50,26 @@ describe('AnalyzeRequestSchema — target selection', () => {
   });
 });
 
+describe('AnalyzeRequestSchema — CV source', () => {
+  it('accepts a stored CV in place of an upload', () => {
+    const parsed = AnalyzeRequestSchema.safeParse({ mode: 'job_match', storedCvId: 'cv-1' });
+    expect(parsed.success).toBe(true);
+    if (parsed.success) expect(parsed.data.file).toBeUndefined();
+  });
+
+  it('rejects a request with no CV at all', () => {
+    expect(AnalyzeRequestSchema.safeParse({ mode: 'ats' }).success).toBe(false);
+  });
+
+  it('rejects both sources together rather than silently picking one', () => {
+    // Which CV was analysed would be invisible in the stored result, so the
+    // ambiguity is refused instead of resolved by precedence.
+    expect(
+      AnalyzeRequestSchema.safeParse(base({ storedCvId: 'cv-1' })).success
+    ).toBe(false);
+  });
+});
+
 describe('AnalyzeRequestSchema — target role format', () => {
   const bad = [
     ['too short', 'A'],

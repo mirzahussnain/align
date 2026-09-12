@@ -25,6 +25,7 @@ export interface ProfileOption {
  * and named from the user's target role at the next step.
  */
 export function ProfileSelectionStep({
+  initialProfileId,
   stageIndex,
   totalStages,
   profiles,
@@ -33,6 +34,7 @@ export function ProfileSelectionStep({
   onBack,
   onUpgrade,
 }: {
+  initialProfileId?: string | null;
   stageIndex: number;
   totalStages: number;
   profiles: ProfileOption[];
@@ -41,9 +43,7 @@ export function ProfileSelectionStep({
   onBack: () => void;
   onUpgrade: () => void;
 }) {
-  const [choice, setChoice] = useState<string>(
-    profiles.length === 1 ? profiles[0].id : ''
-  );
+  const [choice, setChoice] = useState<string>(initialProfileId ?? (profiles.length === 1 ? profiles[0].id : ''));
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
@@ -151,7 +151,7 @@ export function ProfileSelectionStep({
               ? 'Use this if the CV is for a different kind of role.'
               : `Your plan includes ${profileCapacity.limit} Career Profile${profileCapacity.limit === 1 ? '' : 's'}. Choose an existing one, or upgrade to add another.`
           }
-          icon={<FolderPlus className="h-4 w-4 text-accent-purple" aria-hidden="true" />}
+          icon={<FolderPlus className="h-4 w-4" aria-hidden="true" />}
           disabled={pending || !canCreate}
         />
       </fieldset>

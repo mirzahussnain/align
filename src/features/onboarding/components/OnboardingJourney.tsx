@@ -1,14 +1,16 @@
 'use client';
 
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import type { CapabilityDecision } from '@/shared/entitlements/registry';
+import { OnboardingExperience } from './OnboardingShell';
+import { PricingDetailsDialog } from '@/shared/components/billing/PricingDetailsDialog';
 import { GoalStep } from './GoalStep';
 import { CvSourceStep } from './CvSourceStep';
 import { UploadStep } from './UploadStep';
 import { ExtractionStep } from './ExtractionStep';
 import { ProfileSelectionStep, type ProfileOption } from './ProfileSelectionStep';
-import { CareerDirectionStep } from './CareerDirectionStep';
+import { CareerDirectionStep, type CareerDirectionDraft } from './CareerDirectionStep';
 import { ImportReviewStep } from './ImportReviewStep';
 import { EligibilityStep } from './EligibilityStep';
 import { FirstActionStep } from './FirstActionStep';
@@ -83,7 +85,18 @@ export function OnboardingJourney({
   const [state, setState] = useState(initialState);
   const [importSession, setImportSession] = useState(initialImportSession);
   const [busy, setBusy] = useState(false);
+  const [transitionDirection, setTransitionDirection] = useState<1 | -1>(1);
+  const stageIndexRef = useRef(initialState.progress.stageIndex);
   const [error, setError] = useState<string | null>(null);
+  const [pricingOpen, setPricingOpen] = useState(false);
+  const [careerDirectionDraft, setCareerDirectionDraft] = useState<CareerDirectionDraft>({
+    fullName: identity.fullName,
+    targetRoleTitle: identity.targetRoleTitle || suggestedRoleFromCv || '',
+    label: identity.label,
+    targetOccupation: identity.targetOccupation,
+    targetSeniority: identity.targetSeniority,
+    tagline: identity.tagline,
+  });
 
   /** Every stage move goes through here, so one place handles busy and errors. */
   const move = useCallback(
@@ -91,7 +104,10 @@ export function OnboardingJourney({
       setBusy(true);
       setError(null);
       try {
-        setState(await run());
+        const nextState = await run();
+        setTransitionDirection(nextState.progress.stageIndex < stageIndexRef.current ? -1 : 1);
+        stageIndexRef.current = nextState.progress.stageIndex;
+        setState(nextState);
       } catch (moveError) {
         setError(
           moveError instanceof OnboardingRequestError
@@ -166,10 +182,12 @@ export function OnboardingJourney({
     }
   }
 
-  switch (state.stage) {
+  const content = (() => {
+    switch (state.stage) {
     case 'GOAL':
       return (
         <GoalStep
+          initialGoal={state.goal}
           stageIndex={stageIndex}
           totalStages={totalStages}
           busy={busy}
@@ -205,7 +223,7 @@ export function OnboardingJourney({
           onUploaded={(storedCvId) => void goTo('EXTRACTION', { storedCvId })}
           onManualPath={switchToManual}
           onBack={() => void goTo('CV_SOURCE')}
-          onUpgrade={() => router.push('/dashboard?tab=billing')}
+          onUpgrade={() => setPricingOpen(true)}
         />
       );
 
@@ -223,13 +241,14 @@ export function OnboardingJourney({
     case 'PROFILE_SELECTION':
       return (
         <ProfileSelectionStep
+          initialProfileId={state.selectedProfileId}
           stageIndex={stageIndex}
           totalStages={totalStages}
           profiles={profiles}
           profileCapacity={profileCapacity}
           onSelected={(profileId) => void openImport(profileId)}
           onBack={() => void goTo(state.storedCvId ? 'EXTRACTION' : 'GOAL')}
-          onUpgrade={() => router.push('/dashboard?tab=billing')}
+          onUpgrade={() => setPricingOpen(true)}
         />
       );
 
@@ -239,10 +258,11 @@ export function OnboardingJourney({
           stageIndex={stageIndex}
           totalStages={totalStages}
           profileId={state.selectedProfileId}
-          initial={{ ...identity, suggestedRoleFromCv }}
+          initial={{ ...careerDirectionDraft, suggestedRoleFromCv }}
           occupationOptions={occupationOptions}
           seniorityOptions={seniorityOptions}
-          onSaved={() => {
+          onSaved={(draft) => {
+            setCareerDirectionDraft(draft);
             if (importSession) {
               void goTo('IMPORT_REVIEW');
               return;
@@ -308,4 +328,27 @@ export function OnboardingJourney({
       goToDashboard();
       return null;
   }
+  })();
+
+  return (
+    <>
+      <OnboardingExperience
+        stage={state.stage}
+        stages={state.stages}
+        stageIndex={state.progress.stageIndex}
+        direction={transitionDirection}
+      >
+        {content}
+      </OnboardingExperience>
+      <PricingDetailsDialog
+        open={pricingOpen}
+        onClose={() => setPricingOpen(false)}
+        context={{
+          capability: state.stage === 'UPLOAD' ? 'stored_source_cvs' : 'additional_career_profiles',
+          decision: state.stage === 'UPLOAD' ? storedCvCapacity : profileCapacity,
+        }}
+        onViewPlans={() => router.push('/dashboard?tab=billing')}
+      />
+    </>
+  );
 }

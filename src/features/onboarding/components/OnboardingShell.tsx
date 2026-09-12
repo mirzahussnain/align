@@ -1,20 +1,346 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
-import { Loader2 } from 'lucide-react';
+import { createContext, useContext, useEffect, useMemo, useRef, type ReactNode } from 'react';
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
+import Image from 'next/image';
+import {
+  ArrowRight,
+  BriefcaseBusiness,
+  Check,
+  Circle,
+  FileCheck2,
+  FileSearch,
+  Loader2,
+  LockKeyhole,
+  MapPinCheck,
+  ShieldCheck,
+  Sparkles,
+  Target,
+  Upload,
+  UserRoundCheck,
+} from 'lucide-react';
 import { cn } from '@/shared/utils/cn';
 
-/**
- * The frame every onboarding stage renders inside.
- *
- * It owns the two things that must be consistent across the journey and are
- * easy to get wrong per-screen: where focus goes after a stage change, and how
- * progress is described.
- *
- * Progress here is ONBOARDING progress — how far through the journey the user
- * is. It is deliberately never mixed with Career Profile completeness, which
- * measures something else entirely and is shown separately where it is relevant.
- */
+type JourneyContextValue = {
+  stage: string;
+  stages: readonly string[];
+  stageIndex: number;
+  direction: 1 | -1;
+  intent?: 'onboarding' | 'manual' | 'import';
+};
+
+const JourneyContext = createContext<JourneyContextValue | null>(null);
+
+const STAGE_META: Record<
+  string,
+  { label: string; heading: string; supporting: string; icon: typeof Target }
+> = {
+  GOAL: {
+    label: 'Starting Point',
+    heading: 'Build a profile that works harder for you.',
+    supporting: 'Align turns your real experience into clearer job-fit and application guidance.',
+    icon: Sparkles,
+  },
+  CV_SOURCE: {
+    label: 'Choose A Source',
+    heading: 'Start with what you already have.',
+    supporting: 'Import a CV or build manually. You stay in control of every detail.',
+    icon: FileCheck2,
+  },
+  UPLOAD: {
+    label: 'Add Your CV',
+    heading: 'Bring your experience into one place.',
+    supporting: 'Your original file stays private and nothing enters your profile without review.',
+    icon: Upload,
+  },
+  EXTRACTION: {
+    label: 'Read Your CV',
+    heading: 'Turning your CV into useful profile details.',
+    supporting: 'Align is organising the document for review. It is not saving profile facts yet.',
+    icon: FileSearch,
+  },
+  PROFILE_SELECTION: {
+    label: 'Career Profile',
+    heading: 'Keep each career direction distinct.',
+    supporting: 'Choose where these details belong so future matching stays relevant.',
+    icon: BriefcaseBusiness,
+  },
+  PROFILE: {
+    label: 'Career Profile',
+    heading: 'Keep each career direction distinct.',
+    supporting: 'Choose where these details belong so future matching stays relevant.',
+    icon: BriefcaseBusiness,
+  },
+  CAREER_DIRECTION: {
+    label: 'Career Direction',
+    heading: 'Give your experience a clear destination.',
+    supporting: 'Your target role tells Align what good fit should look like for you.',
+    icon: Target,
+  },
+  IMPORT_REVIEW: {
+    label: 'Review Details',
+    heading: 'Your profile, with your approval.',
+    supporting: 'Confirm what is accurate, correct what is not, and leave out anything you do not want.',
+    icon: UserRoundCheck,
+  },
+  REVIEW: {
+    label: 'Review Details',
+    heading: 'Your profile, with your approval.',
+    supporting: 'Confirm what is accurate, correct what is not, and leave out anything you do not want.',
+    icon: UserRoundCheck,
+  },
+  ELIGIBILITY_BASICS: {
+    label: 'Practical Fit',
+    heading: 'Add context that changes which roles fit.',
+    supporting: 'A few optional details help Align surface practical constraints without making them the focus.',
+    icon: MapPinCheck,
+  },
+  FIRST_ACTION: {
+    label: 'Ready To Use',
+    heading: 'Your Career Profile now has a purpose.',
+    supporting: 'Use it for a clearer CV review, a grounded job match, or continue from your dashboard.',
+    icon: ShieldCheck,
+  },
+  basics: {
+    label: 'Direction',
+    heading: 'Start With The Role You Want To Move Towards.',
+    supporting: 'This anchors how Align interprets the rest of your experience.',
+    icon: Target,
+  },
+  profile: {
+    label: 'Profile',
+    heading: 'Add Your Professional Context.',
+    supporting: 'Keep contact details and your professional summary together, separate from your career direction.',
+    icon: UserRoundCheck,
+  },
+  eligibility: {
+    label: 'Eligibility',
+    heading: 'Add Practical Eligibility Context.',
+    supporting: 'These optional details help Align identify roles that are realistic for you.',
+    icon: MapPinCheck,
+  },  experience: {
+    label: 'Experience',
+    heading: 'Capture The Work That Shows What You Can Do.',
+    supporting: 'Add what is relevant now. You can return and build on it later.',
+    icon: BriefcaseBusiness,
+  },
+  projects: {
+    label: 'Projects',
+    heading: 'Make Practical Work Part Of Your Story.',
+    supporting: 'Projects can add evidence where formal experience is still growing.',
+    icon: FileCheck2,
+  },
+  education: {
+    label: 'Education',
+    heading: 'Record The Qualifications That Support Your Direction.',
+    supporting: 'Add the education that helps employers understand your foundation.',
+    icon: FileCheck2,
+  },
+  skills: {
+    label: 'Skills',
+    heading: 'Finish With The Capabilities You Want Matched.',
+    supporting: 'Group skills clearly so role comparisons use the right evidence.',
+    icon: Sparkles,
+  },
+};
+
+function metaFor(stage: string) {
+  return (
+    STAGE_META[stage] ?? {
+      label: stage.toLowerCase().replaceAll('_', ' '),
+      heading: 'Build A Clearer Career Profile.',
+      supporting: 'Each step adds context that improves matching and application guidance.',
+      icon: Circle,
+    }
+  );
+}
+
+export function OnboardingExperience({
+  stage,
+  stages,
+  stageIndex,
+  children,
+  intent = 'onboarding',
+  preserveContent = false,
+  direction = 1,
+}: {
+  stage: string;
+  stages: readonly string[];
+  stageIndex: number;
+  children: ReactNode;
+  intent?: JourneyContextValue['intent'];
+  preserveContent?: boolean;
+  direction?: 1 | -1;
+}) {
+  const reduceMotion = useReducedMotion();
+
+  const visibleStages = useMemo(() => stages.filter((item) => item !== 'COMPLETE'), [stages]);
+  const currentMeta = metaFor(stage);
+  const listedIndex = visibleStages.indexOf(stage);
+  const progressIndex = listedIndex >= 0 ? listedIndex : Math.max(0, stageIndex);
+  const progressTotal = Math.max(1, visibleStages.length);
+  const progressPercentage = Math.round(((progressIndex + 1) / progressTotal) * 100);
+
+  const context = useMemo(
+    () => ({ stage, stages, stageIndex, direction, intent }),
+    [stage, stages, stageIndex, direction, intent]
+  );
+
+  const content = preserveContent ? (
+    <motion.div className="h-full" layout={!reduceMotion} transition={{ duration: 0.24 }}>
+      {children}
+    </motion.div>
+  ) : (
+    <AnimatePresence mode="wait" initial={false} custom={direction}>
+      <motion.div
+        key={stage}
+        custom={direction}
+        initial={reduceMotion ? false : { opacity: 0, x: direction * 22, filter: 'blur(5px)' }}
+        animate={{ opacity: 1, x: 0, filter: 'blur(0px)' }}
+        exit={reduceMotion ? { opacity: 1 } : { opacity: 0, x: direction * -14, filter: 'blur(3px)' }}
+        transition={{ duration: reduceMotion ? 0 : 0.24, ease: [0.22, 1, 0.36, 1] }}
+        className="h-full"
+      >
+        {children}
+      </motion.div>
+    </AnimatePresence>
+  );
+
+  return (
+    <JourneyContext.Provider value={context}>
+      <div className="relative min-h-[100dvh] overflow-hidden bg-[#e9edf2] p-0 lg:p-5 xl:p-7">
+        <template
+          data-impeccable-contract="code-led-align-profile-rail"
+          dangerouslySetInnerHTML={{
+            __html:
+              '<!-- THESIS: Onboarding is a guided assembly of a trustworthy Career Profile, not a long form. OWN-WORLD: Ink-slate contextual rail, paper-white workspace, cyan detail and restrained violet actions; 12-16px surfaces and compact controls. STORY: Choose an outcome, bring relevant evidence, approve what is recorded, then use the profile immediately. FIRST VIEWPORT: A stable dark context rail occupies one third; a focused decision surface occupies the rest with actions anchored below. FORM: Split workspace, selected from the existing-flow structural study; seed code-led-align-profile-rail. FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, DESIGN.md, and every shipping raster carrying its provenance -->',
+          }}
+        />
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_14%_18%,rgba(82,207,226,0.11),transparent_28%),radial-gradient(circle_at_86%_86%,rgba(111,78,231,0.08),transparent_30%)]"
+        />
+
+        <div className="relative mx-auto grid min-h-[100dvh] max-w-[1480px] overflow-hidden bg-[#fbfcfd] shadow-[0_24px_90px_rgba(31,41,55,0.13)] lg:h-[calc(100dvh-2.5rem)] lg:min-h-0 lg:grid-cols-[minmax(300px,0.8fr)_minmax(0,1.65fr)] lg:rounded-2xl xl:h-[calc(100dvh-3.5rem)]">
+          <aside className="relative hidden overflow-hidden bg-[#111827] px-8 py-8 text-white lg:flex lg:flex-col xl:px-10 xl:py-10">
+            <div aria-hidden="true" className="pointer-events-none absolute -right-28 -top-24 h-80 w-80 rounded-full bg-cyan-300/10 blur-3xl" />
+            <div aria-hidden="true" className="pointer-events-none absolute -bottom-40 -left-28 h-96 w-96 rounded-full bg-violet-500/10 blur-3xl" />
+
+            <div className="relative flex items-center gap-3">
+              <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/8 ring-1 ring-white/12">
+                <Image src="/assets/svgs/logo.svg" alt="" width={24} height={24} className="h-6 w-6 object-contain" />
+              </span>
+              <span className="text-[15px] font-bold tracking-[-0.02em]">Align</span>
+            </div>
+
+            {stage === 'GOAL' ? (
+              <div className="relative my-auto max-w-sm py-12">
+                <h2 className="mt-5 text-[clamp(2rem,3vw,3rem)] font-semibold leading-[1.05] tracking-[-0.035em] text-white">
+                  {currentMeta.heading}
+                </h2>
+                <p className="mt-5 max-w-[32ch] text-sm leading-6 text-slate-300">{currentMeta.supporting}</p>
+              </div>
+            ) : (
+              <div className="relative mt-12 flex-1">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">Your Progress</p>
+                <ol className="mt-6 space-y-1" aria-label="Onboarding progress">
+                  {visibleStages.map((item, index) => {
+                    const itemMeta = metaFor(item);
+                    const completed = index < progressIndex;
+                    const current = item === stage;
+                    return (
+                      <li key={`${item}-${index}`} className="relative flex min-h-9 items-center gap-3">
+                        {index < visibleStages.length - 1 && (
+                          <span
+                            aria-hidden="true"
+                            className={cn(
+                              'absolute left-[13px] top-[25px] h-[18px] w-px transition-colors duration-300',
+                              completed ? 'bg-cyan-300/70' : 'bg-white/12'
+                            )}
+                          />
+                        )}
+                        <span
+                          className={cn(
+                            'relative flex h-7 w-7 shrink-0 items-center justify-center rounded-full border transition-all duration-300',
+                            completed && 'border-cyan-300/70 bg-cyan-300/12 text-cyan-200',
+                            current && 'border-white/75 bg-white text-slate-950 shadow-[0_6px_24px_rgba(255,255,255,0.15)]',
+                            !completed && !current && 'border-white/20 text-slate-300'
+                          )}
+                        >
+                          {completed ? <Check className="h-3.5 w-3.5" strokeWidth={2.25} aria-hidden="true" /> : <span className="text-[11px] font-semibold tabular-nums">{index + 1}</span>}
+                        </span>
+                        <span
+                          className={cn(
+                            'truncate text-xs font-medium transition-colors',
+                            current ? 'text-white' : completed ? 'text-slate-300' : 'text-slate-300'
+                          )}
+                          aria-current={current ? 'step' : undefined}
+                        >
+                          {itemMeta.label}
+                        </span>
+                      </li>
+                    );
+                  })}
+                </ol>
+              </div>
+            )}
+
+            <AnimatePresence mode="wait" initial={false}>
+              <motion.div
+                key={stage}
+                initial={reduceMotion ? false : { opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={reduceMotion ? { opacity: 1 } : { opacity: 0, y: -5 }}
+                transition={{ duration: reduceMotion ? 0 : 0.22 }}
+                className="relative mt-8 border-t border-white/10 pt-6"
+              >
+                <div className="flex items-start gap-3">
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white/7 text-cyan-200 ring-1 ring-white/10">
+                    <currentMeta.icon className="h-4 w-4" strokeWidth={1.8} aria-hidden="true" />
+                  </span>
+                  <div>
+                    <p className="text-sm font-semibold text-white">{currentMeta.heading}</p>
+                    <p className="mt-1 max-w-[34ch] text-xs leading-5 text-slate-400">{currentMeta.supporting}</p>
+                  </div>
+                </div>
+              </motion.div>
+            </AnimatePresence>
+          </aside>
+
+          <section className="flex min-h-0 min-w-0 flex-col overflow-hidden bg-[#fbfcfd]">
+            <header className="border-b border-slate-200/80 bg-white/80 px-4 py-4 backdrop-blur-md sm:px-6 lg:hidden">
+              <div className="flex items-center justify-between gap-4">
+                <div className="flex items-center gap-2.5">
+                  <Image src="/assets/svgs/logo.svg" alt="" width={28} height={28} className="h-7 w-7 object-contain" />
+                  <span className="text-sm font-bold tracking-[-0.02em] text-slate-900">Align</span>
+                </div>
+                <p className="text-xs font-semibold tabular-nums text-slate-500">{Math.min(progressIndex + 1, progressTotal)} of {progressTotal}</p>
+              </div>
+              <div
+                role="progressbar"
+                aria-valuenow={progressIndex + 1}
+                aria-valuemin={1}
+                aria-valuemax={progressTotal}
+                aria-label={`Setup progress: step ${progressIndex + 1} of ${progressTotal}`}
+                className="mt-3 h-1 overflow-hidden rounded-full bg-slate-200"
+              >
+                <motion.div
+                  className="h-full rounded-full bg-[#6757d9]"
+                  animate={{ width: `${progressPercentage}%` }}
+                  transition={{ duration: reduceMotion ? 0 : 0.3, ease: [0.22, 1, 0.36, 1] }}
+                />
+              </div>
+              <p className="mt-2 text-[11px] font-medium text-slate-600">{currentMeta.label}</p>
+            </header>
+
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 sm:px-7 lg:px-10 lg:[scrollbar-gutter:stable] xl:px-16">{content}</div>
+          </section>
+        </div>
+      </div>
+    </JourneyContext.Provider>
+  );
+}
+
 export function OnboardingShell({
   stageIndex,
   totalStages,
@@ -30,84 +356,75 @@ export function OnboardingShell({
   totalStages: number;
   title: string;
   subtitle?: string;
-  children: React.ReactNode;
-  footer?: React.ReactNode;
+  children: ReactNode;
+  footer?: ReactNode;
   busy?: boolean;
-  /** Announced to screen readers while a long operation runs. */
   busyLabel?: string;
   error?: string | null;
 }) {
   const headingRef = useRef<HTMLHeadingElement>(null);
+  const journey = useContext(JourneyContext);
+  const reduceMotion = useReducedMotion();
 
-  // Focus the new heading on every stage change. Without this a keyboard or
-  // screen-reader user is left at the bottom of the previous screen with no
-  // indication that anything moved.
   useEffect(() => {
-    headingRef.current?.focus();
+    headingRef.current?.focus({ preventScroll: true });
   }, [title]);
 
-  const percentage = totalStages > 0 ? Math.round((stageIndex / totalStages) * 100) : 0;
-
   return (
-    <div className="mx-auto w-full max-w-3xl px-4 py-6 sm:px-6 sm:py-10">
-      <div className="mb-6">
-        <div
-          role="progressbar"
-          aria-valuenow={stageIndex}
-          aria-valuemin={0}
-          aria-valuemax={totalStages}
-          aria-label={`Setup progress: step ${stageIndex + 1} of ${totalStages}`}
-          className="h-1.5 w-full overflow-hidden rounded-full bg-neutral-200"
-        >
+    <div className="mx-auto flex min-h-full w-full max-w-[760px] flex-col py-8 sm:py-10 lg:min-h-[calc(100dvh-2.5rem)] lg:justify-center lg:py-12 xl:min-h-[calc(100dvh-3.5rem)]">
+      {!journey && (
+        <div className="mb-7 lg:hidden">
+          <p className="text-xs font-semibold tabular-nums text-slate-500">Step {Math.min(stageIndex + 1, totalStages)} of {totalStages}</p>
           <div
-            className="h-full rounded-full bg-accent-purple transition-all duration-300"
-            style={{ width: `${percentage}%` }}
-          />
+            role="progressbar"
+            aria-valuenow={stageIndex}
+            aria-valuemin={0}
+            aria-valuemax={totalStages}
+            aria-label={`Setup progress: step ${stageIndex + 1} of ${totalStages}`}
+            className="mt-3 h-1 overflow-hidden rounded-full bg-slate-200"
+          >
+            <div className="h-full rounded-full bg-[#6757d9]" style={{ width: `${Math.round(((stageIndex + 1) / totalStages) * 100)}%` }} />
+          </div>
         </div>
-        <p className="mt-2 text-xs font-medium text-neutral-500">
-          Step {Math.min(stageIndex + 1, totalStages)} of {totalStages}
-        </p>
-      </div>
+      )}
 
-      <div className="rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm sm:p-8">
+      <div className="w-full">
         <h1
           ref={headingRef}
           tabIndex={-1}
-          className="text-xl font-bold text-neutral-900 outline-none sm:text-2xl"
+          className="max-w-[19ch] text-[clamp(1.8rem,4vw,2.65rem)] font-semibold leading-[1.08] tracking-[-0.035em] text-slate-950 outline-none"
         >
           {title}
         </h1>
-        {subtitle && <p className="mt-2 text-sm leading-relaxed text-neutral-500">{subtitle}</p>}
+        {subtitle && <p className="mt-3 max-w-[62ch] text-sm leading-6 text-slate-600 sm:text-[15px]">{subtitle}</p>}
 
-        <div className="mt-6">{children}</div>
+        <div className="mt-7 sm:mt-9">{children}</div>
 
-        {/*
-          One live region for the whole stage. Long operations announce
-          themselves here rather than each component inventing its own, so a
-          screen reader hears one status at a time instead of three.
-        */}
-        <p aria-live="polite" className="sr-only">
-          {busy ? busyLabel ?? 'Working…' : ''}
-        </p>
+        <p aria-live="polite" className="sr-only">{busy ? busyLabel ?? 'Working...' : ''}</p>
 
         {busy && busyLabel && (
-          <p className="mt-4 flex items-center gap-2 text-xs font-medium text-neutral-500">
-            <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+          <p className="mt-5 flex items-center gap-2 text-xs font-medium text-slate-600">
+            <Loader2 className="h-3.5 w-3.5 animate-spin text-[#6757d9] motion-reduce:animate-none" aria-hidden="true" />
             {busyLabel}
           </p>
         )}
 
-        {error && (
-          <p
-            role="alert"
-            className="mt-4 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-medium text-rose-700"
-          >
-            {error}
-          </p>
-        )}
+        <AnimatePresence initial={false}>
+          {error && (
+            <motion.p
+              role="alert"
+              initial={reduceMotion ? false : { opacity: 0, y: -5 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={reduceMotion ? { opacity: 1 } : { opacity: 0, y: -4 }}
+              className="mt-5 rounded-xl bg-rose-50 px-4 py-3 text-xs font-medium leading-5 text-rose-800 ring-1 ring-inset ring-rose-200"
+            >
+              {error}
+            </motion.p>
+          )}
+        </AnimatePresence>
 
         {footer && (
-          <div className="mt-8 flex flex-col gap-3 border-t border-neutral-100 pt-6 sm:flex-row sm:items-center sm:justify-between">
+          <div className="sticky bottom-0 mt-9 flex flex-col-reverse gap-3 border-t border-slate-200/90 bg-[#fbfcfd]/95 py-5 backdrop-blur-md sm:flex-row sm:items-center sm:justify-between">
             {footer}
           </div>
         )}
@@ -116,17 +433,12 @@ export function OnboardingShell({
   );
 }
 
-/** The single primary action on a stage. */
-export function PrimaryButton({
-  children,
-  className,
-  ...props
-}: React.ButtonHTMLAttributes<HTMLButtonElement>) {
+export function PrimaryButton({ children, className, ...props }: React.ButtonHTMLAttributes<HTMLButtonElement>) {
   return (
     <button
       type="button"
       className={cn(
-        'inline-flex w-full items-center justify-center gap-2 rounded-full bg-accent-purple px-5 py-2.5 text-xs font-bold text-white transition-colors hover:bg-accent-purple/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-purple/40 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto',
+        'inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-[#6757d9] px-5 py-2.5 text-sm font-semibold text-white shadow-[0_8px_24px_rgba(103,87,217,0.2)] transition-[background-color,transform,box-shadow] duration-200 hover:bg-[#5948cf] hover:shadow-[0_10px_28px_rgba(103,87,217,0.26)] active:translate-y-px active:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#6757d9]/45 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-45 disabled:shadow-none sm:w-auto',
         className
       )}
       {...props}
@@ -136,17 +448,12 @@ export function PrimaryButton({
   );
 }
 
-/** A secondary or tertiary action, never competing with the primary one. */
-export function SecondaryButton({
-  children,
-  className,
-  ...props
-}: React.ButtonHTMLAttributes<HTMLButtonElement>) {
+export function SecondaryButton({ children, className, ...props }: React.ButtonHTMLAttributes<HTMLButtonElement>) {
   return (
     <button
       type="button"
       className={cn(
-        'inline-flex w-full items-center justify-center gap-2 rounded-full border border-neutral-300 bg-white px-4 py-2.5 text-xs font-semibold text-neutral-700 transition-colors hover:border-neutral-400 hover:text-neutral-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-purple/30 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto',
+        'inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition-[border-color,background-color,color,transform] duration-200 hover:border-slate-400 hover:bg-slate-50 hover:text-slate-950 active:translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#6757d9]/35 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-45 sm:w-auto',
         className
       )}
       {...props}
@@ -156,13 +463,6 @@ export function SecondaryButton({
   );
 }
 
-/**
- * A large, keyboard-operable choice card.
- *
- * A real radio input underneath rather than a styled div: arrow-key navigation,
- * group semantics and the selected state all come free and correct, which a
- * div with role="radio" only approximates.
- */
 export function ChoiceCard({
   name,
   value,
@@ -179,35 +479,53 @@ export function ChoiceCard({
   onSelect: (value: string) => void;
   title: string;
   description: string;
-  icon?: React.ReactNode;
+  icon?: ReactNode;
   disabled?: boolean;
 }) {
+  const reduceMotion = useReducedMotion();
+
   return (
-    <label
+    <motion.label
+      layout={!reduceMotion}
+      whileTap={disabled || reduceMotion ? undefined : { scale: 0.992 }}
       className={cn(
-        'flex cursor-pointer items-start gap-3 rounded-xl border p-4 transition-colors',
+        'group relative flex min-h-[82px] cursor-pointer items-start gap-4 overflow-hidden rounded-2xl border px-4 py-4 transition-[border-color,background-color,box-shadow] duration-200 focus-within:outline-none focus-within:ring-2 focus-within:ring-[#6757d9]/45 focus-within:ring-offset-2 sm:px-5',
         checked
-          ? 'border-accent-purple bg-accent-purple/5 ring-1 ring-accent-purple/30'
-          : 'border-neutral-200 bg-white hover:border-neutral-300',
+          ? 'border-[#6757d9] bg-[#f7f6ff] shadow-[0_10px_30px_rgba(74,63,159,0.09)] ring-1 ring-[#6757d9]/15'
+          : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50/75',
         disabled && 'cursor-not-allowed opacity-50'
       )}
     >
-      <input
-        type="radio"
-        name={name}
-        value={value}
-        checked={checked}
-        disabled={disabled}
-        onChange={() => onSelect(value)}
-        className="mt-1 h-4 w-4 shrink-0 accent-accent-purple focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-purple/40"
-      />
-      <span className="min-w-0 flex-1">
-        <span className="flex items-center gap-2 text-sm font-semibold text-neutral-900">
-          {icon}
-          {title}
-        </span>
-        <span className="mt-1 block text-xs leading-relaxed text-neutral-500">{description}</span>
+      <input type="radio" name={name} value={value} checked={checked} disabled={disabled} onChange={() => onSelect(value)} className="sr-only" />
+      <span
+        className={cn(
+          'flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border transition-colors',
+          checked ? 'border-[#6757d9]/20 bg-[#6757d9] text-white' : 'border-slate-200 bg-slate-50 text-slate-500 group-hover:bg-white'
+        )}
+      >
+        {icon}
       </span>
-    </label>
+      <span className="min-w-0 flex-1 pt-0.5">
+        <span className="block text-sm font-semibold tracking-[-0.01em] text-slate-950">{title}</span>
+        <span className="mt-1 block text-xs leading-5 text-slate-600">{description}</span>
+      </span>
+      <span
+        className={cn(
+          'mt-2 flex h-7 w-7 shrink-0 items-center justify-center rounded-full transition-all',
+          checked ? 'bg-[#6757d9] text-white' : 'bg-slate-100 text-slate-400 group-hover:text-slate-600'
+        )}
+      >
+        {checked ? <Check className="h-3.5 w-3.5" strokeWidth={2.4} aria-hidden="true" /> : <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />}
+      </span>
+    </motion.label>
+  );
+}
+
+export function TrustNote({ children }: { children: ReactNode }) {
+  return (
+    <div className="flex items-start gap-3 rounded-2xl bg-slate-100/80 px-4 py-3.5 text-xs leading-5 text-slate-600">
+      <LockKeyhole className="mt-0.5 h-4 w-4 shrink-0 text-slate-500" aria-hidden="true" />
+      <div>{children}</div>
+    </div>
   );
 }

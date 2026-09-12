@@ -160,7 +160,7 @@ export function UploadStep({
           <div className="mt-3 flex flex-col gap-2 sm:flex-row">
             {capacity.upgradeTarget && (
               <PrimaryButton onClick={onUpgrade} disabled={busy}>
-                See {capacity.upgradeTarget} plan
+                See what {capacity.upgradeTarget} includes
               </PrimaryButton>
             )}
             <SecondaryButton onClick={onManualPath} disabled={busy}>
@@ -210,7 +210,7 @@ export function UploadStep({
                     <span className="block truncate text-xs font-medium text-neutral-800">
                       {storedCv.originalFilename}
                     </span>
-                    <span className="block text-[10px] text-neutral-400">
+                    <span className="block text-[11px] text-neutral-400">
                       {new Date(storedCv.createdAt).toLocaleDateString('en-GB')}
                       {!storedCv.objectAvailable && ' · original no longer available'}
                     </span>
@@ -230,7 +230,7 @@ export function UploadStep({
                     onClick={() => void removeStoredCv(storedCv.id)}
                     disabled={busy}
                     aria-label={`Remove ${storedCv.originalFilename}`}
-                    className="rounded-full p-1.5 text-neutral-400 transition-colors hover:bg-rose-50 hover:text-rose-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-300 disabled:opacity-40"
+                    className="rounded-full p-1.5 text-rose-600 transition-colors hover:bg-rose-100 hover:text-rose-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-300 disabled:opacity-40"
                   >
                     <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
                   </button>
@@ -239,7 +239,7 @@ export function UploadStep({
             ))}
           </ul>
           {capacity.limit !== undefined && (
-            <p className="mt-2 text-[10px] text-neutral-400">
+            <p className="mt-2 text-[11px] text-neutral-400">
               {capacity.used} of {capacity.limit} stored CVs used on your plan.
             </p>
           )}

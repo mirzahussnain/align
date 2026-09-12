@@ -19,6 +19,15 @@ import { saveCareerDirection } from '../actions';
  * The optional advanced fields exist for people who want the extra precision;
  * anything inferred is offered there for confirmation, never written silently.
  */
+export type CareerDirectionDraft = {
+  fullName: string;
+  targetRoleTitle: string;
+  label: string;
+  targetOccupation: string;
+  targetSeniority: string;
+  tagline: string;
+};
+
 export function CareerDirectionStep({
   stageIndex,
   totalStages,
@@ -32,19 +41,13 @@ export function CareerDirectionStep({
   stageIndex: number;
   totalStages: number;
   profileId: string;
-  initial: {
-    fullName: string;
-    targetRoleTitle: string;
-    label: string;
-    targetOccupation: string;
-    targetSeniority: string;
-    tagline: string;
+  initial: CareerDirectionDraft & {
     /** Suggested by the parser from the CV, for the user to accept or change. */
     suggestedRoleFromCv?: string;
   };
   occupationOptions: { value: string; label: string }[];
   seniorityOptions: { value: string; label: string }[];
-  onSaved: () => void;
+  onSaved: (draft: CareerDirectionDraft) => void;
   onBack: () => void;
 }) {
   const [form, setForm] = useState({
@@ -71,7 +74,7 @@ export function CareerDirectionStep({
         setError(result.error);
         return;
       }
-      onSaved();
+      onSaved(form);
     });
   }
 

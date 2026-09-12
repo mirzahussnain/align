@@ -1,17 +1,9 @@
 'use client';
 
-import { ArrowLeft, ArrowRight, FileUp, Lock, PencilLine } from 'lucide-react';
-import { OnboardingShell, PrimaryButton, SecondaryButton } from './OnboardingShell';
+import { ArrowLeft, ArrowRight, FileUp, PencilLine } from 'lucide-react';
+import { motion } from 'framer-motion';
+import { OnboardingShell, SecondaryButton, TrustNote } from './OnboardingShell';
 
-/**
- * How the user wants to get their CV in.
- *
- * The storage claims here are checked against what the pipeline actually does:
- * the file goes to a private bucket, it is reachable only through a short-lived
- * signed link, and it is kept for the retention window the user's plan sets —
- * which is why this screen says "for as long as your plan's retention window"
- * rather than "forever". Malware scanning is not mentioned, because none runs.
- */
 export function CvSourceStep({
   stageIndex,
   totalStages,
@@ -25,7 +17,6 @@ export function CvSourceStep({
 }: {
   stageIndex: number;
   totalStages: number;
-  /** From the server's retention configuration, never a hard-coded number. */
   retentionDays: number | null;
   maxBytes: number;
   busy: boolean;
@@ -40,52 +31,85 @@ export function CvSourceStep({
     <OnboardingShell
       stageIndex={stageIndex}
       totalStages={totalStages}
-      title="Do you have a CV to start from?"
-      subtitle="Uploading one saves you typing everything in. You will review every detail before it becomes part of your profile."
+      title="How would you like to build your profile?"
+      subtitle="Start from a CV to save time, or add your experience manually. Both paths give you full control over what is recorded."
       busy={busy}
       error={error}
       footer={
-        <>
-          <SecondaryButton onClick={onBack} disabled={busy}>
-            <ArrowLeft className="h-3.5 w-3.5" aria-hidden="true" />
-            Back
-          </SecondaryButton>
-          <PrimaryButton onClick={onUploadPath} disabled={busy}>
-            <FileUp className="h-3.5 w-3.5" aria-hidden="true" />
-            Upload my CV
-            <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
-          </PrimaryButton>
-        </>
+        <SecondaryButton onClick={onBack} disabled={busy}>
+          <ArrowLeft className="h-4 w-4" aria-hidden="true" />
+          Back
+        </SecondaryButton>
       }
     >
-      <div className="rounded-xl border border-neutral-200 bg-neutral-50 p-4">
-        <h2 className="flex items-center gap-2 text-xs font-semibold text-neutral-700">
-          <Lock className="h-3.5 w-3.5 text-neutral-400" aria-hidden="true" />
-          What happens to your file
-        </h2>
-        <ul className="mt-2 space-y-1.5 text-xs leading-relaxed text-neutral-500">
-          <li>Accepted formats: PDF and Word (.docx), up to {maxMb}MB.</li>
-          <li>Your original file is stored privately and is only ever reachable through a short-lived link for you.</li>
-          <li>
-            {retentionDays === null
-              ? 'Your original file is kept until you delete it.'
-              : `Your original file is kept for ${retentionDays} days on your current plan, then removed. Details you confirm into your profile are kept.`}
-          </li>
-          <li>Nothing we read from it becomes part of your profile until you have reviewed and confirmed it.</li>
-        </ul>
-      </div>
-
-      <div className="mt-4">
-        <button
-          type="button"
+      <div className="grid gap-3 sm:grid-cols-2">
+        <SourceChoice
+          icon={FileUp}
+          title="Start from my CV"
+          description={`Upload a PDF or Word document, up to ${maxMb}MB, then review every detail.`}
+          onClick={onUploadPath}
+          disabled={busy}
+          featured
+        />
+        <SourceChoice
+          icon={PencilLine}
+          title="Build manually"
+          description="Add your career direction and supporting experience step by step."
           onClick={onManualPath}
           disabled={busy}
-          className="inline-flex items-center gap-2 rounded-lg px-1 py-1 text-xs font-semibold text-accent-purple transition-colors hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-purple/40 disabled:opacity-50"
-        >
-          <PencilLine className="h-3.5 w-3.5" aria-hidden="true" />
-          I would rather enter my details manually
-        </button>
+        />
+      </div>
+
+      <div className="mt-5">
+        <TrustNote>
+          <p className="font-semibold text-slate-800">Your CV stays private.</p>
+          <p className="mt-0.5">
+            {retentionDays === null
+              ? 'The original is kept until you delete it.'
+              : `The original is kept for ${retentionDays} days on your current plan.`}{' '}
+            Nothing read from it joins your Career Profile until you have reviewed and confirmed it.
+          </p>
+        </TrustNote>
       </div>
     </OnboardingShell>
+  );
+}
+
+function SourceChoice({
+  icon: Icon,
+  title,
+  description,
+  onClick,
+  disabled,
+  featured = false,
+}: {
+  icon: typeof FileUp;
+  title: string;
+  description: string;
+  onClick: () => void;
+  disabled: boolean;
+  featured?: boolean;
+}) {
+  return (
+    <motion.button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      whileTap={disabled ? undefined : { scale: 0.99 }}
+      className={`group flex min-h-44 flex-col items-start rounded-2xl border p-5 text-left transition-[border-color,background-color,box-shadow] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#6757d9]/40 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 ${
+        featured
+          ? 'border-[#6757d9]/50 bg-[#f7f6ff] shadow-[0_12px_34px_rgba(74,63,159,0.09)] hover:border-[#6757d9]'
+          : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50'
+      }`}
+    >
+      <span className={`flex h-11 w-11 items-center justify-center rounded-xl ${featured ? 'bg-[#6757d9] text-white' : 'bg-slate-100 text-slate-600'}`}>
+        <Icon className="h-5 w-5" strokeWidth={1.8} aria-hidden="true" />
+      </span>
+      <span className="mt-5 flex w-full items-center justify-between gap-3">
+        <span className="text-sm font-semibold text-slate-950">{title}</span>
+        <ArrowRight className="h-4 w-4 shrink-0 text-slate-400 transition-transform duration-200 group-hover:translate-x-0.5" aria-hidden="true" />
+      </span>
+      <span className="mt-1.5 text-xs leading-5 text-slate-600">{description}</span>
+    </motion.button>
   );
 }

@@ -50,7 +50,18 @@ export const EvidenceSourceSchema = z
 
 export const AnalyzeRequestSchema = z
   .object({
-    file: PdfFile,
+    /**
+     * The CV under analysis, uploaded with this request. Optional only because
+     * `storedCvId` is the alternative source — the refinement below requires
+     * exactly one of the two, so a request can never arrive with no CV at all.
+     */
+    file: PdfFile.optional(),
+    /**
+     * One of the user's already-stored source CVs, analysed without a re-upload.
+     * Ownership and readability are resolved server-side from the id alone; the
+     * request never supplies a storage key, a filename or any bytes.
+     */
+    storedCvId: z.string().min(1).optional(),
     mode: z.enum(['ats', 'job_match']).default('ats'),
     jobDescription: z.string().optional().default(''),
     /**
@@ -95,6 +106,19 @@ export const AnalyzeRequestSchema = z
       .transform((v) => v === true || v === 'true'),
   })
   .superRefine((data, ctx) => {
+    // Exactly one CV source. Both together is ambiguous about which one was
+    // actually analysed — and the answer would be invisible in the stored
+    // result — so it is rejected rather than silently resolved by precedence.
+    if (!data.file && !data.storedCvId) {
+      ctx.addIssue({ code: 'custom', path: ['file'], message: 'Choose a CV to analyse.' });
+    }
+    if (data.file && data.storedCvId) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['file'],
+        message: 'Send either an uploaded CV or a stored CV, not both.',
+      });
+    }
     if (data.targetSelection === 'saved_profile' && !data.savedProfileId) {
       ctx.addIssue({
         code: 'custom',
