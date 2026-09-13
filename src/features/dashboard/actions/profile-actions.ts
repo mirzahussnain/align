@@ -10,7 +10,14 @@ import { EMPLOYMENT_TYPES } from '@/shared/constants/employment-type';
 import { isKnownIndustry } from '@/shared/constants/sector-keywords';
 import { isKnownOccupation } from '@/shared/occupations/registry';
 import { isSeniorityValue } from '@/shared/constants/occupation-options';
-import { assertStoredEvidenceLimit, checkCapability, EntitlementRequiredError } from '@/shared/entitlements/server';
+import { assertStoredEvidenceLimit, EntitlementRequiredError } from '@/shared/entitlements/server';
+import {
+  createProfileWithinPlanLimit,
+  deleteProfileForUser,
+  setDefaultProfileForUser,
+} from '@/shared/services/career-profile';
+import { APIError } from '@/shared/utils/api-error';
+import type { CapabilityDecision } from '@/shared/entitlements/registry';
 import { createCanonicalEvidence, validateStructuredEvidence } from '@/shared/services/structured-evidence';
 import { isProfileDate, isProfileDateBefore } from '@/shared/utils/date';
 import { repairStoredPhone } from '@/shared/utils/phone';
@@ -212,10 +219,7 @@ async function resolveOwnedProfileId(userId: string, profileId?: string): Promis
   });
   if (fallback) return fallback.id;
 
-  const created = await prisma.profile.create({
-    data: { userId, label: 'Default', isDefault: true },
-    select: { id: true },
-  });
+  const created = await createProfileWithinPlanLimit({ userId, label: 'Default' });
   return created.id;
 }
 
@@ -365,44 +369,31 @@ async function requireUser(): Promise<{ id: string }> {
  */
 export async function createProfile(label: string, targetIndustry?: string, targetOccupation?: string) {
   const user = await requireUser();
-
-  const trimmed = label.trim();
-  if (!trimmed) return { ok: false as const, error: 'Give the profile a name.' };
-
-  const decision = await checkCapability(user.id, 'additional_career_profiles');
-  const existing = await prisma.profile.count({ where: { userId: user.id } });
-  if (!decision.allowed) {
-    return {
-      ok: false as const,
-      error: `Your plan allows ${decision.limit} profile${decision.limit === 1 ? '' : 's'}. Upgrade to add more.`,
-      decision,
-    };
-  }
-
-  // The [userId, label] unique index is what actually guarantees uniqueness;
-  // this check exists to return a readable message instead of a Prisma error.
-  const clash = await prisma.profile.findFirst({
-    where: { userId: user.id, label: trimmed },
-    select: { id: true },
-  });
-  if (clash) return { ok: false as const, error: `You already have a profile called "${trimmed}".` };
-
-  const created = await prisma.profile.create({
-    data: {
+  let created;
+  try {
+    created = await createProfileWithinPlanLimit({
       userId: user.id,
-      label: trimmed,
-      targetIndustry: isKnownIndustry(targetIndustry?.trim()) ? targetIndustry!.trim() : null,
-      targetOccupation: isKnownOccupation(targetOccupation) ? targetOccupation : null,
-      // First profile a user ever creates becomes their default.
-      isDefault: existing === 0,
-    },
-    select: { id: true },
-  });
+      label,
+      targetIndustry,
+      targetOccupation,
+    });
+  } catch (error) {
+    if (error instanceof APIError) {
+      if (error.code === 'PROFILE_LIMIT_REACHED') {
+        return {
+          ok: false as const,
+          error: error.message,
+          decision: error.responseBody as unknown as CapabilityDecision,
+        };
+      }
+      return { ok: false as const, error: error.message };
+    }
+    throw error;
+  }
 
   revalidatePath('/dashboard');
   return { ok: true as const, profileId: created.id };
 }
-
 export async function renameProfile(profileId: string, label: string, targetIndustry?: string) {
   const userId = await requireUserId();
   const trimmed = label.trim();
@@ -425,53 +416,26 @@ export async function renameProfile(profileId: string, label: string, targetIndu
  */
 export async function deleteProfile(profileId: string) {
   const userId = await requireUserId();
-
-  const profiles = await prisma.profile.findMany({
-    where: { userId },
-    select: { id: true, isDefault: true },
-    orderBy: { createdAt: 'asc' },
-  });
-
-  const target = profiles.find((p) => p.id === profileId);
-  if (!target) return { ok: false as const, error: 'Profile not found.' };
-  if (profiles.length <= 1) {
-    return { ok: false as const, error: 'You need at least one profile.' };
-  }
-
-  await prisma.profile.delete({ where: { id: profileId } });
-
-  // Deleting the default would leave the user with none — promote the oldest
-  // survivor so `isDefault` always resolves to exactly one profile.
-  if (target.isDefault) {
-    const next = profiles.find((p) => p.id !== profileId);
-    if (next) {
-      await prisma.profile.update({ where: { id: next.id }, data: { isDefault: true } });
-    }
+  const result = await deleteProfileForUser(userId, profileId);
+  if (!result.deleted) {
+    return {
+      ok: false as const,
+      error: result.reason === 'last_profile' ? 'You need at least one profile.' : 'Profile not found.',
+    };
   }
 
   revalidatePath('/dashboard');
   return { ok: true as const };
 }
-
 export async function setDefaultProfile(profileId: string) {
   const userId = await requireUserId();
-
-  const owned = await prisma.profile.findFirst({
-    where: { id: profileId, userId },
-    select: { id: true },
-  });
-  if (!owned) return { ok: false as const, error: 'Profile not found.' };
-
-  // Clearing every flag before setting one keeps "exactly one default" true
-  // even if a previous partial write left two set.
-  await prisma.$transaction([
-    prisma.profile.updateMany({ where: { userId }, data: { isDefault: false } }),
-    prisma.profile.update({ where: { id: profileId }, data: { isDefault: true } }),
-  ]);
+  const result = await setDefaultProfileForUser(userId, profileId);
+  if (!result.updated) return { ok: false as const, error: 'Profile not found.' };
 
   revalidatePath('/dashboard');
   return { ok: true as const };
 }
+
 export interface ExperienceRecordInput extends ExperienceInput { id?: string; }
 export interface ProjectRecordInput { id?: string; name: string; skillIds?: string[]; liveUrl?: string; repositoryUrl?: string; startDate: string; endDate: string; achievements: string[]; }
 export interface InlineProjectSkillInput { name: string; category: string; level: string; taxonomyTermId?: string; }

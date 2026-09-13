@@ -9,7 +9,8 @@ import { isVisaStatus, visaRequiresExpiry } from '@/shared/constants/visa-status
 import { isKnownIndustry } from '@/shared/constants/sector-keywords';
 import { isKnownOccupation } from '@/shared/occupations/registry';
 import { isSeniorityValue } from '@/shared/constants/occupation-options';
-import { checkCapability } from '@/shared/entitlements/server';
+import { createProfileWithinPlanLimit } from '@/shared/services/career-profile';
+import { APIError } from '@/shared/utils/api-error';
 import { suggestCareerTrackLabel } from '@/shared/occupations/track-label';
 
 /**
@@ -39,35 +40,24 @@ async function requireUserId(): Promise<string> {
  */
 export async function createDraftCareerProfile(suggestedLabel?: string) {
   const userId = await requireUserId();
-
-  const existing = await prisma.profile.count({ where: { userId } });
-  const decision = await checkCapability(userId, 'additional_career_profiles');
-  if (!decision.allowed) {
-    return {
-      ok: false as const,
-      error: `Your plan includes ${decision.limit} Career Profile${decision.limit === 1 ? '' : 's'}.`,
-      decision,
-    };
-  }
-
-  // `[userId, label]` is unique, so a default name is suffixed rather than
-  // allowed to collide — a failed insert here would strand the whole journey.
   const base = suggestedLabel?.trim() || 'My Career Profile';
-  const taken = new Set(
-    (await prisma.profile.findMany({ where: { userId }, select: { label: true } })).map((row) => row.label)
-  );
-  let label = base;
-  for (let suffix = 2; taken.has(label); suffix += 1) label = `${base} ${suffix}`;
-
-  const created = await prisma.profile.create({
-    data: { userId, label, isDefault: existing === 0 },
-    select: { id: true, label: true },
-  });
+  let created;
+  try {
+    created = await createProfileWithinPlanLimit({
+      userId,
+      label: base,
+      ensureUniqueLabel: true,
+    });
+  } catch (error) {
+    if (error instanceof APIError) {
+      return { ok: false as const, error: error.message };
+    }
+    throw error;
+  }
 
   revalidatePath('/dashboard');
   return { ok: true as const, profileId: created.id, label: created.label };
 }
-
 export interface CareerDirectionInput {
   profileId: string;
   /** The user's own words for the role they are targeting. Required. */
