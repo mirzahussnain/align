@@ -32,9 +32,9 @@ Limit failures use `PROFILE_LIMIT_REACHED` with the existing entitlement decisio
 
 ## Trusted provider-job persistence
 
-Provider search already materialises every returned result into a durable `JobSnapshot` on the server and returns its server-created `id`. That ID becomes the sole browser reference for details and saves.
+Provider search already materialises every returned result into a durable `JobSnapshot` on the server and returns its server-created `id`. The call graph confirms those results come from provider adapters, server refresh jobs, or existing shared snapshots; that ID becomes the sole browser reference for details and saves.
 
-`/api/saved-jobs` changes from a passthrough provider object to a strict `{ jobSnapshotId, profileId? }` body. The obsolete `/api/jobs/snapshots` client-ingestion behavior is removed; if compatibility requires the route to remain temporarily, it accepts only a strict snapshot ID and performs an ownership-scoped lookup. Canonical snapshot writers continue to accept only internal `NormalisedJob` values produced by provider adapters or trusted server discovery.
+`/api/saved-jobs` changes from a passthrough provider object to a strict `{ jobSnapshotId, profileId? }` body. `/api/jobs/snapshots` remains only as a strict snapshot-ID lookup for legacy compatibility and cannot create or update a snapshot. Canonical snapshot writers are renamed and scoped as provider-ingestion functions accepting only internal `NormalisedJob` values produced by provider adapters or trusted server discovery.
 
 The active Job Board already uses snapshot IDs. Any retained legacy client is updated to use the ID projection and cannot submit title, company, provider identifiers, canonical IDs, descriptions, or metadata.
 
@@ -61,7 +61,7 @@ The strict Zod request schema rejects unknown fields, duplicate semantic IDs, an
 
 Add `CvUploadIntent` with a forward Prisma migration. It records the owner, random object key, bounded display filename, expected MIME and byte size, status, expiry, creation time, and completion time. Statuses are `PENDING`, `VALIDATING`, `COMPLETED`, `FAILED`, and `EXPIRED`.
 
-Pending unexpired intents count as reserved `stored_source_cvs` slots. Intent creation and finalization share the existing stored-CV advisory lock so concurrent intents/finalizations cannot exceed the plan cap. Expired and failed intents do not consume capacity.
+Live intents count as reserved `stored_source_cvs` slots. The exact predicate is `status IN (PENDING, VALIDATING) AND expiresAt > now`; `FAILED`, `EXPIRED`, and `COMPLETED` never count. Intent creation and finalization share the existing stored-CV advisory lock so concurrent intents/finalizations cannot exceed the plan cap.
 
 ### Intent creation
 
@@ -71,17 +71,17 @@ The storage abstraction gains presigned PUT and object-stat operations. The PUT 
 
 ### Finalization
 
-`POST /api/stored-cvs/upload-complete` authenticates and resolves an unused, unexpired intent belonging to the caller. It marks the intent validating, stats the object, rejects missing or mismatched size, downloads the object once, and applies the existing PDF/DOCX signature and container validation. It derives canonical MIME, format, checksum, and safe display filename server-side.
+`POST /api/stored-cvs/upload-complete` authenticates and atomically claims an unused, unexpired intent belonging to the caller. Claiming changes `PENDING` to `VALIDATING` and extends `expiresAt` to a ten-minute validation lease, preventing both concurrent finalizers and expiry during processing. It then stats the object, rejects missing or mismatched size, downloads the object once, and applies the existing PDF/DOCX signature and container validation. It derives canonical MIME, format, checksum, and safe display filename server-side.
 
 Under the resource lock, finalization rechecks the intent state. A duplicate checksum returns the existing Stored CV and deletes the redundant object. Otherwise it creates or revives the Stored CV while atomically completing the reserved intent. Reuse, ownership failures, expiry, malformed content, and size mismatch return stable upload errors and never create an active Stored CV.
 
 ### Cleanup and browser flow
 
-A retry-safe cleanup service finds expired/failed intents, deletes their exact objects, and marks pending expired rows `EXPIRED`. Missing objects are treated as already clean. Request handlers await only work required for their operation; cleanup is exposed for maintenance and may be invoked in bounded awaited batches.
+A retry-safe cleanup service finds expired `PENDING` or stale `VALIDATING` intents and failed intents, deletes their exact objects, and marks non-terminal expired rows `EXPIRED`. Missing objects are treated as already clean. Capacity is released by the time-based count predicate even before cleanup runs, so an abandoned intent can block a user for at most five minutes and a crashed finalizer for at most ten. Request handlers await only work required for their operation; cleanup is exposed for maintenance and may be invoked in bounded awaited batches.
 
-The onboarding/shared Stored CV API requests an intent, uploads the `File` directly with PUT, finalizes it, then continues the existing extraction/import flow. The 10 MiB product limit remains. The old 10 MiB multipart Stored CV POST is removed or retained only as a deliberately small compatibility fallback.
+The onboarding/shared Stored CV API requests an intent, uploads the `File` directly with PUT, finalizes it, then continues the existing extraction/import flow. The 10 MiB product limit remains. The old multipart Stored CV POST is removed.
 
-Authenticated ATS and Job Match routes can already consume `storedCvId`; their direct multipart alternative receives a route-safe lower limit and matching UI copy instead of advertising a 10 MiB Vercel upload. The public demo receives the same route-safe multipart ceiling because its temporary semantics should not consume Stored CV capacity.
+Authenticated ATS and Job Match routes can already consume `storedCvId`; their direct multipart alternative receives a 4 MiB limit and matching UI copy instead of advertising a 10 MiB Vercel upload. The public demo receives the same 4 MiB multipart ceiling because its temporary semantics should not consume Stored CV capacity.
 
 ### MinIO and R2
 
