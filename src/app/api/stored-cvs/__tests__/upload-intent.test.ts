@@ -39,6 +39,7 @@ describe('POST /api/stored-cvs/upload-intent', () => {
     expect((await POST(request({}))).status).toBe(401);
     expect((await POST(request({ filename: 'resume.pdf', mimeType: 'application/pdf', sizeBytes: 42, key: 'forged' }))).status).toBe(400);
     expect((await POST(request({ filename: 'resume.exe', mimeType: 'application/octet-stream', sizeBytes: 42 }))).status).toBe(400);
+    expect((await POST(request({ filename: 'resume.pdf', mimeType: 'application/pdf', sizeBytes: 10 * 1024 * 1024 + 1 }))).status).toBe(400);
     expect(mocks.create).not.toHaveBeenCalled();
   });
 });

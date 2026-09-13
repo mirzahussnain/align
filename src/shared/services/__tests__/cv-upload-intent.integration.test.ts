@@ -95,6 +95,35 @@ describe.skipIf(!enabled)('direct CV upload intents with PostgreSQL and MinIO', 
     })).resolves.toMatchObject({ intentId: expect.any(String) });
   });
 
+  it('rejects size mismatches and malformed DOCX without creating Stored CVs', async () => {
+    const pdf = minimalPdf(['Size mismatch']);
+    const mismatched = await createCvUploadIntent({
+      userId, filename: 'wrong-size.pdf', mimeType: 'application/pdf', sizeBytes: pdf.length + 1,
+    });
+    await storage.upload({ bucket: 'uploads', key: mismatched.objectKey, body: pdf, contentType: 'application/pdf' });
+    await expect(finalizeCvUpload({ userId, intentId: mismatched.intentId })).rejects.toMatchObject({ code: 'UPLOAD_SIZE_MISMATCH' });
+
+    const docxMime = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+    const malformedBytes = Buffer.from('PK malformed Word archive');
+    const malformed = await createCvUploadIntent({
+      userId, filename: 'malformed.docx', mimeType: docxMime, sizeBytes: malformedBytes.length,
+    });
+    await storage.upload({ bucket: 'uploads', key: malformed.objectKey, body: malformedBytes, contentType: docxMime });
+    await expect(finalizeCvUpload({ userId, intentId: malformed.intentId })).rejects.toMatchObject({ code: 'SIGNATURE_MISMATCH' });
+
+    expect(await prisma.storedCv.count({ where: { userId } })).toBe(0);
+  });
+
+  it('deduplicates finalized bytes and deletes the redundant intent object', async () => {
+    const bytes = minimalPdf(['Same candidate', randomUUID()]);
+    const first = await upload('first.pdf', 'application/pdf', bytes);
+    await finalizeCvUpload({ userId, intentId: first.intentId });
+
+    const second = await upload('renamed.pdf', 'application/pdf', bytes);
+    await expect(finalizeCvUpload({ userId, intentId: second.intentId })).resolves.toMatchObject({ kind: 'duplicate' });
+    expect(await prisma.storedCv.count({ where: { userId } })).toBe(1);
+    await expect(storage.stat(second.objectKey)).rejects.toBeTruthy();
+  });
   it('cleans abandoned objects idempotently and marks live states expired', async () => {
     const intent = await createCvUploadIntent({
       userId, filename: 'abandoned.pdf', mimeType: 'application/pdf', sizeBytes: 8,
@@ -102,9 +131,15 @@ describe.skipIf(!enabled)('direct CV upload intents with PostgreSQL and MinIO', 
     });
     await storage.upload({ bucket: 'uploads', key: intent.objectKey, body: Buffer.from('orphaned'), contentType: 'application/pdf' });
 
-    await expect(cleanupCvUploadIntents()).resolves.toMatchObject({ processed: 1 });
+    const missing = await createCvUploadIntent({
+      userId, filename: 'missing.pdf', mimeType: 'application/pdf', sizeBytes: 8,
+      now: new Date(Date.now() - 10 * 60_000),
+    });
+
+    await expect(cleanupCvUploadIntents()).resolves.toMatchObject({ processed: 2 });
     await expect(cleanupCvUploadIntents()).resolves.toMatchObject({ processed: 0 });
     expect((await prisma.cvUploadIntent.findUniqueOrThrow({ where: { id: intent.intentId } })).status).toBe('EXPIRED');
+    expect((await prisma.cvUploadIntent.findUniqueOrThrow({ where: { id: missing.intentId } })).status).toBe('EXPIRED');
     await expect(storage.stat(intent.objectKey)).rejects.toBeTruthy();
   });
 });
