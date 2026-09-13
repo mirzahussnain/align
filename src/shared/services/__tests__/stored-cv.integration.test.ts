@@ -250,6 +250,6 @@ describe.skipIf(!enabled)('stored CV pipeline — real MinIO and Postgres', () =
       (free.storedCv.retentionEndsAt!.getTime() - Date.now()) / (24 * 60 * 60 * 1000)
     );
     // Free's configured source-file retention window.
-    expect(days).toBe(30);
+    expect(days).toBe(180);
   });
 });

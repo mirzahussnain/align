@@ -61,7 +61,7 @@ export interface StoredCvSummary {
   objectAvailable: boolean;
 }
 
-function toSummary(row: {
+export function toStoredCvSummary(row: {
   id: string;
   originalFilename: string;
   sizeBytes: number;
@@ -122,7 +122,7 @@ export async function storeUploadedCv(args: {
     where: { userId_checksum: { userId: args.userId, checksum } },
   });
   if (existing && !existing.deletedAt) {
-    return { kind: 'duplicate', storedCv: toSummary(existing) };
+    return { kind: 'duplicate', storedCv: toStoredCvSummary(existing) };
   }
 
   const retentionEndsAt = sourceExpiryFrom(entitlementsFor(args.plan));
@@ -180,7 +180,7 @@ export async function storeUploadedCv(args: {
     where: { id: created.id },
     data: { status: StoredCvStatus.STORED },
   });
-  return { kind: 'created', storedCv: toSummary(stored) };
+  return { kind: 'created', storedCv: toStoredCvSummary(stored) };
 }
 
 /**
@@ -190,7 +190,7 @@ export async function storeUploadedCv(args: {
  */
 const PATH_SEPARATORS = new Set(['/', String.fromCharCode(0x5c)]);
 
-function safeDisplayFilename(filename: string): string {
+export function safeDisplayFilename(filename: string): string {
   const cleaned = [...(filename || '')]
     // Control characters are dropped by code point, so no invisible byte has to
     // appear in this source in order to express the range.
@@ -215,7 +215,7 @@ export async function listStoredCvs(userId: string): Promise<StoredCvSummary[]> 
     where: { userId, deletedAt: null },
     orderBy: { createdAt: 'desc' },
   });
-  return rows.map(toSummary);
+  return rows.map(toStoredCvSummary);
 }
 
 /**
