@@ -37,6 +37,7 @@ vi.mock('@/shared/entitlements/server', async (importActual) => {
   return {
     ...actual,
     assertCapability: vi.fn(async () => ({ allowed: true, capability: 'cv_regeneration', plan: 'FREE', mode: 'quota' })),
+    getUserPlan: vi.fn(async () => 'FREE'),
   };
 });
 vi.mock('@/shared/services/capability-reservation', () => ({
@@ -108,7 +109,8 @@ vi.mock('@/shared/schemas/analysis-result', () => ({
 import { POST } from '@/app/api/cv/regenerate/route';
 import { auth } from '@/shared/lib/auth';
 import { prisma } from '@/shared/lib/prisma';
-import { assertCapability } from '@/shared/entitlements/server';
+import { assertCapability, getUserPlan } from '@/shared/entitlements/server';
+import { applyRateLimit } from '@/shared/lib/rate-limit';
 import {
   reserveCapability,
   commitCapability,
@@ -121,7 +123,7 @@ import { persistAndArchiveCv } from '@/shared/services/cv-generation';
 import { storage } from '@/shared/lib/storage';
 import { commitRepair } from '@/shared/services/capability-reservation';
 import { resolveApprovedProfileEvidence } from '@/shared/services/profile-reconciler';
-import { loadOwnedProfileData } from '@/features/dashboard/data/load-profile';
+import { loadOwnedProfileData, resolveProfileId } from '@/features/dashboard/data/load-profile';
 import { ProfileEvidenceValidationError } from '@/shared/types/profile-reasoning';
 import { TRUTHFULNESS_FAILURE_MESSAGE } from '@/shared/services/cv-rewrite-validation';
 import { parseStoredAnalysisResult } from '@/shared/schemas/analysis-result';
@@ -227,6 +229,23 @@ beforeEach(() => {
 });
 
 describe('POST /api/cv/regenerate', () => {
+  it('rejects oversized input before rate limits, entitlements, reservations, or domain reads', async () => {
+    const response = await POST(regenRequest({
+      analysisId: 'an-1',
+      hitlContext: { requirement: 'x'.repeat(2001) },
+    }));
+
+    expect(response.status).toBe(400);
+    expect(applyRateLimit).not.toHaveBeenCalled();
+    expect(getUserPlan).not.toHaveBeenCalled();
+    expect(assertCapability).not.toHaveBeenCalled();
+    expect(reserveCapability).not.toHaveBeenCalled();
+    expect(prisma.jobMatch.findFirst).not.toHaveBeenCalled();
+    expect(resolveProfileId).not.toHaveBeenCalled();
+    expect(loadOwnedProfileData).not.toHaveBeenCalled();
+    expect(rewriteCV).not.toHaveBeenCalled();
+  });
+
   it('rebuilds a stored job-match analysis into a DOCX and consumes one generation after success', async () => {
     const res = await POST(regenRequest({ analysisId: 'an-1', templateId: 'architect' }));
 

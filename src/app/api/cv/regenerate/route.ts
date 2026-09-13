@@ -1,5 +1,4 @@
 import { NextResponse } from 'next/server';
-import { z } from 'zod';
 import { withErrorHandler, APIError } from '@/shared/utils/api-error';
 import { applyRateLimit, rewriteLimiter } from '@/shared/lib/rate-limit';
 import { auth } from '@/shared/lib/auth';
@@ -81,46 +80,7 @@ import {
 import { planCvBuildSpec } from '@/shared/services/cv-build-spec';
 import { TemplateIdSchema } from '@/shared/constants/templates';
 import { resolveApprovedApplicationEvidence, StructuredEvidenceValidationError } from '@/shared/services/structured-evidence';
-
-const ProfileEvidenceRefSchema = z.discriminatedUnion('type', [
-  z.object({ type: z.literal('experience'), id: z.string().min(1) }),
-  z.object({ type: z.literal('project'), id: z.string().min(1) }),
-  z.object({ type: z.literal('education'), id: z.string().min(1) }),
-  z.object({ type: z.literal('skill'), id: z.string().min(1) }),
-  z.object({ type: z.literal('certification'), id: z.string().min(1) }),
-  z.object({ type: z.literal('training'), id: z.string().min(1) }),
-  z.object({ type: z.literal('licence'), id: z.string().min(1) }),
-  z.object({ type: z.literal('professional_registration'), id: z.string().min(1) }),
-  z.object({ type: z.literal('language'), id: z.string().min(1) }),
-  z.object({ type: z.literal('volunteering'), id: z.string().min(1) }),
-  z.object({ type: z.literal('other'), id: z.string().min(1) }),
-]);
-
-const RegenerateSchema = z.object({
-  analysisId: z.string().min(1, 'analysisId is required'),
-  templateId: TemplateIdSchema,
-  hitlContext: z.record(z.string(), z.string()).optional().default({}),
-  includeAtsOptimization: z.boolean().optional().default(true),
-  /**
-   * Profile items the user approved in the profile-bridge step. Only ids cross
-   * the wire — the server re-resolves them against the stored profile, so a
-   * tampered request cannot inject invented experience into the rewrite.
-   */
-  approvedProfileEvidence: z
-    .array(
-      z.object({
-        requirementId: z.string().min(1),
-        evidenceRef: ProfileEvidenceRefSchema,
-        rationale: z.string().max(2000).optional(),
-        approvalId: z.string().min(1).optional(),
-      })
-    )
-    .optional()
-    .default([]),
-  /** Career track the approved ids belong to. Omitted uses the default. */
-  profileId: z.string().optional(),
-  applicationEvidenceContextIds: z.array(z.string().min(1)).optional().default([]),
-});
+import { RegenerateSchema } from './schema';
 
 /** hitlContext is a map of requirement label → the candidate's own free-text note. */
 function toUserContext(hitlContext: Record<string, string>): UserProvidedContext[] {
@@ -282,6 +242,20 @@ export async function POST(request: Request) {
       throw new APIError('Please sign in to generate a CV.', 401);
     }
 
+    const parsed = RegenerateSchema.safeParse(await request.json().catch(() => ({})));
+    if (!parsed.success) {
+      throw new APIError(parsed.error.message, 400);
+    }
+    const {
+      analysisId,
+      templateId,
+      hitlContext,
+      includeAtsOptimization,
+      approvedProfileEvidence,
+      profileId,
+      applicationEvidenceContextIds,
+    } = parsed.data;
+
     const rateLimitResponse = await applyRateLimit(rewriteLimiter, session.user.id);
     if (rateLimitResponse) return rateLimitResponse;
 
@@ -301,19 +275,7 @@ export async function POST(request: Request) {
       await assertCapability(session.user.id, 'cv_regeneration');
     }
 
-    const parsed = RegenerateSchema.safeParse(await request.json().catch(() => ({})));
-    if (!parsed.success) {
-      throw new APIError(parsed.error.message, 400);
-    }
-    const {
-      analysisId,
-      templateId,
-      hitlContext,
-      includeAtsOptimization,
-      approvedProfileEvidence,
-      profileId,
-      applicationEvidenceContextIds,
-    } = parsed.data;
+
 
     // Canonical, unprojected read from trusted storage — never the plan-projected
     // report shape. Ownership-checked and schema-validated inside the loader.

@@ -12,6 +12,17 @@ export const ANALYSIS_LIMITS = {
   maxCustomNoteCharacters: envInt('JOB_MATCH_MAX_CUSTOM_NOTE_CHARACTERS', 2_000),
 } as const;
 
+export const REGENERATION_CONTEXT_LIMITS = {
+  maxHitlEntries: 20,
+  maxHitlKeyCharacters: 120,
+  maxHitlValueCharacters: 2_000,
+  maxHitlBytes: 40_000,
+  maxApprovedItems: 100,
+  maxApplicationIds: 100,
+  maxIdentifierCharacters: 128,
+  maxTotalBytes: 65_536,
+} as const;
+
 export const RETENTION = {
   anonymousDemoHours: envInt('RETENTION_ANONYMOUS_DEMO_HOURS', 24),
   freeSourceCvDays: envInt('RETENTION_FREE_SOURCE_CV_DAYS', 180),
