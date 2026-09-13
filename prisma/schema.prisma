@@ -39,6 +39,7 @@ model User {
   profileEvidenceApprovals    ProfileEvidenceApproval[]
   billingAccount              BillingAccount?
   storedCvs                   StoredCv[]
+  cvUploadIntents             CvUploadIntent[]
   cvImportSessions            CvImportSession[]
   cvImportCandidates          CvImportCandidate[]
   onboardingState             OnboardingState?
@@ -1567,11 +1568,45 @@ model StoredCv {
   extractions    CvExtraction[]
   importSessions CvImportSession[]
   revisions      CvRevision[]
+  uploadIntents  CvUploadIntent[]
 
   @@unique([userId, checksum])
   @@index([userId, status])
   @@index([retentionEndsAt])
   @@map("stored_cv")
+}
+
+enum CvUploadIntentStatus {
+  PENDING
+  VALIDATING
+  COMPLETED
+  FAILED
+  EXPIRED
+}
+
+model CvUploadIntent {
+  id       String @id @default(cuid())
+  userId   String
+  user     User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  objectKey String @unique
+
+  originalFilename String
+  expectedMimeType String
+  expectedSizeBytes Int
+  status CvUploadIntentStatus @default(PENDING)
+  expiresAt DateTime
+  completedAt DateTime?
+  failureCode String?
+
+  storedCvId String?
+  storedCv   StoredCv? @relation(fields: [storedCvId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId, status, expiresAt])
+  @@index([status, expiresAt])
+  @@map("cv_upload_intent")
 }
 
 enum CvExtractionStatus {

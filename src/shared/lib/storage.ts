@@ -3,6 +3,7 @@ import {
   PutObjectCommand,
   GetObjectCommand,
   DeleteObjectCommand,
+  HeadObjectCommand,
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 
@@ -42,6 +43,8 @@ export interface UploadParams {
 
 export interface ObjectStorage {
   upload(params: UploadParams): Promise<string>;
+  createUploadUrl(params: { key: string; contentType: string; contentLength: number }): Promise<string>;
+  stat(key: string): Promise<{ sizeBytes: number; contentType: string | null; etag: string | null }>;
   download(bucket: StorageBucket, key: string): Promise<Buffer>;
   delete(bucket: StorageBucket, key: string): Promise<boolean>;
   createSignedUrl(bucket: StorageBucket, key: string, expiresInSeconds?: number): Promise<string>;
@@ -104,6 +107,30 @@ const s3Storage: ObjectStorage = {
       })
     );
     return key;
+  },
+
+  async createUploadUrl({ key, contentType, contentLength }) {
+    return getSignedUrl(
+      getClient(),
+      new PutObjectCommand({
+        Bucket: bucketName('uploads'),
+        Key: key,
+        ContentType: contentType,
+        ContentLength: contentLength,
+      }),
+      { expiresIn: 300 }
+    );
+  },
+
+  async stat(key) {
+    const result = await getClient().send(
+      new HeadObjectCommand({ Bucket: bucketName('uploads'), Key: key })
+    );
+    return {
+      sizeBytes: result.ContentLength ?? 0,
+      contentType: result.ContentType ?? null,
+      etag: result.ETag ?? null,
+    };
   },
 
   async download(bucket, key) {
