@@ -1,6 +1,6 @@
 import { prisma } from '../lib/prisma.ts';
 import { greenhouseAdapter } from './job-providers/greenhouse-adapter.ts';
-import { getOrCreateSnapshotFromNormalisedJob } from './job-snapshot.ts';
+import { persistTrustedProviderJob } from './job-snapshot.ts';
 import { ensureCompanySponsorEvidence } from './company-sponsor-evidence.ts';
 
 export type GreenhouseRefreshSummary = { attempted: number; successful: number; empty: number; failed: number; timedOut: number; jobsRetrieved: number; uniqueJobsPersisted: number; duplicateJobsMerged: number; invalidUrls: number; invalidJobRecords: number; invalidUrlReasons: Record<string, number>; malformedPayloads: number; durationMs: number; perSourceFailures: Record<string, number>; sources: Array<{ sourceId: string; identifier: string; status: 'SUCCESS' | 'EMPTY' | 'FAILED'; jobs: number; errorCode?: string; durationMs: number }> };
@@ -18,7 +18,7 @@ export async function refreshGreenhouseEmployerSources(input: { sourceIds?: stri
     const source = sources[cursor++]; const itemStarted = Date.now(); const attemptedAt = new Date();
     try {
       const result = await greenhouseAdapter.fetchBoard(source);
-      for (const batch of chunks(result.jobs, 20)) await Promise.all(batch.map(async (job) => { const existed = persisted.has(job.canonicalJobId); persisted.add(job.canonicalJobId); await getOrCreateSnapshotFromNormalisedJob(job); if (existed) summary.duplicateJobsMerged += 1; else summary.uniqueJobsPersisted += 1; }));
+      for (const batch of chunks(result.jobs, 20)) await Promise.all(batch.map(async (job) => { const existed = persisted.has(job.canonicalJobId); persisted.add(job.canonicalJobId); await persistTrustedProviderJob(job); if (existed) summary.duplicateJobsMerged += 1; else summary.uniqueJobsPersisted += 1; }));
       await prisma.employerJobSource.update({ where: { id: source.id }, data: { lastAttemptedAt: attemptedAt, lastSuccessfulSyncAt: new Date(), lastErrorCode: null, lastErrorAt: null } });
       // Employer-direct ingestion is the cheapest moment to keep register
       // evidence current: the company is already known and the check is a no-op

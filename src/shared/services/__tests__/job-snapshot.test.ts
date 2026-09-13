@@ -13,7 +13,7 @@ const { prisma } = vi.hoisted(() => ({
 }));
 vi.mock('@/shared/lib/prisma', () => ({ prisma }));
 
-import { attachUserDescription, getOrCreateSnapshotFromNormalisedJob, resolveSelectedDescription } from '@/shared/services/job-snapshot';
+import { attachUserDescription, persistTrustedProviderJob, resolveSelectedDescription } from '@/shared/services/job-snapshot';
 
 const job = {
   source: 'ADZUNA', sourceJobId: 'one', canonicalUrl: 'https://example.test/one', canonicalJobId: 'provider-one', title: 'Platform Engineer', company: 'Fixture Systems Ltd', companyNormalised: 'fixture systems', locationText: 'Leeds, UK', remoteType: 'HYBRID', description: 'Build reliable platform services.', descriptionAvailability: 'FULL', providerReferences: [{ provider: 'ADZUNA', sourceJobId: 'one', sourceUrl: 'https://example.test/one' }, { provider: 'REED', sourceJobId: 'two', sourceUrl: 'https://example.test/two' }], dedupeFingerprint: 'same-vacancy', fetchedAt: '2026-07-28T10:00:00.000Z', sponsorSignal: { registerMatchStatus: 'NONE', jobWording: 'NOT_MENTIONED', explanation: 'Fixture only' }, eligibilityHints: [],
@@ -32,7 +32,7 @@ describe('JobSnapshot service', () => {
     prisma.jobSnapshot.create.mockResolvedValue({ id: 'snapshot-1' });
     prisma.jobProviderReference.upsert.mockResolvedValue({});
 
-    await getOrCreateSnapshotFromNormalisedJob(job as never);
+    await persistTrustedProviderJob(job as never);
 
     // Availability is assessed from the text being STORED, never copied from the
     // NormalisedJob. This fixture declares FULL, but the text is one sentence
@@ -51,7 +51,7 @@ describe('JobSnapshot service', () => {
     prisma.jobSnapshot.update.mockResolvedValue({ id: 'snapshot-1' });
     prisma.jobProviderReference.upsert.mockResolvedValue({});
 
-    await getOrCreateSnapshotFromNormalisedJob({ ...job, description: 'Short refresh' } as never);
+    await persistTrustedProviderJob({ ...job, description: 'Short refresh' } as never);
 
     // The richer stored description is retained, and the availability is
     // recomputed FROM IT. Previously a stored FULL was sticky — `existing
@@ -72,7 +72,7 @@ describe('JobSnapshot service', () => {
     prisma.jobSnapshot.create.mockResolvedValue({ id: 'snapshot-1' });
     prisma.jobProviderReference.upsert.mockResolvedValue({});
 
-    await getOrCreateSnapshotFromNormalisedJob({ ...job, locationText: 'New York City', country: undefined, countryCode: 'GB' } as never);
+    await persistTrustedProviderJob({ ...job, locationText: 'New York City', country: undefined, countryCode: 'GB' } as never);
 
     const written = prisma.jobSnapshot.create.mock.calls[0][0].data;
     expect(written.country).toBeNull();

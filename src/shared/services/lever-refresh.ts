@@ -1,6 +1,6 @@
 import { prisma } from '../lib/prisma.ts';
 import { leverAdapter } from './job-providers/lever-adapter.ts';
-import { getOrCreateSnapshotFromNormalisedJob } from './job-snapshot.ts';
+import { persistTrustedProviderJob } from './job-snapshot.ts';
 import { ensureCompanySponsorEvidence } from './company-sponsor-evidence.ts';
 
 export type LeverRefreshSummary = {
@@ -23,7 +23,7 @@ export async function refreshLeverEmployerSources(input: { sourceIds?: string[];
     const source = sources[cursor++]; const itemStarted = Date.now(); const attemptedAt = new Date();
     try {
       const result = await leverAdapter.fetchBoard(source);
-      for (const batch of chunks(result.jobs, 20)) await Promise.all(batch.map(async (job) => { const existed = persisted.has(job.canonicalJobId); persisted.add(job.canonicalJobId); await getOrCreateSnapshotFromNormalisedJob(job); if (existed) summary.duplicateJobsMerged += 1; else summary.uniqueJobsPersisted += 1; }));
+      for (const batch of chunks(result.jobs, 20)) await Promise.all(batch.map(async (job) => { const existed = persisted.has(job.canonicalJobId); persisted.add(job.canonicalJobId); await persistTrustedProviderJob(job); if (existed) summary.duplicateJobsMerged += 1; else summary.uniqueJobsPersisted += 1; }));
       await prisma.employerJobSource.update({ where: { id: source.id }, data: { lastAttemptedAt: attemptedAt, lastSuccessfulSyncAt: new Date(), lastErrorCode: null, lastErrorAt: null } });
       // Employer-direct ingestion is the cheapest moment to keep register
       // evidence current: the company is already known and the check is a no-op

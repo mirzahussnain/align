@@ -5,7 +5,7 @@ import { blankSponsorSignal } from "@/shared/services/job-normalisation";
 const findMany = vi.fn(async () => [] as Array<{ jobSnapshotId: string }>);
 // The search path now materialises a whole page in one batched call instead of
 // one round trip per card, so this is the boundary the view is mocked at.
-const materialiseSnapshotIds = vi.fn(
+const materialiseTrustedProviderSnapshotIds = vi.fn(
   async (jobs: readonly NormalisedJob[]) =>
     new Map(jobs.map((job) => [job.canonicalJobId, `snapshot-${job.sourceJobId}`])),
 );
@@ -14,7 +14,7 @@ vi.mock("@/shared/lib/prisma", () => ({
   prisma: { savedJob: { findMany } },
 }));
 vi.mock("@/shared/services/job-snapshot", () => ({
-  materialiseSnapshotIds,
+  materialiseTrustedProviderSnapshotIds,
 }));
 
 const { materialiseSearchJobCards } = await import(
@@ -53,7 +53,7 @@ function vacancy(
 beforeEach(() => {
   findMany.mockReset();
   findMany.mockResolvedValue([]);
-  materialiseSnapshotIds.mockClear();
+  materialiseTrustedProviderSnapshotIds.mockClear();
 });
 
 describe("search result materialisation", () => {
@@ -70,7 +70,7 @@ describe("search result materialisation", () => {
     expect(new Set(cards.map((card) => card.id)).size).toBe(2);
     // ONE batched call for the page, not one per card. A fifteen-result page
     // previously cost sixty-plus queries on the critical path of every search.
-    expect(materialiseSnapshotIds).toHaveBeenCalledTimes(1);
+    expect(materialiseTrustedProviderSnapshotIds).toHaveBeenCalledTimes(1);
   });
 
   it("returns API-provided relevance only when a Career Track is supplied", async () => {

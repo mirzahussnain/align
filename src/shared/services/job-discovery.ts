@@ -49,7 +49,7 @@ function snapshotToJob(row: SnapshotRow): NormalisedJob | null {
  *    scale that is megabytes of text transferred, parsed and discarded on every
  *    single search, because nothing on a result CARD renders a description. The
  *    select is now explicit and description-free. Persistence is unaffected: a
- *    NormalisedJob with no description makes `getOrCreateSnapshotFromNormalisedJob`
+ *    NormalisedJob with no description makes `persistTrustedProviderJob`
  *    retain the stored text rather than overwrite it, and identity dedupe between
  *    two employer-direct requisitions never consults description similarity.
  *

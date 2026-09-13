@@ -2,7 +2,7 @@ import { prisma } from "@/shared/lib/prisma";
 import { sponsorSummary } from "@/shared/services/job-board-api";
 import { assessDescriptionCompleteness } from "@/shared/services/job-description-completeness";
 import { calculateDiscoveryRelevance } from "@/shared/services/job-intelligence";
-import { materialiseSnapshotIds } from "@/shared/services/job-snapshot";
+import { materialiseTrustedProviderSnapshotIds } from "@/shared/services/job-snapshot";
 import type { NormalisedJob } from "@/shared/types/job";
 import type { CareerTrackDiscoveryInput } from "@/shared/types/job-intelligence";
 
@@ -23,7 +23,7 @@ export async function materialiseSearchJobCards(
 ) {
   // One batched existence check for the whole page instead of one round trip per
   // card, and no re-read of what was just written.
-  const snapshotIds = await materialiseSnapshotIds(jobs);
+  const snapshotIds = await materialiseTrustedProviderSnapshotIds(jobs);
   const materialised = jobs.map((job) => {
     const id = snapshotIds.get(job.canonicalJobId);
     if (!id) throw new Error("Unable to materialise a durable job snapshot.");

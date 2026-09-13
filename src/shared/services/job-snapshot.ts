@@ -175,7 +175,7 @@ async function persistSnapshot(
 }
 
 /** Durable Job Board boundary. Routes never write JobSnapshot rows directly. */
-export async function getOrCreateSnapshotFromNormalisedJob(job: NormalisedJob) {
+export async function persistTrustedProviderJob(job: NormalisedJob) {
   const existing = await prisma.jobSnapshot.findUnique({
     where: { canonicalJobId: job.dedupeFingerprint },
     select: EXISTING_SNAPSHOT_SELECT,
@@ -281,7 +281,7 @@ export async function createImportedJobSnapshot(input: ImportedVacancyInput) {
  *
  * The search path only needs each job's snapshot id — that is what selection,
  * details, save state and React identity are all keyed on. Calling
- * `getOrCreateSnapshotFromNormalisedJob` per card spent four round trips per
+ * `persistTrustedProviderJob` per card spent four round trips per
  * job (a findUnique, a create-or-update, the reference upserts, then a
  * findUnique-with-includes to re-read what had just been written) purely to
  * throw the payload away and keep the id. For a fifteen-result page that is
@@ -291,7 +291,7 @@ export async function createImportedJobSnapshot(input: ImportedVacancyInput) {
  * writes themselves. Behaviour is otherwise identical, including the concurrent-
  * discovery P2002 recovery, which is why that path is shared rather than copied.
  */
-export async function materialiseSnapshotIds(jobs: readonly NormalisedJob[]): Promise<Map<string, string>> {
+export async function materialiseTrustedProviderSnapshotIds(jobs: readonly NormalisedJob[]): Promise<Map<string, string>> {
   if (!jobs.length) return new Map();
   const fingerprints = [...new Set(jobs.map((job) => job.dedupeFingerprint))];
   const existing = new Map(
