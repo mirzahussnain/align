@@ -1,9 +1,29 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { auth } from '@/shared/lib/auth';
-import { prisma } from '@/shared/lib/prisma';
-import { saveSnapshotForUser } from '@/shared/services/job-snapshot';
+import { saveJobForUser, unsaveJobForUser } from '@/shared/services/saved-job';
 import { APIError, withErrorHandler } from '@/shared/utils/api-error';
-const Input = z.object({ profileId: z.string().optional() });
-export async function POST(request: NextRequest, context: { params: Promise<{ jobSnapshotId: string }> }) { return withErrorHandler(async () => { const session = await auth.api.getSession({ headers: request.headers }); if (!session) throw new APIError('Please sign in to save a job.', 401, undefined, 'UNAUTHENTICATED'); const input = Input.safeParse(await request.json().catch(() => ({}))); if (!input.success) throw new APIError('Invalid save request.', 400, undefined, 'INVALID_REQUEST'); const { jobSnapshotId } = await context.params; const snapshot = await prisma.jobSnapshot.findFirst({ where: { id: jobSnapshotId, OR: [{ importedByUserId: null }, { importedByUserId: session.user.id }] }, select: { id: true } }); if (!snapshot) throw new APIError('Vacancy not found.', 404, undefined, 'NOT_FOUND'); if (input.data.profileId && !await prisma.profile.findFirst({ where: { id: input.data.profileId, userId: session.user.id }, select: { id: true } })) throw new APIError('Career Track not found.', 404, undefined, 'NOT_FOUND'); const saved = await saveSnapshotForUser({ userId: session.user.id, jobSnapshotId, profileId: input.data.profileId }); return NextResponse.json({ saved: true, jobSnapshotId: saved.jobSnapshotId }); }); }
-export async function DELETE(request: NextRequest, context: { params: Promise<{ jobSnapshotId: string }> }) { return withErrorHandler(async () => { const session = await auth.api.getSession({ headers: request.headers }); if (!session) throw new APIError('Please sign in to remove a saved job.', 401, undefined, 'UNAUTHENTICATED'); const { jobSnapshotId } = await context.params; await prisma.savedJob.deleteMany({ where: { userId: session.user.id, jobSnapshotId } }); return NextResponse.json({ saved: false, jobSnapshotId }); }); }
+
+const Input = z.object({ profileId: z.string().min(1).max(128).optional() }).strict();
+
+export async function POST(request: NextRequest, context: { params: Promise<{ jobSnapshotId: string }> }) {
+  return withErrorHandler(async () => {
+    const session = await auth.api.getSession({ headers: request.headers });
+    if (!session) throw new APIError('Please sign in to save a job.', 401, undefined, 'UNAUTHENTICATED');
+    const input = Input.safeParse(await request.json().catch(() => ({})));
+    if (!input.success) throw new APIError('Invalid save request.', 400, undefined, 'INVALID_REQUEST');
+    const { jobSnapshotId } = await context.params;
+    const result = await saveJobForUser({ userId: session.user.id, jobSnapshotId, profileId: input.data.profileId });
+    return NextResponse.json({ saved: true, jobSnapshotId: result.savedJob.jobSnapshotId }, { status: result.created ? 201 : 200 });
+  });
+}
+
+export async function DELETE(request: NextRequest, context: { params: Promise<{ jobSnapshotId: string }> }) {
+  return withErrorHandler(async () => {
+    const session = await auth.api.getSession({ headers: request.headers });
+    if (!session) throw new APIError('Please sign in to remove a saved job.', 401, undefined, 'UNAUTHENTICATED');
+    const { jobSnapshotId } = await context.params;
+    await unsaveJobForUser({ userId: session.user.id, jobSnapshotId });
+    return NextResponse.json({ saved: false, jobSnapshotId });
+  });
+}
