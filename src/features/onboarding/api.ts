@@ -138,6 +138,10 @@ const ERROR_COPY: Record<string, string> = {
   STORAGE_FAILED: 'We could not store your CV securely. Please try again.',
   STORED_CV_LIMIT_REACHED: 'You have reached the number of stored CVs your plan allows.',
   DUPLICATE_STORED_CV: 'You have already uploaded this CV.',
+  UPLOAD_INTENT_EXPIRED: 'This upload expired. Please start the upload again.',
+  UPLOAD_ALREADY_FINALIZED: 'This upload has already been completed.',
+  UPLOAD_INCOMPLETE: 'The uploaded file is not available yet. Please try the upload again.',
+  UPLOAD_SIZE_MISMATCH: 'The uploaded file size did not match the reserved upload.',
   CORRUPT_DOCUMENT: 'We could not read that file. It may be damaged or password protected.',
   EMPTY_TEXT: 'We could not find any text in that CV. It may be a scan rather than a text document.',
   EXTRACTOR_FAILED: 'We could not read your CV. You can try again, or enter your details manually.',
@@ -207,13 +211,32 @@ export const onboardingApi = {
       '/api/stored-cvs'
     ),
 
-  upload: (file: File) => {
-    const form = new FormData();
-    form.append('file', file);
-    return request<{ duplicate: boolean; storedCv: StoredCvSummary }>('/api/stored-cvs', {
-      method: 'POST',
-      body: form,
+  upload: async (file: File) => {
+    const contentType = file.name.toLowerCase().endsWith('.pdf')
+      ? 'application/pdf'
+      : 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+    const intent = await request<{
+      intentId: string;
+      uploadUrl: string;
+      contentType: string;
+      expiresAt: string;
+    }>('/api/stored-cvs/upload-intent', json({
+      filename: file.name,
+      mimeType: contentType,
+      sizeBytes: file.size,
+    }));
+
+    const uploaded = await fetch(intent.uploadUrl, {
+      method: 'PUT',
+      headers: { 'Content-Type': intent.contentType },
+      body: file,
     });
+    if (!uploaded.ok) throw new OnboardingRequestError('STORAGE_FAILED');
+
+    return request<{ duplicate: boolean; storedCv: StoredCvSummary }>(
+      '/api/stored-cvs/upload-complete',
+      json({ intentId: intent.intentId })
+    );
   },
 
   extract: (storedCvId: string, force = false) =>
