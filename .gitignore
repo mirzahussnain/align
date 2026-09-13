@@ -41,17 +41,34 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-.vercel
-
 /src/generated/prisma
 
-# Stage 4 artifacts.
-/artifacts/golden-cvs/
-/artifacts/stage4-browser/
-# Local design, editor and inspection artifacts
+# testing & artifacts
+/artifacts/*
+!/artifacts/README.md
+/test-results/
+/playwright-report/
+
+# local design, editor, and inspection artifacts
 /.impeccable/
 /.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
 /analyze.html
 /scratch-count.cjs
-/artifacts/onboarding-reference/
-/artifacts/*.log
+
+# AI tooling & agents
+.claude/
+.kilo/
+.kilocode/
+.cursor/
+
+# OS files
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# local docker compose override
+docker-compose.override.yml
