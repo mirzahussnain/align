@@ -1,15 +1,9 @@
 import { NextResponse } from 'next/server';
 import { auth } from '@/shared/lib/auth';
 import { APIError } from '@/shared/utils/api-error';
-import { applyRateLimit, analysisLimiter } from '@/shared/lib/rate-limit';
 import { withCvPipeline } from '@/shared/services/cv-pipeline-http';
 import { checkCapability } from '@/shared/entitlements/server';
-import {
-  listStoredCvs,
-  storeUploadedCv,
-  extractStoredCvRecord,
-  sweepExpiredStoredCvs,
-} from '@/shared/services/stored-cv';
+import { listStoredCvs, extractStoredCvRecord } from '@/shared/services/stored-cv';
 import { CvPipelineError, MAX_CV_UPLOAD_BYTES } from '@/shared/services/cv-extraction';
 import { blockOnboarding } from '@/shared/services/onboarding';
 

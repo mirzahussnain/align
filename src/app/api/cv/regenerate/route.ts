@@ -78,7 +78,6 @@ import {
   DOCX_CONTENT_TYPE,
 } from '@/shared/services/cv-generation';
 import { planCvBuildSpec } from '@/shared/services/cv-build-spec';
-import { TemplateIdSchema } from '@/shared/constants/templates';
 import { resolveApprovedApplicationEvidence, StructuredEvidenceValidationError } from '@/shared/services/structured-evidence';
 import { RegenerateSchema } from './schema';
 
