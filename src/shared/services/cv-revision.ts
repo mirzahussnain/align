@@ -82,7 +82,7 @@ export async function resolveCvRevision(args: {
   }
 
   const file = args.file!;
-  if (file.size > ANALYSIS_LIMITS.maxCvBytes) throw new APIError('File too large.', 413);
+  if (file.size > ANALYSIS_LIMITS.maxDirectMultipartCvBytes) throw new APIError('File too large.', 413);
   const bytes = Buffer.from(await file.arrayBuffer());
   const validated = validateUploadBytes(file.name, bytes);
   const extraction = await extractStoredCv(validated.bytes);

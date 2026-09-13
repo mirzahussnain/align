@@ -112,7 +112,7 @@ export default function PublicAtsDemo() {
           <span className="mt-4 text-sm font-semibold text-slate-900">
             {file ? file.name : 'Choose a PDF or DOCX CV'}
           </span>
-          <span className="mt-1 text-xs text-slate-500">Maximum 10 MB</span>
+          <span className="mt-1 text-xs text-slate-500">Maximum 4 MB</span>
           <input
             className="sr-only"
             type="file"

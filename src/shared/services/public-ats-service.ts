@@ -56,7 +56,7 @@ export async function createPublicAtsDemo(args: {
     });
     if (existing) throw new APIError('This browser has already used its free ATS demo.', 429);
   }
-  if (args.file.size > ANALYSIS_LIMITS.maxCvBytes) throw new APIError('File too large.', 413);
+  if (args.file.size > ANALYSIS_LIMITS.maxDirectMultipartCvBytes) throw new APIError('File too large.', 413);
   const ipHash = publicAtsIdentifier(args.ip);
   const cutoff = new Date(Date.now() - RETENTION.anonymousDemoHours * 3_600_000);
   const recentForIp = await prisma.anonymousAtsResult.count({

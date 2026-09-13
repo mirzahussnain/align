@@ -95,6 +95,16 @@ describe('AnalyzeRequestSchema — target role format', () => {
   });
 });
 
+describe('Direct multipart CV size', () => {
+  it('accepts 4 MiB and rejects one byte more for analyze and detect', () => {
+    const exact = new File([new Uint8Array(4 * 1024 * 1024)], 'cv.pdf', { type: 'application/pdf' });
+    const over = new File([new Uint8Array(4 * 1024 * 1024 + 1)], 'cv.pdf', { type: 'application/pdf' });
+    expect(AnalyzeRequestSchema.safeParse({ file: exact, mode: 'ats' }).success).toBe(true);
+    expect(AnalyzeRequestSchema.safeParse({ file: over, mode: 'ats' }).success).toBe(false);
+    expect(DetectRequestSchema.safeParse({ file: exact }).success).toBe(true);
+    expect(DetectRequestSchema.safeParse({ file: over }).success).toBe(false);
+  });
+});
 describe('DetectRequestSchema', () => {
   it('accepts a PDF with an optional profileId', () => {
     expect(DetectRequestSchema.safeParse({ file: pdf(), profileId: 'p1' }).success).toBe(true);

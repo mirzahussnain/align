@@ -289,7 +289,7 @@ export function Step1VacancyForm({
             {uploadFile ? "Change CV" : "Choose PDF"}
           </button>
           <p className="mt-1.5 truncate text-xs text-neutral-500">
-            {uploadFile?.name ?? "PDF, up to 10MB"}
+            {uploadFile?.name ?? "PDF, up to 4MB"}
           </p>
         </div>
       )}

@@ -1,5 +1,7 @@
 "use client";
 
+import { ANALYSIS_LIMITS } from "@/shared/config/analysis-domain";
+
 import {
   useEffect,
   useRef,
@@ -19,7 +21,7 @@ import { Step1VacancyForm, type StoredCvOption } from "./stepper/Step1VacancyFor
 import { Step2CheckResults } from "./stepper/Step2CheckResults";
 import { Step3AnalysisOrUpgrade } from "./stepper/Step3AnalysisOrUpgrade";
 
-const MAX_CV_BYTES = 10 * 1024 * 1024;
+const MAX_CV_BYTES = ANALYSIS_LIMITS.maxDirectMultipartCvBytes;
 
 type CheckedVacancy = {
   jobSnapshotId: string;
@@ -214,7 +216,7 @@ export function VacancyIntake() {
       return;
     }
     if (file.size > MAX_CV_BYTES) {
-      setError("That CV is larger than 10MB.");
+      setError("That CV is larger than 4MB.");
       return;
     }
     setError(null);

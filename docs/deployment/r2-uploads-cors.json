@@ -1,0 +1,9 @@
+[
+  {
+    "AllowedOrigins": ["https://align.vyndra.tech"],
+    "AllowedMethods": ["PUT"],
+    "AllowedHeaders": ["Content-Type"],
+    "ExposeHeaders": ["ETag"],
+    "MaxAgeSeconds": 3600
+  }
+]

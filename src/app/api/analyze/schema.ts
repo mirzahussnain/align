@@ -1,9 +1,10 @@
 import { z } from 'zod';
+import { ANALYSIS_LIMITS } from '@/shared/config/analysis-domain';
 
 const PdfFile = z
   .custom<File>((val) => val instanceof File, 'Must be a File')
   .refine((file) => file.name.endsWith('.pdf'), 'Only PDF files are supported')
-  .refine((file) => file.size <= 10 * 1024 * 1024, 'File too large. Max 10MB');
+  .refine((file) => file.size <= ANALYSIS_LIMITS.maxDirectMultipartCvBytes, 'File too large. Max 4MB');
 
 /**
  * A free-text target role the user typed for THIS upload. Deliberately strict:

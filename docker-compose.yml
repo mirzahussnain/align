@@ -77,12 +77,15 @@ services:
     # The avatars bucket gets an anonymous-download policy because User.image
     # holds a direct URL the browser fetches without credentials — the other two
     # stay private and are only ever reachable through a presigned URL.
+    volumes:
+      - ./docker/minio-cors.xml:/config/minio-cors.xml:ro
     entrypoint: >
       /bin/sh -c "
       mc alias set local http://minio:9000 minioadmin minioadmin &&
       mc mb --ignore-existing local/align-cv-uploads &&
       mc mb --ignore-existing local/align-cv-rewrites &&
       mc mb --ignore-existing local/align-users &&
+      mc cors set local/align-cv-uploads /config/minio-cors.xml &&
       mc anonymous set download local/align-users
       "
 

@@ -5,6 +5,7 @@ const envInt = (name: string, fallback: number): number => {
 
 export const ANALYSIS_LIMITS = {
   maxCvBytes: envInt('ANALYSIS_MAX_CV_BYTES', 10 * 1024 * 1024),
+  maxDirectMultipartCvBytes: 4 * 1024 * 1024,
   maxCvCharacters: envInt('ANALYSIS_MAX_CV_CHARACTERS', 120_000),
   maxJobDescriptionCharacters: envInt('JOB_MATCH_MAX_JD_CHARACTERS', 50_000),
   maxProfileSnapshotBytes: envInt('JOB_MATCH_MAX_PROFILE_SNAPSHOT_BYTES', 250_000),

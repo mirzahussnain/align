@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { ANALYSIS_LIMITS } from '@/shared/config/analysis-domain';
 import { useDropzone } from 'react-dropzone';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Upload, FileText, X, Sparkles, Loader2 } from 'lucide-react';
@@ -100,8 +101,8 @@ export default function CVUploader({ mode = 'ats', onAnalysisComplete, profileId
     setError(null);
     if (acceptedFiles.length > 0) {
       const f = acceptedFiles[0];
-      if (f.size > 10 * 1024 * 1024) {
-        setError('File too large. Maximum size is 10MB.');
+      if (f.size > ANALYSIS_LIMITS.maxDirectMultipartCvBytes) {
+        setError('File too large. Maximum size is 4MB.');
         return;
       }
       setFile(f);
@@ -323,7 +324,7 @@ export default function CVUploader({ mode = 'ats', onAnalysisComplete, profileId
                         {isDragActive ? 'Drop your CV here' : 'Upload your CV'}
                       </p>
                       <p className="text-sm text-slate-500">
-                        Drag & drop or click to browse • PDF format • Max 10MB
+                        Drag & drop or click to browse • PDF format • Max 4MB
                       </p>
                     </div>
                   </div>

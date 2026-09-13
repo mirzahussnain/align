@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useRef, type ChangeEvent } from "react";
+import { ANALYSIS_LIMITS } from "@/shared/config/analysis-domain";
 import {
   X,
   ExternalLink,
@@ -34,7 +35,7 @@ import { interpretOperationalError } from "@/shared/entitlements/operational-err
 const MIN_PASTED_CHARS = 400;
 
 /** Matches the analyse route's own upload limit, so nothing is rejected late. */
-const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
+const MAX_UPLOAD_BYTES = ANALYSIS_LIMITS.maxDirectMultipartCvBytes;
 
 /** One of the user's stored source CVs, as listed by /api/stored-cvs. */
 interface StoredCvOption {
@@ -198,7 +199,7 @@ export function CheckMatchModal({
     const file = e.target.files?.[0];
     if (!file) return;
     if (file.size > MAX_UPLOAD_BYTES) {
-      setError("That file is too large. The maximum size is 10MB.");
+      setError("That file is too large. The maximum size is 4MB.");
       return;
     }
     setError(null);
@@ -701,7 +702,7 @@ export function CheckMatchModal({
                     </p>
                   )}
                   <p className="mt-2 text-xs text-neutral-500 dark:text-text-tertiary">
-                    PDF, up to 10MB.
+                    PDF, up to 4MB.
                   </p>
                 </div>
               )}
