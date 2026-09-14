@@ -9,9 +9,8 @@ import { storage } from '@/shared/lib/storage';
 import { getUserPlan, EntitlementRequiredError } from '@/shared/entitlements/server';
 import { getPlanEntitlement, type CapabilityDecision } from '@/shared/entitlements/registry';
 import { entitlementsFor, sourceExpiryFrom } from '@/shared/lib/entitlements';
+import { RETENTION_POLICY, UPLOAD_POLICY } from '@/shared/policies';
 import {
-  CV_FORMAT_CANONICAL_MIME,
-  MAX_CV_UPLOAD_BYTES,
   validateUploadBytes,
   type CvSourceFormat,
 } from '@/shared/services/cv-extraction';
@@ -24,17 +23,15 @@ import {
 } from '@/shared/services/stored-cv';
 
 const CAPABILITY = 'stored_source_cvs' as const;
-const PENDING_TTL_MS = 5 * 60_000;
-const VALIDATING_TTL_MS = 10 * 60_000;
 const STORAGE_PROVIDER = 's3';
 const LIVE_STATUSES = [CvUploadIntentStatus.PENDING, CvUploadIntentStatus.VALIDATING] as const;
 
 function metadataFormat(filename: string, mimeType: string, sizeBytes: number): CvSourceFormat {
   if (!Number.isInteger(sizeBytes) || sizeBytes <= 0) throw new CvPipelineError('FILE_EMPTY');
-  if (sizeBytes > MAX_CV_UPLOAD_BYTES) throw new CvPipelineError('FILE_TOO_LARGE', 413);
+  if (sizeBytes > UPLOAD_POLICY.cv.maxBytes) throw new CvPipelineError('FILE_TOO_LARGE', 413);
   const lower = filename.toLowerCase();
   const format = lower.endsWith('.pdf') ? 'pdf' : lower.endsWith('.docx') ? 'docx' : null;
-  if (!format || CV_FORMAT_CANONICAL_MIME[format] !== mimeType) {
+  if (!format || UPLOAD_POLICY.cv.canonicalMimeTypes[format] !== mimeType) {
     throw new CvPipelineError('UNSUPPORTED_FORMAT');
   }
   return format;
@@ -87,7 +84,9 @@ export async function createCvUploadIntent(args: {
   const now = args.now ?? new Date();
   const format = metadataFormat(args.filename, args.mimeType, args.sizeBytes);
   const objectKey = `users/${args.userId}/stored-cv/intents/${randomUUID()}.${format}`;
-  const expiresAt = new Date(now.getTime() + PENDING_TTL_MS);
+  const expiresAt = new Date(
+    now.getTime() + RETENTION_POLICY.uploadIntent.pendingMinutes * 60_000
+  );
 
   const intent = await prisma.$transaction(async (tx) => {
     await lockStoredCvSlots(tx, args.userId);
@@ -106,7 +105,7 @@ export async function createCvUploadIntent(args: {
         userId: args.userId,
         objectKey,
         originalFilename: safeDisplayFilename(args.filename),
-        expectedMimeType: CV_FORMAT_CANONICAL_MIME[format],
+        expectedMimeType: UPLOAD_POLICY.cv.canonicalMimeTypes[format],
         expectedSizeBytes: args.sizeBytes,
         status: CvUploadIntentStatus.PENDING,
         expiresAt,
@@ -136,7 +135,9 @@ async function claimIntent(userId: string, intentId: string, now: Date) {
       where: { id: intentId, userId, status: CvUploadIntentStatus.PENDING, expiresAt: { gt: now } },
       data: {
         status: CvUploadIntentStatus.VALIDATING,
-        expiresAt: new Date(now.getTime() + VALIDATING_TTL_MS),
+        expiresAt: new Date(
+          now.getTime() + RETENTION_POLICY.uploadIntent.validatingMinutes * 60_000
+        ),
       },
     });
     if (claimed.count === 1) {

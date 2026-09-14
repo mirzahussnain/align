@@ -7,9 +7,8 @@ import { logJobBoardEvent } from '@/shared/services/job-board-observability';
 import { normaliseCompanyName, normaliseLocation, normaliseTitle } from '@/shared/services/job-normalisation';
 import type { NormalisedJob } from '@/shared/types/job';
 import type { CompanyResolutionResult } from '@/shared/types/sponsor-evidence';
-import { ANALYSIS_LIMITS } from '@/shared/config/analysis-domain';
+import { ANALYSIS_LIMITS, RETENTION_POLICY } from '@/shared/policies';
 
-const MATCH_REQUEST_TTL_MS = 30 * 60_000;
 const descriptionHash = (value: string) => createHash('sha256').update(value).digest('hex');
 const asDate = (value: string | undefined) => value && !Number.isNaN(Date.parse(value)) ? new Date(value) : null;
 const json = <T>(value: T) => JSON.parse(JSON.stringify(value));
@@ -402,7 +401,9 @@ export async function createMatchRequest(input: { userId: string; profileId: str
     : resolveSelectedDescription(snapshot);
   if (!selected) throw new Error('Add a job description before preparing a match.');
   if (selected.partial && !input.partialDescriptionAccepted) throw new Error('Confirm that you understand this is a partial description.');
-  const expiresAt = new Date(Date.now() + MATCH_REQUEST_TTL_MS);
+  const expiresAt = new Date(
+    Date.now() + RETENTION_POLICY.abandonedRequestMinutes * 60_000
+  );
   const existing = await prisma.jobMatchRequest.findFirst({
     where: { userId: input.userId, profileId: input.profileId, jobSnapshotId: input.jobSnapshotId, selectedDescriptionHash: selected.hash, status: 'PREPARED', expiresAt: { gt: new Date() } },
     orderBy: { createdAt: 'desc' },

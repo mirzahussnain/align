@@ -1,6 +1,6 @@
 import { prisma } from '@/shared/lib/prisma';
 import { Prisma } from '@/generated/prisma/client';
-import { RETENTION } from '@/shared/config/analysis-domain';
+import { RETENTION_POLICY } from '@/shared/policies';
 import { sweepExpiredSources } from './storage-quota';
 import { sweepExpiredStoredCvs } from './stored-cv';
 import { sweepExpiredReservations } from './capability-reservation';
@@ -24,7 +24,7 @@ export async function expireJobMatchRequests(now = new Date()): Promise<number> 
   const result = await prisma.jobMatchRequest.updateMany({
     where: { status: 'PREPARED', OR: [
       { expiresAt: { lte: now } },
-      { createdAt: { lte: before(RETENTION.abandonedRequestMinutes * 60_000, now) } },
+      { createdAt: { lte: before(RETENTION_POLICY.abandonedRequestMinutes * 60_000, now) } },
     ] },
     data: { status: 'EXPIRED' },
   });
@@ -43,7 +43,7 @@ export async function expireSourceCvObjects(): Promise<number> {
 
 /** Archive stale, unsaved discovery snapshots. Immutable JobRevisions survive. */
 export async function archiveStaleJobs(now = new Date()): Promise<number> {
-  const cutoff = before(RETENTION.staleJobDays * 86_400_000, now);
+  const cutoff = before(RETENTION_POLICY.staleJobDays * 86_400_000, now);
   const candidates = await prisma.jobSnapshot.findMany({
     where: {
       importedByUserId: null,

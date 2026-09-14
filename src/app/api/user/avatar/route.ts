@@ -3,8 +3,8 @@ import { withErrorHandler, APIError } from '@/shared/utils/api-error';
 import { auth } from '@/shared/lib/auth';
 import { prisma } from '@/shared/lib/prisma';
 import { storage, keyFor } from '@/shared/lib/storage';
+import { UPLOAD_POLICY } from '@/shared/policies';
 
-const MAX_AVATAR_BYTES = 5 * 1024 * 1024; // 5MB
 const ALLOWED_TYPES: Record<string, string> = {
   'image/png': 'png',
   'image/jpeg': 'jpg',
@@ -35,7 +35,7 @@ export async function POST(request: Request) {
       throw new APIError('Unsupported image type. Use PNG, JPEG, or WebP.', 400);
     }
 
-    if (file.size > MAX_AVATAR_BYTES) {
+    if (file.size > UPLOAD_POLICY.avatar.maxBytes) {
       throw new APIError('Image too large. Max 5MB.', 400);
     }
 

@@ -1,4 +1,5 @@
 import { CvPipelineError } from './errors';
+import { UPLOAD_POLICY } from '@/shared/policies';
 
 /**
  * Container formats the CV pipeline accepts at launch.
@@ -8,27 +9,24 @@ import { CvPipelineError } from './errors';
  * rejected rather than half-supported, because a format that silently extracts
  * nothing is worse than one the user is told to convert.
  */
-export const SUPPORTED_CV_FORMATS = ['pdf', 'docx'] as const;
+export const SUPPORTED_CV_FORMATS = UPLOAD_POLICY.cv.formats;
 export type CvSourceFormat = (typeof SUPPORTED_CV_FORMATS)[number];
 
-/** Maximum accepted upload, matching the existing analyse route's limit. */
-export const MAX_CV_UPLOAD_BYTES = 10 * 1024 * 1024;
-
-export const CV_FORMAT_MIME_TYPES: Record<CvSourceFormat, readonly string[]> = {
-  pdf: ['application/pdf'],
-  docx: ['application/vnd.openxmlformats-officedocument.wordprocessingml.document'],
-};
+export const CV_FORMAT_MIME_TYPES = UPLOAD_POLICY.cv.mimeTypes satisfies Record<
+  CvSourceFormat,
+  readonly string[]
+>;
 
 /** Canonical content type stored on the row and sent to object storage. */
-export const CV_FORMAT_CANONICAL_MIME: Record<CvSourceFormat, string> = {
-  pdf: 'application/pdf',
-  docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-};
+export const CV_FORMAT_CANONICAL_MIME = UPLOAD_POLICY.cv.canonicalMimeTypes satisfies Record<
+  CvSourceFormat,
+  string
+>;
 
-export const CV_FORMAT_EXTENSIONS: Record<CvSourceFormat, string> = {
-  pdf: '.pdf',
-  docx: '.docx',
-};
+export const CV_FORMAT_EXTENSIONS = UPLOAD_POLICY.cv.extensions satisfies Record<
+  CvSourceFormat,
+  string
+>;
 
 function extensionFormat(filename: string): CvSourceFormat | null {
   const lower = filename.toLowerCase();
@@ -98,7 +96,7 @@ export interface ValidatedUpload {
  */
 export function validateUploadBytes(filename: string, bytes: Buffer): ValidatedUpload {
   if (bytes.length === 0) throw new CvPipelineError('FILE_EMPTY');
-  if (bytes.length > MAX_CV_UPLOAD_BYTES) throw new CvPipelineError('FILE_TOO_LARGE', 413);
+  if (bytes.length > UPLOAD_POLICY.cv.maxBytes) throw new CvPipelineError('FILE_TOO_LARGE', 413);
 
   const detected = detectFormatFromBytes(bytes);
   const claimed = extensionFormat(filename);

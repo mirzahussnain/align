@@ -7,10 +7,11 @@ import { buildConfirmedCandidateFacts } from '@/shared/services/practical-compat
 import { getJobDetailsView } from '@/shared/services/job-board-api';
 import { createMatchRequest } from '@/shared/services/job-snapshot';
 import { APIError, withErrorHandler } from '@/shared/utils/api-error';
+import { ANALYSIS_LIMITS } from '@/shared/policies';
 const Input = z.object({
   profileId: z.string().optional(),
   partialDescriptionAccepted: z.boolean().default(false),
-  descriptionOverride: z.string().trim().min(50).max(50_000).optional(),
+  descriptionOverride: z.string().trim().min(50).max(ANALYSIS_LIMITS.maxJobDescriptionCharacters).optional(),
 });
 /**
  * Preparation returns EVIDENCE and readiness, never a canonical match score.

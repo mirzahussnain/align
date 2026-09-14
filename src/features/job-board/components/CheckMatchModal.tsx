@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useRef, type ChangeEvent } from "react";
-import { ANALYSIS_LIMITS } from "@/shared/config/analysis-domain";
+import { UPLOAD_POLICY } from "@/shared/policies";
 import {
   X,
   ExternalLink,
@@ -35,7 +35,7 @@ import { interpretOperationalError } from "@/shared/entitlements/operational-err
 const MIN_PASTED_CHARS = 400;
 
 /** Matches the analyse route's own upload limit, so nothing is rejected late. */
-const MAX_UPLOAD_BYTES = ANALYSIS_LIMITS.maxDirectMultipartCvBytes;
+const MAX_UPLOAD_BYTES = UPLOAD_POLICY.cv.maxDirectMultipartBytes;
 
 /** One of the user's stored source CVs, as listed by /api/stored-cvs. */
 interface StoredCvOption {

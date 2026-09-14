@@ -3,7 +3,8 @@ import type { Prisma } from '@/generated/prisma/client';
 import { prisma } from '@/shared/lib/prisma';
 import { loadOwnedProfileData } from '@/features/dashboard/data/load-profile';
 import { buildConfirmedCandidateFacts } from './practical-compatibility-store';
-import { ANALYSIS_LIMITS, ANALYSIS_VERSIONS } from '@/shared/config/analysis-domain';
+import { ANALYSIS_VERSIONS } from '@/shared/config/analysis-domain';
+import { ANALYSIS_LIMITS } from '@/shared/policies';
 import { APIError } from '@/shared/utils/api-error';
 
 export interface CareerProfileSnapshotData {

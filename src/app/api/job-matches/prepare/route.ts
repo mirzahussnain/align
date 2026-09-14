@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { auth } from '@/shared/lib/auth';
 import { createMatchRequest } from '@/shared/services/job-snapshot';
 import { APIError, withErrorHandler } from '@/shared/utils/api-error';
-import { ANALYSIS_LIMITS } from '@/shared/config/analysis-domain';
+import { ANALYSIS_LIMITS } from '@/shared/policies';
 
 const Input = z.object({
   jobSnapshotId: z.string().min(1),

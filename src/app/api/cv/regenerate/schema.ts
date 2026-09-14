@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { TemplateIdSchema } from '@/shared/constants/templates';
-import { REGENERATION_CONTEXT_LIMITS as limits } from '@/shared/config/analysis-domain';
+import { REGENERATION_CONTEXT_LIMITS as limits } from '@/shared/policies';
 
 const utf8Bytes = (value: unknown) => Buffer.byteLength(JSON.stringify(value), 'utf8');
 const IdentifierSchema = z.string().trim().min(1).max(limits.maxIdentifierCharacters);

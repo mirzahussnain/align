@@ -7,13 +7,13 @@ import { APIError, withErrorHandler } from '@/shared/utils/api-error';
 import { runJobMatch } from '@/shared/services/job-match-service';
 import { checkCapability } from '@/shared/entitlements/server';
 import { projectAnalysisReport } from '@/shared/entitlements/report-projection';
-import { ANALYSIS_LIMITS } from '@/shared/config/analysis-domain';
+import { UPLOAD_POLICY } from '@/shared/policies';
 
 const Input = z.object({
   requestId: z.string().min(1),
   storedCvId: z.string().min(1).optional(),
   file: z.custom<File>((value) => value instanceof File)
-    .refine((file) => file.size <= ANALYSIS_LIMITS.maxDirectMultipartCvBytes, 'File too large. Max 4MB')
+    .refine((file) => file.size <= UPLOAD_POLICY.cv.maxDirectMultipartBytes, 'File too large. Max 4MB')
     .optional(),
 }).refine((value) => Boolean(value.file) !== Boolean(value.storedCvId), 'Choose exactly one CV source.');
 

@@ -6,11 +6,12 @@ import { createMatchRequest } from '@/shared/services/job-snapshot';
 import { assessAndPersistJobIntelligence } from '@/shared/services/job-intelligence-store';
 import { buildConfirmedCandidateFacts } from '@/shared/services/practical-compatibility-store';
 import { APIError, withErrorHandler } from '@/shared/utils/api-error';
+import { ANALYSIS_LIMITS } from '@/shared/policies';
 
 const Input = z.object({
   profileId: z.string().optional(),
   partialDescriptionAccepted: z.boolean().default(false),
-  descriptionOverride: z.string().trim().min(50).max(50_000).optional(),
+  descriptionOverride: z.string().trim().min(50).max(ANALYSIS_LIMITS.maxJobDescriptionCharacters).optional(),
 });
 export async function POST(request: NextRequest, context: RouteContext<'/api/jobs/[jobSnapshotId]/match/prepare'>) {
   return withErrorHandler(async () => {

@@ -3,7 +3,8 @@ import { prisma } from '@/shared/lib/prisma';
 import { storage, keyFor } from '@/shared/lib/storage';
 import { entitlementsFor, sourceExpiryFrom } from '@/shared/lib/entitlements';
 import type { PlanId } from '@/shared/entitlements/registry';
-import { ANALYSIS_LIMITS, ANALYSIS_VERSIONS } from '@/shared/config/analysis-domain';
+import { ANALYSIS_VERSIONS } from '@/shared/config/analysis-domain';
+import { ANALYSIS_LIMITS, UPLOAD_POLICY } from '@/shared/policies';
 import { APIError } from '@/shared/utils/api-error';
 import { checksumOf, loadOwnedStoredCv, extractStoredCvRecord } from './stored-cv';
 import { extractStoredCv, validateUploadBytes, CvPipelineError } from './cv-extraction';
@@ -82,7 +83,7 @@ export async function resolveCvRevision(args: {
   }
 
   const file = args.file!;
-  if (file.size > ANALYSIS_LIMITS.maxDirectMultipartCvBytes) throw new APIError('File too large.', 413);
+  if (file.size > UPLOAD_POLICY.cv.maxDirectMultipartBytes) throw new APIError('File too large.', 413);
   const bytes = Buffer.from(await file.arrayBuffer());
   const validated = validateUploadBytes(file.name, bytes);
   const extraction = await extractStoredCv(validated.bytes);

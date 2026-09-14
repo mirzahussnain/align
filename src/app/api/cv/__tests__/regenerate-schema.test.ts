@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { RegenerateSchema } from '@/app/api/cv/regenerate/schema';
-import { REGENERATION_CONTEXT_LIMITS as limits } from '@/shared/config/analysis-domain';
+import { REGENERATION_CONTEXT_LIMITS as limits } from '@/shared/policies';
 
 const base = { analysisId: 'analysis-1', templateId: 'architect' };
 const bytes = (value: unknown) => Buffer.byteLength(JSON.stringify(value), 'utf8');
