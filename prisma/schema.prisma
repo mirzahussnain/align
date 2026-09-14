@@ -21,6 +21,7 @@ model User {
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
   onboardedAt   DateTime?
+  welcomeEmailSentAt DateTime?
   sessions      Session[]
   accounts      Account[]
 
