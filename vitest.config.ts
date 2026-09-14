@@ -12,5 +12,6 @@ export default defineConfig({
     environment: 'node',
     include: ['src/**/*.test.{ts,tsx}'],
     setupFiles: ['./vitest.setup.ts'],
+    maxWorkers: '50%',
   },
 });

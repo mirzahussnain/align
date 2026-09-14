@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
 import {
   docxWithHeaderAndHyperlinks,
   docxWithTextBoxAndFieldLink,
@@ -16,6 +16,12 @@ import {
   splitMarkdownLinks,
 } from '../links';
 import { matchSectionHeading } from '../sections';
+let realWorldPdfExtraction: Awaited<ReturnType<typeof extractStoredCv>>;
+
+beforeAll(async () => {
+  realWorldPdfExtraction = await extractStoredCv(realWorldPdfCv());
+}, 15_000);
+
 
 /**
  * The links, the summary, the phone and the projects a CV carries — the four
@@ -158,7 +164,7 @@ describe('handles written as labels, with no address behind them', () => {
   it('prefers a resolved hyperlink over a handle, and marks nothing as derived', async () => {
     // The real CV printed "linkedIn/jordanreyes-dev" while its hyperlink pointed
     // at /in/jordan-reyes-dev. The two disagree, and the link is the truth.
-    const { structured } = await extractStoredCv(realWorldPdfCv());
+    const { structured } = realWorldPdfExtraction;
     expect(structured.identity.linkedin).toBe('https://linkedin.com/in/jordan-reyes-dev');
     expect(structured.derivedIdentity).toBeUndefined();
   });
@@ -169,7 +175,7 @@ describe('PDF hyperlink recovery', () => {
     // The regression case. The text layer of this document contains the labels
     // "github/jordanreyes", "linkedIn/jordanreyes-dev" and "jordanreyes.me" and
     // not one http address; the URLs exist only as /Link annotations.
-    const { text, structured } = await extractStoredCv(realWorldPdfCv());
+    const { text, structured } = realWorldPdfExtraction;
     expect(text).not.toContain('http');
 
     expect(structured.identity.linkedin).toBe('https://linkedin.com/in/jordan-reyes-dev');
@@ -178,7 +184,7 @@ describe('PDF hyperlink recovery', () => {
   });
 
   it('splits the phone into a dial code and a national number', async () => {
-    const { structured } = await extractStoredCv(realWorldPdfCv());
+    const { structured } = realWorldPdfExtraction;
     expect(structured.identity).toMatchObject({
       phone: '+44 7737-853800',
       phoneDialCode: '+44',
@@ -188,14 +194,14 @@ describe('PDF hyperlink recovery', () => {
   });
 
   it('reads the PROFILE section as a professional summary, with provenance', async () => {
-    const { structured } = await extractStoredCv(realWorldPdfCv());
+    const { structured } = realWorldPdfExtraction;
     expect(structured.summary).toContain('IT Support professional');
     expect(structured.summarySource?.sourceLocation.section).toBe('PROFILE');
     expect(structured.summarySource?.excerpt).toContain('IT Support professional');
   });
 
   it('reads a project that has no dates, and attaches its repository link', async () => {
-    const { structured } = await extractStoredCv(realWorldPdfCv());
+    const { structured } = realWorldPdfExtraction;
     expect(structured.projects).toHaveLength(1);
     expect(structured.projects[0]).toMatchObject({
       name: 'Kinetx - Distributed Video Streaming Platform',
@@ -212,7 +218,7 @@ describe('PDF hyperlink recovery', () => {
   });
 
   it('names both institutions, so neither education entry is raised as incomplete', async () => {
-    const { structured } = await extractStoredCv(realWorldPdfCv());
+    const { structured } = realWorldPdfExtraction;
     expect(structured.education).toHaveLength(2);
     expect(structured.education.map((entry) => entry.university)).toEqual([
       'Ulster University, UK',
@@ -226,7 +232,7 @@ describe('PDF hyperlink recovery', () => {
   });
 
   it('does not turn a bare link label into a project or an achievement', async () => {
-    const { structured } = await extractStoredCv(realWorldPdfCv());
+    const { structured } = realWorldPdfExtraction;
     expect(structured.projects.map((project) => project.name)).not.toContain('Repository');
     expect(structured.projects[0].achievements).toEqual([
       'Deployed a distributed application on Azure Virtual Machines using Docker and Nginx.',
@@ -342,7 +348,7 @@ describe('PDF form field values', () => {
   it('keeps link line numbers correct once field values are added above them', async () => {
     // Prepending renumbers every line. A link left pointing at its old index
     // would drift onto a different entry — the bug this guards is silent.
-    const { text, structured } = await extractStoredCv(realWorldPdfCv());
+    const { text, structured } = realWorldPdfExtraction;
     const repo = structured.links?.find((link) => link.visibleText === 'Repository');
     expect(repo?.line).toBeDefined();
     expect(text.split('\n')[repo!.line!]).toBe('Repository');
@@ -350,7 +356,7 @@ describe('PDF form field values', () => {
 
   it('does not open a document twice when it has no form', async () => {
     // No AcroForm, so the form pass never runs and nothing is prepended.
-    const { text } = await extractStoredCv(realWorldPdfCv());
+    const { text } = realWorldPdfExtraction;
     expect(text.startsWith('Jordan Reyes')).toBe(true);
   });
 });
