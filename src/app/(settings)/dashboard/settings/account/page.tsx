@@ -1,6 +1,7 @@
 import { headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 import AccountSettings from '@/features/settings/components/AccountSettings';
+import DeleteAccountPanel from '@/features/settings/components/DeleteAccountPanel';
 import { auth } from '@/shared/lib/auth';
 import { prisma } from '@/shared/lib/prisma';
 
@@ -19,6 +20,8 @@ export default async function AccountSettingsPage() {
   });
   if (!user) redirect('/login');
 
+  const providers = [...new Set(user.accounts.map((account) => account.providerId))];
+
   return (
     <AccountSettings
       user={{
@@ -26,8 +29,9 @@ export default async function AccountSettingsPage() {
         email: user.email,
         emailVerified: user.emailVerified,
         createdAt: user.createdAt.toISOString(),
-        providers: [...new Set(user.accounts.map((account) => account.providerId))],
+        providers,
       }}
+      dangerZone={<DeleteAccountPanel credentialUser={providers.includes('credential')} />}
     />
   );
 }
