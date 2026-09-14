@@ -3,6 +3,7 @@
 import { useRef, useState } from 'react';
 import Link from 'next/link';
 import { ArrowRight, Check, FileUp, LockKeyhole, Loader2, ShieldCheck } from 'lucide-react';
+import { UPLOAD_POLICY } from '@/shared/policies';
 import type { PublicAtsPreview } from '@/shared/services/public-ats-service';
 
 export default function PublicAtsDemo() {
@@ -116,7 +117,7 @@ export default function PublicAtsDemo() {
           <input
             className="sr-only"
             type="file"
-            accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            accept={UPLOAD_POLICY.cv.fileInputAccept}
             onChange={(event) => {
               setFile(event.target.files?.[0] ?? null);
               setError(null);

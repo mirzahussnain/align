@@ -9,10 +9,9 @@ import { UPLOAD_POLICY } from '@/shared/policies';
 
 const Input = z.object({
   filename: z.string().trim().min(1).max(200),
-  mimeType: z.enum([
-    'application/pdf',
-    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-  ]),
+  mimeType: z.string().refine((value) =>
+    UPLOAD_POLICY.cv.acceptedMimeTypes.some((mimeType) => mimeType === value)
+  ),
   sizeBytes: z.number().int().positive().max(UPLOAD_POLICY.cv.maxBytes),
 }).strict();
 

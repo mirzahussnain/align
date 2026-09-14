@@ -3,6 +3,7 @@
 import { useRef, useState } from 'react';
 import { ArrowLeft, FileText, Trash2, UploadCloud } from 'lucide-react';
 import type { CapabilityDecision } from '@/shared/entitlements/registry';
+import { UPLOAD_POLICY } from '@/shared/policies';
 import { OnboardingShell, PrimaryButton, SecondaryButton } from './OnboardingShell';
 import { onboardingApi, OnboardingRequestError, type StoredCvSummary } from '../api';
 
@@ -181,7 +182,7 @@ export function UploadStep({
               ref={inputRef}
               id="onboarding-cv-file"
               type="file"
-              accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+              accept={UPLOAD_POLICY.cv.fileInputAccept}
               disabled={busy}
               onChange={(event) => {
                 const file = event.target.files?.[0];

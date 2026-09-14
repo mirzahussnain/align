@@ -30,7 +30,9 @@ function metadataFormat(filename: string, mimeType: string, sizeBytes: number): 
   if (!Number.isInteger(sizeBytes) || sizeBytes <= 0) throw new CvPipelineError('FILE_EMPTY');
   if (sizeBytes > UPLOAD_POLICY.cv.maxBytes) throw new CvPipelineError('FILE_TOO_LARGE', 413);
   const lower = filename.toLowerCase();
-  const format = lower.endsWith('.pdf') ? 'pdf' : lower.endsWith('.docx') ? 'docx' : null;
+  const format = UPLOAD_POLICY.cv.formats.find((candidate) =>
+    lower.endsWith(UPLOAD_POLICY.cv.extensions[candidate])
+  );
   if (!format || UPLOAD_POLICY.cv.canonicalMimeTypes[format] !== mimeType) {
     throw new CvPipelineError('UNSUPPORTED_FORMAT');
   }

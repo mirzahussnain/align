@@ -46,6 +46,11 @@ describe('upload policy', () => {
         docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
       },
       extensions: { pdf: '.pdf', docx: '.docx' },
+      acceptedMimeTypes: [
+        'application/pdf',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      ],
+      fileInputAccept: '.pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document',
     });
     expect(UPLOAD_POLICY.cv.maxBytes).toBe(10 * 1024 * 1024);
     expect(UPLOAD_POLICY.avatar.maxBytes).toBe(5 * 1024 * 1024);
