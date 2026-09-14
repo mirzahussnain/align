@@ -57,6 +57,25 @@ describe('lifecycle email templates', () => {
     expect(reset.text).toContain('https://align.test/reset');
   });
 
+  it('gives self-service guidance without an unconfigured support channel', () => {
+    const changed = passwordChangedEmail({ name: 'Ada' });
+    const deleted = accountDeletedEmail({ name: 'Ada' });
+
+    for (const format of [changed.html, changed.text]) {
+      expect(format).toContain(
+        'If you did not make this change, reset your password and review your account security.'
+      );
+      expect(format).not.toContain('contact Align support');
+    }
+
+    for (const format of [deleted.html, deleted.text]) {
+      expect(format).toContain(
+        'If you did not request this deletion, change the password for the email account you used with Align.'
+      );
+      expect(format).not.toContain('contact Align support');
+    }
+  });
+
   it('escapes user-controlled names and lifecycle URLs in HTML', () => {
     const email = verificationEmail({
       name: '<script>alert("name")</script>',

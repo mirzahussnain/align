@@ -48,7 +48,8 @@ export function passwordChangedEmail(input: NamedRecipient): LifecycleTemplate {
     heading: 'Your password was changed',
     name: input.name,
     paragraphs: ['The password for your Align account was changed successfully.'],
-    securityNote: 'If you did not make this change, contact Align support immediately.',
+    securityNote:
+      'If you did not make this change, reset your password and review your account security.',
   });
 }
 
@@ -61,6 +62,7 @@ export function accountDeletedEmail(input: NamedRecipient): LifecycleTemplate {
       'Your Align account and the associated personal data covered by our deletion process have been deleted.',
       'Thank you for using Align.',
     ],
-    securityNote: 'If you did not request this deletion, contact Align support immediately.',
+    securityNote:
+      'If you did not request this deletion, change the password for the email account you used with Align.',
   });
 }
