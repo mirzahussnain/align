@@ -131,10 +131,12 @@ export default function BillingView({
   tier,
   storage,
   billing,
+  embedded = false,
 }: {
   tier: string;
   storage: StorageUsage;
   billing: BillingStatusView;
+  embedded?: boolean;
 }) {
   const [busy, setBusy] = useState<null | 'checkout' | 'portal'>(null);
   const [error, setError] = useState<string | null>(null);
@@ -195,9 +197,9 @@ export default function BillingView({
 
   return (
     <>
-      <DashboardTopBar title="Plan & Billing" subtitle="Your subscription" showNewAnalysis={false} />
+      {!embedded && <DashboardTopBar title="Plan & Billing" subtitle="Your subscription" showNewAnalysis={false} />}
 
-      <div className="px-4 py-6 sm:px-6 lg:px-8">
+      <div className={cn(!embedded && "px-4 py-6 sm:px-6 lg:px-8")}>
         <div className="mb-5 rounded-xl border border-neutral-200 bg-white px-4 py-3">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <p className="text-xs text-neutral-600">
@@ -220,7 +222,7 @@ export default function BillingView({
         )}
 
         {/* Manage-billing bar for anyone with a provider customer. */}
-        {isPro && billing.portalAvailable && (
+        {!embedded && isPro && billing.portalAvailable && (
           <div className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-neutral-200 bg-white p-5">
             <div>
               <p className="text-sm font-bold text-neutral-900">Manage Billing</p>
@@ -340,7 +342,7 @@ function renderCta({
           disabled={busy !== null}
           className="w-full rounded-xl bg-slate-900 px-4 py-2 text-xs font-bold text-white shadow-sm transition-colors hover:bg-slate-800 disabled:opacity-60"
         >
-          {busy === 'portal' ? 'Opening…' : 'Manage Billing'}
+          {busy === 'portal' ? 'Opening…' : 'Manage subscription'}
         </button>
       );
     }
