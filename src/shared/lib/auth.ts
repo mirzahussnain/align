@@ -4,11 +4,13 @@ import { prismaAdapter } from 'better-auth/adapters/prisma';
 
 import { sendLifecycleEmail } from '@/shared/email/resend';
 import {
+  accountDeletedEmail,
   passwordChangedEmail,
   passwordResetEmail,
   verificationEmail,
 } from '@/shared/email/templates/lifecycle';
 import { sendWelcomeEmailOnce } from '@/shared/services/welcome-email';
+import { prepareAccountDeletion } from '@/shared/account-deletion/service';
 
 import {
   BETTER_AUTH_RATE_LIMIT_RULES,
@@ -54,6 +56,20 @@ export const authOptions = {
         required: false,
         input: false,
         returned: false,
+      },
+    },
+    deleteUser: {
+      enabled: true,
+      beforeDelete: async (user) => {
+        await prepareAccountDeletion(user);
+      },
+      afterDelete: async (user) => {
+        await bestEffort(() =>
+          sendLifecycleEmail({
+            to: user.email,
+            template: accountDeletedEmail({ name: user.name }),
+          })
+        );
       },
     },
   },

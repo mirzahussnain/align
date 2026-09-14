@@ -4,6 +4,7 @@ const mocks = vi.hoisted(() => ({
   findAccount: vi.fn(),
   sendLifecycleEmail: vi.fn(),
   sendWelcomeEmailOnce: vi.fn(),
+  prepareAccountDeletion: vi.fn(),
   createStorage: vi.fn(() => ({ get: vi.fn(), set: vi.fn(), consume: vi.fn() })),
 }));
 
@@ -19,9 +20,13 @@ vi.mock('@/shared/email/templates/lifecycle', () => ({
   verificationEmail: vi.fn((input) => ({ subject: 'verify', html: input.url, text: input.url })),
   passwordResetEmail: vi.fn((input) => ({ subject: 'reset', html: input.url, text: input.url })),
   passwordChangedEmail: vi.fn(() => ({ subject: 'changed', html: 'changed', text: 'changed' })),
+  accountDeletedEmail: vi.fn(() => ({ subject: 'deleted', html: 'deleted', text: 'deleted' })),
 }));
 vi.mock('@/shared/services/welcome-email', () => ({
   sendWelcomeEmailOnce: mocks.sendWelcomeEmailOnce,
+}));
+vi.mock('@/shared/account-deletion/service', () => ({
+  prepareAccountDeletion: mocks.prepareAccountDeletion,
 }));
 vi.mock('../better-auth-rate-limit', () => ({
   createBetterAuthRateLimitStorage: mocks.createStorage,
@@ -45,6 +50,18 @@ describe('Better Auth lifecycle configuration', () => {
     vi.clearAllMocks();
     mocks.sendLifecycleEmail.mockResolvedValue(undefined);
     mocks.sendWelcomeEmailOnce.mockResolvedValue('sent');
+  });
+
+  it('wires Better Auth deletion around the authoritative cleanup boundary', async () => {
+    expect(authOptions.user?.deleteUser?.enabled).toBe(true);
+
+    await authOptions.user?.deleteUser?.beforeDelete?.(user);
+    expect(mocks.prepareAccountDeletion).toHaveBeenCalledWith(user);
+
+    await authOptions.user?.deleteUser?.afterDelete?.(user);
+    expect(mocks.sendLifecycleEmail).toHaveBeenCalledWith(
+      expect.objectContaining({ to: user.email })
+    );
   });
 
   it('enables signup verification and session-safe password reset', () => {
