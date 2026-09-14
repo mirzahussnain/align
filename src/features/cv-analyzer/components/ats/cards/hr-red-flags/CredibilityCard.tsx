@@ -9,9 +9,10 @@ interface ClichéItem {
 
 interface CredibilityCardProps {
   clichésList: ClichéItem[];
+  source?: 'rule' | 'ai';
 }
 
-export default function CredibilityCard({ clichésList }: CredibilityCardProps) {
+export default function CredibilityCard({ clichésList, source = 'rule' }: CredibilityCardProps) {
   const isPassed = clichésList.length <= 2;
   return (
     <AuditCard
@@ -20,6 +21,7 @@ export default function CredibilityCard({ clichésList }: CredibilityCardProps) 
       subtitle="Filters overused buzzwords and vague claims"
       score={isPassed ? 'Credible' : 'Contains clichés'}
       scoreStatus={isPassed ? 'excellent' : 'good'}
+      source={source}
       details="Overusing vague corporate statements reduces recruiter interest. Focus on concrete metric accomplishments."
     >
       {clichésList.length > 0 ? (
@@ -47,7 +49,7 @@ export default function CredibilityCard({ clichésList }: CredibilityCardProps) 
           <div>
             <h4 className="text-xs font-bold text-emerald-800">Vague Clichés Clean</h4>
             <p className="text-[11px] text-emerald-700 leading-relaxed mt-0.5">
-              Your resume uses direct, technical, and objective language without empty descriptors like "extremely motivated".
+              Your resume uses direct, specific, and objective language without empty descriptors like &quot;extremely motivated&quot;.
             </p>
           </div>
         </div>

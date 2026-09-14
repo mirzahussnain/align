@@ -9,6 +9,7 @@ export default function LinkedinMatchCard({ linkedin }: LinkedinMatchCardProps) 
   return (
     <AuditCard
       id="linkedinMatch"
+      source="rule"
       title="LinkedIn Profile Match"
       subtitle="Checks presence of public network identifiers"
       score={linkedin ? 'Linked' : 'Missing'}

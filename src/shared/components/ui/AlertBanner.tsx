@@ -14,32 +14,32 @@ export default function AlertBanner({ type = 'warning', title, children, classNa
     switch (type) {
       case 'warning':
         return {
-          wrapper: "bg-amber-50 border-amber-200",
+          wrapper: "bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-800/50",
           icon: "text-amber-500",
-          title: "text-amber-900",
-          text: "text-amber-800"
+          title: "text-amber-900 dark:text-amber-200",
+          text: "text-amber-800 dark:text-amber-300"
         };
       case 'error':
         return {
-          wrapper: "bg-rose-50 border-rose-200",
+          wrapper: "bg-rose-50 dark:bg-rose-950/30 border-rose-200 dark:border-rose-800/50",
           icon: "text-rose-500",
-          title: "text-rose-900",
-          text: "text-rose-800"
+          title: "text-rose-900 dark:text-rose-200",
+          text: "text-rose-800 dark:text-rose-300"
         };
       case 'success':
         return {
-          wrapper: "bg-emerald-50 border-emerald-200",
+          wrapper: "bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800/50",
           icon: "text-emerald-500",
-          title: "text-emerald-900",
-          text: "text-emerald-800"
+          title: "text-emerald-900 dark:text-emerald-200",
+          text: "text-emerald-800 dark:text-emerald-300"
         };
       case 'info':
       default:
         return {
-          wrapper: "bg-blue-50 border-blue-200",
-          icon: "text-blue-500",
-          title: "text-blue-900",
-          text: "text-blue-800"
+          wrapper: "bg-sky-50 dark:bg-sky-950/30 border-sky-200 dark:border-sky-800/50",
+          icon: "text-sky-500",
+          title: "text-sky-900 dark:text-sky-200",
+          text: "text-sky-800 dark:text-sky-300"
         };
     }
   };

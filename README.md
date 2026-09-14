@@ -69,7 +69,7 @@ Align is designed to bridge the gap between candidate resumes and the strict, au
 ## 🚦 Getting Started
 
 ### Prerequisites
-Ensure you have `Node.js` (v20+) installed.
+`Node.js` (v20+) and `Docker` (for the local database).
 
 ### 1. Clone the repository
 ```bash
@@ -99,7 +99,81 @@ UPSTASH_REDIS_REST_URL=your_upstash_url
 UPSTASH_REDIS_REST_TOKEN=your_upstash_token
 ```
 
-### 4. Run the Development Server
+### 4. Start the Local Database
+Development runs against a local Postgres container, **not** the hosted Neon
+instance — so resetting the schema or generating throwaway test analyses never
+pollutes real user data.
+
+```bash
+npm run db:setup   # starts Postgres, applies migrations, generates the client
+```
+
+The container uses the `pgvector` image (extensions `vector` and `pg_trgm` are
+enabled on first boot), and binds host port **5433** so it cannot collide with a
+Postgres already installed on your machine. Set in `.env.local`:
+
+```env
+DATABASE_URL="postgresql://align:align@localhost:5433/align?schema=public"
+```
+
+| Command | What it does |
+| --- | --- |
+| `npm run db:up` | Start the container and wait until it's ready |
+| `npm run db:down` | Stop it, **keeping** the data |
+| `npm run db:nuke` | Stop it and **delete the volume** — a truly clean slate |
+| `npm run db:reset` | Drop, re-apply every migration, on the current `DATABASE_URL` |
+| `npm run db:migrate` | Create a new migration from schema changes |
+| `npm run db:studio` | Browse the data in Prisma Studio |
+
+> **Connecting to Neon instead:** point `DATABASE_URL` at the pooled endpoint and
+> also set `DIRECT_URL` to the same host with `-pooler` removed. Prisma Migrate
+> needs the direct connection for DDL and advisory locks, which PgBouncer does
+> not reliably support; the app keeps using the pooled URL. Treat `db:reset` and
+> `db:nuke` as local-only commands.
+
+### 5. Start Redis (Job Board cache)
+
+The Job Board caches provider results, merged search pages, search sessions and
+its refresh lock in Redis. It holds **nothing durable** — every key can be
+rebuilt by searching again, so losing the lot costs latency and nothing else.
+
+```bash
+npm run redis:up   # starts Redis and waits for it to answer PING
+```
+
+Set in `.env.local`:
+
+```env
+REDIS_URL=redis://localhost:6379
+```
+
+> **Leaving `REDIS_URL` unset is supported.** Search still queries the providers
+> and still returns results; a structured warning is logged once. What you lose
+> is caching, cross-instance sessions and the shared refresh lock — so searches
+> are slower and **Load more** reports an expired session (HTTP 409) rather than
+> silently repeating page one. Note this is a *different* variable from
+> `UPSTASH_REDIS_REST_URL`, which is Upstash's REST endpoint used only by rate
+> limiting.
+
+| Command | What it does |
+| --- | --- |
+| `npm run redis:up` | Start the container and wait until it answers `PING` |
+| `npm run redis:down` | Stop it, **keeping** the append-only data |
+| `npm run redis:ping` | Health check — prints `PONG` |
+| `npm run redis:keys` | Inspect: list every `align:*` key currently cached |
+| `npm run redis:flush` | Empty local Redis — the safe way to force a cold search |
+| `npm run test:redis` | Run the Redis integration tests against the container |
+| `npm run dev:up` | Start Postgres, MinIO **and** Redis together |
+| `npm run dev:nuke` | Stop everything and delete all volumes, Redis included |
+
+Inspect a single cached value while debugging:
+
+```bash
+docker compose exec redis redis-cli get "align:v1:jobs:session:<sessionId>"
+docker compose exec redis redis-cli ttl "align:v1:jobs:search:<queryHash>:1"
+```
+
+### 6. Run the Development Server
 ```bash
 npm run dev
 ```

@@ -23,6 +23,7 @@ export default function ContactInfoCard({ contactInfo }: ContactInfoCardProps) {
   return (
     <AuditCard
       id="contactInfo"
+      source="rule"
       title="Contact Information"
       subtitle="Checks availability of vital contact channels"
       score={isPassed ? "Complete" : "Incomplete"}

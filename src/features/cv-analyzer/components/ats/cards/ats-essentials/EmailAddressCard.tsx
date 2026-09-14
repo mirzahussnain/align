@@ -9,6 +9,7 @@ export default function EmailAddressCard({ email }: EmailAddressCardProps) {
   return (
     <AuditCard
       id="emailAddress"
+      source="rule"
       title="Email Address"
       subtitle="Verifies presence and correctness of email address"
       score={email ? 'Passed' : 'Missing'}
@@ -25,7 +26,7 @@ export default function EmailAddressCard({ email }: EmailAddressCardProps) {
               <p className="text-xs font-semibold text-emerald-900 mt-0.5">{email}</p>
             </div>
             <span className="text-[9px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200 px-2 py-0.5 rounded uppercase">
-              Verified
+              Detected
             </span>
           </div>
         ) : (

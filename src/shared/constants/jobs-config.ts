@@ -1,4 +1,4 @@
-import { Globe, Building2, CheckCircle, HelpCircle, XCircle } from 'lucide-react';
+import { Globe, Building2, CheckCircle, HelpCircle, XCircle, type LucideIcon } from 'lucide-react';
 import type { SponsorStatus } from '@/shared/types/job';
 
 export const SOURCES = [
@@ -8,7 +8,7 @@ export const SOURCES = [
   { id: 'jooble', label: 'Jooble', icon: Building2 },
 ] as const;
 
-export const SPONSOR_CONFIG: Record<SponsorStatus, { icon: any; label: string; className: string }> = {
+export const SPONSOR_CONFIG: Record<SponsorStatus, { icon: LucideIcon; label: string; className: string }> = {
   'confirmed-sponsor': { 
     icon: CheckCircle, 
     label: 'Visa Sponsorship', 

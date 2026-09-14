@@ -40,7 +40,7 @@ export default function AnalysisProgress({ isAnalyzing }: AnalysisProgressProps)
   return (
     <div className="w-full max-w-xl mx-auto bg-white/80 border border-slate-200/50 backdrop-blur-xl rounded-2xl p-8 shadow-xl text-left select-none relative overflow-hidden">
       {/* Background soft glow flare */}
-      <div className="absolute -top-24 -left-24 w-48 h-48 bg-accent-purple/10 blur-3xl rounded-full pointer-events-none" />
+      <div className="absolute -top-24 -left-24 w-48 h-48 bg-accent-cyan/10 blur-3xl rounded-full pointer-events-none" />
       <div className="absolute -bottom-24 -right-24 w-48 h-48 bg-accent-cyan/10 blur-3xl rounded-full pointer-events-none" />
 
       <div className="flex flex-col items-center gap-6 relative z-10">
@@ -62,7 +62,7 @@ export default function AnalysisProgress({ isAnalyzing }: AnalysisProgressProps)
               cx="64"
               cy="64"
               r="48"
-              className="stroke-accent-purple"
+              className="stroke-accent-cyan"
               strokeWidth="6"
               fill="transparent"
               strokeDasharray={circumference}
@@ -103,7 +103,7 @@ export default function AnalysisProgress({ isAnalyzing }: AnalysisProgressProps)
                   {isCompleted ? (
                     <CheckCircle2 size={18} className="text-success fill-success/10" />
                   ) : isActive ? (
-                    <Loader2 size={16} className="text-accent-purple animate-spin" />
+                    <Loader2 size={16} className="text-accent-cyan animate-spin" />
                   ) : (
                     <div className="w-4.5 h-4.5 rounded-full border-2 border-slate-200" />
                   )}
@@ -116,7 +116,7 @@ export default function AnalysisProgress({ isAnalyzing }: AnalysisProgressProps)
                     isCompleted
                       ? 'text-success'
                       : isActive
-                      ? 'text-accent-purple font-bold animate-pulse'
+                      ? 'text-accent-cyan font-bold animate-pulse'
                       : 'text-text-secondary'
                   )}
                 >

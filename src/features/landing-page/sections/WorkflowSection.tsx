@@ -9,7 +9,10 @@ import { WORKFLOW_NODES, WORKFLOW_PATHS, WORKFLOW_PULSES } from '@/shared/consta
 
 export default function WorkflowSection() {
   return (
-    <section className="relative bg-[#fafafa] -mt-16 pt-28 pb-32 px-4 sm:px-6 lg:px-8 overflow-hidden">
+    <section
+      id="how-it-works"
+      className="relative bg-slate-50 -mt-16 pt-28 pb-32 px-4 sm:px-6 lg:px-8 overflow-hidden scroll-mt-24"
+    >
       {/* Clean Web3 Faint Grid Background */}
       <div className="absolute inset-0 bg-flow-grid pointer-events-none opacity-40" />
 
@@ -22,7 +25,7 @@ export default function WorkflowSection() {
           transition={{ duration: 0.6 }}
           className="text-center max-w-3xl mx-auto z-20 relative"
         >
-          <h2 className="text-[2.5rem] sm:text-5xl md:text-[3.5rem] font-medium text-[#1e293b] tracking-[-0.03em] leading-[1.1] mt-4">
+          <h2 className="text-[2.5rem] sm:text-5xl md:text-[3.5rem] font-medium text-slate-800 tracking-[-0.03em] leading-[1.1] mt-4">
             A clear entry point to <span className="text-slate-500">UK-ready CVs</span>, role matching, and visa insights
           </h2>
           <p className="text-[15px] md:text-[16px] text-slate-500 leading-relaxed mt-6 max-w-2xl mx-auto font-medium">
@@ -34,7 +37,7 @@ export default function WorkflowSection() {
           <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
             <Link
               href="/analyze"
-              className="px-6 py-2.5 rounded-full bg-[#111827] text-white text-[13px] font-semibold tracking-wide shadow-xl shadow-slate-900/10 hover:bg-black hover:scale-[1.02] transition-all"
+              className="px-6 py-2.5 rounded-full bg-slate-900 text-white text-[13px] font-semibold tracking-wide shadow-xl shadow-slate-900/10 hover:bg-black hover:scale-[1.02] transition-all"
             >
               View Sample Report
             </Link>

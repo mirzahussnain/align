@@ -57,17 +57,17 @@ export default function AtsOptimizationStep({ includeAtsOptimization, onSelect }
           className={cn(
             "relative p-5 rounded-2xl border-2 cursor-pointer transition-all duration-200",
             includeAtsOptimization 
-              ? "border-accent-purple bg-purple-50/30" 
+              ? "border-accent-cyan bg-sky-50/30" 
               : "border-slate-200 hover:border-slate-300 bg-white"
           )}
         >
           {includeAtsOptimization && (
-            <div className="absolute -top-3 -right-3 bg-accent-purple text-white text-[10px] font-bold px-3 py-1 rounded-full uppercase tracking-wider shadow-sm">
+            <div className="absolute -top-3 -right-3 bg-slate-900 text-white text-[10px] font-bold px-3 py-1 rounded-full uppercase tracking-wider shadow-sm">
               Recommended
             </div>
           )}
           <div className="flex items-center gap-3 mb-3">
-            <div className={cn("p-2 rounded-xl", includeAtsOptimization ? "bg-purple-100 text-accent-purple" : "bg-slate-100 text-slate-500")}>
+            <div className={cn("p-2 rounded-xl", includeAtsOptimization ? "bg-sky-100 text-accent-cyan" : "bg-slate-100 text-slate-500")}>
               <Sparkles size={20} />
             </div>
             <h4 className={cn("font-bold", includeAtsOptimization ? "text-slate-900" : "text-slate-600")}>
@@ -79,13 +79,13 @@ export default function AtsOptimizationStep({ includeAtsOptimization, onSelect }
           </p>
           <ul className="space-y-2">
             <li className="flex items-center gap-2 text-sm text-slate-600">
-              <CheckCircle2 size={16} className="text-accent-purple" /> Fixes weak action verbs
+              <CheckCircle2 size={16} className="text-accent-cyan" /> Fixes weak action verbs
             </li>
             <li className="flex items-center gap-2 text-sm text-slate-600">
-              <CheckCircle2 size={16} className="text-accent-purple" /> Enforces STAR format & metrics
+              <CheckCircle2 size={16} className="text-accent-cyan" /> Enforces STAR format & metrics
             </li>
             <li className="flex items-center gap-2 text-sm text-slate-600">
-              <CheckCircle2 size={16} className="text-accent-purple" /> Strips corporate clichés
+              <CheckCircle2 size={16} className="text-accent-cyan" /> Strips corporate clichés
             </li>
           </ul>
         </div>

@@ -103,20 +103,20 @@ export default function CalculatorSection() {
                 className="w-full h-2 rounded-lg appearance-none cursor-pointer outline-none bg-slate-200/80
                   [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 
                   [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:border-2 
-                  [&::-webkit-slider-thumb]:border-purple-500 [&::-webkit-slider-thumb]:shadow-md [&::-webkit-slider-thumb]:hover:scale-110 
+                  [&::-webkit-slider-thumb]:border-accent-cyan [&::-webkit-slider-thumb]:shadow-md [&::-webkit-slider-thumb]:hover:scale-110 
                   [&::-webkit-slider-thumb]:transition-all
                   [&::-moz-range-thumb]:w-4 [&::-moz-range-thumb]:h-4 [&::-moz-range-thumb]:rounded-full 
-                  [&::-moz-range-thumb]:bg-white [&::-moz-range-thumb]:border-2 [&::-moz-range-thumb]:border-purple-500 
+                  [&::-moz-range-thumb]:bg-white [&::-moz-range-thumb]:border-2 [&::-moz-range-thumb]:border-accent-cyan 
                   [&::-moz-range-thumb]:shadow-md"
                 style={{
-                  background: `linear-gradient(to right, #8b5cf6 ${((atsScore - 30) / 70) * 100}%, #e2e8f0 ${((atsScore - 30) / 70) * 100}%)`
+                  background: `linear-gradient(to right, #0ea5e9 ${((atsScore - 30) / 70) * 100}%, #e2e8f0 ${((atsScore - 30) / 70) * 100}%)`
                 }}
               />
             </div>
 
             {/* Live Info details */}
             <div className="pt-4 border-t border-neutral-200/60 flex items-center gap-3">
-              <div className="p-2 rounded-xl bg-accent-purple/10 text-accent-purple">
+              <div className="p-2 rounded-xl bg-accent-cyan/10 text-accent-cyan">
                 <Award size={18} />
               </div>
               <p className="text-xs text-neutral-500 leading-relaxed">
@@ -129,10 +129,10 @@ export default function CalculatorSection() {
           <div className="space-y-6">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {/* London Estimate Card */}
-              <div className="bg-neutral-900 text-white rounded-3xl p-6 shadow-xl flex flex-col justify-between h-[150px]">
-                <span className="text-[10px] text-neutral-400 uppercase font-bold tracking-wider">London Salary Estimate</span>
+              <div className="bg-slate-900 text-white rounded-3xl p-6 shadow-xl flex flex-col justify-between h-[150px]">
+                <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">London Salary Estimate</span>
                 <h4 className="text-2xl sm:text-3xl font-black tracking-tight mt-1">£{baseSalaryLondon.toLocaleString()}</h4>
-                <span className="text-[10px] text-neutral-500 font-medium">Expected base rate per annum</span>
+                <span className="text-[10px] text-slate-500 font-medium">Expected base rate per annum</span>
               </div>
 
               {/* Regional Estimate Card */}
@@ -151,7 +151,7 @@ export default function CalculatorSection() {
               </div>
               <Link
                 href="/analyze"
-                className="px-6 py-2.5 rounded-full bg-neutral-900 hover:bg-neutral-800 text-white text-xs font-bold transition-all duration-300 flex items-center gap-1.5 shadow-md"
+                className="px-6 py-2.5 rounded-full bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold transition-all duration-300 flex items-center gap-1.5 shadow-md"
               >
                 Improve ATS Score <ChevronRight size={14} />
               </Link>

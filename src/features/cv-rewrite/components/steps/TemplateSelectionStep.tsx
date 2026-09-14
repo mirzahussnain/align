@@ -2,14 +2,15 @@
 
 import { CheckCircle2 } from 'lucide-react';
 import { cn } from '@/shared/utils/cn';
+import type { TemplateId } from '@/shared/constants/templates';
 
 interface Props {
   selected: string;
-  onSelect: (id: string) => void;
+  onSelect: (id: TemplateId) => void;
 }
 
 interface Template {
-  id: string;
+  id: TemplateId;
   name: string;
   description: string;
   atsSafe: boolean;
@@ -60,13 +61,13 @@ export default function TemplateSelectionStep({ selected, onSelect }: Props) {
               "relative p-5 rounded-2xl border-2 transition-all cursor-pointer",
               tpl.disabled ? "opacity-50 cursor-not-allowed bg-slate-50 border-slate-100" :
               selected === tpl.id 
-                ? "border-accent-purple bg-purple-50/50 shadow-md scale-[1.02]" 
+                ? "border-accent-cyan bg-sky-50/50 shadow-md scale-[1.02]" 
                 : "border-slate-200 hover:border-slate-300 hover:bg-slate-50"
             )}
           >
             {selected === tpl.id && (
-              <div className="absolute top-4 right-4 text-accent-purple">
-                <CheckCircle2 size={24} className="fill-purple-100" />
+              <div className="absolute top-4 right-4 text-accent-cyan">
+                <CheckCircle2 size={24} className="fill-sky-100" />
               </div>
             )}
             

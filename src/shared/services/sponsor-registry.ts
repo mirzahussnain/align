@@ -1,31 +1,42 @@
+import { createHash } from 'node:crypto';
+import { readFile } from 'node:fs/promises';
+import { join } from 'node:path';
 import Papa from 'papaparse';
 import { API_CONFIG } from '@/shared/lib/config';
 import type { Sponsor } from '@/shared/types/job';
 import { getIndustryFromCompany } from '@/shared/utils/sponsor';
+import {
+  SponsorIndexStore,
+  standardizeSponsorOrganisationName,
+  type SponsorEmployerMatch,
+  type SponsorIndex,
+} from './sponsor-index';
 
-let sponsorSetCache: Set<string> | null = null;
 let sponsorArrayCache: Sponsor[] | null = null;
+let registerVersionCache: string | null = null;
+let registerMetadataCache: SponsorRegisterMetadata | null = null;
 let fetchPromise: Promise<Sponsor[]> | null = null;
 let lastFetchTime = 0;
-const CACHE_TTL = 24 * 60 * 60 * 1000; // 24 hours
+const CACHE_TTL = 24 * 60 * 60 * 1000;
+const sponsorIndexes = new SponsorIndexStore();
 
-/**
- * Standardizes a company name for fuzzy matching
- */
-export function standardizeCompanyName(name: string): string {
-  if (!name) return '';
-  return name
-    .toLowerCase()
-    .replace(/\b(ltd|limited|llc|inc|plc|group)\b/g, '')
-    .replace(/[.,\/#!$%\^&\*;:{}=\-_`~()'"\\]/g, ' ')
-    .replace(/\s{2,}/g, ' ')
-    .trim();
+const BUNDLED_REGISTER = {
+  releaseVersion: '2',
+  publishedAt: '2026-07-29',
+  file: 'SP_-_Worker_and_Temporary_Worker_Web_Register_-_2026-07-29.csv',
+} as const;
+
+export interface SponsorRegisterMetadata {
+  releaseVersion: string;
+  registerVersion: string;
+  publishedAt?: string;
+  rowCount: number;
+  source: 'BUNDLED_RELEASE' | 'LIVE_FALLBACK';
 }
 
-/**
- * Validates a CSV URL to prevent SSRF vulnerabilities.
- * Ensures the URL is an official Gov.UK domain.
- */
+/** Backwards-compatible export used by sponsor-match caching callers. */
+export const standardizeCompanyName = standardizeSponsorOrganisationName;
+
 function isValidSponsorUrl(url: string): boolean {
   try {
     const parsed = new URL(url);
@@ -35,121 +46,102 @@ function isValidSponsorUrl(url: string): boolean {
   }
 }
 
-/**
- * Scrapes the GOV.UK guidance page for the latest CSV link.
- */
 async function getLatestSponsorCsvUrl(): Promise<string> {
   const fallbackUrl = API_CONFIG.gov.fallbackCsvUrl;
   try {
     const response = await fetch(API_CONFIG.gov.sponsorRegistryPage, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-      },
+      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; Align sponsor-register loader)' },
       next: { revalidate: 3600 },
     });
     if (!response.ok) return fallbackUrl;
-
     const html = await response.text();
     const match = html.match(/https:\/\/assets\.publishing\.service\.gov\.uk\/media\/[a-zA-Z0-9]+\/[0-9_-]+Worker_and_Temporary_Worker\.csv/);
-    if (match && isValidSponsorUrl(match[0])) {
-      return match[0];
-    }
-    return fallbackUrl;
+    return match && isValidSponsorUrl(match[0]) ? match[0] : fallbackUrl;
   } catch {
     return fallbackUrl;
   }
 }
 
+function parseSponsors(csvText: string): Sponsor[] {
+  const results = Papa.parse<Record<string, string>>(csvText, {
+    header: true,
+    skipEmptyLines: true,
+  });
+  if (results.errors.length) {
+    const first = results.errors[0];
+    throw new Error(`Failed to parse sponsor CSV data at row ${first.row ?? 'unknown'}: ${first.message}`);
+  }
+  return results.data.map((row) => {
+    const organisationName = row['Organisation Name'] || '';
+    return {
+      organisationName,
+      townCity: row['Town/City'] || '',
+      county: row.County || '',
+      rating: row['Type & Rating'] || row.Rating || '',
+      route: row.Route || '',
+      industry: getIndustryFromCompany(organisationName),
+    };
+  }).filter((sponsor) => sponsor.organisationName);
+}
+
+async function loadRemoteSponsorCsv(): Promise<string> {
+  const configuredUrl = process.env.GOVUK_SPONSOR_CSV_URL;
+  let response: Response | null = null;
+  if (configuredUrl && isValidSponsorUrl(configuredUrl)) {
+    try {
+      response = await fetch(configuredUrl, { cache: 'no-store' });
+    } catch (error) {
+      console.warn('Failed to fetch configured sponsor CSV URL.', error);
+    }
+  }
+  if (!response?.ok) {
+    const resolvedUrl = await getLatestSponsorCsvUrl();
+    try {
+      response = await fetch(resolvedUrl, { cache: 'no-store' });
+    } catch (error) {
+      console.warn('Failed to fetch resolved sponsor CSV URL.', error);
+    }
+  }
+  if (!response?.ok) response = await fetch(API_CONFIG.gov.fallbackCsvUrl, { cache: 'no-store' });
+  if (!response.ok) throw new Error(`Failed to fetch sponsor CSV data: ${response.status}`);
+  return response.text();
+}
+
 /**
- * Core function to fetch and parse the Sponsor CSV into full objects.
- * Single source of truth for both API responses and boolean lookups.
+ * Loads the source once per register generation. The Sponsor list serves the
+ * sponsor API; SponsorIndex is separate, reconstructable read-only acceleration
+ * for employer matching.
  */
 export async function getSponsors(): Promise<Sponsor[]> {
-  const now = Date.now();
-
-  if (sponsorArrayCache && now - lastFetchTime < CACHE_TTL) {
-    return sponsorArrayCache;
-  }
-
-  if (fetchPromise) {
-    return fetchPromise;
-  }
+  if (sponsorArrayCache && Date.now() - lastFetchTime < CACHE_TTL) return sponsorArrayCache;
+  if (fetchPromise) return fetchPromise;
 
   fetchPromise = (async () => {
-    let csvUrl = process.env.GOVUK_SPONSOR_CSV_URL;
-    let response: Response | null = null;
-
-    if (csvUrl && isValidSponsorUrl(csvUrl)) {
-      try {
-        response = await fetch(csvUrl, { cache: 'no-store' });
-      } catch (e) {
-        console.warn(`Failed to fetch configured CSV URL: ${csvUrl}`, e);
-      }
-    }
-
-    if (!response || !response.ok) {
-      const resolvedUrl = await getLatestSponsorCsvUrl();
-      if (isValidSponsorUrl(resolvedUrl)) {
-        try {
-          response = await fetch(resolvedUrl, { cache: 'no-store' });
-        } catch (e) {
-          console.error(`Failed to fetch resolved CSV URL`, e);
-        }
-      }
-    }
-
-    if (!response || !response.ok) {
-      const hardcodedUrl = API_CONFIG.gov.fallbackCsvUrl;
-      response = await fetch(hardcodedUrl, { cache: 'no-store' });
-    }
-
-    if (!response || !response.ok) {
-      if (sponsorArrayCache) return sponsorArrayCache;
-      throw new Error(`Failed to fetch sponsor CSV data: ${response ? response.status : 'unknown error'}`);
-    }
-
     try {
-      const csvText = await response.text();
-
-      return new Promise<Sponsor[]>((resolve, reject) => {
-        Papa.parse(csvText, {
-          header: true,
-          skipEmptyLines: true,
-          complete: (results) => {
-            try {
-              const sponsors = results.data.map((row: any) => {
-                const name = row['Organisation Name'] || '';
-                return {
-                  organisationName: name,
-                  townCity: row['Town/City'] || '',
-                  county: row['County'] || '',
-                  rating: row['Type & Rating'] || row['Rating'] || '',
-                  route: row['Route'] || '',
-                  industry: getIndustryFromCompany(name),
-                };
-              }).filter((s: Sponsor) => s.organisationName);
-              
-              sponsorArrayCache = sponsors;
-              
-              // Populate Set cache synchronously
-              const newSponsorSet = new Set<string>();
-              sponsors.forEach(s => {
-                const standardized = standardizeCompanyName(s.organisationName);
-                if (standardized) newSponsorSet.add(standardized);
-              });
-              sponsorSetCache = newSponsorSet;
-              
-              lastFetchTime = Date.now();
-              resolve(sponsors);
-            } catch (e) {
-               reject(new Error("Error mapping sponsor data"));
-            }
-          },
-          error: (error: any) => {
-            reject(error);
-          },
-        });
-      });
+      let csvText: string;
+      let source: SponsorRegisterMetadata['source'] = 'BUNDLED_RELEASE';
+      try {
+        csvText = await readFile(join(process.cwd(), 'data', 'sponsors', BUNDLED_REGISTER.file), 'utf8');
+      } catch (error) {
+        console.warn('Bundled sponsor register v2 is unavailable; using the GOV.UK fallback.', error);
+        source = 'LIVE_FALLBACK';
+        csvText = await loadRemoteSponsorCsv();
+      }
+      const sponsors = parseSponsors(csvText);
+      const contentVersion = versionSponsors(sponsors);
+      sponsorArrayCache = sponsors;
+      registerVersionCache = source === 'BUNDLED_RELEASE'
+        ? `v${BUNDLED_REGISTER.releaseVersion}-${BUNDLED_REGISTER.publishedAt}-${contentVersion}`
+        : `live-${contentVersion}`;
+      registerMetadataCache = {
+        releaseVersion: source === 'BUNDLED_RELEASE' ? BUNDLED_REGISTER.releaseVersion : 'live',
+        registerVersion: registerVersionCache,
+        ...(source === 'BUNDLED_RELEASE' ? { publishedAt: BUNDLED_REGISTER.publishedAt } : {}),
+        rowCount: sponsors.length,
+        source,
+      };
+      lastFetchTime = Date.now();
+      return sponsors;
     } catch (error) {
       if (sponsorArrayCache) return sponsorArrayCache;
       throw error;
@@ -157,23 +149,60 @@ export async function getSponsors(): Promise<Sponsor[]> {
       fetchPromise = null;
     }
   })();
-
   return fetchPromise;
 }
 
-/**
- * Checks if a specific company name is in the UK Sponsor Registry
- */
-export async function isCompanySponsor(companyName: string): Promise<boolean> {
-  if (!companyName) return false;
-  
-  // Ensure cache is populated
+export async function getSponsorRegisterVersion(): Promise<string> {
   await getSponsors();
-  
-  if (!sponsorSetCache) return false;
+  if (!registerVersionCache) throw new Error('Sponsor register version was not created with the loaded register.');
+  return registerVersionCache;
+}
 
-  const standardized = standardizeCompanyName(companyName);
-  if (!standardized) return false;
+export async function getSponsorRegisterMetadata(): Promise<SponsorRegisterMetadata> {
+  await getSponsors();
+  if (!registerMetadataCache) throw new Error('Sponsor register metadata was not created with the loaded register.');
+  return registerMetadataCache;
+}
 
-  return sponsorSetCache.has(standardized);
+/**
+ * In-process SponsorIndex = parsed read-only register acceleration.
+ * Redis sponsor-match cache = reusable completed employer lookup across requests.
+ */
+export async function getSponsorIndex(): Promise<SponsorIndex> {
+  const sponsors = await getSponsors();
+  // Read the version paired with this loaded array without another await, so a
+  // concurrent refresh cannot combine an old dataset with a new namespace.
+  if (!registerVersionCache) throw new Error('Sponsor register version was not created with the loaded register.');
+  return sponsorIndexes.getOrBuild(registerVersionCache, sponsors);
+}
+
+export async function isCompanySponsor(companyName: string): Promise<boolean> {
+  return (await getSponsorIndex()).matchEmployer(companyName).status === 'EXACT';
+}
+
+export async function batchCheckSponsors(companyNames: string[]): Promise<Map<string, boolean>> {
+  const index = await getSponsorIndex();
+  return new Map(companyNames.map((name) => [name, index.matchEmployer(name).status === 'EXACT']));
+}
+
+/** Conservative indexed matcher retained as the existing public integration boundary. */
+export async function matchSponsorCompanies(companyNames: string[]): Promise<Map<string, SponsorEmployerMatch>> {
+  const result = new Map<string, SponsorEmployerMatch>();
+  if (!companyNames.length) return result;
+  const index = await getSponsorIndex();
+  for (const company of companyNames) result.set(company, index.matchEmployer(company));
+  return result;
+}
+
+/** Full-content version computed while parsing: different datasets cannot share a cache namespace. */
+function versionSponsors(sponsors: readonly Sponsor[]): string {
+  const hash = createHash('sha256');
+  for (const sponsor of sponsors) {
+    hash.update(sponsor.organisationName).update('\0');
+    hash.update(sponsor.townCity).update('\0');
+    hash.update(sponsor.county).update('\0');
+    hash.update(sponsor.rating).update('\0');
+    hash.update(sponsor.route).update('\n');
+  }
+  return hash.digest('hex').slice(0, 16);
 }

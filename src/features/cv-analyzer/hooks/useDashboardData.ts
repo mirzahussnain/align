@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import { CVAnalysisResult } from '@/shared/types/cv';
+import { getOccupationProfile, isKnownOccupation } from '@/shared/occupations/registry';
 import {
   extractOriginalSummary,
   getFormattedCVLines,
@@ -11,12 +12,18 @@ import {
 } from '@/shared/utils/cv-parser';
 
 export function useDashboardData(result: CVAnalysisResult) {
+  // Typed `kind` selection with title-prefix fallback for results stored
+  // before recommendations carried kinds.
   const aiRewrites = useMemo(() => {
-    return result.recommendations.filter(r => r.title.startsWith('Rewrite bullet:'));
+    return result.recommendations.filter(
+      r => r.kind === 'rewrite' || (!r.kind && r.title.startsWith('Rewrite bullet:'))
+    );
   }, [result.recommendations]);
 
   const aiFeedback = useMemo(() => {
-    return result.recommendations.find(r => r.title === 'UK Tech Market Alignment Feedback');
+    return result.recommendations.find(
+      r => r.kind === 'alignment' || (!r.kind && r.title === 'UK Tech Market Alignment Feedback')
+    );
   }, [result.recommendations]);
 
   const originalSummary = useMemo(() => {
@@ -47,12 +54,26 @@ export function useDashboardData(result: CVAnalysisResult) {
     return result.compliance.filter(c => !c.passed).length === 0;
   }, [result.compliance]);
 
-  const hasTestingKeywords = useMemo(() => {
-    if (result.aiHasTesting !== undefined) {
-      return result.aiHasTesting;
-    }
-    return /jest|cypress|playwright|vitest|mocha|testing|tdd|bdd/i.test(result.rawText);
-  }, [result.aiHasTesting, result.rawText]);
+  /** The occupation this result was evaluated as — legacy rows read as generic. */
+  const occupationLabel = useMemo(() => {
+    const occupation = result.classification?.occupation;
+    return isKnownOccupation(occupation) ? getOccupationProfile(occupation).label : 'General';
+  }, [result.classification]);
+
+  /**
+   * Role relevance: coverage of the classified occupation's evidence, not
+   * tech-specific testing keywords. Legacy stored rows carry the old
+   * `keywordDensity` category id.
+   */
+  const roleAligned = useMemo(() => {
+    const coverage = result.categories.find(
+      c => c.id === 'evidenceCoverage' || c.id === 'keywordDensity'
+    );
+    const coverageOk = coverage ? coverage.status === 'excellent' || coverage.status === 'good' : true;
+    const missingMandatory =
+      result.credentials?.findings.some(f => f.class === 'mandatory' && !f.found) ?? false;
+    return coverageOk && !missingMandatory;
+  }, [result.categories, result.credentials]);
 
   const hasRiskFactor = useMemo(() => {
     if (result.aiRiskFlags && result.aiRiskFlags.length > 0) {
@@ -94,7 +115,8 @@ export function useDashboardData(result: CVAnalysisResult) {
     clichésList,
     targetRoleTitle,
     isCompliancePassed,
-    hasTestingKeywords,
+    occupationLabel,
+    roleAligned,
     hasRiskFactor,
     risksList,
     isEssentialSectionsPassed,

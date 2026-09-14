@@ -27,7 +27,7 @@ export default function SectionGroup({
       )}
     >
       <div className="flex items-center gap-4 mb-8">
-        <div className="p-3 bg-white rounded-2xl shadow-sm text-accent-purple border border-slate-100">
+        <div className="p-3 bg-white rounded-2xl shadow-sm text-accent-cyan border border-slate-100">
           {icon}
         </div>
         <div>

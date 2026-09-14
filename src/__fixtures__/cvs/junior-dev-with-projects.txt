@@ -1,0 +1,49 @@
+PRIYA SHARMA
+Manchester, UK | priya.sharma@example.com | 07700 900456
+linkedin.com/in/priyasharma-dev | github.com/priyasharma-dev
+
+PROFESSIONAL SUMMARY
+Junior software engineer with a first-class Computer Science degree and 1 year of commercial experience building full-stack web applications with React, TypeScript, and Node.js. Shipped three production projects including a booking platform serving 2,000+ monthly users. Seeking a graduate or junior engineering role in the UK.
+
+TECHNICAL SKILLS
+Languages: TypeScript, JavaScript, Python, SQL
+Frontend: React, Next.js, Tailwind CSS, HTML, CSS
+Backend: Node.js, Express, PostgreSQL, Prisma, REST APIs
+Testing: Jest, React Testing Library, Playwright
+Tools: Git, GitHub Actions, Docker, Vercel, AWS S3
+
+KEY PROJECTS
+
+CourtBook — Sports venue booking platform
+Built a full-stack booking system with Next.js, PostgreSQL, and Stripe payments
+Serves 2,000+ monthly active users across 14 venues
+Reduced page load time by 40% through server-side rendering and image optimisation
+Wrote unit and end-to-end tests with Jest and Playwright reaching 85% coverage
+
+DevTracker — Open-source GitHub analytics dashboard
+React and Node.js dashboard aggregating contribution data via the GitHub API
+120+ GitHub stars; merged contributions from 8 external contributors
+CI pipeline with GitHub Actions running lint, tests, and preview deploys
+
+StudyBuddy — Revision flashcard app
+Python/Flask REST API with a React front end, deployed on Render
+Implemented spaced-repetition scheduling algorithm
+
+PROFESSIONAL EXPERIENCE
+
+Junior Software Developer — BrightPath Digital, Manchester
+July 2025 - Present
+Develop and maintain React components for client marketing sites and web apps
+Fixed 30+ bugs in a legacy Express codebase, improving error rates by 25%
+Participate in code reviews and agile ceremonies in a team of 6 engineers
+
+Software Engineering Intern — BrightPath Digital, Manchester
+June 2024 - September 2024
+Built an internal tool automating weekly reporting, saving the team 4 hours per week
+
+EDUCATION
+BSc (Hons) Computer Science, First Class — University of Manchester, 2022 - 2025
+Relevant modules: Algorithms, Databases, Distributed Systems, Software Engineering
+
+CERTIFICATIONS
+AWS Certified Cloud Practitioner (2025)

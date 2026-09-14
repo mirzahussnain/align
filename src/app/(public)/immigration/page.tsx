@@ -1,9 +1,10 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, Suspense } from 'react';
 import { motion } from 'framer-motion';
 import { Search, ShieldCheck, Building2, ExternalLink, Loader2, Info } from 'lucide-react';
 import Navbar from '@/shared/components/layout/Navbar';
+import PublicPageBackdrop from '@/shared/components/layout/PublicPageBackdrop';
 import { Input } from '@/shared/components/ui/Input';
 import GlassCard from '@/shared/components/ui/GlassCard';
 import { cn } from '@/shared/utils/cn';
@@ -14,7 +15,7 @@ import { useSponsors } from '@/features/immigration/hooks/useSponsors';
 import { VISAS, INDUSTRY_SECTORS } from '@/shared/constants/immigration-config';
 import { EXTERNAL_LINKS } from '@/shared/constants/navigation';
 
-export default function ImmigrationHubPage() {
+function ImmigrationHubContent() {
   const [activeVisaTab, setActiveVisaTab] = useState<string>(VISAS[0].title);
   
   const {
@@ -29,21 +30,23 @@ export default function ImmigrationHubPage() {
     isLoading,
     page,
     error,
+    register,
     handlePageChange,
   } = useSponsors();
 
   return (
-    <main className="min-h-screen bg-hero-gradient">
+    <main className="relative isolate min-h-screen overflow-hidden bg-hero-gradient">
       <Navbar />
+      <PublicPageBackdrop variant="immigration" />
 
-      <section className="pt-24 pb-12 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
+      <section className="relative z-10 pt-24 pb-12 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           className="mb-8"
         >
           <h1 className="text-3xl font-bold text-text-primary mb-2 flex items-center gap-2">
-            <ShieldCheck className="text-accent-purple" />
+            <ShieldCheck className="text-accent-cyan" />
             UK Immigration Hub
           </h1>
           <p className="text-text-secondary">
@@ -58,11 +61,11 @@ export default function ImmigrationHubPage() {
           transition={{ delay: 0.1 }}
           className="mb-8"
         >
-          <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-accent-purple/10 to-accent-cyan/10 border border-accent-purple/25 p-6 sm:p-8">
+          <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-sky-50/50 to-slate-50/50 border border-sky-200 p-6 sm:p-8">
             <div className="relative z-10 flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
               <div className="flex-1">
                 <div className="flex items-center gap-2 mb-2">
-                  <span className="px-2.5 py-1 rounded-full text-[10px] font-bold tracking-wider uppercase bg-accent-purple text-white">Recommended</span>
+                  <span className="px-2.5 py-1 rounded-full text-[10px] font-bold tracking-wider uppercase bg-slate-900 text-white">Recommended</span>
                   <h2 className="text-xl font-bold text-text-primary">Knowledge Transfer Partnerships (KTPs)</h2>
                 </div>
                 <p className="text-text-secondary text-sm mb-4 max-w-3xl">
@@ -70,7 +73,7 @@ export default function ImmigrationHubPage() {
                   <strong className="text-text-primary ml-1">Universities are licensed sponsors and can sponsor your Skilled Worker Visa.</strong>
                 </p>
                 <div className="flex flex-wrap gap-4">
-                  <a href={EXTERNAL_LINKS.ktpJobs} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 text-sm font-semibold text-accent-purple hover:text-accent-purple-glow transition-colors">
+                  <a href={EXTERNAL_LINKS.ktpJobs} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 text-sm font-semibold text-accent-cyan hover:text-accent-cyan-glow transition-colors">
                     View Official KTP Jobs <ExternalLink size={16} />
                   </a>
                   <a href={`${EXTERNAL_LINKS.jobsAcUk}KTP+Associate`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 text-sm font-semibold text-accent-cyan hover:text-accent-cyan-glow transition-colors">
@@ -86,7 +89,7 @@ export default function ImmigrationHubPage() {
             </div>
             
             {/* Decorative background elements */}
-            <div className="absolute top-0 right-0 -translate-y-1/2 translate-x-1/3 w-64 h-64 bg-accent-purple/20 rounded-full blur-3xl pointer-events-none" />
+            <div className="absolute top-0 right-0 -translate-y-1/2 translate-x-1/3 w-64 h-64 bg-accent-cyan/15 rounded-full blur-3xl pointer-events-none" />
             <div className="absolute bottom-0 left-0 translate-y-1/2 -translate-x-1/3 w-64 h-64 bg-accent-cyan/20 rounded-full blur-3xl pointer-events-none" />
           </div>
         </motion.div>
@@ -99,7 +102,13 @@ export default function ImmigrationHubPage() {
               <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
                 <div>
                   <h2 className="text-xl font-bold text-text-primary mb-1">Register of Licensed Sponsors</h2>
-                  <p className="text-xs text-text-tertiary">Data sourced directly from GOV.UK CSV</p>
+                  <p className="text-xs text-text-tertiary">
+                    {!register
+                      ? 'Loading register details…'
+                      : register.source === 'BUNDLED_RELEASE'
+                        ? `GOV.UK register · Version ${register.releaseVersion} · ${register.rowCount.toLocaleString()} entries${register.publishedAt ? ` · ${new Date(`${register.publishedAt}T00:00:00Z`).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' })}` : ''}`
+                        : 'Data sourced directly from the live GOV.UK CSV'}
+                  </p>
                 </div>
                 <a href={EXTERNAL_LINKS.govSponsorList} target="_blank" rel="noopener noreferrer" className="text-xs flex items-center gap-1 text-text-tertiary hover:text-text-primary transition-colors">
                   Official Source <ExternalLink size={12} />
@@ -171,7 +180,7 @@ export default function ImmigrationHubPage() {
                       {isLoading && sponsors.length === 0 ? (
                         <tr>
                           <td colSpan={5} className="px-4 py-8 text-center">
-                            <Loader2 size={24} className="animate-spin text-accent-purple mx-auto mb-2" />
+                            <Loader2 size={24} className="animate-spin text-accent-cyan mx-auto mb-2" />
                             <span className="text-text-tertiary text-xs">Loading sponsors...</span>
                           </td>
                         </tr>
@@ -218,7 +227,7 @@ export default function ImmigrationHubPage() {
                             <td className="px-4 py-3 text-right">
                               <a
                                 href={`/jobs?query=${encodeURIComponent(sponsor.organisationName)}`}
-                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-bold bg-accent-purple text-white hover:bg-purple-700 hover:shadow-md transition-all opacity-0 group-hover:opacity-100 focus:opacity-100 whitespace-nowrap"
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-bold bg-slate-900 text-white hover:bg-purple-700 hover:shadow-md transition-all opacity-0 group-hover:opacity-100 focus:opacity-100 whitespace-nowrap"
                               >
                                 View Jobs
                               </a>
@@ -304,5 +313,13 @@ export default function ImmigrationHubPage() {
         </div>
       </section>
     </main>
+  );
+}
+
+export default function ImmigrationHubPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-hero-gradient flex items-center justify-center text-text-secondary">Loading Immigration Hub...</div>}>
+      <ImmigrationHubContent />
+    </Suspense>
   );
 }

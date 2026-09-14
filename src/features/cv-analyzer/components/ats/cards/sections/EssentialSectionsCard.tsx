@@ -27,6 +27,7 @@ export default function EssentialSectionsCard({ rawText }: EssentialSectionsCard
   return (
     <AuditCard
       id="essentialSections"
+      source="rule"
       title="Essential Sections"
       subtitle="Verifies presence of core recruitment sections"
       score={isPassed ? 'Complete' : 'Incomplete'}

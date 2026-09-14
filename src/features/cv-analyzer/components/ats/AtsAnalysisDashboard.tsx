@@ -1,21 +1,15 @@
 'use client';
 
 import { CVAnalysisResult } from '@/shared/types/cv';
-import ScoreDial from '@/shared/components/ui/CircularProgress';
 import KeywordsPanel from './panels/KeywordsPanel';
 import CompliancePanel from './panels/CompliancePanel';
 import SectionsPanel from './panels/SectionsPanel';
-import ImpactPanel from './panels/ImpactPanel';
 import { useState, useRef, useEffect } from 'react';
 import { cn } from '@/shared/utils/cn';
 import {
   BookOpen,
   Sparkles,
-  ChevronDown,
-  ChevronUp,
   AlertTriangle,
-  ArrowLeft,
-  ArrowRight,
   PenTool,
   LayoutList,
   CheckCircle,
@@ -23,8 +17,11 @@ import {
 } from 'lucide-react';
 import { DASHBOARD_NAVIGATION_GROUPS } from '../../constants/dashboard-navigation';
 import { useAnalysisDashboard } from '../../hooks/useAnalysisDashboard';
+import { routeWorkflow } from '@/shared/services/workflow-router';
+import ScreeningReadinessStrip from './ScreeningReadinessStrip';
 import { getParentGroupId } from '@/shared/utils/navigation';
 import SectionGroup from './SectionGroup';
+import SourceBadge from './SourceBadge';
 
 // Extracted Layout Shells & Components
 import AlertBanner from '@/shared/components/ui/AlertBanner';
@@ -55,16 +52,23 @@ import DatesLinksCard from './cards/ats-essentials/DatesLinksCard';
 // HR Red Flags Group
 import CredibilityCard from './cards/hr-red-flags/CredibilityCard';
 import InterviewRisksCard from './cards/hr-red-flags/InterviewRisksCard';
-import PeerBenchmarkingCard from './cards/hr-red-flags/PeerBenchmarkingCard';
 import LinkedinMatchCard from './cards/hr-red-flags/LinkedinMatchCard';
 
 // Discrimination Group
 import RelevanceCard from './cards/discrimination/RelevanceCard';
+import CredentialsCard from './cards/discrimination/CredentialsCard';
 
 // Seniority Group
 import RoleTargetCard from './cards/seniority/RoleTargetCard';
 
-export default function AtsAnalysisDashboard({ result }: { result: CVAnalysisResult }) {
+export default function AtsAnalysisDashboard({
+  result,
+  onNewUpload,
+}: {
+  result: CVAnalysisResult;
+  /** Reset to the uploader. Provided only where a fresh upload is possible. */
+  onNewUpload?: () => void;
+}) {
   const [isMobileDetailView, setIsMobileDetailView] = useState(false);
   const mobileNavRef = useRef<HTMLDivElement>(null);
   const desktopNavRef = useRef<HTMLElement>(null);
@@ -88,7 +92,8 @@ export default function AtsAnalysisDashboard({ result }: { result: CVAnalysisRes
     repeatedWords,
     clichésList,
     targetRoleTitle,
-    hasTestingKeywords,
+    occupationLabel,
+    roleAligned,
     hasRiskFactor,
     risksList,
     getCategoryScorePercent,
@@ -99,6 +104,16 @@ export default function AtsAnalysisDashboard({ result }: { result: CVAnalysisRes
 
   // Scroll spy active group
   const activeGroupId = getParentGroupId(DASHBOARD_NAVIGATION_GROUPS, activeItem, 'content');
+
+  // How this occupation actually screens candidates; cv_led renders the
+  // standard dashboard with no additions.
+  const workflow = routeWorkflow(result.classification);
+
+  // Whether the AI layer actually ran and its output was applied. Drives the
+  // per-card source badge so summary/impact/clichés/risk cards say "AI-generated"
+  // only when a model really produced them — otherwise they fell back to rules.
+  const aiApplied = !!result.aiApplied;
+  const aiOrRule = aiApplied ? 'ai' : 'rule';
 
   // Scroll mobile nav to keep active item in view
   useEffect(() => {
@@ -132,11 +147,48 @@ export default function AtsAnalysisDashboard({ result }: { result: CVAnalysisRes
 
   return (
     <div className="flex flex-col gap-6 w-full relative">
-      {result.aiIsTechRole === false && (
-        <AlertBanner title="Out-of-Domain CV Detected" type="warning">
-          Align is specifically calibrated for Software Engineering and Tech roles. We detected that this is a non-technical CV. Your keyword and impact scores may be artificially low because our engine is looking for strict technical requirements (like Cloud platforms and Testing frameworks).
+      {/* The rule-based score below is complete and unaffected, but the AI
+          sections (summary, impact, rewrites) are missing. Saying so beats
+          letting the report look mysteriously thin. */}
+      {result.viewerMode !== 'anonymous_demo' && result.aiSkipped === 'quota' && (
+        <AlertBanner title="AI insights paused — monthly limit reached" type="info">
+          You&apos;ve used all the AI analyses included in your plan this month, so this report
+          shows the rule-based ATS results only: formatting, sections, keywords and compliance
+          are all still scored in full. The AI-written summary feedback, impact rewrites and
+          role detection resume when your allowance resets at the start of next month.
         </AlertBanner>
       )}
+
+      {result.outOfDomain && (
+        <AlertBanner title="We couldn't confidently match your CV to a supported occupation" type="warning">
+          This report was scored against general UK CV standards rather than occupation-specific
+          expectations, so some scores may read lower than they should. Set a target occupation on
+          your profile — or include your target role title prominently on the CV — and re-analyse
+          for a calibrated report.
+        </AlertBanner>
+      )}
+
+      {workflow.framing && (
+        <AlertBanner title="How this role is usually screened" type="info">
+          {workflow.framing}
+        </AlertBanner>
+      )}
+
+      {workflow.emphasis.includes('screening_readiness') && (
+        <ScreeningReadinessStrip result={result} />
+      )}
+
+      {/* How to read the report: which cards are fixed rules vs. a model's
+          judgement. Kept small — it's orientation, not a headline. */}
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-2xl border border-slate-100 bg-slate-50/60 px-4 py-3 text-[11px] text-slate-500">
+        <span className="font-semibold text-slate-600">How to read this report:</span>
+        <span className="inline-flex items-center gap-1.5">
+          <SourceBadge source="rule" /> deterministic — same CV always scores the same.
+        </span>
+        <span className="inline-flex items-center gap-1.5">
+          <SourceBadge source="ai" /> written by AI — treat as informed judgement, not fixed fact.
+        </span>
+      </div>
 
       {/* --- MOBILE SUMMARY VIEW --- */}
       <MobileSummary
@@ -144,6 +196,7 @@ export default function AtsAnalysisDashboard({ result }: { result: CVAnalysisRes
         totalIssues={totalIssues}
         isMobileDetailView={isMobileDetailView}
         setIsMobileDetailView={setIsMobileDetailView}
+        onNewUpload={onNewUpload}
       />
 
       {/* --- MOBILE DETAILED VIEW TOP NAV --- */}
@@ -183,7 +236,7 @@ export default function AtsAnalysisDashboard({ result }: { result: CVAnalysisRes
         {/* ==================== RESUME PREVIEW GROUP ==================== */}
         <SectionGroup id="overview" title="Live Analysis Preview" icon={<Sparkles size={24} />} score={result.overallScore}>
           <ResumePreviewPanel
-            formattedCVLines={formattedCVLines as any}
+            formattedCVLines={formattedCVLines}
             cvViewMode={cvViewMode}
             setCvViewMode={setCvViewMode}
             activeRewriteIndex={activeRewriteIndex}
@@ -211,6 +264,7 @@ export default function AtsAnalysisDashboard({ result }: { result: CVAnalysisRes
             aiFeedback={aiFeedback}
             activeRewriteIndex={activeRewriteIndex}
             setActiveRewriteIndex={setActiveRewriteIndex}
+            source={aiOrRule}
           />
 
           {/* Section 4: Repetition */}
@@ -222,6 +276,7 @@ export default function AtsAnalysisDashboard({ result }: { result: CVAnalysisRes
             scoreStatus={result.categories.find(c => c.id === 'professionalSummary')?.status}
             details={result.categories.find(c => c.id === 'professionalSummary')?.details}
             originalSummary={originalSummary}
+            source={aiOrRule}
           />
 
           {/* Section 6: ATS Keywords */}
@@ -253,7 +308,7 @@ export default function AtsAnalysisDashboard({ result }: { result: CVAnalysisRes
           <FileFormatSizeCard
             pageCount={result.pageCount}
             estimatedReadTime={result.formatting.estimatedReadTime}
-            details={result.categories.find(c => c.id === 'pageCount')?.details}
+            details={result.categories.find(c => c.id === 'pageCount' || c.id === 'formatting')?.details}
           />
 
           {/* Section 12: Design */}
@@ -269,7 +324,7 @@ export default function AtsAnalysisDashboard({ result }: { result: CVAnalysisRes
           <HeaderLinksCard linkedin={contactInfo.linkedin} />
 
           {/* Section 15: File Name Check */}
-          <FileNameCard />
+          <FileNameCard fileName={result.fileName} />
 
           {/* Section 16: Dates & Links */}
           <DatesLinksCard formattingIssues={result.formatting.issues} />
@@ -278,15 +333,16 @@ export default function AtsAnalysisDashboard({ result }: { result: CVAnalysisRes
         {/* ==================== HR RED FLAGS GROUP ==================== */}
         <SectionGroup id="hr-red-flags" title="HR Red Flags" icon={<AlertOctagon size={24} />} score={getGroupScore('hr-red-flags')}>
           {/* Section 17: Credibility */}
-          <CredibilityCard clichésList={clichésList} />
+          <CredibilityCard clichésList={clichésList} source={result.aiClichés?.length ? 'ai' : 'rule'} />
 
           {/* Section 18: Interview Risks */}
-          <InterviewRisksCard hasRiskFactor={hasRiskFactor} risksList={risksList} />
+          <InterviewRisksCard
+            hasRiskFactor={hasRiskFactor}
+            risksList={risksList}
+            source={result.aiRiskFlags?.length ? 'ai' : 'rule'}
+          />
 
-          {/* Section 19: Peer Benchmarking */}
-          <PeerBenchmarkingCard overallScore={result.overallScore} />
-
-          {/* Section 20: LinkedIn Match */}
+          {/* Section 19: LinkedIn Match */}
           <LinkedinMatchCard linkedin={contactInfo.linkedin} />
         </SectionGroup>
 
@@ -297,22 +353,18 @@ export default function AtsAnalysisDashboard({ result }: { result: CVAnalysisRes
             <CompliancePanel result={result} />
           </div>
 
-          {/* Section 22: UK Tech Relevance */}
-          <RelevanceCard hasTestingKeywords={hasTestingKeywords} presentKeywords={result.keywords.present} />
+          {/* Section 22: Credentials & Licences */}
+          <CredentialsCard credentials={result.credentials} occupationLabel={occupationLabel} />
+
+          {/* Section 23: Role Relevance */}
+          <RelevanceCard roleAligned={roleAligned} occupationLabel={occupationLabel} presentKeywords={result.keywords.present} />
         </SectionGroup>
 
         {/* ==================== SENIORITY GROUP ==================== */}
         <SectionGroup id="seniority" title="Seniority" icon={<BookOpen size={24} />} score={getGroupScore('seniority')}>
           {/* Section 23: Role Target */}
-          <RoleTargetCard targetRoleTitle={targetRoleTitle} />
+          <RoleTargetCard targetRoleTitle={targetRoleTitle} source={result.aiTargetRole ? 'ai' : 'rule'} />
         </SectionGroup>
-
-        {/* MOBILE STICKY CTA BUTTON (Visible only on mobile detail view) */}
-        <div className="lg:hidden fixed bottom-0 left-0 right-0 p-4 bg-white/90 border-t border-slate-200 backdrop-blur-md z-50">
-          <button className="w-full bg-success hover:bg-emerald-600 text-white font-extrabold py-3.5 px-4 rounded-xl flex items-center justify-center gap-2 shadow-lg transition-colors text-sm uppercase tracking-wider">
-            Improve & Download Resume
-          </button>
-        </div>
 
       </div>
       </div>

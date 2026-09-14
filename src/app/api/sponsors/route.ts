@@ -1,10 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getSponsors } from '@/shared/services/sponsor-registry';
+import { getSponsorRegisterMetadata, getSponsors } from '@/shared/services/sponsor-registry';
 import { withErrorHandler, APIError } from '@/shared/utils/api-error';
 import { SponsorQuerySchema } from './schema';
+import { applyRateLimit, sponsorsLimiter } from '@/shared/lib/rate-limit';
+import { filterSponsors } from '@/shared/utils/sponsor';
 
 export async function GET(request: NextRequest) {
   return withErrorHandler(async () => {
+    const ip = request.headers.get('x-forwarded-for') ?? 'anonymous';
+    const rateLimitResponse = await applyRateLimit(sponsorsLimiter, ip);
+    if (rateLimitResponse) return rateLimitResponse;
+
     const { searchParams } = new URL(request.url);
     
     const parsed = SponsorQuerySchema.safeParse(Object.fromEntries(searchParams.entries()));
@@ -14,28 +20,11 @@ export async function GET(request: NextRequest) {
 
     const { query, route, industry, page, perPage } = parsed.data;
 
-    const sponsors = await getSponsors();
-
-    // Filter
-    const filtered = sponsors.filter((sponsor) => {
-      if (
-        query &&
-        !sponsor.organisationName.toLowerCase().includes(query) &&
-        !sponsor.townCity.toLowerCase().includes(query)
-      ) {
-        return false;
-      }
-      if (route !== 'all' && !sponsor.route.toLowerCase().includes(route)) {
-        return false;
-      }
-      if (
-        industry !== 'all' &&
-        (!sponsor.industry || sponsor.industry.toLowerCase() !== industry)
-      ) {
-        return false;
-      }
-      return true;
-    });
+    const [sponsors, register] = await Promise.all([
+      getSponsors(),
+      getSponsorRegisterMetadata(),
+    ]);
+    const filtered = filterSponsors(sponsors, { query, route, industry });
 
     // Paginate
     const total = filtered.length;
@@ -47,6 +36,7 @@ export async function GET(request: NextRequest) {
       total,
       page,
       perPage,
+      register,
     });
   });
 }

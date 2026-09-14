@@ -1,6 +1,6 @@
 // Adzuna API Service
 
-import type { Job, JobSearchParams, JobSearchResult } from '@/shared/types/job';
+import type { ProviderJob, JobSearchParams, JobSearchResult } from '@/shared/types/job';
 import { API_CONFIG } from '@/shared/lib/config';
 
 interface AdzunaJob {
@@ -24,7 +24,15 @@ interface AdzunaResponse {
   mean: number;
 }
 
-export async function searchAdzunaJobs(params: JobSearchParams): Promise<JobSearchResult> {
+/**
+ * `signal` lets the orchestrator stop waiting on a source it has abandoned, so a
+ * request whose deadline has passed releases its socket instead of running to
+ * completion unobserved. Optional, so every existing caller is unaffected.
+ */
+export async function searchAdzunaJobs(
+  params: JobSearchParams,
+  options: { signal?: AbortSignal } = {}
+): Promise<JobSearchResult> {
   const { appId, appKey, baseUrl } = API_CONFIG.adzuna;
 
   if (!appId || !appKey) {
@@ -54,7 +62,7 @@ export async function searchAdzunaJobs(params: JobSearchParams): Promise<JobSear
   if (params.salaryMax) {
     searchParams.set('salary_max', String(params.salaryMax));
   }
-  if (params.contractType && params.contractType !== 'all') {
+  if (params.contractType === 'permanent' || params.contractType === 'contract') {
     searchParams.set('contract_type', params.contractType);
   }
   if (params.sortBy === 'date') {
@@ -65,7 +73,7 @@ export async function searchAdzunaJobs(params: JobSearchParams): Promise<JobSear
 
   const url = `${baseUrl}/${params.page}?${searchParams.toString()}`;
 
-  const response = await fetch(url, { next: { revalidate: 300 } }); // Cache 5 min
+  const response = await fetch(url, { next: { revalidate: 300 }, signal: options.signal }); // Cache 5 min
 
   if (!response.ok) {
     const errorText = await response.text();
@@ -74,7 +82,7 @@ export async function searchAdzunaJobs(params: JobSearchParams): Promise<JobSear
 
   const data: AdzunaResponse = await response.json();
 
-  const jobs: Job[] = data.results.map((job) => ({
+  const jobs: ProviderJob[] = data.results.map((job) => ({
     id: `adzuna-${job.id}`,
     title: job.title,
     company: job.company.display_name,

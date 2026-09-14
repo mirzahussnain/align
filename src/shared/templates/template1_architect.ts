@@ -1,9 +1,10 @@
 import {
   Document, Packer, Paragraph, TextRun, TabStopType,
-  AlignmentType, BorderStyle, LevelFormat, ExternalHyperlink
+  AlignmentType, BorderStyle, LevelFormat
 } from 'docx';
-import type { RewrittenCVData } from './types';
-import { formatPhone, buildLinkArray } from './utils';
+import { buildLinkArray, contactDetailParts, flattenSkills } from './utils';
+import { formatDateRangeStyled, type DateDisplayStyle } from '@/shared/utils/date';
+import type { CvBuildSpec, CvSectionSpec } from '@/shared/services/cv-build-spec/types';
 
 // ── PALETTE ────────────────────────────────────────────────
 const C = {
@@ -22,6 +23,7 @@ const sp = (before = 0, after = 0) => ({ before, after });
 
 function rule(spaceAfter = 60) {
   return new Paragraph({
+    keepNext: true,
     border: { bottom: { style: BorderStyle.SINGLE, size: 12, color: C.rule, space: 1 } },
     spacing: sp(0, spaceAfter),
   });
@@ -45,6 +47,7 @@ function nameBlock(name: string, tagline: string) {
 function sectionHead(text: string) {
   return [
     new Paragraph({
+      keepNext: true,
       spacing: sp(220, 30),
       children: [
         new TextRun({ text: text.toUpperCase(), bold: true, size: 22, font: "Calibri", color: C.accent })
@@ -57,12 +60,14 @@ function sectionHead(text: string) {
 function roleHeader(title: string, org: string, dateStr: string, locationStr: string) {
   return [
     new Paragraph({
+      keepNext: true,
       spacing: sp(140, 0),
       children: [
         new TextRun({ text: title, bold: true, size: 20, font: "Calibri", color: C.navy })
       ]
     }),
     new Paragraph({
+      keepNext: true,
       tabStops: [{ type: TabStopType.RIGHT, position: CONTENT_W }],
       spacing: sp(20, 30),
       children: [
@@ -74,20 +79,22 @@ function roleHeader(title: string, org: string, dateStr: string, locationStr: st
   ];
 }
 
-function projHead(title: string, stack: string, dateStr: string) {
+function projHead(title: string, skills: string, dateStr: string) {
   return [
     new Paragraph({
+      keepNext: true,
       spacing: sp(140, 0),
       children: [
         new TextRun({ text: title, bold: true, size: 20, font: "Calibri", color: C.navy })
       ]
     }),
     new Paragraph({
+      keepNext: true,
       tabStops: [{ type: TabStopType.RIGHT, position: CONTENT_W }],
       spacing: sp(20, 28),
       children: [
-        new TextRun({ text: "Stack: ", bold: true, size: 19, font: "Calibri", color: C.muted }),
-        new TextRun({ text: stack, size: 19, font: "Calibri", color: C.muted, italics: true }),
+        new TextRun({ text: "Skills: ", bold: true, size: 19, font: "Calibri", color: C.muted }),
+        new TextRun({ text: skills, size: 19, font: "Calibri", color: C.muted, italics: true }),
         new TextRun({ text: "\t" }),
         new TextRun({ text: dateStr, size: 19, font: "Calibri", color: C.muted, italics: true }),
       ]
@@ -97,6 +104,7 @@ function projHead(title: string, stack: string, dateStr: string) {
 
 function bul(label: string, body: string) {
   return new Paragraph({
+    keepLines: true,
     numbering: { reference: "bul", level: 0 },
     spacing: sp(0, 55),
     children: [
@@ -116,8 +124,75 @@ function skillRow(label: string, value: string) {
   });
 }
 
+// ── SECTION RENDERERS ────────────────────────────────────────────────
+// Each renderer lays out ONE planned section using this template's visual
+// language. The section's presence, order and heading were decided by the
+// content planner — the template only presents.
+function renderSection(section: CvSectionSpec, dateStyle: DateDisplayStyle): Paragraph[] {
+  switch (section.type) {
+    case 'summary':
+      return [
+        ...sectionHead(section.heading),
+        new Paragraph({
+          spacing: sp(60, 80),
+          alignment: AlignmentType.JUSTIFIED,
+          children: [new TextRun({ text: section.text, size: 19, font: "Calibri", color: C.body })],
+        }),
+      ];
+    case 'education':
+      return [
+        ...sectionHead(section.heading),
+        ...section.entries.flatMap(edu => [
+          ...roleHeader(edu.degree, edu.university, formatDateRangeStyled(edu.startDate, edu.endDate, dateStyle), ""),
+          new Paragraph({
+            spacing: sp(0, 30),
+            children: [
+              new TextRun({ text: edu.grade, bold: true, size: 19, font: "Calibri", color: C.navy }),
+              new TextRun({ text: `  ·  ${edu.description}`, size: 19, font: "Calibri", color: C.body }),
+            ],
+          }),
+        ]),
+      ];
+    case 'projects':
+      return [
+        ...sectionHead(section.heading),
+        ...section.entries.flatMap(proj => [
+          ...projHead(proj.name, proj.skills, formatDateRangeStyled(proj.startDate, proj.endDate, dateStyle)),
+          ...proj.achievements.map(ach => bul(ach.label ? `${ach.label}:` : '', ach.body)),
+        ]),
+      ];
+    case 'experience':
+      return [
+        ...sectionHead(section.heading),
+        ...section.entries.flatMap(exp => [
+          ...roleHeader(exp.jobTitle, exp.company, formatDateRangeStyled(exp.startDate, exp.endDate, dateStyle), exp.location ? `${exp.location}  ·  ${exp.type}` : exp.type),
+          ...exp.achievements.map(ach => bul(ach.label ? `${ach.label}:` : '', ach.body)),
+        ]),
+      ];
+    case 'skills':
+      return [
+        ...sectionHead(section.heading),
+        ...(section.layout === 'flat'
+          ? [skillRow('Skills:', flattenSkills(section.groups))]
+          : section.groups.map(cat => skillRow(`${cat.category}:`, cat.skills))),
+      ];
+    case 'certifications':
+      return [
+        ...sectionHead(section.heading),
+        ...section.entries.map(cert => new Paragraph({
+          spacing: sp(60, 36),
+          children: [
+            new TextRun({ text: cert.name, size: 19, font: "Calibri", color: C.navy }),
+            new TextRun({ text: `  ·  ${cert.issuer}, ${cert.year}`, size: 19, font: "Calibri", color: C.muted }),
+          ],
+        })),
+      ];
+  }
+}
+
 // ── DOCUMENT GENERATOR ───────────────────────────────────────────────
-export async function generateArchitectTemplate(data: RewrittenCVData): Promise<Buffer> {
+export async function generateArchitectTemplate(spec: CvBuildSpec): Promise<Buffer> {
+  const { identity } = spec;
   const doc = new Document({
     numbering: {
       config: [{
@@ -143,14 +218,14 @@ export async function generateArchitectTemplate(data: RewrittenCVData): Promise<
       },
       children: [
         // ── HEADER ──────────────────────────────────────────
-        ...nameBlock(data.fullName, data.tagline),
+        ...nameBlock(identity.fullName, identity.headline),
         new Paragraph({
           alignment: AlignmentType.CENTER,
           spacing: { before: 0, after: 80 },
           children: [
-            new TextRun({ 
-              text: [formatPhone(data.contact.phone), data.contact.location, data.contact.visaStatus].filter(Boolean).join(" • "), 
-              size: 20, font: "Calibri", color: C.muted 
+            new TextRun({
+              text: contactDetailParts(identity.contact).join(" • "),
+              size: 20, font: "Calibri", color: C.muted
             })
           ]
         }),
@@ -158,77 +233,16 @@ export async function generateArchitectTemplate(data: RewrittenCVData): Promise<
           alignment: AlignmentType.CENTER,
           spacing: { before: 0, after: 160 },
           children: buildLinkArray([
-            { url: data.contact.email, type: 'mail' },
-            { url: data.contact.github, type: 'github' },
-            { url: data.contact.linkedin, type: 'linkedin' },
-            { url: data.contact.website, type: 'portfolio' }
+            { url: identity.contact.email, type: 'mail' },
+            { url: identity.contact.github, type: 'github' },
+            { url: identity.contact.linkedin, type: 'linkedin' },
+            { url: identity.contact.website, type: 'portfolio' }
           ], " • ", "Calibri", 20, C.muted)
         }),
         rule(40),
 
-        // ── PROFESSIONAL SUMMARY ────────────────────────────
-        ...(data.professionalSummary ? [
-          ...sectionHead("Professional Summary"),
-          new Paragraph({
-            spacing: sp(60, 80),
-            alignment: AlignmentType.JUSTIFIED,
-            children: [new TextRun({
-              text: data.professionalSummary,
-              size: 19, font: "Calibri", color: C.body
-            })]
-          })
-        ] : []),
-
-        // ── EDUCATION ───────────────────────────────────────
-        ...(data.education && data.education.length > 0 ? [
-          ...sectionHead("Education"),
-          ...data.education.flatMap(edu => [
-            ...roleHeader(edu.degree, edu.university, `${edu.startDate} – ${edu.endDate}`, ""),
-            new Paragraph({
-              spacing: sp(0, 30),
-              children: [
-                new TextRun({ text: edu.grade, bold: true, size: 19, font: "Calibri", color: C.navy }),
-                new TextRun({ text: `  ·  ${edu.description}`, size: 19, font: "Calibri", color: C.body }),
-              ]
-            })
-          ])
-        ] : []),
-
-        // ── KEY PROJECTS ─────────────────────────────────────
-        ...(data.projects && data.projects.length > 0 ? [
-          ...sectionHead("Key Projects"),
-          ...data.projects.flatMap(proj => [
-            ...projHead(proj.name, proj.stack, `${proj.startDate} – ${proj.endDate}`),
-            ...proj.achievements.map(ach => bul(ach.label ? `${ach.label}:` : '', ach.body))
-          ])
-        ] : []),
-
-        // ── PROFESSIONAL EXPERIENCE ──────────────────────────
-        ...(data.experience && data.experience.length > 0 ? [
-          ...sectionHead("Professional Experience"),
-          ...data.experience.flatMap(exp => [
-            ...roleHeader(exp.jobTitle, exp.company, `${exp.startDate} – ${exp.endDate}`, exp.location ? `${exp.location}  ·  ${exp.type}` : exp.type),
-            ...exp.achievements.map(ach => bul(ach.label ? `${ach.label}:` : '', ach.body))
-          ])
-        ] : []),
-
-        // ── CORE SKILLS ──────────────────────────────────────
-        ...(data.coreSkills && data.coreSkills.length > 0 ? [
-          ...sectionHead("Core Skills"),
-          ...data.coreSkills.map(cat => skillRow(`${cat.category}:`, cat.skills))
-        ] : []),
-
-        // ── CERTIFICATIONS ───────────────────────────────────
-        ...(data.certifications && data.certifications.length > 0 ? [
-          ...sectionHead("Certifications"),
-          ...data.certifications.map(cert => new Paragraph({
-            spacing: sp(60, 36),
-            children: [
-              new TextRun({ text: cert.name, size: 19, font: "Calibri", color: C.navy }),
-              new TextRun({ text: `  ·  ${cert.issuer}, ${cert.year}`, size: 19, font: "Calibri", color: C.muted }),
-            ]
-          }))
-        ] : []),
+        // ── PLANNED SECTIONS (order & headings decided by the planner) ──
+        ...spec.sections.flatMap((section) => renderSection(section, spec.presentation.dateStyle)),
       ]
     }]
   });

@@ -1,0 +1,1919 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: npx create-db
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id            String    @id
+  name          String
+  email         String
+  emailVerified Boolean   @default(false)
+  image         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  onboardedAt   DateTime?
+  sessions      Session[]
+  accounts      Account[]
+
+  identity                    ProfileIdentity?
+  practicalFacts              ProfilePracticalFacts?
+  profiles                    Profile[]
+  atsAnalyses                 AtsAnalysis[]
+  jobMatches                  JobMatch[]
+  cvRevisions                 CvRevision[]
+  jobRevisions                JobRevision[]
+  careerProfileSnapshots      CareerProfileSnapshot[]
+  generatedCVs                GeneratedCV[]
+  usage                       UsageCounter[]
+  capabilityReservations      CapabilityReservation[]
+  applicationEvidenceContexts ApplicationEvidenceContext[]
+  profileEvidenceApprovals    ProfileEvidenceApproval[]
+  billingAccount              BillingAccount?
+  storedCvs                   StoredCv[]
+  cvUploadIntents             CvUploadIntent[]
+  cvImportSessions            CvImportSession[]
+  cvImportCandidates          CvImportCandidate[]
+  onboardingState             OnboardingState?
+  savedJobs                   SavedJob[]
+  jobMatchRequests            JobMatchRequest[]
+  claimedAnonymousAtsResults  AnonymousAtsResult[]
+  importedJobSnapshots        JobSnapshot[]                @relation("ImportedJobSnapshots")
+
+  @@unique([email])
+  @@map("user")
+}
+
+// ── Billing domain ────────────────────────────────────────────────────────────
+// Provider-neutral. Stripe (or any future provider) writes rows here through an
+// adapter; the effective-access resolver reads them to derive a product plan. No
+// card data, no raw payment method data — only references and access/period dates.
+
+enum BillingProvider {
+  STRIPE
+  MANUAL
+}
+
+enum BillingArrangement {
+  RECURRING
+  FIXED_TERM
+  ONE_TIME
+  MANUAL
+}
+
+enum BillingPurchaseStatus {
+  PENDING
+  TRIALING
+  ACTIVE
+  PAST_DUE
+  UNPAID
+  CANCELLED
+  EXPIRED
+  REFUNDED
+  INCOMPLETE
+  INCOMPLETE_EXPIRED
+}
+
+// One per user; groups all of a user's access-granting purchases so a provider
+// customer maps to an Align account rather than to a single subscription.
+model BillingAccount {
+  id     String @id @default(cuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // The provider customer bound to this account, established at first checkout so
+  // the portal and repeat checkouts reuse it before any purchase completes. The
+  // customer is owned by the account, never accepted from client input.
+  provider           BillingProvider?
+  providerCustomerId String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  purchases BillingPurchase[]
+
+  @@index([provider, providerCustomerId])
+  @@map("billing_account")
+}
+
+// A single access-granting purchase. Recurring subscriptions, fixed-term passes,
+// one-time buys and manual grants are all represented here — access dates are
+// kept separate from billing-period dates so a fixed-term pass is never forced
+// into recurring fields.
+model BillingPurchase {
+  id               String         @id @default(cuid())
+  billingAccountId String
+  billingAccount   BillingAccount @relation(fields: [billingAccountId], references: [id], onDelete: Cascade)
+
+  provider    BillingProvider
+  arrangement BillingArrangement
+
+  offerId String
+  planId  String
+  status  BillingPurchaseStatus
+
+  providerCustomerId     String?
+  providerPurchaseId     String?
+  providerSubscriptionId String?
+  providerPriceId        String?
+
+  // Access window (authoritative for whether the plan is granted right now).
+  accessStartsAt DateTime?
+  accessEndsAt   DateTime?
+
+  // Billing-period window (recurring subscriptions), separate from access.
+  currentPeriodStart DateTime?
+  currentPeriodEnd   DateTime?
+  cancelAtPeriodEnd  Boolean   @default(false)
+
+  trialEndsAt DateTime?
+  graceEndsAt DateTime?
+  cancelledAt DateTime?
+  expiredAt   DateTime?
+  refundedAt  DateTime?
+
+  // Provider timestamp of the most recent event applied to this purchase. Used to
+  // reject stale/out-of-order webhook deliveries: an event older than this never
+  // overwrites newer state (see purchase-sync). Null until the first sync.
+  lastEventAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([provider, providerPurchaseId])
+  @@unique([provider, providerSubscriptionId])
+  @@index([billingAccountId, status])
+  @@index([planId, status])
+  @@index([accessEndsAt])
+  @@map("billing_purchase")
+}
+
+// Idempotency + audit ledger for verified provider webhook events. A verified
+// event is processed exactly once: the unique (provider, providerEventId) makes a
+// duplicate delivery a safe no-op, and the receipt row records the outcome so a
+// provider retry of a previously-failed event can be reprocessed while a
+// successful/ignored one is not. No raw payloads, secrets or PII are stored —
+// only opaque provider references and a safe outcome/error code.
+model BillingEventReceipt {
+  id              String          @id @default(cuid())
+  provider        BillingProvider
+  providerEventId String
+  eventType       String
+  occurredAt      DateTime
+  processedAt     DateTime        @default(now())
+
+  // 'processed' | 'ignored' | 'failed'. 'failed' is the only re-processable
+  // outcome; the others are terminal and short-circuit a duplicate delivery.
+  outcome    String
+  purchaseId String?
+  errorCode  String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([provider, providerEventId])
+  @@index([purchaseId])
+  @@index([processedAt])
+  @@map("billing_event_receipt")
+}
+
+// UK right-to-work statuses. The three permanent ones (British/Irish citizen,
+// Settled/ILR) carry no expiry; every other status is time-limited and requires
+// a `visaExpiry`. Kept in sync with src/shared/constants/visa-status.ts.
+enum VisaStatus {
+  BRITISH_CITIZEN
+  IRISH_CITIZEN
+  SETTLED
+  PRE_SETTLED
+  SKILLED_WORKER
+  HEALTH_CARE_WORKER
+  GRADUATE
+  STUDENT
+  DEPENDANT
+  GLOBAL_TALENT
+  HIGH_POTENTIAL
+  YOUTH_MOBILITY
+  OTHER_SPONSORSHIP
+}
+
+// Who the candidate *is* — the facts that never vary by which job they are
+// applying for. Held once per user so editing a phone number or a visa status
+// updates every profile at once, rather than drifting across five copies.
+model ProfileIdentity {
+  id            String      @id @default(cuid())
+  userId        String      @unique
+  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  fullName      String
+  email         String?
+  phoneDialCode String?
+  phoneNumber   String?
+  phoneCountry  String?
+  city          String?
+  state         String?
+  country       String?
+  website       String?
+  linkedin      String?
+  github        String?
+  visaStatus    VisaStatus?
+  visaExpiry    DateTime?
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  @@map("profile_identity")
+}
+
+/**
+ * How the candidate is willing to attend a workplace. Distinct from a vacancy's
+ * `workStyle`: this is a stated preference, never derived from a CV.
+ */
+enum WorkPatternPreference {
+  REMOTE_ONLY
+  HYBRID
+  ONSITE
+  FLEXIBLE
+}
+
+/**
+ * Highest DBS check the candidate currently holds. NONE is a confirmed absence.
+ */
+enum DbsCheckLevel {
+  NONE
+  BASIC
+  STANDARD
+  ENHANCED
+}
+
+/**
+ * Highest UK security clearance currently held. NONE is a confirmed absence.
+ */
+enum SecurityClearanceLevel {
+  NONE
+  BPSS
+  CTC
+  SC
+  DV
+}
+
+/**
+ * Confirmed, structured practical facts about the candidate.
+ * Every field is nullable and every nullable field means UNKNOWN, never "no".
+ * That distinction is the whole point of the model: practical compatibility must
+ * be able to say "not confirmed in your profile" instead of manufacturing a
+ * conflict out of an absent value. Nothing here is ever inferred from CV prose —
+ * these are only written when the user records them explicitly.
+ * Held once per user (like ProfileIdentity) because a driving licence or a DBS
+ * check does not vary by which Career Track the candidate is applying under.
+ */
+model ProfilePracticalFacts {
+  id     String @id @default(cuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Immigration and work permission. `visaStatus`/`visaExpiry` stay on
+  // ProfileIdentity; these are the two answers that status alone cannot give.
+  requiresSponsorshipNow     Boolean?
+  mayRequireSponsorshipLater Boolean?
+
+  // Location and work pattern. Home location itself is ProfileIdentity.city/state.
+  openToRelocation      Boolean?
+  relocationLocations   String[]               @default([])
+  maxCommuteMinutes     Int?
+  workPatternPreference WorkPatternPreference?
+  maxOnsiteDaysPerWeek  Int?
+
+  // Mobility
+  drivingLicenceHeld  Boolean?
+  ownVehicleAvailable Boolean?
+  willingToTravel     Boolean?
+
+  // Checks and regulation
+  dbsCheckLevel        DbsCheckLevel?
+  dbsUpdateService     Boolean?
+  securityClearance    SecurityClearanceLevel?
+  ukResidencyStartDate DateTime?
+
+  // Availability
+  availableForNightShifts    Boolean?
+  availableForWeekendShifts  Boolean?
+  availableForRotatingShifts Boolean?
+  earliestStartDate          DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("profile_practical_facts")
+}
+
+// One career track's worth of content — "Software Engineer", "Warehouse
+// Operative", "Admin". A user may hold several (capped by their tier, see
+// src/shared/lib/entitlements.ts) and exactly one is flagged `isDefault`.
+//
+// Combined with ProfileIdentity this mirrors RewrittenCVData
+// (src/shared/templates/types.ts) so the DOCX generators consume it unchanged.
+model Profile {
+  id                  String   @id @default(cuid())
+  userId              String
+  user                User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /**
+   * User-facing name for the track, e.g. "Warehouse Operative".
+   */
+  label               String   @default("Default")
+  /**
+   * The profile used when no explicit choice is made. Exactly one per user.
+   */
+  isDefault           Boolean  @default(false)
+  /**
+   * Which `Sector` (src/shared/constants/sector-keywords.ts) this track
+   * targets. Lets a job match auto-select the right profile from its own
+   * detected sector instead of asking the user.
+   */
+  targetIndustry      String?
+  /**
+   * Structured target occupation (an `OccupationId` from
+   * src/shared/occupations/registry.ts). Validated at the API layer, not the
+   * DB — the ontology is code. This is precedence tier 2 for classification.
+   */
+  targetOccupation    String?
+  /**
+   * The user's own words for their target role, e.g. "Warehouse
+   * Administrator". Feeds classification, prompt context, and summary
+   * guidance — users are never limited to the ontology label.
+   */
+  targetRoleTitle     String?
+  /**
+   * entry | mid | senior | lead
+   */
+  targetSeniority     String?
+  tagline             String?
+  professionalSummary String?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  experience                  Experience[]
+  projects                    ProjectEntry[]
+  education                   Education[]
+  skillGroups                 SkillGroup[]
+  skills                      Skill[]
+  certifications              Certification[]
+  trainings                   Training[]
+  licences                    Licence[]
+  professionalRegistrations   ProfessionalRegistration[]
+  languages                   Language[]
+  volunteering                Volunteering[]
+  otherEvidence               OtherEvidence[]
+  applicationEvidenceContexts ApplicationEvidenceContext[]
+  profileEvidenceApprovals    ProfileEvidenceApproval[]
+  generatedCVs                GeneratedCV[]
+  atsAnalyses                 AtsAnalysis[]
+  careerProfileSnapshots      CareerProfileSnapshot[]
+  savedJobs                   SavedJob[]
+  jobMatchRequests            JobMatchRequest[]
+  cvImportSessions            CvImportSession[]
+
+  @@unique([userId, label])
+  @@index([userId])
+  @@map("profile")
+}
+
+/**
+ * Employment type. An enum rather than free text so a CV template can render a
+ * consistent label and a job match can reason about it — "FT", "full time" and
+ * "Full-Time" were all previously storable and none of them compare equal.
+ * Display labels live in src/shared/constants/employment-type.ts.
+ * Nothing scores this field — it exists so the CV renders the arrangement
+ * honestly. A volunteer role, a clinical placement or an agency shift printed
+ * as ordinary employment misrepresents the candidate, which is why the list
+ * covers unpaid and temporary work. It stops short of distinctions users
+ * cannot make reliably: "contract" is FIXED_TERM and "self-employed" is
+ * FREELANCE, because no consumer would tell them apart anyway.
+ */
+enum EmploymentType {
+  FULL_TIME
+  PART_TIME
+  FIXED_TERM
+  TEMPORARY_AGENCY
+  INTERNSHIP
+  PLACEMENT
+  APPRENTICESHIP
+  FREELANCE
+  VOLUNTEER
+}
+
+model Experience {
+  id           String          @id @default(cuid())
+  profileId    String
+  profile      Profile         @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  jobTitle     String
+  company      String
+  location     String?
+  type         EmploymentType?
+  /**
+   * Month precision, stored ISO as `YYYY-MM`.
+   * Deliberately not DateTime: a CV never shows a day, and a DateTime would
+   * force an arbitrary day-of-month that then has to be hidden everywhere. ISO
+   * text sorts correctly as a string and formats to "Jan 2022" at render time,
+   * which the old free-text column could not do — it stored whatever was typed.
+   */
+  startDate    String
+  /**
+   * Null while `current` is true — an ongoing role has no end date.
+   */
+  endDate      String?
+  /**
+   * "I still work here". Kept as its own flag rather than a magic endDate value
+   * so the CV can render "Present" and a date comparison never has to parse it.
+   */
+  current      Boolean         @default(false)
+  achievements Json[]
+  sortOrder    Int             @default(0)
+
+  @@index([profileId])
+  @@map("experience")
+}
+
+model ProjectEntry {
+  id            String         @id @default(cuid())
+  profileId     String
+  profile       Profile        @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  name          String
+  liveUrl       String?
+  repositoryUrl String?
+  /**
+   * `YYYY-MM`, as on Experience — but optional on both ends. Plenty of side
+   * projects have no meaningful start or finish, and forcing a date there
+   * produces invented ones.
+   */
+  startDate     String?
+  endDate       String?
+  achievements  Json[]
+  sortOrder     Int            @default(0)
+  projectSkills ProjectSkill[]
+
+  @@index([profileId])
+  @@map("project_entry")
+}
+
+model Education {
+  id          String  @id @default(cuid())
+  profileId   String
+  profile     Profile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  degree      String
+  university  String
+  /**
+   * `YYYY-MM`, as on Experience. Optional — an exact qualification title plus
+   * institution is enough to save a valid record; a missing date means "not
+   * provided", never "failed" or "gap". International/historic qualifications
+   * frequently have no reliable month, and forcing one invents data.
+   */
+  startDate   String?
+  /**
+   * Null while `current` is true, i.e. still studying.
+   */
+  endDate     String?
+  current     Boolean @default(false)
+  grade       String?
+  description String?
+  sortOrder   Int     @default(0)
+
+  @@index([profileId])
+  @@map("education")
+}
+
+model SkillGroup {
+  id        String  @id @default(cuid())
+  profileId String
+  profile   Profile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  category  String
+  sortOrder Int     @default(0)
+  skills    Skill[]
+
+  @@index([profileId])
+  @@map("skill_group")
+}
+
+/**
+ * One independently addressable stored skill. A skill must have its own row so
+ * profile-evidence references never depend on a group's array position.
+ */
+model Skill {
+  id               String             @id @default(cuid())
+  profileId        String
+  profile          Profile            @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  skillGroupId     String?
+  skillGroup       SkillGroup?        @relation(fields: [skillGroupId], references: [id], onDelete: SetNull)
+  name             String
+  normalizedName   String
+  taxonomyTermId   String?
+  taxonomyTerm     SkillTaxonomyTerm? @relation(fields: [taxonomyTermId], references: [id], onDelete: SetNull)
+  level            String?
+  contextType      String?
+  linkedEvidenceId String?
+  activity         String?
+  period           String?
+  outcome          String?
+  sortOrder        Int                @default(0)
+
+  projectSkills ProjectSkill[]
+
+  @@unique([profileId, normalizedName])
+  @@index([profileId])
+  @@index([taxonomyTermId])
+  @@index([skillGroupId])
+  @@map("skill")
+}
+
+/**
+ * Imported local taxonomy metadata. It never represents user-owned evidence.
+ */
+model SkillTaxonomyTerm {
+  id                String   @id @default(cuid())
+  source            String
+  sourceVersion     String
+  externalUri       String   @unique
+  preferredLabel    String
+  normalizedLabel   String
+  alternativeLabels String[]
+  description       String?
+  conceptType       String?
+  searchText        String
+  importedAt        DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  skills Skill[]
+
+  @@index([source, sourceVersion])
+  @@index([normalizedLabel])
+  @@map("skill_taxonomy_term")
+}
+
+/**
+ * A user-confirmed contextual association: this canonical Skill was used on this Project.
+ */
+model ProjectSkill {
+  projectId String
+  skillId   String
+  sortOrder Int    @default(0)
+
+  project ProjectEntry @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  skill   Skill        @relation(fields: [skillId], references: [id], onDelete: Restrict)
+
+  @@id([projectId, skillId])
+  @@index([skillId])
+  @@map("project_skill")
+}
+
+model Certification {
+  id                 String  @id @default(cuid())
+  profileId          String
+  profile            Profile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  name               String
+  issuer             String?
+  year               String?
+  issueDate          String?
+  expiryDate         String?
+  credentialNumber   String?
+  status             String?
+  verificationUrl    String?
+  verificationStatus String?
+
+  @@index([profileId])
+  @@map("certification")
+}
+
+enum ProfileEvidenceKind {
+  SKILL_TOOL
+  EMPLOYMENT
+  PROJECT
+  EDUCATION
+  TRAINING
+  CERTIFICATION
+  LICENCE
+  REGISTRATION
+  LANGUAGE
+  VOLUNTEERING
+  OTHER
+}
+
+model ProfileEvidenceApproval {
+  id              String   @id @default(cuid())
+  userId          String
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  jobMatchId      String
+  jobMatch        JobMatch @relation(fields: [jobMatchId], references: [id], onDelete: Cascade)
+  profileId       String?
+  profile         Profile? @relation(fields: [profileId], references: [id], onDelete: SetNull)
+  requirementId   String
+  evidenceType    String
+  evidenceId      String
+  snapshot        Json
+  snapshotVersion Int      @default(1)
+  approvedAt      DateTime @default(now())
+
+  @@index([userId, jobMatchId, requirementId])
+  @@index([profileId])
+  @@map("profile_evidence_approval")
+}
+
+model ApplicationEvidenceContext {
+  id            String              @id @default(cuid())
+  userId        String
+  user          User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  jobMatchId    String
+  jobMatch      JobMatch            @relation(fields: [jobMatchId], references: [id], onDelete: Cascade)
+  profileId     String?
+  profile       Profile?            @relation(fields: [profileId], references: [id], onDelete: SetNull)
+  requirementId String
+  kind          ProfileEvidenceKind
+  details       Json
+  approvedAt    DateTime
+  createdAt     DateTime            @default(now())
+
+  @@index([userId, jobMatchId, requirementId])
+  @@map("application_evidence_context")
+}
+
+model Training {
+  id        String  @id @default(cuid())
+  profileId String
+  profile   Profile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  course    String
+  // Provider optional: training evidence stays valid when the provider is
+  // unknown or omitted. Missing means "not provided", not "unverified".
+  provider  String?
+  field     String?
+  // Lifecycle status optional: a missing status is "unknown", never inferred as
+  // completed or in-progress.
+  status    String?
+  startDate String?
+  endDate   String?
+  result    String?
+
+  @@index([profileId])
+  @@map("training")
+}
+
+model Licence {
+  id                 String  @id @default(cuid())
+  profileId          String
+  profile            Profile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  officialName       String
+  // Only the licence name is required. Issuing authority, lifecycle status, and
+  // verification state are optional — a null status is never read as "active".
+  issuingBody        String?
+  issueDate          String?
+  expiryDate         String?
+  credentialNumber   String?
+  status             String?
+  verificationUrl    String?
+  verificationStatus String?
+
+  @@index([profileId])
+  @@map("licence")
+}
+
+model ProfessionalRegistration {
+  id                 String  @id @default(cuid())
+  profileId          String
+  profile            Profile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  // Registration body (issuingBody) and title (officialName) are both required;
+  // everything else is optional. Lifecycle status is never inferred from dates.
+  officialName       String
+  issuingBody        String
+  issueDate          String?
+  expiryDate         String?
+  registrationNumber String?
+  status             String?
+  verificationUrl    String?
+  verificationStatus String?
+
+  @@index([profileId])
+  @@map("professional_registration")
+}
+
+model Language {
+  id                     String  @id @default(cuid())
+  profileId              String
+  profile                Profile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  language               String
+  // Each ability is optional and independent — at least one must be supplied
+  // (enforced in validation), but a missing ability is null, never inferred
+  // from the others. Values are the shared LanguageProficiency scale.
+  speaking               String?
+  reading                String?
+  writing                String?
+  professionalUseContext String?
+  formalTest             String?
+
+  @@index([profileId])
+  @@map("language")
+}
+
+model Volunteering {
+  id           String   @id @default(cuid())
+  profileId    String
+  profile      Profile  @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  // Organisation and role are enough to save a valid record. A contribution
+  // strengthens the evidence but is optional — its absence never invalidates
+  // the role. endDate null = current, consistent with Experience.
+  organisation String
+  role         String
+  startDate    String?
+  endDate      String?
+  contribution String?
+  skillsTools  String[]
+  outcome      String?
+
+  @@index([profileId])
+  @@map("volunteering")
+}
+
+model OtherEvidence {
+  id          String  @id @default(cuid())
+  profileId   String
+  profile     Profile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  // Title plus description (the evidence content) are required. `context` is
+  // the optional free-text category/routing hint, not a mandatory field.
+  title       String
+  context     String?
+  description String
+  period      String?
+  outcome     String?
+
+  @@index([profileId])
+  @@map("other_evidence")
+}
+
+// Persists a full CVAnalysisResult run (src/shared/types/cv.ts). The general
+// ATS/CV result is stored as Json to avoid over-normalizing volatile fields,
+// while mode/overallScore stay queryable columns for history views.
+/**
+ * Immutable CV input used by an ATS analysis or Job Match.
+ */
+model CvRevision {
+  id                    String        @id @default(cuid())
+  userId                String
+  user                  User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  storedCvId            String?
+  storedCv              StoredCv?     @relation(fields: [storedCvId], references: [id], onDelete: SetNull)
+  extractionId          String?
+  extraction            CvExtraction? @relation(fields: [extractionId], references: [id], onDelete: SetNull)
+  filename              String
+  mimeType              String
+  byteSize              Int
+  checksum              String
+  extractedText         String
+  pageCount             Int?
+  parserVersion         String
+  sourceObjectKey       String?
+  sourceObjectExpiresAt DateTime?
+  sourceObjectDeletedAt DateTime?
+  createdAt             DateTime      @default(now())
+
+  atsAnalyses  AtsAnalysis[]
+  jobMatches   JobMatch[]
+  generatedCVs GeneratedCV[]
+
+  @@index([userId, createdAt])
+  @@index([storedCvId])
+  @@index([sourceObjectExpiresAt])
+  @@map("cv_revision")
+}
+
+/**
+ * A CV-centric ATS result. It never represents vacancy fit.
+ */
+model AtsAnalysis {
+  id                  String     @id @default(cuid())
+  userId              String
+  user                User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  profileId           String?
+  profile             Profile?   @relation(fields: [profileId], references: [id], onDelete: SetNull)
+  cvRevisionId        String
+  cvRevision          CvRevision @relation(fields: [cvRevisionId], references: [id], onDelete: Restrict)
+  overallScore        Int
+  resultJson          Json
+  scoringVersion      String
+  profileVersion      String?
+  dictionaryVersion   String?
+  occupation          String?
+  applicationWorkflow String?
+  classification      Json?
+  aiEnhanced          Boolean    @default(false)
+  aiProvider          String?
+  aiModel             String?
+  promptVersion       String?
+  createdAt           DateTime   @default(now())
+
+  @@index([userId, createdAt])
+  @@index([profileId])
+  @@index([cvRevisionId])
+  @@map("ats_analysis")
+}
+
+/**
+ * Exact immutable vacancy text and metadata used for one or more matches.
+ */
+model JobRevision {
+  id                      String               @id @default(cuid())
+  userId                  String?
+  user                    User?                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  jobSnapshotId           String?
+  jobSnapshot             JobSnapshot?         @relation(fields: [jobSnapshotId], references: [id], onDelete: SetNull)
+  title                   String
+  company                 String
+  location                String?
+  description             String
+  descriptionSource       JobDescriptionSource
+  descriptionHash         String
+  providerMetadataJson    Json?
+  sponsorshipMetadataJson Json?
+  createdAt               DateTime             @default(now())
+
+  jobMatches   JobMatch[]
+  generatedCVs GeneratedCV[]
+
+  @@index([jobSnapshotId])
+  @@index([userId, createdAt])
+  @@index([descriptionHash])
+  @@map("job_revision")
+}
+
+/**
+ * Immutable match-time copy of the selected Career Profile and practical facts.
+ */
+model CareerProfileSnapshot {
+  id               String   @id @default(cuid())
+  userId           String
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sourceProfileId  String?
+  sourceProfile    Profile? @relation(fields: [sourceProfileId], references: [id], onDelete: SetNull)
+  profileLabel     String
+  targetRole       String?
+  targetOccupation String?
+  targetSeniority  String?
+  targetIndustry   String?
+  snapshotJson     Json
+  schemaVersion    Int      @default(1)
+  contentHash      String
+  createdAt        DateTime @default(now())
+
+  jobMatches   JobMatch[]
+  generatedCVs GeneratedCV[]
+
+  @@index([userId, createdAt])
+  @@index([sourceProfileId])
+  @@map("career_profile_snapshot")
+}
+
+/**
+ * Candidate-to-vacancy result over three exact immutable inputs.
+ */
+model JobMatch {
+  id                String                @id @default(cuid())
+  userId            String
+  user              User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  cvRevisionId      String
+  cvRevision        CvRevision            @relation(fields: [cvRevisionId], references: [id], onDelete: Restrict)
+  jobRevisionId     String
+  jobRevision       JobRevision           @relation(fields: [jobRevisionId], references: [id], onDelete: Restrict)
+  profileSnapshotId String
+  profileSnapshot   CareerProfileSnapshot @relation(fields: [profileSnapshotId], references: [id], onDelete: Restrict)
+  requestId         String?               @unique
+  request           JobMatchRequest?      @relation(fields: [requestId], references: [id], onDelete: SetNull)
+  matchScore        Int
+  resultJson        Json
+  algorithmVersion  String
+  promptVersion     String
+  aiProvider        String?
+  aiModel           String?
+  createdAt         DateTime              @default(now())
+
+  generatedCVs                GeneratedCV[]
+  applicationEvidenceContexts ApplicationEvidenceContext[]
+  profileEvidenceApprovals    ProfileEvidenceApproval[]
+
+  @@index([userId, createdAt])
+  @@index([cvRevisionId])
+  @@index([jobRevisionId])
+  @@index([profileSnapshotId])
+  @@map("job_match")
+}
+
+enum AnonymousAtsStatus {
+  PROCESSING
+  READY
+  CLAIMED
+  EXPIRED
+  FAILED
+}
+
+/**
+ * Short-lived anonymous ATS demo. Access requires the opaque cookie token.
+ */
+model AnonymousAtsResult {
+  id              String             @id @default(cuid())
+  tokenHash       String             @unique
+  sessionHash     String             @unique
+  ipHash          String
+  status          AnonymousAtsStatus @default(PROCESSING)
+  filename        String
+  mimeType        String
+  byteSize        Int
+  checksum        String
+  extractedText   String
+  pageCount       Int?
+  resultJson      Json?
+  overallScore    Int?
+  expiresAt       DateTime
+  claimedAt       DateTime?
+  claimedByUserId String?
+  claimedByUser   User?              @relation(fields: [claimedByUserId], references: [id], onDelete: SetNull)
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+
+  @@index([ipHash, createdAt])
+  @@index([expiresAt, status])
+  @@map("anonymous_ats_result")
+}
+
+enum JobProvider {
+  ADZUNA
+  REED
+  JOOBLE
+  GREENHOUSE
+  LEVER
+  SMARTRECRUITERS
+  ASHBY
+}
+
+// Employer-direct boards are a separate directory concern from the general
+// JobProvider enum. Keeping this enum scoped to the directory prevents a
+// provider identifier from being mistaken for a market-wide search provider.
+enum EmployerAtsProvider {
+  GREENHOUSE
+  LEVER
+  SMARTRECRUITERS
+  ASHBY
+}
+
+enum EmployerSourceOrigin {
+  CURATED_SEED
+  MANUAL_ADMIN
+  VERIFIED_COMPANY_URL
+  USER_SUGGESTED_UNVERIFIED
+}
+
+enum EmployerSourceVerificationStatus {
+  PENDING
+  VERIFIED
+  FAILED
+  DISABLED
+}
+
+enum EmployerSourceRegion {
+  GLOBAL
+  EU
+}
+
+// Sponsor-register matching is employer-level evidence. It is intentionally
+// not a source-verification status and never implies a vacancy has sponsorship.
+enum SponsorMatchStatus {
+  NOT_CHECKED
+  EXACT
+  LIKELY
+  AMBIGUOUS
+  NONE
+}
+
+// Outcome of resolving a provider's employer TEXT to a canonical CompanyRecord.
+// Deliberately separate from SponsorMatchStatus: linking a vacancy to a company
+// is an identity question, and matching that company to the Home Office register
+// is a different one. A vacancy can be confidently linked to a company that has
+// no register entry, and vice versa.
+enum CompanyLinkStatus {
+  NOT_ATTEMPTED
+  MATCHED_COMPANY
+  AMBIGUOUS_COMPANY
+  NO_COMPANY_MATCH
+}
+
+enum JobDescriptionAvailability {
+  FULL
+  PARTIAL
+  EXTERNAL_ONLY
+}
+
+enum JobDescriptionSource {
+  PROVIDER_FULL
+  PROVIDER_PARTIAL
+  USER_PASTED
+}
+
+enum JobSnapshotStatus {
+  ACTIVE
+  STALE
+  ARCHIVED
+  EXPIRED
+  REMOVED
+  UNKNOWN
+}
+
+enum SavedJobApplicationStatus {
+  SAVED
+  APPLIED
+  INTERVIEWING
+  OFFERED
+  REJECTED
+  WITHDRAWN
+}
+
+enum JobMatchRequestStatus {
+  PREPARED
+  CONSUMED
+  COMPLETED
+  EXPIRED
+}
+
+model JobSnapshot {
+  id                     String  @id @default(cuid())
+  canonicalJobId         String  @unique
+  title                  String
+  normalisedTitle        String
+  employerName           String
+  normalisedEmployerName String
+  // Vacancies brought in by a user are private, unlike discovery snapshots.
+  // Null means the snapshot came from a shared provider feed.
+  importedByUserId       String?
+  importedByUser         User?   @relation("ImportedJobSnapshots", fields: [importedByUserId], references: [id], onDelete: Cascade)
+  importedUrl            String?
+
+  companyRecordId           String?
+  // Why this snapshot is (or is not) linked to a company. Retained even when no
+  // link was made, so a backfill can tell "never tried" from "tried, ambiguous"
+  // and does not re-run resolution against an unchanged employer name forever.
+  companyLinkStatus         CompanyLinkStatus          @default(NOT_ATTEMPTED)
+  companyLinkEvidence       Json?
+  companyLinkedAt           DateTime?
+  employerSourceId          String?
+  locationText              String?
+  city                      String?
+  region                    String?
+  country                   String?
+  workStyle                 String?
+  salaryMin                 Decimal?
+  salaryMax                 Decimal?
+  salaryCurrency            String?
+  salaryPeriod              String?
+  salaryText                String?
+  contractType              String?
+  employmentType            String?
+  seniority                 String?
+  providerDescription       String?
+  userSuppliedDescription   String?
+  descriptionAvailability   JobDescriptionAvailability
+  selectedDescriptionSource JobDescriptionSource?
+  selectedDescriptionHash   String?
+  descriptionAssessment     Json?
+  employerSponsorEvidence   Json?
+  vacancySponsorshipSignal  Json?
+  requirementEvidence       Json?
+  intelligenceAssessedAt    DateTime?
+  dedupeFingerprint         String
+  status                    JobSnapshotStatus          @default(ACTIVE)
+  postedAt                  DateTime?
+  expiresAt                 DateTime?
+  firstSeenAt               DateTime                   @default(now())
+  lastSeenAt                DateTime                   @default(now())
+  fetchedAt                 DateTime                   @default(now())
+  createdAt                 DateTime                   @default(now())
+  updatedAt                 DateTime                   @updatedAt
+  providerReferences        JobProviderReference[]
+  companyRecord             CompanyRecord?             @relation(fields: [companyRecordId], references: [id], onDelete: SetNull)
+  employerSource            EmployerJobSource?         @relation("EmployerSourceSnapshots", fields: [employerSourceId], references: [id], onDelete: SetNull)
+  savedJobs                 SavedJob[]
+  matchRequests             JobMatchRequest[]
+  revisions                 JobRevision[]
+
+  @@index([dedupeFingerprint])
+  @@index([importedByUserId, createdAt])
+  @@index([companyRecordId])
+  // The backfill command's selection predicate: unlinked snapshots grouped by the
+  // employer text a resolution attempt would use.
+  @@index([companyLinkStatus, normalisedEmployerName])
+  @@index([employerSourceId])
+  // Discovery's actual predicate. `getAtsSnapshotProviderResults` filters on
+  // status = ACTIVE and a lastSeenAt freshness window on every search; without a
+  // composite index that is a sequential scan of the whole snapshot table each
+  // time. Ordered status-first because it is the equality term.
+  @@index([status, lastSeenAt])
+  // The company vacancy list's filter-and-sort: companyRecordId equality, then
+  // postedAt descending. Matches `listCompanyVacancies` exactly.
+  @@index([companyRecordId, postedAt])
+  @@map("job_snapshot")
+}
+
+// Canonical employer identity. Sponsor-register evidence belongs here, while
+// ATS identity and verification belong on EmployerJobSource below.
+model CompanyRecord {
+  id                      String             @id @default(cuid())
+  displayName             String
+  normalisedName          String
+  websiteUrl              String?
+  careersUrl              String?
+  country                 String?
+  industry                String?
+  sponsorMatchStatus      SponsorMatchStatus @default(NOT_CHECKED)
+  sponsorOrganisationName String?
+  sponsorRegisterVersion  String?
+  sponsorCheckedAt        DateTime?
+  sponsorEvidence         Json?
+  createdAt               DateTime           @default(now())
+  updatedAt               DateTime           @updatedAt
+
+  jobSources     EmployerJobSource[]
+  jobSnapshots   JobSnapshot[]
+  sponsorHistory CompanySponsorHistory[]
+
+  @@unique([normalisedName])
+  @@index([sponsorMatchStatus])
+  // Staleness selection for the enrichment backfill: "which companies were not
+  // checked against the CURRENT register version".
+  @@index([sponsorRegisterVersion])
+  @@map("company_record")
+}
+
+// One immutable historical outcome per company and sponsor-register release.
+// CompanyRecord keeps the latest outcome for fast reads; this table preserves
+// earlier evidence when a new register release supersedes it.
+model CompanySponsorHistory {
+  id               String             @id @default(cuid())
+  companyRecordId  String
+  registerVersion  String
+  matchStatus      SponsorMatchStatus
+  organisationName String?
+  checkedAt        DateTime
+  evidence         Json?
+  createdAt        DateTime           @default(now())
+
+  companyRecord CompanyRecord @relation(fields: [companyRecordId], references: [id], onDelete: Cascade)
+
+  @@unique([companyRecordId, registerVersion])
+  @@index([companyRecordId, checkedAt])
+  @@index([registerVersion])
+  @@map("company_sponsor_history")
+}
+
+// A public ATS board candidate for one canonical company. A source remains
+// non-queryable until both verification and explicit enablement are present.
+model EmployerJobSource {
+  id                   String                           @id @default(cuid())
+  companyRecordId      String
+  provider             EmployerAtsProvider
+  providerIdentifier   String
+  providerRegion       EmployerSourceRegion?
+  careersUrl           String?
+  boardUrl             String?
+  sourceOrigin         EmployerSourceOrigin
+  verificationStatus   EmployerSourceVerificationStatus @default(PENDING)
+  enabled              Boolean                          @default(false)
+  lastAttemptedAt      DateTime?
+  lastVerifiedAt       DateTime?
+  lastVerifiedJobCount Int?
+  lastSuccessfulSyncAt DateTime?
+  lastErrorCode        String?
+  lastErrorAt          DateTime?
+  createdAt            DateTime                         @default(now())
+  updatedAt            DateTime                         @updatedAt
+
+  companyRecord CompanyRecord @relation(fields: [companyRecordId], references: [id], onDelete: Cascade)
+  jobSnapshots  JobSnapshot[] @relation("EmployerSourceSnapshots")
+
+  @@unique([provider, providerIdentifier])
+  @@index([companyRecordId, enabled])
+  @@index([provider, verificationStatus])
+  @@map("employer_job_source")
+}
+
+model JobProviderReference {
+  id             String      @id @default(cuid())
+  jobSnapshotId  String
+  provider       JobProvider
+  providerJobId  String
+  providerUrl    String
+  applicationUrl String?
+  firstSeenAt    DateTime    @default(now())
+  lastSeenAt     DateTime    @default(now())
+  jobSnapshot    JobSnapshot @relation(fields: [jobSnapshotId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerJobId])
+  @@index([jobSnapshotId])
+  @@map("job_provider_reference")
+}
+
+model SavedJob {
+  id                String                     @id @default(cuid())
+  userId            String
+  user              User                       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  profileId         String?
+  profile           Profile?                   @relation(fields: [profileId], references: [id], onDelete: SetNull)
+  jobSnapshotId     String
+  jobSnapshot       JobSnapshot                @relation(fields: [jobSnapshotId], references: [id], onDelete: Cascade)
+  savedAt           DateTime                   @default(now())
+  applicationStatus SavedJobApplicationStatus? @default(SAVED)
+  createdAt         DateTime                   @default(now())
+  updatedAt         DateTime                   @updatedAt
+
+  @@unique([userId, jobSnapshotId])
+  @@index([userId, savedAt])
+  @@index([profileId])
+  @@map("saved_job")
+}
+
+model JobMatchRequest {
+  id                         String                @id @default(cuid())
+  userId                     String
+  user                       User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  profileId                  String
+  profile                    Profile               @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  jobSnapshotId              String
+  jobSnapshot                JobSnapshot           @relation(fields: [jobSnapshotId], references: [id], onDelete: Cascade)
+  selectedDescriptionSource  JobDescriptionSource
+  selectedDescriptionHash    String
+  descriptionText            String
+  partialDescriptionAccepted Boolean               @default(false)
+  status                     JobMatchRequestStatus @default(PREPARED)
+  createdAt                  DateTime              @default(now())
+  expiresAt                  DateTime?
+  consumedAt                 DateTime?
+  jobMatch                   JobMatch?
+
+  @@index([userId, createdAt])
+  @@index([jobSnapshotId])
+  @@index([profileId])
+  @@map("job_match_request")
+}
+
+// Monthly AI usage, one row per user per calendar month.
+//
+// This exists because usage CANNOT be derived by counting Analysis rows: the
+// free tier prunes analyses beyond its cap (storage-quota.ts), so a user who
+// ran 40 analyses may only have 10 rows left. Counting them would silently
+// refund the quota every time something was pruned. The counter is append-only
+// and never pruned — it is the only honest record of what was consumed.
+//
+// `period` is a "YYYY-MM" key in UTC. Storing the bucket rather than computing
+// windows from a timestamp keeps the increment a single atomic upsert.
+model UsageCounter {
+  id               String   @id @default(cuid())
+  userId           String
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /**
+   * Calendar month in UTC, formatted "YYYY-MM".
+   */
+  period           String
+  /**
+   * Analyses that actually invoked a model. Rule-based-only runs are free and
+   * are deliberately not counted.
+   */
+  aiAnalyses       Int      @default(0)
+  /**
+   * Completed CV rewrites.
+   */
+  cvGenerations    Int      @default(0)
+  /**
+   * Profile-vs-CV reconciliation calls that reached a model.
+   */
+  profileReasoning Int      @default(0)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@unique([userId, period])
+  @@index([userId])
+  @@map("usage_counter")
+}
+
+/**
+ * Quota lifecycle state of a reservation. RESERVED holds a unit against a
+ * concurrent request; COMMITTED is immutable consumed usage; RELEASED returns
+ * the unit after a failed/abandoned attempt; EXPIRED is a reservation that timed
+ * out before commit and no longer counts against quota. Only RESERVED and
+ * COMMITTED rows count toward a user's usage.
+ */
+enum UsageReservationStatus {
+  RESERVED
+  COMMITTED
+  RELEASED
+  EXPIRED
+}
+
+/**
+ * Diagnostic lifecycle of the underlying expensive operation, carried on the
+ * same row so operation state can be inspected without a parallel table.
+ */
+enum CapabilityOperationStatus {
+  PENDING
+  RUNNING
+  SUCCEEDED
+  FAILED_RETRYABLE
+  FAILED_TERMINAL
+}
+
+/**
+ * The authoritative usage ledger for quota-controlled capabilities. Replaces the
+ * former append-only CapabilityUsageEvent: a reservation is created atomically
+ * (under a per-user+capability advisory lock) BEFORE the expensive work so two
+ * concurrent requests cannot both take the last unit, and is committed only once
+ * the work has succeeded and persisted. Quota is `COMMITTED + active RESERVED`.
+ * `(userId, capability, operationId)` is unique, which is what makes a retry with
+ * the same operation id idempotent — it resolves to the same row rather than a
+ * second charge. UsageCounter remains as a derived compatibility aggregate,
+ * updated inside the same transaction as the commit.
+ */
+model CapabilityReservation {
+  id                  String                    @id @default(cuid())
+  userId              String
+  user                User                      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  capability          String
+  operationId         String
+  /**
+   * Quota bucket key at reserve time (periodKey), e.g. "2026-07".
+   */
+  period              String
+  status              UsageReservationStatus    @default(RESERVED)
+  operationStatus     CapabilityOperationStatus @default(PENDING)
+  /**
+   * SHA-256 of the request's stable identity (ids, mode, hashes of large text) —
+   * NEVER raw CV or job-description content. Lets a retry with the same operation
+   * id but conflicting content be rejected rather than silently reused.
+   */
+  fingerprint         String?
+  /**
+   * Safe AiFailureReason code recorded when a reservation is released.
+   */
+  failureReason       String?
+  /**
+   * Reference to the persisted result (analysisId / generatedCvId) for recovery.
+   */
+  resultRef           String?
+  /**
+   * Links a later repair attempt to the original COMMITTED reservation whose
+   * result went missing, so a repair does not double-charge. Unused today;
+   * present so the Stage-2 RESULT_UNAVAILABLE flow needs no further migration.
+   */
+  repairOfOperationId String?
+  reservedAt          DateTime                  @default(now())
+  /**
+   * reservedAt + RESERVATION_TTL_MS. A RESERVED row past this no longer counts.
+   */
+  expiresAt           DateTime
+  committedAt         DateTime?
+  releasedAt          DateTime?
+  createdAt           DateTime                  @default(now())
+  updatedAt           DateTime                  @updatedAt
+
+  @@unique([userId, capability, operationId])
+  @@index([userId, capability, period, status])
+  @@map("capability_reservation")
+}
+
+// Persisted output of cv-rewriter.ts. Optionally linked to the Analysis it
+// was generated from, so "regenerate from this job-match analysis" can reuse
+// jobMatchData.cv_build_spec without re-running AI.
+model GeneratedCV {
+  id                  String                 @id @default(cuid())
+  userId              String
+  user                User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  jobMatchId          String?
+  jobMatch            JobMatch?              @relation(fields: [jobMatchId], references: [id], onDelete: SetNull)
+  sourceCvRevisionId  String?
+  sourceCvRevision    CvRevision?            @relation(fields: [sourceCvRevisionId], references: [id], onDelete: SetNull)
+  profileSnapshotId   String?
+  profileSnapshot     CareerProfileSnapshot? @relation(fields: [profileSnapshotId], references: [id], onDelete: SetNull)
+  jobRevisionId       String?
+  jobRevision         JobRevision?           @relation(fields: [jobRevisionId], references: [id], onDelete: SetNull)
+  parentGeneratedCvId String?
+  parentGeneratedCv   GeneratedCV?           @relation("GeneratedCvVersions", fields: [parentGeneratedCvId], references: [id], onDelete: SetNull)
+  childVersions       GeneratedCV[]          @relation("GeneratedCvVersions")
+  versionNumber       Int                    @default(1)
+  /**
+   * Which profile produced this CV, when it came from a profile-based path.
+   */
+  profileId           String?
+  profile             Profile?               @relation(fields: [profileId], references: [id], onDelete: SetNull)
+  template            String
+  /**
+   * Headline for this document, snapshotted from the rewritten CV's tagline at
+   * generation time. Denormalised deliberately: the dashboard lists up to 250
+   * CVs and rendering a card title should not mean deserialising 250 full CV
+   * payloads out of `data`.
+   */
+  title               String?
+  data                Json
+  /**
+   * Generation-time source and approval metadata; never mixed into CV content.
+   */
+  provenance          Json?
+  fileKey             String?
+  /**
+   * Bytes of the archived DOCX, so quota is computed without listing R2.
+   */
+  fileSize            Int?
+  createdAt           DateTime               @default(now())
+
+  @@index([userId])
+  @@index([jobMatchId])
+  @@index([sourceCvRevisionId])
+  @@index([profileSnapshotId])
+  @@index([jobRevisionId])
+  @@index([parentGeneratedCvId])
+  @@index([profileId])
+  @@map("generated_cv")
+}
+
+model Session {
+  id        String   @id
+  expiresAt DateTime
+  token     String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  ipAddress String?
+  userAgent String?
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([token])
+  @@index([userId])
+  @@map("session")
+}
+
+model Account {
+  id                    String    @id
+  accountId             String
+  providerId            String
+  userId                String
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  password              String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@index([userId])
+  @@map("account")
+}
+
+model Verification {
+  id         String   @id
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([identifier])
+  @@map("verification")
+}
+
+// ── Stored source CVs, extraction and import ─────────────────────────────────
+//
+// The pipeline is StoredCv → CvExtraction → CvImportSession → CvImportCandidate.
+// Each step is a separate row so the original file, what a parser read out of it,
+// which Career Profile it is being imported into, and what the user confirmed all
+// stay independently addressable and independently retained.
+
+/**
+ * Lifecycle of the archived original file. UPLOADING → STORED covers the window
+ * where a row exists but the object may not; EXPIRED/DELETED mean the BINARY is
+ * gone while the row, its extractions and its confirmed provenance survive.
+ */
+enum StoredCvStatus {
+  UPLOADING
+  STORED
+  EXTRACTING
+  READY
+  FAILED
+  EXPIRED
+  DELETED
+}
+
+/**
+ * A user's original uploaded CV, stored once in object storage.
+ * Deliberately owned by the USER and not by a Career Profile: one CV is commonly
+ * imported into several profiles ("import as an update to my Nursing track", then
+ * later into "Care Assistant"), and hanging it off a single profileId would force
+ * either a duplicate upload or a lie about which track it belongs to. The
+ * profile-scoped part of the story lives in CvImportSession.
+ * `checksum` (sha256 of the bytes) is the identity used for duplicate detection —
+ * the filename is display metadata only, so the same CV re-uploaded under a new
+ * name is still recognised. Unique per owner, never globally: two users uploading
+ * an identical template must not collide, and one user must not be told their own
+ * file already exists in someone else's account.
+ * Rows are SOFT-deleted. Retention expiry removes the object and stamps
+ * `objectDeletedAt`; nothing here ever cascades into confirmed profile records.
+ */
+model StoredCv {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  /**
+   * Storage provider key, server-selected — never accepted from a client.
+   */
+  storageProvider String
+  storageKey      String @unique
+
+  originalFilename String
+  mimeType         String
+  sizeBytes        Int
+  /**
+   * Lowercase hex sha256 of the file bytes.
+   */
+  checksum         String
+  /**
+   * Detected and signature-verified container format: 'pdf' | 'docx'.
+   */
+  sourceFormat     String
+
+  status StoredCvStatus @default(UPLOADING)
+
+  /**
+   * When the archived object becomes eligible for removal, stamped from the
+   * user's `source_file_retention` window at upload time. Null means keep.
+   */
+  retentionEndsAt DateTime?
+  /**
+   * The binary is gone; the row and its provenance remain readable.
+   */
+  objectDeletedAt DateTime?
+  /**
+   * Soft delete. The pipeline never hard-deletes a stored CV.
+   */
+  deletedAt       DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  extractions    CvExtraction[]
+  importSessions CvImportSession[]
+  revisions      CvRevision[]
+  uploadIntents  CvUploadIntent[]
+
+  @@unique([userId, checksum])
+  @@index([userId, status])
+  @@index([retentionEndsAt])
+  @@map("stored_cv")
+}
+
+enum CvUploadIntentStatus {
+  PENDING
+  VALIDATING
+  COMPLETED
+  FAILED
+  EXPIRED
+}
+
+model CvUploadIntent {
+  id       String @id @default(cuid())
+  userId   String
+  user     User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  objectKey String @unique
+
+  originalFilename String
+  expectedMimeType String
+  expectedSizeBytes Int
+  status CvUploadIntentStatus @default(PENDING)
+  expiresAt DateTime
+  completedAt DateTime?
+  failureCode String?
+
+  storedCvId String?
+  storedCv   StoredCv? @relation(fields: [storedCvId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId, status, expiresAt])
+  @@index([status, expiresAt])
+  @@map("cv_upload_intent")
+}
+
+enum CvExtractionStatus {
+  PENDING
+  PROCESSING
+  READY
+  FAILED
+}
+
+/**
+ * One immutable attempt at reading a stored CV.
+ * Versioned rather than unique-per-CV: a parser upgrade or a retry after a
+ * transient failure must produce a NEW row, because candidates already confirmed
+ * against an earlier extraction cite its `parserVersion` and its excerpts as
+ * durable provenance. Overwriting would silently rewrite the evidence behind
+ * records the user has already approved.
+ */
+model CvExtraction {
+  id         String   @id @default(cuid())
+  storedCvId String
+  storedCv   StoredCv @relation(fields: [storedCvId], references: [id], onDelete: Cascade)
+
+  /**
+   * Server-selected extractor version, e.g. "cv-extract@1".
+   */
+  parserVersion String
+  /**
+   * Retry counter within a parser version; (cv, version, attempt) is unique.
+   */
+  attempt       Int    @default(1)
+  sourceFormat  String
+
+  status CvExtractionStatus @default(PENDING)
+
+  /**
+   * Normalised plain text. Stored in Postgres — CV text is a few tens of KB.
+   */
+  extractedText  String?
+  /**
+   * Validated CvExtractionPayload; never raw parser output.
+   */
+  structuredData Json?
+  pageCount      Int?
+  /**
+   * Stable project error code. Never provider or library wording.
+   */
+  errorCode      String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  importSessions CvImportSession[]
+  candidates     CvImportCandidate[]
+  revisions      CvRevision[]
+
+  @@unique([storedCvId, parserVersion, attempt])
+  @@index([storedCvId, status])
+  @@map("cv_extraction")
+}
+
+enum CvImportSessionStatus {
+  DRAFT
+  REVIEWING
+  PARTIALLY_IMPORTED
+  COMPLETED
+  ABANDONED
+  FAILED
+}
+
+/**
+ * One (stored CV → one Career Profile) import. This is where a user-owned file
+ * becomes profile-scoped work.
+ * Unique on (storedCvId, profileId) so returning to an interrupted import — or
+ * two tabs racing the same "import into this profile" button — resolves to the
+ * same session instead of creating a second set of candidates.
+ * The reconciliation fields are metadata about whether the comparison ran, not
+ * entitlement state: plan, quota and capability decisions are resolved live and
+ * are never persisted here.
+ */
+model CvImportSession {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  storedCvId   String
+  storedCv     StoredCv     @relation(fields: [storedCvId], references: [id], onDelete: Cascade)
+  extractionId String
+  extraction   CvExtraction @relation(fields: [extractionId], references: [id], onDelete: Cascade)
+  profileId    String
+  profile      Profile      @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  status CvImportSessionStatus @default(DRAFT)
+
+  /**
+   * not_requested | unavailable | completed | failed — display + retry state.
+   */
+  reconciliationStatus      String?
+  /**
+   * The ledger operation id, so a retry is idempotent rather than re-charged.
+   */
+  reconciliationOperationId String?
+  reconciliationRanAt       DateTime?
+  reconciliationSummary     Json?
+
+  importedAt DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  candidates CvImportCandidate[]
+
+  @@unique([storedCvId, profileId])
+  @@index([userId, status])
+  @@map("cv_import_session")
+}
+
+enum CvImportEntityType {
+  /**
+   * A proposal about one field of the shared `ProfileIdentity` — a phone, a
+   * LinkedIn URL, a personal site. One candidate per FIELD rather than one per
+   * CV, so a user can accept the LinkedIn address the CV got right and reject
+   * the phone number it got wrong, and so a field that contradicts what the
+   * account already holds can be flagged on its own.
+   */
+  IDENTITY_UPDATE
+  /**
+   * A proposal for `Profile.professionalSummary`. Separate from
+   * IDENTITY_UPDATE because it targets a different table with different scope:
+   * identity is shared across every Career Track, a summary belongs to one.
+   */
+  PROFILE_SUMMARY_UPDATE
+  EXPERIENCE
+  PROJECT
+  EDUCATION
+  SKILL
+  CERTIFICATION
+  TRAINING
+  LICENCE
+  PROFESSIONAL_REGISTRATION
+  LANGUAGE
+  VOLUNTEERING
+  OTHER_EVIDENCE
+}
+
+enum CvImportReviewStatus {
+  PROPOSED
+  CONFIRMED
+  EDITED
+  REJECTED
+  DUPLICATE
+  CONFLICT
+}
+
+/**
+ * A reviewable proposal, and — once confirmed — the durable provenance record
+ * for the canonical row it created.
+ * Parser output NEVER goes straight into Experience/Education/Skill/... . It
+ * lands here first, is reviewed, and only a user confirmation writes a canonical
+ * record. `createdEntityType`/`createdEntityId` then point at what was written,
+ * which is what lets a canonical profile record be traced back to an excerpt, an
+ * extraction and a parser version without adding provenance columns to ten tables.
+ * `sourceExcerpt`, `extractionId` and `parserVersion` are immutable after
+ * creation, and the row outlives the stored object: when the original file
+ * expires the excerpt is all that remains of the evidence, so deleting it would
+ * destroy the audit trail for records the user still holds.
+ * Only a CONFIRMED OTHER_EVIDENCE candidate ever consumes the reusable-evidence
+ * allowance. Every other entity type is canonical career history and consumes
+ * nothing; proposed, rejected, duplicate and conflicting candidates consume
+ * nothing regardless of type.
+ */
+model CvImportCandidate {
+  id        String          @id @default(cuid())
+  userId    String
+  user      User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sessionId String
+  session   CvImportSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  storedCvId   String
+  extractionId String
+  extraction   CvExtraction @relation(fields: [extractionId], references: [id], onDelete: Cascade)
+  profileId    String
+
+  entityType     CvImportEntityType
+  /**
+   * Validated against the per-entity import payload schema, never free JSON.
+   */
+  structuredData Json
+
+  /**
+   * Immutable verbatim source wording this proposal came from.
+   */
+  sourceExcerpt  String
+  sourceLocation Json?
+  confidence     Float?
+
+  reviewStatus  CvImportReviewStatus @default(PROPOSED)
+  /**
+   * Stable code for a terminal conflict the user must resolve explicitly.
+   */
+  conflictCode  String?
+  /**
+   * Immutable: which extractor produced this proposal.
+   */
+  parserVersion String
+
+  createdEntityType String?
+  createdEntityId   String?
+  confirmedAt       DateTime?
+  confirmedByUserId String?
+
+  /**
+   * Normalised identity of the proposal within its session. Makes candidate
+   * generation and bulk confirmation idempotent: re-running either resolves to
+   * the same row rather than proposing or importing the same job twice.
+   */
+  dedupeKey String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([sessionId, dedupeKey])
+  @@index([sessionId, reviewStatus])
+  @@index([userId])
+  @@index([createdEntityType, createdEntityId])
+  @@map("cv_import_candidate")
+}
+
+// ── Onboarding ───────────────────────────────────────────────────────────────
+
+enum OnboardingGoal {
+  CHECK_CV
+  MATCH_JOB
+  BUILD_PROFILE
+  NO_CV
+}
+
+enum OnboardingStage {
+  GOAL
+  CV_SOURCE
+  UPLOAD
+  EXTRACTION
+  PROFILE_SELECTION
+  CAREER_DIRECTION
+  IMPORT_REVIEW
+  ELIGIBILITY_BASICS
+  FIRST_ACTION
+  COMPLETE
+}
+
+enum OnboardingStatus {
+  NOT_STARTED
+  IN_PROGRESS
+  BLOCKED
+  COMPLETED
+  DISMISSED
+}
+
+enum OnboardingFirstValue {
+  DETERMINISTIC_ATS
+  AI_ATS
+  JOB_MATCH
+  PROFILE_CREATED
+}
+
+/**
+ * Where a user is in the goal-led first-run journey, persisted so a refresh, a
+ * closed browser or another device resumes rather than restarts.
+ * Deliberately holds NO plan, quota, entitlement decision, capability access or
+ * billing state. Those are server-authoritative and resolved live on every
+ * request; a copy here would go stale the moment a user upgrades, and a client
+ * that could influence it would be a way around the entitlement system.
+ * Separate from `User.onboardedAt`, which is retained as-is: users who completed
+ * the old wizard already carry it and must never be pulled into this flow.
+ */
+model OnboardingState {
+  id     String @id @default(cuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  goal   OnboardingGoal?
+  stage  OnboardingStage  @default(GOAL)
+  status OnboardingStatus @default(NOT_STARTED)
+
+  /**
+   * Resolved and ownership-checked server-side on every write.
+   */
+  selectedProfileId String?
+  storedCvId        String?
+  extractionId      String?
+  importSessionId   String?
+
+  firstValueType        OnboardingFirstValue?
+  /**
+   * analysisId of the outcome, or the profileId for PROFILE_CREATED.
+   */
+  firstValueRef         String?
+  firstValueCompletedAt DateTime?
+
+  /**
+   * Stable project error code for a BLOCKED stage. Never provider wording.
+   */
+  lastErrorCode String?
+  completedAt   DateTime?
+  dismissedAt   DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId, status])
+  @@map("onboarding_state")
+}

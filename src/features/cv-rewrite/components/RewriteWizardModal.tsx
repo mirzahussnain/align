@@ -12,14 +12,21 @@ import SkillsBridgeStep from './steps/SkillsBridgeStep';
 import FormatSelectionStep from './steps/FormatSelectionStep';
 import RewriteLoadingStep from './steps/RewriteLoadingStep';
 import SuccessStep from './steps/SuccessStep';
+import { triggerBrowserDownload } from '../utils/download';
+import { DEFAULT_TEMPLATE_ID, type TemplateId } from '@/shared/constants/templates';
 
 interface RewriteWizardModalProps {
   isOpen: boolean;
   onClose: () => void;
-  cvText: string;
-  jobDescription: string;
-  jobMatchFeedback: any;
-  atsData?: any;
+  /**
+   * The persisted analysis this rewrite rebuilds from. Everything the rewrite
+   * needs — CV text, job description, ATS findings — is re-read server-side from
+   * this row, so no CV/JD/feedback text is sent from the client any more.
+   * Absent only when the analysis has not finished persisting.
+   */
+  analysisId?: string;
+  /** Missing canonical mandatory requirements shown in the HITL step. */
+  missingSkills: string[];
 }
 
 export type RewriteStep = 'template' | 'ats_opt_in' | 'skills_bridge' | 'format' | 'loading' | 'success';
@@ -28,20 +35,16 @@ export type ExportFormat = 'docx' | 'pdf';
 export default function RewriteWizardModal({
   isOpen,
   onClose,
-  cvText,
-  jobDescription,
-  jobMatchFeedback,
-  atsData,
+  analysisId,
+  missingSkills,
 }: RewriteWizardModalProps) {
   const [currentStep, setCurrentStep] = useState<RewriteStep>('template');
-  const [selectedTemplate, setSelectedTemplate] = useState('architect');
+  const [selectedTemplate, setSelectedTemplate] = useState<TemplateId>(DEFAULT_TEMPLATE_ID);
   const [selectedFormat, setSelectedFormat] = useState<ExportFormat>('docx');
   const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [hitlContext, setHitlContext] = useState<Record<string, string>>({});
   const [includeAtsOptimization, setIncludeAtsOptimization] = useState<boolean>(true);
-
-  const missingSkills: string[] = jobMatchFeedback?.mandatorySkills?.missing || [];
 
   if (!isOpen) return null;
 
@@ -58,55 +61,54 @@ export default function RewriteWizardModal({
   };
 
   const handleRewriteSubmit = async () => {
+    // The rewrite is rebuilt entirely from the persisted analysis, so without
+    // its id there is nothing to rebuild from — fail before the loading state
+    // rather than firing a request the server would reject.
+    if (!analysisId) {
+      setError("This analysis hasn't finished saving yet. Please try again in a moment.");
+      setCurrentStep('template');
+      return;
+    }
+
     setCurrentStep('loading');
     setError(null);
     try {
-      // 1. We stringify the feedback so the AI can use it
-      const feedbackStr = JSON.stringify(jobMatchFeedback, null, 2);
-
-      // 2. Call our API
-      const response = await fetch('/api/cv/rewrite', {
+      // Only the analysis id and the user's choices cross the wire. The server
+      // re-reads the CV text, job description and ATS findings from the stored
+      // analysis, so none of that is client-supplied any more.
+      const response = await fetch('/api/cv/regenerate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          cvText,
-          jobDescription,
-          jobMatchFeedback: feedbackStr,
+          analysisId,
           templateId: selectedTemplate,
           hitlContext,
-          atsOptimizationData: includeAtsOptimization ? JSON.stringify(atsData) : null,
+          includeAtsOptimization,
         }),
       });
 
       if (!response.ok) {
-        const err = await response.json();
+        const err = await response.json().catch(() => ({}));
         throw new Error(err.error || 'Failed to rewrite CV');
       }
 
-      // 3. Get the raw blob
+      // The endpoint always returns a DOCX; trigger the download and keep the
+      // object URL for the success screen's manual re-download link.
       const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
+      const url = triggerBrowserDownload(blob, 'Tailored_CV.docx');
       setDownloadUrl(url);
 
-      // 4. Auto-download the file for the user
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `Tailored_CV_${selectedFormat.toUpperCase()}.${selectedFormat}`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-
       setCurrentStep('success');
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err);
-      setError(err.message || 'An unexpected error occurred.');
+      setError(err instanceof Error ? err.message : 'An unexpected error occurred.');
       setCurrentStep('template'); // Push back to start on error
     }
   };
 
   const resetWizard = () => {
     setCurrentStep('template');
-    setSelectedTemplate('architect');
+    setSelectedTemplate(DEFAULT_TEMPLATE_ID);
     setSelectedFormat('docx');
     setDownloadUrl(null);
     setError(null);
@@ -214,7 +216,7 @@ export default function RewriteWizardModal({
             )}
 
             {currentStep === 'format' && (
-              <Button onClick={handleRewriteSubmit} className="bg-gradient-to-r from-accent-purple to-blue-600">
+              <Button onClick={handleRewriteSubmit} className="bg-slate-900 hover:bg-slate-800">
                 Start AI Rewrite
               </Button>
             )}

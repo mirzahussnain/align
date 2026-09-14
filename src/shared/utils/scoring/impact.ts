@@ -1,16 +1,20 @@
-import { IMPACT_PATTERNS } from '@/shared/constants/scoring-config';
+import type { OccupationProfile } from '@/shared/occupations/types';
 
-export function analyzeImpactStatements(text: string): number {
+/**
+ * Count lines that evidence impact USING THE OCCUPATION'S OWN PATTERNS.
+ * A warehouse CV proves impact through targets met, accuracy, and safety
+ * records; percentages are one form of evidence, never a requirement.
+ */
+export function analyzeImpactStatements(text: string, profile: OccupationProfile): number {
   const lines = text.split('\n');
   let impactCount = 0;
 
   for (const line of lines) {
-    if (IMPACT_PATTERNS.some(p => p.test(line))) {
+    if (profile.impactPatterns.some(p => p.test(line))) {
       impactCount++;
     }
   }
 
-  // Score based on number of quantified achievements
   if (impactCount >= 8) return 10;
   if (impactCount >= 6) return 8;
   if (impactCount >= 4) return 7;

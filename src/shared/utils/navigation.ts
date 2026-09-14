@@ -2,10 +2,11 @@
  * Utility functions for handling complex navigation state and scroll spying.
  */
 
+// Only the fields the lookup reads — structural typing lets any richer
+// navigation shape satisfy this without index-signature gymnastics.
 export interface NavGroupShape {
   id: string;
-  items: Array<{ id: string; [key: string]: any }>;
-  [key: string]: any;
+  items: ReadonlyArray<{ id: string }>;
 }
 
 /**

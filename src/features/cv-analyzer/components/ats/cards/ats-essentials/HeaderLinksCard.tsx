@@ -10,13 +10,16 @@ export default function HeaderLinksCard({ linkedin }: HeaderLinksCardProps) {
     <AuditCard
       id="headerLinks"
       title="Header Links"
-      subtitle="Checks for active LinkedIn, GitHub, or portfolio URLs"
-      score={linkedin ? 'Passed' : 'Missing'}
+      subtitle="Detects LinkedIn, GitHub, or portfolio URLs in the CV text"
+      score={linkedin ? 'Found' : 'Missing'}
       scoreStatus={linkedin ? 'excellent' : 'good'}
+      source="rule"
     >
       <div className="space-y-3">
         <p className="text-xs text-slate-500 leading-relaxed">
-          Adding active profile links increases recruitment response rates by up to 40%.
+          A LinkedIn or portfolio link in your header gives recruiters an easy way to verify your
+          background. We detect the link in your CV — we don’t check that it’s live, so give it a
+          quick test before you send.
         </p>
         {linkedin ? (
           <div className="p-4 bg-emerald-50/20 border border-emerald-100 rounded-xl flex items-center justify-between">
@@ -32,7 +35,7 @@ export default function HeaderLinksCard({ linkedin }: HeaderLinksCardProps) {
               </a>
             </div>
             <span className="text-[9px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200 px-2 py-0.5 rounded uppercase">
-              Active
+              Detected
             </span>
           </div>
         ) : (

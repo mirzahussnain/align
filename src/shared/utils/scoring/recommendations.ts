@@ -1,18 +1,25 @@
+import type { OccupationProfile } from '@/shared/occupations/types';
 import type {
-  CategoryScore,
   KeywordAnalysis,
   SectionOrderAnalysis,
   FormattingAnalysis,
   ComplianceCheck,
+  CredentialAnalysis,
   Recommendation,
 } from '@/shared/types/cv';
 
+/**
+ * Rule-based recommendations from the deterministic pass. Occupation-specific
+ * expectations (testing frameworks, cloud platforms, …) come from the
+ * profile's evidence priorities and the AI layer — never hardcoded here.
+ */
 export function generateRecommendations(
-  categories: CategoryScore[],
   keywords: KeywordAnalysis,
-  sectionOrder: SectionOrderAnalysis,
+  sectionLayout: SectionOrderAnalysis,
   formatting: FormattingAnalysis,
-  compliance: ComplianceCheck[]
+  compliance: ComplianceCheck[],
+  credentials: CredentialAnalysis,
+  profile: OccupationProfile
 ): Recommendation[] {
   const recs: Recommendation[] = [];
 
@@ -23,38 +30,29 @@ export function generateRecommendations(
       title: issue.message,
       description: issue.fix,
       timeEstimate: '15 min',
+      kind: 'formatting',
     });
   }
 
-  // Missing testing keywords
-  const testingBreakdown = keywords.categoryBreakdown.find(c => c.category === 'testing');
-  if (testingBreakdown && testingBreakdown.percentage < 20) {
+  // Missing mandatory credentials are eligibility failures.
+  for (const finding of credentials.findings.filter(f => f.class === 'mandatory' && !f.found)) {
     recs.push({
       priority: 'critical',
-      title: 'Add testing skills — critically missing',
-      description: 'UK employers hard-filter for testing (Jest, Vitest, Playwright, Cypress). Add testing experience to at least one project and list it in your skills.',
-      timeEstimate: '1-2 days',
+      title: `Add ${finding.label}`,
+      description: finding.message ?? `${finding.label} is expected for ${profile.label} roles.`,
+      timeEstimate: '10 min',
+      kind: 'credential',
     });
   }
 
-  // Section ordering
-  for (const suggestion of sectionOrder.suggestions) {
+  // Section layout
+  for (const suggestion of sectionLayout.suggestions) {
     recs.push({
-      priority: 'high',
-      title: 'Reorder CV sections',
+      priority: sectionLayout.missingRequired?.some(s => suggestion.includes(s)) ? 'high' : 'medium',
+      title: 'Improve CV structure',
       description: suggestion,
       timeEstimate: '15 min',
-    });
-  }
-
-  // Missing cloud keywords
-  const cloudBreakdown = keywords.categoryBreakdown.find(c => c.category === 'cloud');
-  if (cloudBreakdown && cloudBreakdown.percentage < 30) {
-    recs.push({
-      priority: 'high',
-      title: 'Add cloud platform experience',
-      description: 'UK market is AWS-dominant. Mention AWS, Terraform, or other cloud services you have experience with.',
-      timeEstimate: '30 min',
+      kind: 'section',
     });
   }
 
@@ -65,6 +63,32 @@ export function generateRecommendations(
       title: `Remove: ${check.rule}`,
       description: check.description,
       timeEstimate: '5 min',
+      kind: 'compliance',
+    });
+  }
+
+  // Weak evidence coverage against the classified sector's vocabulary.
+  const total = keywords.present.length + keywords.missing.length;
+  if (total > 0 && keywords.present.length / total < 0.25) {
+    recs.push({
+      priority: 'high',
+      title: 'Strengthen role-specific evidence',
+      description: `Your CV names few of the terms UK employers screen for in ${profile.label} roles. Work concrete skills and terminology into your experience bullets: ${profile.evidencePriorities
+        .slice(0, 3)
+        .join('; ')}.`,
+      timeEstimate: '1-2 hours',
+      kind: 'keyword',
+    });
+  }
+
+  // Desirable credentials worth surfacing.
+  for (const finding of credentials.findings.filter(f => f.class === 'desirable' && !f.found)) {
+    recs.push({
+      priority: 'medium',
+      title: `Consider adding: ${finding.label}`,
+      description: finding.message ?? '',
+      timeEstimate: '10 min',
+      kind: 'credential',
     });
   }
 
@@ -75,28 +99,7 @@ export function generateRecommendations(
       title: issue.message,
       description: issue.fix,
       timeEstimate: '15 min',
-    });
-  }
-
-  // Missing monitoring keywords
-  const monitoringBreakdown = keywords.categoryBreakdown.find(c => c.category === 'monitoring');
-  if (monitoringBreakdown && monitoringBreakdown.percentage < 20) {
-    recs.push({
-      priority: 'medium',
-      title: 'Add monitoring/observability skills',
-      description: 'Mention Sentry, Datadog, LogRocket, or similar tools to show production awareness.',
-      timeEstimate: '1 day',
-    });
-  }
-
-  // Practices
-  const practicesBreakdown = keywords.categoryBreakdown.find(c => c.category === 'practices');
-  if (practicesBreakdown && practicesBreakdown.percentage < 30) {
-    recs.push({
-      priority: 'medium',
-      title: 'Add engineering practices keywords',
-      description: 'Mention code reviews, pair programming, accessibility (WCAG), and performance optimization to match UK engineering culture.',
-      timeEstimate: '30 min',
+      kind: 'formatting',
     });
   }
 

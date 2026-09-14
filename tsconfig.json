@@ -6,6 +6,11 @@
     "skipLibCheck": true,
     "strict": true,
     "noEmit": true,
+    // The .mts scripts in scripts/ run under `node --experimental-strip-types`,
+    // which resolves relative imports literally and therefore needs the .ts
+    // extension spelled out. tsc rejects that by default; this permits it.
+    // Safe here because nothing is emitted — Next compiles the app itself.
+    "allowImportingTsExtensions": true,
     "esModuleInterop": true,
     "module": "esnext",
     "moduleResolution": "bundler",

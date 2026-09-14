@@ -13,6 +13,7 @@ export default function FileFormatSizeCard({ pageCount, estimatedReadTime, detai
   return (
     <AuditCard
       id="fileFormatSize"
+      source="rule"
       title="File Format & Size"
       subtitle="Checks page count and reading speed"
       score={isPassed ? 'Passed' : 'Too long'}

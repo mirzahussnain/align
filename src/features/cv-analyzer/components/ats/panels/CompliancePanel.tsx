@@ -2,6 +2,7 @@
 
 import { CVAnalysisResult } from '@/shared/types/cv';
 import { Check, X } from 'lucide-react';
+import SourceBadge from '../SourceBadge';
 
 export default function CompliancePanel({ result }: { result: CVAnalysisResult }) {
   return (
@@ -9,6 +10,7 @@ export default function CompliancePanel({ result }: { result: CVAnalysisResult }
       <div className="mb-6">
         <h2 className="text-2xl font-bold text-slate-800 dark:text-slate-100">UK Equality Act Compliance</h2>
         <p className="text-slate-400 dark:text-slate-500 text-sm mt-1">Verification of anti-discrimination rules</p>
+        <SourceBadge source="rule" className="mt-2" />
       </div>
 
       <div className="bg-bg-panel border border-slate-100 dark:border-slate-800/60 rounded-[24px] p-6 shadow-sm shadow-slate-100/40 dark:shadow-none">

@@ -7,13 +7,15 @@ interface ProfessionalSummaryCardProps {
   scoreStatus?: 'excellent' | 'good' | 'needs-improvement' | 'critical' | 'neutral';
   details?: string;
   originalSummary?: string;
+  source?: 'rule' | 'ai';
 }
 
 export default function ProfessionalSummaryCard({
   score,
   scoreStatus,
   details,
-  originalSummary
+  originalSummary,
+  source = 'rule'
 }: ProfessionalSummaryCardProps) {
   return (
     <AuditCard
@@ -22,6 +24,7 @@ export default function ProfessionalSummaryCard({
       subtitle="Checks professional summary length and guidelines"
       score={score}
       scoreStatus={scoreStatus}
+      source={source}
       details={details}
     >
       {originalSummary && (
@@ -40,8 +43,8 @@ export default function ProfessionalSummaryCard({
             </h4>
             <ul className="text-xs font-medium text-green-800/90 space-y-1.5 list-disc pl-4">
               <li>Limit length strictly between 30 and 60 words.</li>
-              <li>Include at least one quantified technical metric.</li>
-              <li>Remove empty buzzwords (e.g. 'passionate team player').</li>
+              <li>Include at least one concrete, evidenced achievement relevant to your field.</li>
+              <li>Remove empty buzzwords (e.g. &apos;passionate team player&apos;).</li>
               <li>Ensure target job role is mentioned clearly.</li>
             </ul>
           </div>

@@ -20,7 +20,7 @@ export default function Badge({
     primary: 'bg-accent-cyan/10 text-accent-cyan border-accent-cyan/20',
     success: 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20',
     warning: 'bg-amber-500/10 text-amber-600 border-amber-500/20',
-    error: 'bg-red-500/10 text-red-600 border-red-500/20',
+    error: 'bg-rose-500/10 text-rose-600 border-rose-500/20',
     outline: 'bg-transparent border-border-subtle text-text-secondary',
     ghost: 'bg-transparent border-transparent text-text-secondary hover:bg-bg-tertiary',
   };

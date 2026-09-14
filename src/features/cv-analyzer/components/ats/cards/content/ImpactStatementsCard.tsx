@@ -12,6 +12,7 @@ interface ImpactStatementsCardProps {
   aiFeedback?: Recommendation;
   activeRewriteIndex: number;
   setActiveRewriteIndex: (idx: number) => void;
+  source?: 'rule' | 'ai';
 }
 
 export default function ImpactStatementsCard({
@@ -21,7 +22,8 @@ export default function ImpactStatementsCard({
   aiRewrites,
   aiFeedback,
   activeRewriteIndex,
-  setActiveRewriteIndex
+  setActiveRewriteIndex,
+  source = 'rule'
 }: ImpactStatementsCardProps) {
   return (
     <AuditCard
@@ -30,13 +32,14 @@ export default function ImpactStatementsCard({
       subtitle="STAR Method measurements validation"
       score={score}
       scoreStatus={scoreStatus}
+      source={source}
       details={details}
     >
       {aiRewrites.length > 0 && (
         <div className="space-y-3 mt-4">
           <div className="flex items-center justify-between">
             <h4 className="text-xs font-bold text-slate-400 tracking-wider uppercase flex items-center gap-1.5">
-              <Lightbulb size={14} className="text-accent-purple" />
+              <Lightbulb size={14} className="text-accent-cyan" />
               Suggested Rewrites ({aiRewrites.length})
             </h4>
             <div className="flex gap-1.5">
@@ -47,7 +50,7 @@ export default function ImpactStatementsCard({
                   className={cn(
                     "w-5 h-5 rounded-full text-[10px] font-bold flex items-center justify-center transition-all cursor-pointer",
                     activeRewriteIndex === idx
-                      ? "bg-accent-purple text-white"
+                      ? "bg-slate-900 text-white"
                       : "bg-slate-200 text-slate-500 hover:bg-slate-300"
                   )}
                 >

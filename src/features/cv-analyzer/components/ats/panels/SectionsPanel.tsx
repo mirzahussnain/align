@@ -1,13 +1,15 @@
 'use client';
 
 import { CVAnalysisResult } from '@/shared/types/cv';
+import SourceBadge from '../SourceBadge';
 
 export default function SectionsPanel({ result }: { result: CVAnalysisResult }) {
   return (
     <div className="space-y-6">
       <div className="mb-6">
         <h2 className="text-2xl font-bold text-slate-800 dark:text-slate-100">Section Ordering</h2>
-        <p className="text-slate-400 dark:text-slate-500 text-sm mt-1">Evaluation of your CV's structural flow</p>
+        <p className="text-slate-400 dark:text-slate-500 text-sm mt-1">Evaluation of your CV&apos;s structural flow</p>
+        <SourceBadge source="rule" className="mt-2" />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

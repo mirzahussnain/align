@@ -1,0 +1,5 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { auth } from '@/shared/lib/auth';
+import { resolveMatchRequest } from '@/shared/services/job-snapshot';
+import { APIError, withErrorHandler } from '@/shared/utils/api-error';
+export async function GET(request: NextRequest, context: RouteContext<'/api/job-match-requests/[id]'>) { return withErrorHandler(async () => { const session = await auth.api.getSession({ headers: request.headers }); if (!session) throw new APIError('Please sign in to view this match.', 401); const { id } = await context.params; const resolved = await resolveMatchRequest(session.user.id, id); if (!resolved) throw new APIError('This match preparation is invalid or has expired.', 404); return NextResponse.json({ profileId: resolved.request.profileId, jobSnapshotId: resolved.request.jobSnapshotId, description: resolved.selected.text, descriptionAvailability: resolved.selected.partial ? 'PARTIAL' : 'FULL' }); }); }

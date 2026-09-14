@@ -1,0 +1,7 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { z } from 'zod';
+import { auth } from '@/shared/lib/auth';
+import { listCompanyVacancies } from '@/shared/services/job-board-api';
+import { APIError, withErrorHandler } from '@/shared/utils/api-error';
+const Query = z.object({ cursor: z.string().max(500).optional(), limit: z.coerce.number().int().min(1).max(50).default(20) });
+export async function GET(request: NextRequest, context: { params: Promise<{ companyRecordId: string }> }) { return withErrorHandler(async () => { const parsed = Query.safeParse(Object.fromEntries(request.nextUrl.searchParams)); if (!parsed.success) throw new APIError('Invalid vacancy pagination.', 400, undefined, 'INVALID_REQUEST'); const { companyRecordId } = await context.params; const session = await auth.api.getSession({ headers: request.headers }); try { const vacancies = await listCompanyVacancies(companyRecordId, session?.user.id, parsed.data); if (!vacancies) throw new APIError('Company not found.', 404, undefined, 'NOT_FOUND'); return NextResponse.json(vacancies); } catch (error) { if (error instanceof APIError) throw error; throw new APIError('Invalid pagination cursor.', 400, { field: 'cursor' }, 'INVALID_REQUEST'); } }); }

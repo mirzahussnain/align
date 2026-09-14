@@ -1,0 +1,533 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`numeric characterization (pre-Phase-A pin) > admin-office scores identically 1`] = `
+{
+  "categories": [
+    {
+      "id": "formatting",
+      "maxScore": 10,
+      "score": 10,
+      "status": "excellent",
+    },
+    {
+      "id": "compliance",
+      "maxScore": 6,
+      "score": 6,
+      "status": "excellent",
+    },
+    {
+      "id": "atsReadability",
+      "maxScore": 10,
+      "score": 10,
+      "status": "excellent",
+    },
+    {
+      "id": "sectionCompleteness",
+      "maxScore": 10,
+      "score": 10,
+      "status": "excellent",
+    },
+    {
+      "id": "evidenceCoverage",
+      "maxScore": 10,
+      "score": 2,
+      "status": "critical",
+    },
+    {
+      "id": "credentials",
+      "maxScore": 10,
+      "score": 10,
+      "status": "excellent",
+    },
+    {
+      "id": "impactStatements",
+      "maxScore": 10,
+      "score": 7,
+      "status": "good",
+    },
+    {
+      "id": "professionalSummary",
+      "maxScore": 10,
+      "score": 8,
+      "status": "good",
+    },
+  ],
+  "confidence": 1,
+  "credentials": {
+    "findings": [],
+    "notMaterial": true,
+    "score": 10,
+  },
+  "missingRequiredSections": [],
+  "occupation": "administrator",
+  "overallScore": 79,
+  "reasonCodes": [
+    "CORE_TASKS_MATCH",
+    "CREDENTIAL_EVIDENCE",
+    "DISTINCTIVE_OUTPUT_MATCH",
+    "JOB_TITLE_EXACT_MATCH",
+  ],
+  "recommendationShape": [
+    {
+      "kind": "keyword",
+      "priority": "high",
+    },
+  ],
+  "regulated": false,
+  "sector": "admin_office",
+  "seniority": "lead",
+  "source": "dictionary_evidence",
+}
+`;
+
+exports[`numeric characterization (pre-Phase-A pin) > hca-no-nmc scores identically 1`] = `
+{
+  "categories": [
+    {
+      "id": "formatting",
+      "maxScore": 10,
+      "score": 10,
+      "status": "excellent",
+    },
+    {
+      "id": "compliance",
+      "maxScore": 6,
+      "score": 6,
+      "status": "excellent",
+    },
+    {
+      "id": "atsReadability",
+      "maxScore": 10,
+      "score": 10,
+      "status": "excellent",
+    },
+    {
+      "id": "sectionCompleteness",
+      "maxScore": 10,
+      "score": 8.5,
+      "status": "excellent",
+    },
+    {
+      "id": "evidenceCoverage",
+      "maxScore": 10,
+      "score": 2,
+      "status": "critical",
+    },
+    {
+      "id": "credentials",
+      "maxScore": 10,
+      "score": 8.5,
+      "status": "excellent",
+    },
+    {
+      "id": "impactStatements",
+      "maxScore": 10,
+      "score": 8,
+      "status": "good",
+    },
+    {
+      "id": "professionalSummary",
+      "maxScore": 10,
+      "score": 8,
+      "status": "good",
+    },
+  ],
+  "confidence": 1,
+  "credentials": {
+    "findings": [
+      {
+        "class": "desirable",
+        "found": true,
+        "id": "care-certificate",
+      },
+      {
+        "class": "desirable",
+        "found": false,
+        "id": "dbs-check",
+      },
+    ],
+    "notMaterial": false,
+    "score": 8.5,
+  },
+  "missingRequiredSections": [],
+  "occupation": "healthcare_support",
+  "overallScore": 76,
+  "reasonCodes": [
+    "CORE_TASKS_MATCH",
+    "CREDENTIAL_EVIDENCE",
+    "DISTINCTIVE_OUTPUT_MATCH",
+    "JOB_TITLE_EXACT_MATCH",
+  ],
+  "recommendationShape": [
+    {
+      "kind": "keyword",
+      "priority": "high",
+    },
+    {
+      "kind": "section",
+      "priority": "medium",
+    },
+    {
+      "kind": "credential",
+      "priority": "medium",
+    },
+  ],
+  "regulated": false,
+  "sector": "healthcare_nhs",
+  "seniority": "lead",
+  "source": "dictionary_evidence",
+}
+`;
+
+exports[`numeric characterization (pre-Phase-A pin) > junior-dev-with-projects scores identically 1`] = `
+{
+  "categories": [
+    {
+      "id": "formatting",
+      "maxScore": 10,
+      "score": 10,
+      "status": "excellent",
+    },
+    {
+      "id": "compliance",
+      "maxScore": 6,
+      "score": 6,
+      "status": "excellent",
+    },
+    {
+      "id": "atsReadability",
+      "maxScore": 10,
+      "score": 10,
+      "status": "excellent",
+    },
+    {
+      "id": "sectionCompleteness",
+      "maxScore": 10,
+      "score": 10,
+      "status": "excellent",
+    },
+    {
+      "id": "evidenceCoverage",
+      "maxScore": 10,
+      "score": 1,
+      "status": "critical",
+    },
+    {
+      "id": "credentials",
+      "maxScore": 10,
+      "score": 10,
+      "status": "excellent",
+    },
+    {
+      "id": "impactStatements",
+      "maxScore": 10,
+      "score": 8,
+      "status": "good",
+    },
+    {
+      "id": "professionalSummary",
+      "maxScore": 10,
+      "score": 9,
+      "status": "excellent",
+    },
+  ],
+  "confidence": 1,
+  "credentials": {
+    "findings": [],
+    "notMaterial": true,
+    "score": 10,
+  },
+  "missingRequiredSections": [],
+  "occupation": "software_engineer",
+  "overallScore": 79,
+  "reasonCodes": [
+    "CORE_TASKS_MATCH",
+    "CREDENTIAL_EVIDENCE",
+    "DISTINCTIVE_OUTPUT_MATCH",
+    "JOB_TITLE_EXACT_MATCH",
+  ],
+  "recommendationShape": [
+    {
+      "kind": "keyword",
+      "priority": "high",
+    },
+  ],
+  "regulated": false,
+  "sector": "tech",
+  "seniority": "entry",
+  "source": "dictionary_evidence",
+}
+`;
+
+exports[`numeric characterization (pre-Phase-A pin) > paralegal-no-sra scores identically 1`] = `
+{
+  "categories": [
+    {
+      "id": "formatting",
+      "maxScore": 10,
+      "score": 10,
+      "status": "excellent",
+    },
+    {
+      "id": "compliance",
+      "maxScore": 6,
+      "score": 6,
+      "status": "excellent",
+    },
+    {
+      "id": "atsReadability",
+      "maxScore": 10,
+      "score": 10,
+      "status": "excellent",
+    },
+    {
+      "id": "sectionCompleteness",
+      "maxScore": 10,
+      "score": 10,
+      "status": "excellent",
+    },
+    {
+      "id": "evidenceCoverage",
+      "maxScore": 10,
+      "score": 1,
+      "status": "critical",
+    },
+    {
+      "id": "credentials",
+      "maxScore": 10,
+      "score": 10,
+      "status": "excellent",
+    },
+    {
+      "id": "impactStatements",
+      "maxScore": 10,
+      "score": 3,
+      "status": "critical",
+    },
+    {
+      "id": "professionalSummary",
+      "maxScore": 10,
+      "score": 8,
+      "status": "good",
+    },
+  ],
+  "confidence": 0.3,
+  "credentials": {
+    "findings": [],
+    "notMaterial": true,
+    "score": 10,
+  },
+  "missingRequiredSections": [],
+  "occupation": "generic",
+  "overallScore": 73,
+  "reasonCodes": [
+    "FALLBACK",
+  ],
+  "recommendationShape": [
+    {
+      "kind": "keyword",
+      "priority": "high",
+    },
+  ],
+  "regulated": false,
+  "sector": "law",
+  "seniority": "entry",
+  "source": "fallback",
+}
+`;
+
+exports[`numeric characterization (pre-Phase-A pin) > registered-nurse-no-nmc scores identically 1`] = `
+{
+  "categories": [
+    {
+      "id": "formatting",
+      "maxScore": 10,
+      "score": 10,
+      "status": "excellent",
+    },
+    {
+      "id": "compliance",
+      "maxScore": 6,
+      "score": 6,
+      "status": "excellent",
+    },
+    {
+      "id": "atsReadability",
+      "maxScore": 10,
+      "score": 10,
+      "status": "excellent",
+    },
+    {
+      "id": "sectionCompleteness",
+      "maxScore": 10,
+      "score": 10,
+      "status": "excellent",
+    },
+    {
+      "id": "evidenceCoverage",
+      "maxScore": 10,
+      "score": 1,
+      "status": "critical",
+    },
+    {
+      "id": "credentials",
+      "maxScore": 10,
+      "score": 3,
+      "status": "critical",
+    },
+    {
+      "id": "impactStatements",
+      "maxScore": 10,
+      "score": 7,
+      "status": "good",
+    },
+    {
+      "id": "professionalSummary",
+      "maxScore": 10,
+      "score": 8,
+      "status": "good",
+    },
+  ],
+  "confidence": 1,
+  "credentials": {
+    "findings": [
+      {
+        "class": "mandatory",
+        "found": false,
+        "id": "nmc-registration",
+      },
+      {
+        "class": "desirable",
+        "found": true,
+        "id": "life-support",
+      },
+      {
+        "class": "desirable",
+        "found": true,
+        "id": "safeguarding",
+      },
+    ],
+    "notMaterial": false,
+    "score": 3,
+  },
+  "missingRequiredSections": [],
+  "occupation": "registered_nurse",
+  "overallScore": 67,
+  "reasonCodes": [
+    "CORE_TASKS_MATCH",
+    "CREDENTIAL_EVIDENCE",
+    "DISTINCTIVE_OUTPUT_MATCH",
+    "JOB_TITLE_EXACT_MATCH",
+  ],
+  "recommendationShape": [
+    {
+      "kind": "credential",
+      "priority": "critical",
+    },
+    {
+      "kind": "keyword",
+      "priority": "high",
+    },
+  ],
+  "regulated": true,
+  "sector": "healthcare_nhs",
+  "seniority": "lead",
+  "source": "dictionary_evidence",
+}
+`;
+
+exports[`numeric characterization (pre-Phase-A pin) > warehouse-flt-no-projects scores identically 1`] = `
+{
+  "categories": [
+    {
+      "id": "formatting",
+      "maxScore": 10,
+      "score": 10,
+      "status": "excellent",
+    },
+    {
+      "id": "compliance",
+      "maxScore": 6,
+      "score": 6,
+      "status": "excellent",
+    },
+    {
+      "id": "atsReadability",
+      "maxScore": 10,
+      "score": 10,
+      "status": "excellent",
+    },
+    {
+      "id": "sectionCompleteness",
+      "maxScore": 10,
+      "score": 10,
+      "status": "excellent",
+    },
+    {
+      "id": "evidenceCoverage",
+      "maxScore": 10,
+      "score": 1,
+      "status": "critical",
+    },
+    {
+      "id": "credentials",
+      "maxScore": 10,
+      "score": 10,
+      "status": "excellent",
+    },
+    {
+      "id": "impactStatements",
+      "maxScore": 10,
+      "score": 10,
+      "status": "excellent",
+    },
+    {
+      "id": "professionalSummary",
+      "maxScore": 10,
+      "score": 8,
+      "status": "good",
+    },
+  ],
+  "confidence": 1,
+  "credentials": {
+    "findings": [
+      {
+        "class": "role_dependent",
+        "found": true,
+        "id": "flt-licence",
+      },
+      {
+        "class": "desirable",
+        "found": true,
+        "id": "manual-handling",
+      },
+      {
+        "class": "role_dependent",
+        "found": false,
+        "id": "driving-entitlement",
+      },
+    ],
+    "notMaterial": false,
+    "score": 10,
+  },
+  "missingRequiredSections": [],
+  "occupation": "warehouse_operative",
+  "overallScore": 80,
+  "reasonCodes": [
+    "CORE_TASKS_MATCH",
+    "CREDENTIAL_EVIDENCE",
+    "DISTINCTIVE_OUTPUT_MATCH",
+    "JOB_TITLE_EXACT_MATCH",
+  ],
+  "recommendationShape": [
+    {
+      "kind": "keyword",
+      "priority": "high",
+    },
+  ],
+  "regulated": false,
+  "sector": "warehouse_logistics",
+  "seniority": "mid",
+  "source": "dictionary_evidence",
+}
+`;

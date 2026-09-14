@@ -16,6 +16,7 @@ export default function BulletsConsistencyCard({ bulletConsistency }: BulletsCon
   return (
     <AuditCard
       id="bulletsConsistency"
+      source="rule"
       title="Bullets Consistency"
       subtitle="Checks formatting coherence of bullet lists"
       score={isPassed ? "Consistent" : "Mixed style"}

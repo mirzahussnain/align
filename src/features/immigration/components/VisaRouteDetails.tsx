@@ -4,7 +4,7 @@ import { cn } from '@/shared/utils/cn';
 
 interface VisaData {
   title: string;
-  icon: any;
+  icon: React.ElementType;
   color: string;
   bg: string;
   border: string;

@@ -21,7 +21,7 @@ export default function SuccessStep({ downloadUrl, format }: Props) {
       <div>
         <h3 className="text-2xl font-bold text-slate-800 mb-2">Your CV is Ready!</h3>
         <p className="text-slate-500 max-w-sm mx-auto">
-          We've successfully tailored your experience to match the exact requirements of this role. 
+          We&apos;ve successfully tailored your experience to match the exact requirements of this role. 
           Your download should have started automatically.
         </p>
       </div>

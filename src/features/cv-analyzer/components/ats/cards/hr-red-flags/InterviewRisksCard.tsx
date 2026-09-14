@@ -4,9 +4,10 @@ import AuditCard from '../../AuditCard';
 interface InterviewRisksCardProps {
   hasRiskFactor: boolean;
   risksList: string[];
+  source?: 'rule' | 'ai';
 }
 
-export default function InterviewRisksCard({ hasRiskFactor, risksList }: InterviewRisksCardProps) {
+export default function InterviewRisksCard({ hasRiskFactor, risksList, source = 'rule' }: InterviewRisksCardProps) {
   return (
     <AuditCard
       id="interviewRisks"
@@ -14,6 +15,7 @@ export default function InterviewRisksCard({ hasRiskFactor, risksList }: Intervi
       subtitle="Scans for chronological gaps or recruiter red flags"
       score={hasRiskFactor ? 'Review flags' : 'Low risk'}
       scoreStatus={hasRiskFactor ? 'good' : 'excellent'}
+      source={source}
     >
       <div className="space-y-3">
         <p className="text-xs text-slate-500 leading-relaxed">
