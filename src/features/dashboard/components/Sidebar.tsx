@@ -10,6 +10,7 @@ import {
   Briefcase,
   Stamp,
   CreditCard,
+  Settings,
   LogOut,
   PanelLeftClose,
   PanelLeftOpen,
@@ -35,6 +36,7 @@ interface LinkItem {
   href: string;
   label: string;
   icon: LucideIcon;
+  activePrefix?: string;
 }
 
 const TAB_GROUPS: { label: string; items: TabItem[] }[] = [
@@ -61,6 +63,7 @@ const TAB_GROUPS: { label: string; items: TabItem[] }[] = [
 // Route-backed exploration stays as real links so browser navigation and active state remain canonical.
 const EXTERNAL_LINKS: LinkItem[] = [
   { href: "/dashboard/jobs", label: "Jobs", icon: Briefcase },
+  { href: "/dashboard/settings/account", label: "Settings", icon: Settings, activePrefix: "/dashboard/settings" },
   { href: "/immigration", label: "Sponsorship", icon: Stamp },
 ];
 
@@ -286,9 +289,12 @@ function SidebarContent({
               Explore
             </p>
           )}
-          {EXTERNAL_LINKS.map(({ href, label, icon: Icon }) => {
+          {EXTERNAL_LINKS.map(({ href, label, icon: Icon, activePrefix }) => {
             const isActive =
-              pathname === href || pathname.startsWith(`${href}/`);
+              pathname === href ||
+              pathname.startsWith(`${href}/`) ||
+              (activePrefix !== undefined &&
+                (pathname === activePrefix || pathname.startsWith(`${activePrefix}/`)));
             return (
               <Link
                 key={href}

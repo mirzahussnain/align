@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, render } from "@testing-library/react";
+import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import Sidebar from "@/features/dashboard/components/Sidebar";
 import { useDashboardStore } from "@/shared/stores/dashboard-store";
@@ -41,12 +41,31 @@ beforeEach(() => {
 afterEach(() => cleanup());
 
 describe("Sidebar active state", () => {
+  it("links to account settings from every dashboard route", () => {
+    navigation.pathname = "/dashboard";
+
+    render(<Sidebar {...props} />);
+
+    expect(screen.getByRole("link", { name: "Settings" })).toHaveAttribute(
+      "href",
+      "/dashboard/settings/account",
+    );
+  });
+
   it("marks only the store tab while the dashboard route is showing", () => {
     navigation.pathname = "/dashboard";
 
     render(<Sidebar {...props} />);
 
     expect(currentItems()).toEqual(["Overview"]);
+  });
+
+  it("keeps Settings current across its nested sections", () => {
+    navigation.pathname = "/dashboard/settings/security";
+
+    render(<Sidebar {...props} />);
+
+    expect(currentItems()).toEqual(["Settings"]);
   });
 
   it("marks only the tool link on a route-backed tool, not the last dashboard tab", () => {
