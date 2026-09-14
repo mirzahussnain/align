@@ -55,7 +55,7 @@ export function renderEmailShell(input: EmailShellInput): LifecycleTemplate {
     ...input.paragraphs.flatMap((paragraph) => [paragraph, '']),
     ...(input.action ? [input.action.label, input.action.url, ''] : []),
     ...(input.securityNote ? [input.securityNote, ''] : []),
-    'Need help? Reply to this email and our team will help.',
+    'This is an automated message. Replies to this email are not monitored.',
     '',
     'Align — clearer career decisions.',
   ].join('\n');
@@ -75,7 +75,7 @@ export function renderEmailShell(input: EmailShellInput): LifecycleTemplate {
           ${paragraphs}${action}${securityNote}
         </td></tr>
         <tr><td style="padding:20px 32px;border-top:1px solid #e5e5e5;color:#777777;font-size:12px;line-height:18px;">
-          Need help? Reply to this email and our team will help.<br>Align &mdash; clearer career decisions.
+          This is an automated message. Replies to this email are not monitored.<br>Align &mdash; clearer career decisions.
         </td></tr>
       </table>
     </td></tr>

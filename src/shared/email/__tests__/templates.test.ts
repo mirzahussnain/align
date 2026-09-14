@@ -38,7 +38,10 @@ describe('lifecycle email templates', () => {
     for (const template of templates) {
       expect(template.html).toContain('role="presentation"');
       expect(template.html).toContain('>Align<');
-      expect(template.html).toContain('Need help?');
+      expect(template.html).toContain('This is an automated message. Replies to this email are not monitored.');
+      expect(template.text).toContain('This is an automated message. Replies to this email are not monitored.');
+      expect(template.html).not.toContain('Reply to this email');
+      expect(template.text).not.toContain('Reply to this email');
       expect(template.html).not.toContain('<script');
       expect(template.text.length).toBeGreaterThan(0);
     }
