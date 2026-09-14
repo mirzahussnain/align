@@ -27,6 +27,7 @@ interface Row {
 
 const store = vi.hoisted(() => ({
   tier: 'free' as string,
+  verified: true,
   rows: [] as Row[],
   counters: new Map<string, Record<string, number>>(),
   seq: 0,
@@ -118,6 +119,7 @@ const client = vi.hoisted(() => {
     $executeRawUnsafe: vi.fn(async () => 0),
     user: {
       findUnique: vi.fn(async () => ({
+        emailVerified: s.verified,
         billingAccount: {
           purchases:
             s.tier === 'pro'
@@ -177,7 +179,9 @@ function counter(userId: string, period: string, field: string): number {
 }
 
 beforeEach(() => {
+  vi.clearAllMocks();
   store.tier = 'free';
+  store.verified = true;
   store.rows = [];
   store.counters = new Map();
   store.seq = 0;
@@ -203,6 +207,15 @@ describe('reserveCapability', () => {
     const result = await reserveCapability({ userId: 'u1', capability: 'ats_analysis', operationId: 'op1', now: T0 });
     expect(result.status).toBe('unmetered');
     expect(store.rows).toHaveLength(0);
+  });
+
+  it('rejects an unverified protected capability before opening a billing transaction', async () => {
+    store.verified = false;
+
+    await expect(
+      reserveCapability({ userId: 'u1', capability: 'job_match_analysis', operationId: 'op' })
+    ).rejects.toMatchObject({ code: 'EMAIL_VERIFICATION_REQUIRED', statusCode: 403 });
+    expect(client.$transaction).not.toHaveBeenCalled();
   });
 
   it('denies once the quota is fully committed', async () => {

@@ -13,6 +13,7 @@ import { reserveCapability, commitCapability, releaseCapability, reservationFing
 import { APIError } from '@/shared/utils/api-error';
 import { ANALYSIS_VERSIONS } from '@/shared/config/analysis-domain';
 import { loadProfileTarget } from '@/features/dashboard/data/load-profile';
+import { EmailVerificationRequiredError } from './email-verification-guard';
 
 export interface AtsAnalysisInput {
   userId: string;
@@ -74,19 +75,26 @@ export async function runAtsAnalysis(input: AtsAnalysisInput): Promise<CVAnalysi
     : profileTarget;
   if (input.targetSelection === 'saved_profile' && !selectedTarget) throw new APIError('Saved Career Profile not found.', 404);
 
-  const reserve = await reserveCapability({
-    userId: input.userId,
-    capability: 'ai_enhanced_ats_analysis',
-    operationId: input.operationId,
-    fingerprint: reservationFingerprint(['ats', input.userId, source.checksum, input.targetSelection, input.savedProfileId, input.targetRole, input.targetOccupation]),
-  });
-  if (reserve.status === 'recovered' && reserve.reservation.resultRef) {
+  let reserve: Awaited<ReturnType<typeof reserveCapability>> | null;
+  try {
+    reserve = await reserveCapability({
+      userId: input.userId,
+      capability: 'ai_enhanced_ats_analysis',
+      operationId: input.operationId,
+      fingerprint: reservationFingerprint(['ats', input.userId, source.checksum, input.targetSelection, input.savedProfileId, input.targetRole, input.targetOccupation]),
+    });
+  } catch (error) {
+    if (!(error instanceof EmailVerificationRequiredError)) throw error;
+    reserve = null;
+  }
+  if (reserve?.status === 'recovered' && reserve.reservation.resultRef) {
     const row = await prisma.atsAnalysis.findFirst({ where: { id: reserve.reservation.resultRef, userId: input.userId } });
     if (row) return { ...(row.resultJson as unknown as CVAnalysisResult), analysisId: row.id };
   }
-  if (reserve.status === 'conflict') throw new APIError('This operation ID was already used for different input.', 409);
-  const aiAllowed = reserve.status !== 'exhausted';
-  const reservationHeld = reserve.status === 'reserved';
+  if (reserve?.status === 'conflict') throw new APIError('This operation ID was already used for different input.', 409);
+  const verificationRequired = reserve === null;
+  const aiAllowed = reserve !== null && reserve.status !== 'exhausted';
+  const reservationHeld = reserve?.status === 'reserved';
 
   const selection = input.targetSelection ?? 'detected';
   const { context, classification } = await resolveAnalysisContext({
@@ -118,7 +126,7 @@ export async function runAtsAnalysis(input: AtsAnalysisInput): Promise<CVAnalysi
       result.aiSkipped = 'error';
     }
   } else {
-    result.aiSkipped = 'quota';
+    result.aiSkipped = verificationRequired ? 'verification_required' : 'quota';
   }
 
   if (reservationHeld && !provenance) await releaseCapability({ userId: input.userId, capability: 'ai_enhanced_ats_analysis', operationId: input.operationId, reason: 'provider_unavailable' });
