@@ -48,6 +48,8 @@ export default function AuthForm({ mode }: AuthFormProps) {
   const [error, setError] = useState('');
   const [isPending, setIsPending] = useState(false);
   const [isGooglePending, setIsGooglePending] = useState(false);
+  const [awaitingVerification, setAwaitingVerification] = useState(false);
+  const [resendStatus, setResendStatus] = useState('');
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
@@ -56,11 +58,17 @@ export default function AuthForm({ mode }: AuthFormProps) {
 
     const { error: authError } =
       mode === 'signup'
-        ? await authClient.signUp.email({ name, email, password })
+        ? await authClient.signUp.email({ name, email, password, callbackURL: '/verify-email' })
         : await authClient.signIn.email({ email, password });
 
     if (authError) {
       setError(authError.message || 'Something went wrong. Please try again.');
+      setIsPending(false);
+      return;
+    }
+
+    if (mode === 'signup') {
+      setAwaitingVerification(true);
       setIsPending(false);
       return;
     }
@@ -82,7 +90,31 @@ export default function AuthForm({ mode }: AuthFormProps) {
     }
   }
 
+  async function resendVerification() {
+    setResendStatus('');
+    const result = await authClient.sendVerificationEmail({
+      email,
+      callbackURL: '/verify-email',
+    });
+    setResendStatus(result.error ? 'Unable to resend right now.' : 'Verification email sent.');
+  }
+
   const fieldClass = 'field-dark w-full transition-colors';
+
+  if (awaitingVerification) {
+    return (
+      <div className="w-full max-w-sm">
+        <h1 className="text-3xl font-black tracking-tight text-white">Check your email</h1>
+        <p className="mt-2 text-sm text-white/50">
+          We sent a verification link to {email}. Verify your email before using provider-backed features.
+        </p>
+        <button type="button" onClick={resendVerification} className="mt-6 text-sm font-semibold text-accent-cyan">
+          Resend verification email
+        </button>
+        {resendStatus && <p role="status" className="mt-3 text-xs text-white/60">{resendStatus}</p>}
+      </div>
+    );
+  }
 
   return (
     <div className="w-full max-w-sm">
@@ -148,6 +180,12 @@ export default function AuthForm({ mode }: AuthFormProps) {
           >
             {error}
           </p>
+        )}
+
+        {mode === 'login' && (
+          <Link href="/forgot-password" className="self-end text-xs font-semibold text-accent-cyan">
+            Forgot password?
+          </Link>
         )}
 
         <button

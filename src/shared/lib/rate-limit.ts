@@ -20,6 +20,10 @@ const isConfigured =
 
 const redis = isConfigured ? Redis.fromEnv() : null;
 
+export function getRateLimitRedis(): Redis | null {
+  return redis;
+}
+
 const createRateLimiter = (requests: number, window: `${number} s` | `${number} m` | `${number} h`) =>
   redis
     ? new Ratelimit({
