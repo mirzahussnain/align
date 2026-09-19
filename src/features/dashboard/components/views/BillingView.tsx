@@ -1,8 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Check, ExternalLink, Loader2, AlertTriangle } from 'lucide-react';
-import DashboardTopBar from '../DashboardTopBar';
+import { Check, AlertTriangle } from 'lucide-react';
 import { cn } from '@/shared/utils/cn';
 import { PLANS } from '@/shared/constants/plans';
 import { offerPresentationForPlan } from '@/shared/billing/config';
@@ -131,12 +130,10 @@ export default function BillingView({
   tier,
   storage,
   billing,
-  embedded = false,
 }: {
   tier: string;
   storage: StorageUsage;
   billing: BillingStatusView;
-  embedded?: boolean;
 }) {
   const [busy, setBusy] = useState<null | 'checkout' | 'portal'>(null);
   const [error, setError] = useState<string | null>(null);
@@ -197,9 +194,7 @@ export default function BillingView({
 
   return (
     <>
-      {!embedded && <DashboardTopBar title="Plan & Billing" subtitle="Your subscription" showNewAnalysis={false} />}
-
-      <div className={cn(!embedded && "px-4 py-6 sm:px-6 lg:px-8")}>
+      <div>
         <div className="mb-5 rounded-xl border border-neutral-200 bg-white px-4 py-3">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <p className="text-xs text-neutral-600">
@@ -221,26 +216,6 @@ export default function BillingView({
           <div className="mb-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-xs text-red-700">{error}</div>
         )}
 
-        {/* Manage-billing bar for anyone with a provider customer. */}
-        {!embedded && isPro && billing.portalAvailable && (
-          <div className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-neutral-200 bg-white p-5">
-            <div>
-              <p className="text-sm font-bold text-neutral-900">Manage Billing</p>
-              <p className="mt-1 text-xs text-neutral-500">
-                Update your payment method, view invoices or cancel — all in the secure billing portal.
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={openPortal}
-              disabled={busy !== null}
-              className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2 text-xs font-bold text-white shadow-sm transition-colors hover:bg-slate-800 disabled:opacity-60"
-            >
-              {busy === 'portal' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ExternalLink className="h-3.5 w-3.5" />}
-              Manage Billing
-            </button>
-          </div>
-        )}
 
         <div className="mb-6 rounded-2xl border border-slate-200 bg-white p-6">
           <div className="mb-4 flex items-baseline justify-between gap-3">

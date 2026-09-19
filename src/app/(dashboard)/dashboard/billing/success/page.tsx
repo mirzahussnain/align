@@ -89,7 +89,7 @@ export default function CheckoutSuccessPage() {
               Your subscription is active. Full reports, higher limits and advanced tools are unlocked.
             </p>
             <Link
-              href="/dashboard?tab=billing"
+              href="/dashboard/settings/billing"
               className="mt-6 inline-block w-full rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-bold text-white hover:bg-slate-800 shadow-sm transition"
             >
               Go to billing
@@ -114,7 +114,7 @@ export default function CheckoutSuccessPage() {
             >
               Check again
             </button>
-            <Link href="/dashboard?tab=billing" className="mt-3 inline-block text-xs font-semibold text-neutral-500 hover:text-neutral-700">
+            <Link href="/dashboard/settings/billing" className="mt-3 inline-block text-xs font-semibold text-neutral-500 hover:text-neutral-700">
               Back to billing
             </Link>
           </>

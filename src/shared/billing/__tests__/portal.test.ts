@@ -49,9 +49,8 @@ describe('startPortal', () => {
     const result = await startPortal('u1');
     expect(result.url).toBe('https://stripe.test/portal');
     expect(mocks.createPortal).toHaveBeenCalledWith(
-      // Must be a route that EXISTS: the billing UI is a dashboard tab, so a bare
-      // /dashboard/billing return URL drops the user on a 404 leaving the portal.
-      expect.objectContaining({ providerCustomerId: 'cus_1', returnUrl: 'https://app.test/dashboard?tab=billing' })
+      // Return users to the canonical route-backed billing settings view.
+      expect.objectContaining({ providerCustomerId: 'cus_1', returnUrl: 'https://app.test/dashboard/settings/billing' })
     );
   });
 

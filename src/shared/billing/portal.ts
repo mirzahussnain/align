@@ -27,9 +27,8 @@ export async function startPortal(userId: string): Promise<{ url: string }> {
   const { url } = await adapter.createCustomerPortal({
     userId,
     providerCustomerId: customer.providerCustomerId,
-    // The billing UI is a TAB of the dashboard, not its own route — `/dashboard/billing`
-    // has no page and 404s. Deep-link the tab the same way the checkout return does.
-    returnUrl: `${appUrl}/dashboard?tab=billing`,
+    // Return to the canonical route-backed billing settings view.
+    returnUrl: `${appUrl}/dashboard/settings/billing`,
   });
   logBillingEvent('portal_session_created', { userId, provider: customer.provider });
   return { url };

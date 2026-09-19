@@ -347,7 +347,7 @@ export function OnboardingJourney({
           capability: state.stage === 'UPLOAD' ? 'stored_source_cvs' : 'additional_career_profiles',
           decision: state.stage === 'UPLOAD' ? storedCvCapacity : profileCapacity,
         }}
-        onViewPlans={() => router.push('/dashboard?tab=billing')}
+        onViewPlans={() => router.push('/dashboard/settings/billing')}
       />
     </>
   );

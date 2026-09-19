@@ -1,12 +1,12 @@
-"use client";
+'use client';
 
-import type { ReactNode } from "react";
-import Sidebar from "@/features/dashboard/components/Sidebar";
-import type { ProfileSummary } from "@/features/dashboard/data/load-profile";
-import { EntitlementProvider } from "@/shared/components/entitlements/EntitlementProvider";
-import type { EntitlementSnapshot } from "@/shared/entitlements/server";
+import type { ReactNode } from 'react';
+import { EntitlementProvider } from '@/shared/components/entitlements/EntitlementProvider';
+import type { EntitlementSnapshot } from '@/shared/entitlements/server';
+import type { ProfileSummary } from '@/features/dashboard/data/load-profile';
+import Sidebar from './Sidebar';
 
-interface JobBoardDashboardShellProps {
+interface DashboardRouteShellProps {
   children: ReactNode;
   user: { name: string; email: string; image?: string | null };
   tier: string;
@@ -16,7 +16,7 @@ interface JobBoardDashboardShellProps {
   maxProfiles: number;
 }
 
-export default function JobBoardDashboardShell({
+export default function DashboardRouteShell({
   children,
   user,
   tier,
@@ -24,7 +24,7 @@ export default function JobBoardDashboardShell({
   profiles,
   activeProfileId,
   maxProfiles,
-}: JobBoardDashboardShellProps) {
+}: DashboardRouteShellProps) {
   return (
     <EntitlementProvider initialSnapshot={entitlementSnapshot}>
       <div className="flex min-h-screen bg-neutral-50 text-neutral-900 dark:bg-bg-primary dark:text-text-primary">

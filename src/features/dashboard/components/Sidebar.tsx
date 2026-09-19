@@ -9,7 +9,6 @@ import {
   UserRound,
   Briefcase,
   Stamp,
-  CreditCard,
   Settings,
   LogOut,
   PanelLeftClose,
@@ -55,7 +54,6 @@ const TAB_GROUPS: { label: string; items: TabItem[] }[] = [
       { tab: "ats", label: "ATS Analyses", icon: FileSearch },
       { tab: "job_matches", label: "Job Matches", icon: Briefcase },
       { tab: "cvs", label: "Generated CVs", icon: FileStack },
-      { tab: "billing", label: "Plan & Billing", icon: CreditCard },
     ],
   },
 ];

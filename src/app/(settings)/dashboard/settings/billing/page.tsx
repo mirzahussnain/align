@@ -13,7 +13,6 @@ export default async function BillingSettingsPage() {
 
   return (
     <BillingView
-      embedded
       tier={billing.effectivePlan.toLowerCase()}
       storage={storage}
       billing={{

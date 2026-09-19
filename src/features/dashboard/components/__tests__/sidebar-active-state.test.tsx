@@ -50,6 +50,7 @@ describe("Sidebar active state", () => {
       "href",
       "/dashboard/settings/account",
     );
+    expect(screen.queryByRole("button", { name: "Plan & Billing" })).not.toBeInTheDocument();
   });
 
   it("marks only the store tab while the dashboard route is showing", () => {

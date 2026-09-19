@@ -113,7 +113,7 @@ export function Step3AnalysisOrUpgrade({
             </button>
           ) : (
             <Link
-              href="/dashboard?tab=billing"
+              href="/dashboard/settings/billing"
               className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-slate-900 px-6 text-sm font-bold text-white shadow-sm transition hover:bg-slate-800"
             >
               <Sparkles className="h-4 w-4 text-accent-cyan" />

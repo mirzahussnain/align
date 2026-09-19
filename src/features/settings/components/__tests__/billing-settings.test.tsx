@@ -8,7 +8,6 @@ describe('billing settings presentation', () => {
   it('reuses the existing customer portal action', () => {
     render(
       <BillingView
-        embedded
         tier="pro"
         billing={{
           plan: 'PRO',

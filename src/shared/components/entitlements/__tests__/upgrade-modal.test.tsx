@@ -1,9 +1,15 @@
 // @vitest-environment jsdom
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { EntitlementProvider, useEntitlements } from '../EntitlementProvider';
 import { PRODUCT_CAPABILITIES, type CapabilityDecision } from '@/shared/entitlements/registry';
+
+const navigation = vi.hoisted(() => ({ push: vi.fn() }));
+
+vi.mock('next/navigation', () => ({
+  useRouter: () => navigation,
+}));
 
 function Trigger() {
   const { decisionFor, openUpgrade } = useEntitlements();
@@ -19,5 +25,7 @@ describe('central upgrade modal', () => {
     expect(screen.getByRole('dialog')).toBeInTheDocument();
     expect(screen.getByText('Generate a truthful tailored CV')).toBeInTheDocument();
     expect(screen.getByText(/used 1 of 1/i)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: /view full plan/i }));
+    expect(navigation.push).toHaveBeenCalledWith('/dashboard/settings/billing');
   });
 });

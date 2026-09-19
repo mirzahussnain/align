@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
-import Sidebar from './Sidebar';
+import DashboardRouteShell from './DashboardRouteShell';
 import ProfileCompletionBanner from './ProfileCompletionBanner';
 import OverviewView from './views/OverviewView';
 import AnalyzeView from './views/AnalyzeView';
@@ -9,12 +9,9 @@ import JobMatchView from './views/JobMatchView';
 import ProfileView from './views/ProfileView';
 import DomainHistoryView from './views/DomainHistoryView';
 import CvsView from './views/CvsView';
-import BillingView, { type BillingStatusView } from './views/BillingView';
 import { useDashboardStore, type DashboardTab } from '@/shared/stores/dashboard-store';
 import type { ProfileData, ProfileSummary } from '@/features/dashboard/data/load-profile';
-import type { StorageUsage } from '@/shared/services/storage-quota';
 import type { UsageSnapshot } from '@/shared/services/usage-meter';
-import { EntitlementProvider } from '@/shared/components/entitlements/EntitlementProvider';
 import type { EntitlementSnapshot } from '@/shared/entitlements/server';
 
 export interface AtsAnalysisRow {
@@ -69,10 +66,8 @@ export interface DashboardData {
   maxProfiles: number;
   profileReasoning: boolean;
   reasoningRemaining: number | null;
-  storage: StorageUsage;
-  billing: BillingStatusView;
-  usage: UsageSnapshot;
   profileComplete: boolean;
+  usage: UsageSnapshot;
   profileCompleteness: number;
   aiAnalysesLimit: number | null;
 }
@@ -114,31 +109,34 @@ export default function DashboardShell({
   }));
 
   return (
-    <EntitlementProvider initialSnapshot={entitlementSnapshot}>
-      <div className="flex min-h-screen bg-neutral-50 text-neutral-900">
-        <Sidebar user={user} tier={tier} profiles={data.profiles} activeProfileId={data.profile.profileId} maxProfiles={data.maxProfiles} />
-        <div className="min-w-0 flex-1">
-          <ProfileCompletionBanner percent={data.profileCompleteness} label={data.profile.label} onProfileTab={tab === 'profile'} />
-          {tab === 'overview' && <OverviewView user={user} data={data} />}
-          {tab === 'analyze' && <AnalyzeView activeProfileId={data.profile.profileId} />}
-          {tab === 'job_match' && <JobMatchView />}
-          {tab === 'profile' && <ProfileView key={data.profile.profileId} initial={data.profile} name={user.name} email={user.email} image={user.image} />}
-          {tab === 'ats' && <DomainHistoryView domain="ats" atsAnalyses={data.atsAnalyses} jobMatches={[]} />}
-          {tab === 'job_matches' && <DomainHistoryView domain="job_match" atsAnalyses={[]} jobMatches={data.jobMatches} />}
-          {tab === 'cvs' && (
-            <CvsView
-              cvs={data.cvs}
-              analyses={rewriteSources}
-              profileComplete={data.profileComplete}
-              profileReasoning={data.profileReasoning}
-              activeProfileId={data.profile.profileId}
-              activeProfileLabel={data.profile.label}
-              reasoningRemaining={data.reasoningRemaining}
-            />
-          )}
-          {tab === 'billing' && <BillingView tier={tier} storage={data.storage} billing={data.billing} />}
-        </div>
+    <DashboardRouteShell
+      user={user}
+      tier={tier}
+      entitlementSnapshot={entitlementSnapshot}
+      profiles={data.profiles}
+      activeProfileId={data.profile.profileId}
+      maxProfiles={data.maxProfiles}
+    >
+      <div className="min-w-0 flex-1">
+        <ProfileCompletionBanner percent={data.profileCompleteness} label={data.profile.label} onProfileTab={tab === 'profile'} />
+        {tab === 'overview' && <OverviewView user={user} data={data} />}
+        {tab === 'analyze' && <AnalyzeView activeProfileId={data.profile.profileId} />}
+        {tab === 'job_match' && <JobMatchView />}
+        {tab === 'profile' && <ProfileView key={data.profile.profileId} initial={data.profile} name={user.name} email={user.email} image={user.image} />}
+        {tab === 'ats' && <DomainHistoryView domain="ats" atsAnalyses={data.atsAnalyses} jobMatches={[]} />}
+        {tab === 'job_matches' && <DomainHistoryView domain="job_match" atsAnalyses={[]} jobMatches={data.jobMatches} />}
+        {tab === 'cvs' && (
+          <CvsView
+            cvs={data.cvs}
+            analyses={rewriteSources}
+            profileComplete={data.profileComplete}
+            profileReasoning={data.profileReasoning}
+            activeProfileId={data.profile.profileId}
+            activeProfileLabel={data.profile.label}
+            reasoningRemaining={data.reasoningRemaining}
+          />
+        )}
       </div>
-    </EntitlementProvider>
+    </DashboardRouteShell>
   );
 }

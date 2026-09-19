@@ -1,6 +1,7 @@
 'use client';
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import type { EntitlementSnapshot } from '@/shared/entitlements/server';
 import {
   ENTITLEMENT_REQUIRED_EVENT,
@@ -9,7 +10,6 @@ import {
   type CapabilityDecision,
   type ProductCapability,
 } from '@/shared/entitlements/registry';
-import { useDashboardStore } from '@/shared/stores/dashboard-store';
 import {
   PricingDetailsDialog,
   type PricingDetailsContext,
@@ -34,7 +34,7 @@ interface EntitlementContextValue {
 const EntitlementContext = createContext<EntitlementContextValue | null>(null);
 
 export function EntitlementProvider({ initialSnapshot, children }: { initialSnapshot: EntitlementSnapshot; children: React.ReactNode }) {
-  const setTab = useDashboardStore((state) => state.setTab);
+  const router = useRouter();
   const [snapshot, setSnapshot] = useState(initialSnapshot);
   const [pricingDetails, setPricingDetails] = useState<PricingDetailsContext | null>(null);
   const refresh = useCallback(async () => {
@@ -75,7 +75,7 @@ export function EntitlementProvider({ initialSnapshot, children }: { initialSnap
         open={pricingDetails !== null}
         context={pricingDetails ?? undefined}
         onClose={() => setPricingDetails(null)}
-        onViewPlans={() => setTab('billing')}
+        onViewPlans={() => router.push('/dashboard/settings/billing')}
       />
     </EntitlementContext.Provider>
   );
