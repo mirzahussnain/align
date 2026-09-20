@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { type ChangeEvent, type FormEvent, useRef } from "react";
 import type { CareerTrack } from "@/features/job-board/lib/job-board";
+import { ANALYSIS_LIMITS } from "@/shared/policies";
 
 export type StoredCvOption = {
   id: string;
@@ -197,7 +198,7 @@ export function Step1VacancyForm({
           required
           aria-label="Full job description"
           minLength={400}
-          maxLength={50_000}
+          maxLength={ANALYSIS_LIMITS.maxJobDescriptionCharacters}
           value={description}
           onChange={(e) => setDescription(e.target.value)}
           placeholder="Paste the complete responsibilities, essential criteria, practical requirements and benefits…"

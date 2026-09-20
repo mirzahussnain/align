@@ -10,10 +10,8 @@ import {
   profileCompleteness,
   resolveProfileId,
 } from '@/features/dashboard/data/load-profile';
-import { getStorageUsage } from '@/shared/services/storage-quota';
-import { getUsage } from '@/shared/services/usage-meter';
 import { getEntitlementSnapshot } from '@/shared/entitlements/server';
-import { resolveBillingAccess } from '@/shared/billing/access';
+import { getUsage } from '@/shared/services/usage-meter';
 
 export const dynamic = 'force-dynamic';
 
@@ -27,13 +25,14 @@ export default async function DashboardPage({
   const params = await searchParams;
   const requestedProfile = Array.isArray(params.profile) ? params.profile[0] : params.profile;
   const requestedTab = Array.isArray(params.tab) ? params.tab[0] : params.tab;
+  if (requestedTab === 'billing') redirect('/dashboard/settings/billing');
   const requestedAnalysis = Array.isArray(params.analysis) ? params.analysis[0] : params.analysis;
-  const tabs = ['overview', 'analyze', 'job_match', 'profile', 'ats', 'job_matches', 'cvs', 'billing'] as const;
+  const tabs = ['overview', 'analyze', 'job_match', 'profile', 'ats', 'job_matches', 'cvs'] as const;
   const initialTab = tabs.find((tab) => tab === requestedTab);
   const userId = session.user.id;
   const profileId = await resolveProfileId(userId, requestedProfile);
 
-  const [atsAnalyses, jobMatches, cvs, profileData, profiles, entitlements] = await Promise.all([
+  const [atsAnalyses, jobMatches, cvs, profileData, profiles, entitlements, usage] = await Promise.all([
     prisma.atsAnalysis.findMany({
       where: { userId, OR: [{ profileId }, { profileId: null }] },
       orderBy: { createdAt: 'desc' },
@@ -84,13 +83,9 @@ export default async function DashboardPage({
     loadProfileData(userId, requestedProfile),
     listProfiles(userId),
     getEntitlementSnapshot(userId),
+    getUsage(userId),
   ]);
 
-  const [storage, usage, billing] = await Promise.all([
-    getStorageUsage(userId, entitlements.plan),
-    getUsage(userId),
-    resolveBillingAccess(userId),
-  ]);
   const reconciliation = entitlements.capabilities.profile_reconciliation;
 
   return (
@@ -136,20 +131,10 @@ export default async function DashboardPage({
         maxProfiles: entitlements.capabilities.additional_career_profiles.limit ?? 1,
         profileReasoning: reconciliation.allowed,
         reasoningRemaining: reconciliation.mode === 'quota' ? (reconciliation.remaining ?? 0) : reconciliation.allowed ? null : 0,
-        storage,
         usage,
         profileComplete: isProfileComplete(profileData),
         profileCompleteness: profileCompleteness(profileData),
         aiAnalysesLimit: entitlements.capabilities.ai_enhanced_ats_analysis.limit ?? null,
-        billing: {
-          plan: billing.effectivePlan,
-          status: billing.status,
-          cancelAtPeriodEnd: billing.cancelAtPeriodEnd,
-          accessEndsAt: billing.accessEndsAt?.toISOString() ?? null,
-          graceEndsAt: billing.graceEndsAt?.toISOString() ?? null,
-          checkoutAvailable: billing.checkoutAvailable,
-          portalAvailable: billing.portalAvailable,
-        },
       }}
     />
   );

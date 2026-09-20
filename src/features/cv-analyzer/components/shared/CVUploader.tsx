@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ANALYSIS_LIMITS } from '@/shared/config/analysis-domain';
+import { UPLOAD_POLICY } from '@/shared/policies';
 import { useDropzone } from 'react-dropzone';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Upload, FileText, X, Sparkles, Loader2 } from 'lucide-react';
@@ -101,7 +101,7 @@ export default function CVUploader({ mode = 'ats', onAnalysisComplete, profileId
     setError(null);
     if (acceptedFiles.length > 0) {
       const f = acceptedFiles[0];
-      if (f.size > ANALYSIS_LIMITS.maxDirectMultipartCvBytes) {
+      if (f.size > UPLOAD_POLICY.cv.maxDirectMultipartBytes) {
         setError('File too large. Maximum size is 4MB.');
         return;
       }

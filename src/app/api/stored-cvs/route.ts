@@ -4,7 +4,8 @@ import { APIError } from '@/shared/utils/api-error';
 import { withCvPipeline } from '@/shared/services/cv-pipeline-http';
 import { checkCapability } from '@/shared/entitlements/server';
 import { listStoredCvs, extractStoredCvRecord } from '@/shared/services/stored-cv';
-import { CvPipelineError, MAX_CV_UPLOAD_BYTES } from '@/shared/services/cv-extraction';
+import { CvPipelineError } from '@/shared/services/cv-extraction';
+import { UPLOAD_POLICY } from '@/shared/policies';
 import { blockOnboarding } from '@/shared/services/onboarding';
 
 /** Stored-CV listing and extraction; uploads use the intent routes. */
@@ -20,7 +21,11 @@ export async function GET(request: Request) {
     ]);
     // Usage comes from the server with the list, so no component has to hard-code
     // "3 of 3" or guess what the plan allows.
-    return NextResponse.json({ storedCvs, capacity: decision, maxBytes: MAX_CV_UPLOAD_BYTES });
+    return NextResponse.json({
+      storedCvs,
+      capacity: decision,
+      maxBytes: UPLOAD_POLICY.cv.maxBytes,
+    });
   });
 }
 

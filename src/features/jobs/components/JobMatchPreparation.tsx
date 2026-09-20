@@ -2,6 +2,7 @@
 
 import { useRef, useState } from 'react';
 import Button from '@/shared/components/ui/Button';
+import { ANALYSIS_LIMITS, UPLOAD_POLICY } from '@/shared/policies';
 import type { CVAnalysisResult } from '@/shared/types/cv';
 
 type Track = { profileId: string; label: string };
@@ -95,10 +96,10 @@ export default function JobMatchPreparation({
             </select>
           </label>
           <label className="block font-medium">CV revision
-            <input type="file" accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" onChange={(event) => { setFile(event.target.files?.[0] ?? null); operationId.current = crypto.randomUUID(); }} className="mt-1 block min-h-11 w-full rounded-xl border border-border-subtle p-2 text-sm" />
+            <input type="file" accept={UPLOAD_POLICY.cv.fileInputAccept} onChange={(event) => { setFile(event.target.files?.[0] ?? null); operationId.current = crypto.randomUUID(); }} className="mt-1 block min-h-11 w-full rounded-xl border border-border-subtle p-2 text-sm" />
           </label>
           <label className="block font-medium">Job description
-            <textarea value={description} onChange={(event) => setDescription(event.target.value)} maxLength={50_000} className="mt-1 min-h-44 w-full rounded-xl border border-border-subtle bg-transparent p-3 text-sm font-normal" />
+            <textarea value={description} onChange={(event) => setDescription(event.target.value)} maxLength={ANALYSIS_LIMITS.maxJobDescriptionCharacters} className="mt-1 min-h-44 w-full rounded-xl border border-border-subtle bg-transparent p-3 text-sm font-normal" />
           </label>
           {usesPrivateOverride && <p className="rounded-xl bg-violet-50 p-3 text-xs leading-5 text-violet-800">This edited description is private to your Job Match. It will not change the shared vacancy.</p>}
           {!usesPrivateOverride && descriptionAvailability !== 'FULL' && (

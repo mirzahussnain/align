@@ -62,7 +62,8 @@ export interface CVAnalysisResult {
   // Why the optional AI enrichment layer did not run, for honest UI provenance:
   // 'quota' — the user's AI allowance is exhausted (rule-based score served);
   // 'error' — the provider was unavailable (rule-based score served, retryable).
-  aiSkipped?: 'quota' | 'error';
+  // 'verification_required' means email verification gated provider work.
+  aiSkipped?: 'quota' | 'error' | 'verification_required';
   
   // Job Matcher specific fields
   mode?: 'ats' | 'job_match';

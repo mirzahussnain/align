@@ -12,7 +12,10 @@ const tx = {
 };
 
 vi.mock('@/shared/lib/prisma', () => ({
-  prisma: { $transaction: vi.fn(async (callback: (client: typeof tx) => unknown) => callback(tx)) },
+  prisma: {
+    user: { findUnique: vi.fn(async () => ({ emailVerified: true })) },
+    $transaction: vi.fn(async (callback: (client: typeof tx) => unknown) => callback(tx)),
+  },
 }));
 vi.mock('@/shared/billing/access', () => ({
   resolveBillingAccess: vi.fn(async () => ({ effectivePlan: 'FREE' })),

@@ -60,6 +60,11 @@ const CHECKS: Check[] = [
   { name: 'GOOGLE_CLIENT_ID', required: false, note: 'Google sign-in (optional)' },
   { name: 'GOOGLE_CLIENT_SECRET', required: false, note: 'Google sign-in (optional)' },
 
+  // Transactional email is optional for non-email local work. Production must
+  // provide both values because credential verification and reset are enabled.
+  { name: 'RESEND_API_KEY', required: false, note: 'Resend server API key (required in production)' },
+  { name: 'AUTH_EMAIL_FROM', required: false, note: 'Transactional sender address (required in production)' },
+
   // ── Object storage ─────────────────────────────────────────────────────────
   {
     name: 'S3_ENDPOINT',
@@ -207,6 +212,12 @@ if (process.env.STRIPE_SECRET_KEY) {
 }
 
 if (process.env.NODE_ENV === 'production') {
+  if (!process.env.RESEND_API_KEY) {
+    errors.push('RESEND_API_KEY is required in production for lifecycle email delivery');
+  }
+  if (!process.env.AUTH_EMAIL_FROM) {
+    errors.push('AUTH_EMAIL_FROM is required in production for lifecycle email delivery');
+  }
   if (!process.env.UPSTASH_REDIS_REST_URL || !process.env.UPSTASH_REDIS_REST_TOKEN) {
     errors.push('UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN are required in production');
   }

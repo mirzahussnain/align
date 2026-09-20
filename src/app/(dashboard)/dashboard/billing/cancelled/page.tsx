@@ -18,7 +18,7 @@ export default function CheckoutCancelledPage() {
           No payment was taken and your current plan hasn&apos;t changed. You can upgrade whenever you&apos;re ready.
         </p>
         <Link
-          href="/dashboard?tab=billing"
+          href="/dashboard/settings/billing"
           className="mt-6 inline-block w-full rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-bold text-white hover:bg-slate-800 shadow-sm transition"
         >
           Back to billing

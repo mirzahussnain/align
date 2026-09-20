@@ -4,15 +4,15 @@ import { auth } from '@/shared/lib/auth';
 import { applyRateLimit, analysisLimiter } from '@/shared/lib/rate-limit';
 import { withCvPipeline } from '@/shared/services/cv-pipeline-http';
 import { createCvUploadIntent } from '@/shared/services/cv-upload-intent';
-import { CvPipelineError, MAX_CV_UPLOAD_BYTES } from '@/shared/services/cv-extraction';
+import { CvPipelineError } from '@/shared/services/cv-extraction';
+import { UPLOAD_POLICY } from '@/shared/policies';
 
 const Input = z.object({
   filename: z.string().trim().min(1).max(200),
-  mimeType: z.enum([
-    'application/pdf',
-    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-  ]),
-  sizeBytes: z.number().int().positive().max(MAX_CV_UPLOAD_BYTES),
+  mimeType: z.string().refine((value) =>
+    UPLOAD_POLICY.cv.acceptedMimeTypes.some((mimeType) => mimeType === value)
+  ),
+  sizeBytes: z.number().int().positive().max(UPLOAD_POLICY.cv.maxBytes),
 }).strict();
 
 export async function POST(request: Request) {

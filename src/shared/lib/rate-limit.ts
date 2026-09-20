@@ -20,6 +20,10 @@ const isConfigured =
 
 const redis = isConfigured ? Redis.fromEnv() : null;
 
+export function getRateLimitRedis(): Redis | null {
+  return redis;
+}
+
 const createRateLimiter = (requests: number, window: `${number} s` | `${number} m` | `${number} h`) =>
   redis
     ? new Ratelimit({
@@ -36,6 +40,7 @@ export const publicAtsLimiter = createRateLimiter(3, '24 h'); // network-level a
 
 // 🟡 Billing — user-initiated checkout/portal actions (webhooks are NOT limited)
 export const billingLimiter  = createRateLimiter(10, '1 m'); // 10 billing actions per minute
+export const accountActionLimiter = createRateLimiter(5, '1 h'); // deliberate sensitive account actions
 
 // 🟡 Data fetching — relaxed limits
 export const jobsLimiter     = createRateLimiter(30, '1 m'); // 30 job fetches per minute

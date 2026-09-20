@@ -1,5 +1,7 @@
 # Job Board Completion Programme — Stage A Audit
 
+> Historical audit snapshot. The job-board programme described here has since delivered durable snapshots, saved jobs, companies, sponsor evidence, match preparation, and Redis-backed caching. Use [Architecture](./ARCHITECTURE.md) and [Project status](./PROJECT_STATUS.md) for the current implementation.
+
 Repository audit performed 2026-07-28 against branch `phase0-completeness`.
 No code was modified. Baseline: **1232 tests passing / 70 skipped (110 files)**,
 `tsc --noEmit` clean, `eslint` 2 pre-existing errors + 23 warnings.

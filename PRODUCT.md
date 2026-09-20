@@ -2,6 +2,8 @@
 
 <!-- impeccable:product-schema 1 -->
 
+> Current product reference as of 20 September 2026. For implementation status and system boundaries, see [Project status](docs/PROJECT_STATUS.md) and [Architecture](docs/ARCHITECTURE.md).
+
 ## Platform
 
 web
@@ -29,6 +31,24 @@ Users may begin from an existing CV or build their profile manually. They may be
 - Onboarding supports both CV-assisted profile creation and manual profile creation.
 - Product guidance must not imply that sponsorship or eligibility is guaranteed.
 
+## Implemented Product Areas
+
+- **Career Profile:** structured, reusable candidate evidence with multiple career directions and practical employability facts.
+- **ATS Analysis:** deterministic document checks combined with schema-constrained AI feedback and versioned history.
+- **Job Match:** requirement-level comparison against a selected profile, including evidence mapping, gaps, and rewrite strategy.
+- **CV Generation:** evidence-backed DOCX generation and regeneration with provenance validation and private downloads.
+- **Job Intelligence:** multi-provider UK job discovery, saved jobs, company views, job descriptions, sponsor evidence, and matching hand-off.
+- **Account Lifecycle:** credential and Google authentication, verification, lifecycle email, password/session controls, billing, and deliberate deletion.
+- **Commercial Access:** Free and Pro entitlements, usage limits, retention rules, reservations, and Stripe-backed subscription state.
+
+## Trust Boundaries
+
+- User-confirmed evidence is authoritative. AI output may organise, compare, or rewrite it but must not create unsupported claims.
+- Provider job data and sponsor-register matches carry source and freshness context.
+- Align does not guarantee employment, interviews, salary, sponsorship, immigration eligibility, or ATS outcomes.
+- Checkout completion alone does not grant Pro access; signed billing events determine effective access.
+- Raw CVs and generated documents are private user data and must not be exposed through public object URLs.
+
 ## Brand Commitments
 
 - Product name: Align.
@@ -39,7 +59,7 @@ Users may begin from an existing CV or build their profile manually. They may be
 
 - Existing application code and onboarding flows in `src/features/onboarding`.
 - Existing design tokens and UI primitives in `src/app/globals.css` and `src/shared/components/ui`.
-- A user-provided onboarding reference video at `C:\Users\Hussnain Ali\Downloads\large-thumbnail20250212-991569-x0npjq.mp4`, supplied for pacing and interaction principles only.
+- Historical onboarding research is summarised in `docs/ONBOARDING_UX_AUDIT.md`; local reference media is not a repository dependency.
 - No customer testimonials, benchmarks, or commercial claims were provided and none should be fabricated.
 
 ## Product Principles

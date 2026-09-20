@@ -1,200 +1,164 @@
 <div align="center">
-  <img src="public/assets/svgs/logo.svg" alt="Align Logo" width="100" height="100" />
-  
-  # Align — UK Tech Career Intelligence
-  
-  **The ultimate AI-powered ATS calibration and career intelligence platform for the UK Tech Market.**
+  <img src="public/assets/svgs/logo.svg" alt="Align logo" width="92" height="92" />
 
-  [![Next.js](https://img.shields.io/badge/Next.js-16.2-black?style=for-the-badge&logo=next.js)](https://nextjs.org/)
-  [![React](https://img.shields.io/badge/React-19.2-61DAFB?style=for-the-badge&logo=react&logoColor=black)](https://react.dev/)
-  [![TypeScript](https://img.shields.io/badge/TypeScript-5.0-3178C6?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
-  [![Tailwind CSS](https://img.shields.io/badge/Tailwind_v4-38B2AC?style=for-the-badge&logo=tailwind-css&logoColor=white)](https://tailwindcss.com/)
+  <h1>Align</h1>
+
+  <p><strong>Evidence-led CV analysis and UK career intelligence.</strong></p>
+  <p>Build a truthful career profile, understand role fit, and create stronger applications without inventing experience.</p>
+
+  <p>
+    <a href="docs/PROJECT_STATUS.md"><img alt="Status: production readiness" src="https://img.shields.io/badge/status-production%20readiness-0891b2?style=flat-square" /></a>
+    <a href="https://nextjs.org/"><img alt="Next.js 16.2" src="https://img.shields.io/badge/Next.js-16.2-000000?style=flat-square&logo=next.js" /></a>
+    <a href="https://react.dev/"><img alt="React 19.2" src="https://img.shields.io/badge/React-19.2-20232a?style=flat-square&logo=react&logoColor=61dafb" /></a>
+    <a href="https://www.typescriptlang.org/"><img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-strict-3178c6?style=flat-square&logo=typescript&logoColor=white" /></a>
+    <a href="https://www.prisma.io/"><img alt="Prisma 7.8" src="https://img.shields.io/badge/Prisma-7.8-2d3748?style=flat-square&logo=prisma" /></a>
+    <a href="https://vitest.dev/"><img alt="Vitest" src="https://img.shields.io/badge/tested%20with-Vitest-6e9f18?style=flat-square&logo=vitest&logoColor=white" /></a>
+  </p>
+
+  <p>
+    <a href="#what-align-does">Product</a> &middot;
+    <a href="docs/ARCHITECTURE.md">Architecture</a> &middot;
+    <a href="docs/DEPLOYMENT.md">Deployment</a> &middot;
+    <a href="docs/PROJECT_STATUS.md">Project status</a> &middot;
+    <a href="DESIGN.md">Design system</a>
+  </p>
 </div>
 
-<br />
+![Align homepage hero showing the career-intelligence interface, CV calibration cards, and UK tech job tools](docs/images/align-repository-cover.png)
 
-## 🌟 Overview
+## What Align does
 
-**Align** is an enterprise-grade CV analyzer and career intelligence application specifically tailored for software engineers and technology professionals targeting the UK market. By combining precise rule-based ATS parsing with deep semantic AI models, Align provides actionable insights to bypass applicant tracking systems, align with UK tech standards, and significantly improve interview callback rates.
+Align combines a candidate's real evidence with practical UK employability context. It is designed for international and UK-based early-career job seekers who need useful application guidance without fabricated claims or false certainty.
 
----
+| Area | Capability |
+| --- | --- |
+| Career profile | Manual or CV-assisted onboarding, structured evidence, practical constraints, multiple career directions, and resumable progress |
+| ATS analysis | Deterministic document checks plus schema-constrained AI feedback, versioned results, and retained history |
+| Job matching | Evidence-aware role comparison, requirement mapping, skill gaps, scoring ledger, and rewrite strategy |
+| CV generation | Profile-backed DOCX generation, provenance validation, bounded repair, private storage, and downloads |
+| Job intelligence | Adzuna, Reed, and Jooble search; saved jobs; company records; descriptions; and matching hand-off |
+| UK sponsorship | GOV.UK sponsor-register discovery, indexed organisation resolution, and clearly qualified evidence |
+| Account lifecycle | Credential and Google auth, verification, lifecycle email, password/session controls, billing, and deliberate deletion |
+| Commercial controls | Stripe billing, central entitlements, quota reservations, retention limits, and usage presentation |
 
-## 🚀 Key Features
+Align does not promise employment, sponsorship, visa eligibility, salary outcomes, or ATS success. Provider data and AI output are treated as inputs to transparent product decisions, not as authority.
 
-*   **ATS Alignment Engine**: Upload your PDF CV to instantly receive a comprehensive scoring audit. Analyzes formatting, readability, repetition, and UK compliance rules.
-*   **Semantic AI Feedback**: Powered by advanced LLMs (Gemini / Groq), Align performs a STAR-method review on your impact statements, suggesting highly optimized bullet rewrites.
-*   **Job Matcher AI**: Paste a target Job Description alongside your CV to receive a precise match percentage, skill gap analysis, and tailored recommendations.
-*   **UK Tech Intelligence**: Discover tech jobs, track visa sponsorship trends, and benchmark your salary based on Adzuna, Reed, and GOV.UK data.
-*   **Enterprise UI/UX**: Built with Framer Motion and modern Tailwind CSS design principles for a dynamic, glassmorphic, and highly engaging user experience.
+## Architecture
 
----
-
-## 🎯 Core Functionalities & Capabilities
-
-Align is designed to bridge the gap between candidate resumes and the strict, automated filtering systems used by modern UK tech recruiters.
-
-### 1. Granular ATS Parsing & Validation
-* **Invisible Character Detection:** Detects and warns about zero-width characters (like `\u200b`) that silently break ATS parsers.
-* **Format Compliance:** Evaluates page length, column layouts, margin sizing, and standard heading naming conventions.
-* **Repetition & Cliché Checking:** Highlights overused buzzwords (e.g., "Hardworking", "Team player") and calculates keyword density to ensure an organic profile.
-* **UK Discrimination Filters:** Automatically flags sensitive data (Age, Marital Status, Headshots) that violate the UK Equality Act 2010 and cause instant rejections.
-
-### 2. Semantic STAR-Method Auditing
-* **Impact Statement Scoring:** Uses AI to identify if bullet points follow the "Situation, Task, Action, Result" framework.
-* **One-Click Rewrites:** Provides instantly rewritten bullet points that inject quantifiable metrics and active verbs into weak descriptions.
-* **Tech Stack Verification:** Cross-references the skills listed in your summary against the actual technologies mentioned in your experience.
-
-### 3. Precision Job Matching
-* **JD vs. CV Mapping:** Paste a job description to receive a targeted gap analysis indicating exactly which hard skills and soft skills are missing from your CV.
-* **Skill Weighting:** Evaluates missing keywords based on priority (e.g., distinguishing between a "nice-to-have" tool and a "core requirement" like React or TypeScript).
-
-### 4. Career Market Intelligence
-* **UK Visa Sponsorship Index:** Tracks companies currently on the GOV.UK sponsor register to help international candidates filter jobs effectively.
-* **Real-time Salary Estimator:** Dynamically calculates potential salary ranges (London vs. Regional) based on years of experience, current ATS score, and Adzuna API market data.
-
----
-
-## 🛠️ Technology Stack
-
-*   **Framework**: [Next.js 16 (App Router)](https://nextjs.org/)
-*   **Library**: [React 19](https://react.dev/)
-*   **Language**: [TypeScript](https://www.typescriptlang.org/)
-*   **Styling**: [Tailwind CSS v4](https://tailwindcss.com/) & [Framer Motion](https://www.framer.com/motion/)
-*   **AI Integration**: [Google GenAI (Gemini)](https://ai.google.dev/) & [Groq SDK](https://groq.com/)
-*   **Rate Limiting**: [@upstash/ratelimit](https://upstash.com/) with Redis
-*   **File Parsing**: `pdf-parse` & `docx`
-
----
-
-## 🚦 Getting Started
-
-### Prerequisites
-`Node.js` (v20+) and `Docker` (for the local database).
-
-### 1. Clone the repository
-```bash
-git clone https://github.com/your-username/cv-analyzer.git
-cd cv-analyzer
+```mermaid
+flowchart LR
+  Browser --> Next[Next.js App Router]
+  Next --> Auth[Better Auth]
+  Next --> DB[(PostgreSQL)]
+  Next --> Storage[(R2 / MinIO)]
+  Next --> Redis[(Redis)]
+  Next --> Providers[AI / Jobs / Email / Stripe]
 ```
 
-### 2. Install Dependencies
+The UI is organised by user journey under `src/features`. Cross-feature policies, provider adapters, storage, billing, entitlements, and persistence boundaries live under `src/shared`. PostgreSQL is the durable source of truth; Redis is used only for distributed protection and disposable job-search state.
+
+Read the full [architecture guide](docs/ARCHITECTURE.md) for route boundaries, data flows, infrastructure, and security invariants.
+
+## Technology
+
+- Next.js 16.2 App Router and React 19.2
+- TypeScript, Tailwind CSS 4, Framer Motion, and Recharts
+- PostgreSQL with Prisma 7.8
+- Better Auth with credential and Google OAuth flows
+- Google Gemini with Groq fallback
+- S3-compatible object storage: MinIO locally and Cloudflare R2 in production
+- Upstash REST rate limiting and Redis job-board caching
+- Resend lifecycle email and Stripe billing
+- Vitest, Testing Library, and opt-in backing-service integration tests
+
+## Local development
+
+### Prerequisites
+
+- Node.js 20 or later
+- Docker with Compose
+
+### Install and configure
+
 ```bash
+git clone https://github.com/vyndra-tech/align.git
+cd align
 npm install
 ```
 
-### 3. Environment Variables
-Create a `.env.local` file in the root of the project and add the necessary API keys:
-```env
-# AI Models
-GEMINI_API_KEY=your_gemini_api_key
-GROQ_API_KEY=your_groq_api_key
-
-# Job Market APIs
-REED_API_KEY=your_reed_api_key
-ADZUNA_APP_ID=your_adzuna_app_id
-ADZUNA_APP_KEY=your_adzuna_app_key
-
-# Upstash Rate Limiting (Optional for dev)
-UPSTASH_REDIS_REST_URL=your_upstash_url
-UPSTASH_REDIS_REST_TOKEN=your_upstash_token
-```
-
-### 4. Start the Local Database
-Development runs against a local Postgres container, **not** the hosted Neon
-instance — so resetting the schema or generating throwaway test analyses never
-pollutes real user data.
+Copy `.env.example` to `.env.local`, then add any provider keys needed for the flow you are developing. Local Postgres, MinIO, and Redis values are already documented in the example.
 
 ```bash
-npm run db:setup   # starts Postgres, applies migrations, generates the client
-```
-
-The container uses the `pgvector` image (extensions `vector` and `pg_trgm` are
-enabled on first boot), and binds host port **5433** so it cannot collide with a
-Postgres already installed on your machine. Set in `.env.local`:
-
-```env
-DATABASE_URL="postgresql://align:align@localhost:5433/align?schema=public"
-```
-
-| Command | What it does |
-| --- | --- |
-| `npm run db:up` | Start the container and wait until it's ready |
-| `npm run db:down` | Stop it, **keeping** the data |
-| `npm run db:nuke` | Stop it and **delete the volume** — a truly clean slate |
-| `npm run db:reset` | Drop, re-apply every migration, on the current `DATABASE_URL` |
-| `npm run db:migrate` | Create a new migration from schema changes |
-| `npm run db:studio` | Browse the data in Prisma Studio |
-
-> **Connecting to Neon instead:** point `DATABASE_URL` at the pooled endpoint and
-> also set `DIRECT_URL` to the same host with `-pooler` removed. Prisma Migrate
-> needs the direct connection for DDL and advisory locks, which PgBouncer does
-> not reliably support; the app keeps using the pooled URL. Treat `db:reset` and
-> `db:nuke` as local-only commands.
-
-### 5. Start Redis (Job Board cache)
-
-The Job Board caches provider results, merged search pages, search sessions and
-its refresh lock in Redis. It holds **nothing durable** — every key can be
-rebuilt by searching again, so losing the lot costs latency and nothing else.
-
-```bash
-npm run redis:up   # starts Redis and waits for it to answer PING
-```
-
-Set in `.env.local`:
-
-```env
-REDIS_URL=redis://localhost:6379
-```
-
-> **Leaving `REDIS_URL` unset is supported.** Search still queries the providers
-> and still returns results; a structured warning is logged once. What you lose
-> is caching, cross-instance sessions and the shared refresh lock — so searches
-> are slower and **Load more** reports an expired session (HTTP 409) rather than
-> silently repeating page one. Note this is a *different* variable from
-> `UPSTASH_REDIS_REST_URL`, which is Upstash's REST endpoint used only by rate
-> limiting.
-
-| Command | What it does |
-| --- | --- |
-| `npm run redis:up` | Start the container and wait until it answers `PING` |
-| `npm run redis:down` | Stop it, **keeping** the append-only data |
-| `npm run redis:ping` | Health check — prints `PONG` |
-| `npm run redis:keys` | Inspect: list every `align:*` key currently cached |
-| `npm run redis:flush` | Empty local Redis — the safe way to force a cold search |
-| `npm run test:redis` | Run the Redis integration tests against the container |
-| `npm run dev:up` | Start Postgres, MinIO **and** Redis together |
-| `npm run dev:nuke` | Stop everything and delete all volumes, Redis included |
-
-Inspect a single cached value while debugging:
-
-```bash
-docker compose exec redis redis-cli get "align:v1:jobs:session:<sessionId>"
-docker compose exec redis redis-cli ttl "align:v1:jobs:search:<queryHash>:1"
-```
-
-### 6. Run the Development Server
-```bash
+npm run dev:up
+npm run db:setup
 npm run dev
 ```
-Open [http://localhost:3000](http://localhost:3000) to view the application.
 
----
+The application runs at `http://localhost:3000`. MinIO's local console is available at `http://localhost:9001` with the development credentials from `.env.example`.
 
-## 🏗️ Architecture & Structure
+### Useful commands
 
-The codebase strictly adheres to enterprise scalability principles, enforcing modularity and the DRY principle:
+| Command | Purpose |
+| --- | --- |
+| `npm run dev` | Start the Next.js development server |
+| `npm run dev:up` | Start Postgres, MinIO, bucket initialisation, and Redis |
+| `npm run dev:down` | Stop local backing services without deleting their data |
+| `npm run dev:nuke` | Delete local backing-service volumes and recreate from a clean state |
+| `npm run db:deploy` | Apply committed Prisma migrations |
+| `npm run db:seed` | Seed local development data |
+| `npm test` | Run the Vitest suite |
+| `npm run typecheck` | Run TypeScript without emitting files |
+| `npm run build` | Produce a production Next.js build |
+| `npm run check:env` | Validate environment names, shapes, and combinations |
+| `npm run check:env:live` | Probe storage credentials, signing, and bucket privacy |
 
-*   **`src/app/`**: Next.js App Router definitions, API routes, and global layouts.
-*   **`src/features/`**: Domain-specific feature modules (e.g., `cv-analyzer`, `landing-page`).
-*   **`src/shared/`**: Global shared resources, highly decoupled from specific business logic:
-    *   `/components`: Reusable UI elements, heavily utilizing `Tailwind` and `framer-motion`.
-    *   `/hooks`: Decoupled React state management and side effects.
-    *   `/lib`: Third-party SDK integrations (Upstash, AI clients).
-    *   `/services`: Asynchronous fetchers and database queries.
-    *   `/utils`: Pure, stateless formatting and helper functions.
+`DATABASE_URL` must point at local Postgres before running destructive development commands. The repository includes a guard that refuses local reset operations when a production environment is detected.
 
----
+## Environment groups
 
-## 📄 License
-This project is licensed under the MIT License.
+The complete production contract lives in [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md). At a glance:
+
+- Database: `DATABASE_URL`, `DIRECT_URL`
+- Auth: `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL`, optional Google credentials
+- Email: `RESEND_API_KEY`, `AUTH_EMAIL_FROM`
+- AI: `GEMINI_API_KEY`, recommended `GROQ_API_KEY`
+- Protection/cache: Upstash REST credentials and a separate `REDIS_URL`
+- Storage: S3 endpoint, credentials, three buckets, and the public avatar base URL
+- Jobs: Adzuna, Reed, and Jooble credentials
+- Billing: Stripe secret, webhook secret, publishable key, price ID, and public app URL
+
+Never commit `.env.local`, production secrets, downloaded ESCO datasets, CV fixtures containing personal data, or generated development logs.
+
+## Repository map
+
+```text
+src/app/                 Next.js pages, layouts, and route handlers
+src/features/            User-journey UI and client/server compositions
+src/shared/              Domain services, policies, adapters, and UI primitives
+prisma/                  Schema and ordered migrations
+scripts/                 Environment, import, audit, and maintenance commands
+data/sponsors/           Pinned sponsor-register fallback data
+docs/                    Architecture, deployment, status, and runbooks
+docker/                  Local backing-service initialisation
+```
+
+## Product integrity
+
+- User evidence remains authoritative; AI may organise or rewrite it but may not invent it.
+- Raw CVs and generated documents stay in private buckets and use short-lived signed URLs.
+- Provider-backed work requires a verified identity, rate-limit approval, and entitlement approval.
+- Billing access is granted only after verified webhook convergence.
+- Sponsorship evidence is dated and qualified, never presented as a guarantee.
+- Accessibility, reduced motion, keyboard use, clear errors, and non-alarmist language are product requirements.
+
+## Documentation
+
+- [Current project status](docs/PROJECT_STATUS.md)
+- [System architecture](docs/ARCHITECTURE.md)
+- [Production deployment](docs/DEPLOYMENT.md)
+- [Product principles](PRODUCT.md)
+- [Design system](DESIGN.md)
+- [Object-storage configuration](docs/deployment/object-storage.md)
+- [Reservation and reliability smoke tests](docs/RESERVATION_SMOKE.md)
+- [Golden CV review](docs/STAGE4_GOLDEN_CV_REVIEW.md)
+- [ESCO skill taxonomy](docs/ESCO_SKILLS.md)

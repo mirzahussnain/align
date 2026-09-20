@@ -4,7 +4,7 @@ import { auth } from '@/shared/lib/auth';
 import { listProfiles } from '@/features/dashboard/data/load-profile';
 import { checkCapability } from '@/shared/entitlements/server';
 import { listStoredCvs } from '@/shared/services/stored-cv';
-import { MAX_CV_UPLOAD_BYTES } from '@/shared/services/cv-extraction';
+import { UPLOAD_POLICY } from '@/shared/policies';
 import { ImportCvFlow } from '@/features/onboarding/components/ImportCvFlow';
 import type { StoredCvSummary } from '@/features/onboarding/api';
 
@@ -47,7 +47,7 @@ export default async function ImportCvPage() {
         storedCvs={JSON.parse(JSON.stringify(storedCvs)) as StoredCvSummary[]}
         storedCvCapacity={storedCvCapacity}
         evidenceCapacity={evidenceCapacity}
-        maxUploadBytes={MAX_CV_UPLOAD_BYTES}
+        maxUploadBytes={UPLOAD_POLICY.cv.maxBytes}
       />
     </main>
   );

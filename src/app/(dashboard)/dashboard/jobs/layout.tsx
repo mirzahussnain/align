@@ -1,6 +1,6 @@
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
-import JobBoardDashboardShell from "@/features/job-board/components/JobBoardDashboardShell";
+import DashboardRouteShell from "@/features/dashboard/components/DashboardRouteShell";
 import { listProfiles } from "@/features/dashboard/data/load-profile";
 import { getEntitlementSnapshot } from "@/shared/entitlements/server";
 import { auth } from "@/shared/lib/auth";
@@ -19,7 +19,7 @@ export default async function JobBoardLayout({
     profiles.find((profile) => profile.isDefault) ?? profiles[0];
 
   return (
-    <JobBoardDashboardShell
+    <DashboardRouteShell
       user={{
         name: session.user.name,
         email: session.user.email,
@@ -34,6 +34,6 @@ export default async function JobBoardLayout({
       }
     >
       {children}
-    </JobBoardDashboardShell>
+    </DashboardRouteShell>
   );
 }

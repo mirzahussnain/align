@@ -10,6 +10,7 @@ import { assessAndPersistJobIntelligence } from "@/shared/services/job-intellige
 import { buildConfirmedCandidateFacts } from "@/shared/services/practical-compatibility-store";
 import { getJobDetailsView } from "@/shared/services/job-board-api";
 import { APIError, withErrorHandler } from "@/shared/utils/api-error";
+import { ANALYSIS_LIMITS } from "@/shared/policies";
 
 const optionalHttpsUrl = z
   .string()
@@ -34,7 +35,7 @@ const Input = z.object({
   title: z.string().trim().min(2).max(500),
   employerName: z.string().trim().min(2).max(500),
   locationText: z.string().trim().max(500).optional(),
-  description: z.string().trim().min(400).max(50_000),
+  description: z.string().trim().min(400).max(ANALYSIS_LIMITS.maxJobDescriptionCharacters),
   profileId: z.string().min(1),
 });
 

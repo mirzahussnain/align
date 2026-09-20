@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 
-export type DashboardTab = 'overview' | 'analyze' | 'job_match' | 'profile' | 'ats' | 'job_matches' | 'cvs' | 'billing';
+export type DashboardTab = 'overview' | 'analyze' | 'job_match' | 'profile' | 'ats' | 'job_matches' | 'cvs';
 export type AnalysisDomain = 'ats' | 'job_match';
 
 interface DashboardState {

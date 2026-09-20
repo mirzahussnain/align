@@ -1,6 +1,6 @@
 "use client";
 
-import { ANALYSIS_LIMITS } from "@/shared/config/analysis-domain";
+import { UPLOAD_POLICY } from "@/shared/policies";
 
 import {
   useEffect,
@@ -21,7 +21,7 @@ import { Step1VacancyForm, type StoredCvOption } from "./stepper/Step1VacancyFor
 import { Step2CheckResults } from "./stepper/Step2CheckResults";
 import { Step3AnalysisOrUpgrade } from "./stepper/Step3AnalysisOrUpgrade";
 
-const MAX_CV_BYTES = ANALYSIS_LIMITS.maxDirectMultipartCvBytes;
+const MAX_CV_BYTES = UPLOAD_POLICY.cv.maxDirectMultipartBytes;
 
 type CheckedVacancy = {
   jobSnapshotId: string;

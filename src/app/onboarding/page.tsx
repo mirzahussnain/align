@@ -7,7 +7,7 @@ import { OnboardingJourney } from '@/features/onboarding/components/OnboardingJo
 import { getOnboardingState, shouldOnboard } from '@/shared/services/onboarding';
 import { loadImportSession } from '@/shared/services/cv-import';
 import { loadOwnedExtraction, listStoredCvs } from '@/shared/services/stored-cv';
-import { MAX_CV_UPLOAD_BYTES } from '@/shared/services/cv-extraction';
+import { UPLOAD_POLICY } from '@/shared/policies';
 import { checkCapability, getUserPlan } from '@/shared/entitlements/server';
 import { entitlementsFor } from '@/shared/lib/entitlements';
 import { OCCUPATION_OPTIONS, SENIORITY_OPTIONS } from '@/shared/constants/occupation-options';
@@ -87,7 +87,7 @@ export default async function OnboardingPage() {
         retentionDays={entitlementsFor(plan).sourceRetentionDays}
         storedCvs={JSON.parse(JSON.stringify(storedCvs)) as StoredCvSummary[]}
         storedCvCapacity={storedCvCapacity}
-        maxUploadBytes={MAX_CV_UPLOAD_BYTES}
+        maxUploadBytes={UPLOAD_POLICY.cv.maxBytes}
         identity={{
           fullName: profileData.personal.fullName || (session.user.name ?? ''),
           targetRoleTitle: profileData.personal.targetRoleTitle,

@@ -1,6 +1,7 @@
 'use client';
 
 import type { CapabilityDecision } from '@/shared/entitlements/registry';
+import { UPLOAD_POLICY } from '@/shared/policies';
 
 /**
  * The onboarding client's single door to the server.
@@ -212,9 +213,12 @@ export const onboardingApi = {
     ),
 
   upload: async (file: File) => {
-    const contentType = file.name.toLowerCase().endsWith('.pdf')
-      ? 'application/pdf'
-      : 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+    const lowerFilename = file.name.toLowerCase();
+    const format = UPLOAD_POLICY.cv.formats.find((candidate) =>
+      lowerFilename.endsWith(UPLOAD_POLICY.cv.extensions[candidate])
+    );
+    if (!format) throw new OnboardingRequestError('UNSUPPORTED_FORMAT');
+    const contentType = UPLOAD_POLICY.cv.canonicalMimeTypes[format];
     const intent = await request<{
       intentId: string;
       uploadUrl: string;

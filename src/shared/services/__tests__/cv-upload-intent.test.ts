@@ -20,6 +20,31 @@ const mocks = vi.hoisted(() => {
     stat: vi.fn(),
     download: vi.fn(),
     delete: vi.fn(),
+    policy: {
+      cv: {
+        formats: ['pdf', 'docx', 'odt'],
+        maxBytes: 10 * 1024 * 1024,
+        maxDirectMultipartBytes: 4 * 1024 * 1024,
+        mimeTypes: {
+          pdf: ['application/pdf'],
+          docx: ['application/vnd.openxmlformats-officedocument.wordprocessingml.document'],
+          odt: ['application/vnd.oasis.opendocument.text'],
+        },
+        canonicalMimeTypes: {
+          pdf: 'application/pdf',
+          docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+          odt: 'application/vnd.oasis.opendocument.text',
+        },
+        extensions: { pdf: '.pdf', docx: '.docx', odt: '.odt' },
+        acceptedMimeTypes: [
+          'application/pdf',
+          'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+          'application/vnd.oasis.opendocument.text',
+        ],
+        fileInputAccept: '.pdf,.docx,.odt,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.oasis.opendocument.text',
+      },
+      avatar: { maxBytes: 5 * 1024 * 1024 },
+    },
   };
 });
 
@@ -38,6 +63,10 @@ vi.mock('@/shared/entitlements/server', async (load) => {
   const actual = await load<typeof import('@/shared/entitlements/server')>();
   return { ...actual, getUserPlan: mocks.getUserPlan };
 });
+vi.mock('@/shared/policies', async (load) => ({
+  ...(await load<typeof import('@/shared/policies')>()),
+  UPLOAD_POLICY: mocks.policy,
+}));
 
 import {
   countReservedStoredCvSlots,
@@ -87,6 +116,25 @@ describe('CV upload intent lifecycle', () => {
       key: result.objectKey,
       contentType: 'application/pdf',
       contentLength: 123,
+    });
+  });
+
+  it('derives stored-CV extension and canonical MIME metadata from the upload policy', async () => {
+    mocks.tx.cvUploadIntent.create.mockImplementation(async ({ data }) => ({ id: 'intent-1', ...data }));
+
+    const result = await createCvUploadIntent({
+      userId: 'user-1',
+      filename: 'resume.odt',
+      mimeType: 'application/vnd.oasis.opendocument.text',
+      sizeBytes: 123,
+      now: new Date('2026-09-13T12:00:00.000Z'),
+    });
+
+    expect(result.objectKey).toMatch(/^users\/user-1\/stored-cv\/intents\/[a-f0-9-]+\.odt$/);
+    expect(mocks.tx.cvUploadIntent.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        expectedMimeType: 'application/vnd.oasis.opendocument.text',
+      }),
     });
   });
 

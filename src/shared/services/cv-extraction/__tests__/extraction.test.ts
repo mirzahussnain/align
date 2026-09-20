@@ -5,8 +5,8 @@ import { CvPipelineError } from '../errors';
 import {
   detectFormatFromBytes,
   validateUploadBytes,
-  MAX_CV_UPLOAD_BYTES,
 } from '../formats';
+import { UPLOAD_POLICY } from '@/shared/policies';
 import { normaliseExtractedText, sourceExcerpt, hasUsableText } from '../text';
 import { parseCvDateRange, parseCvDateToken, findDateRange } from '../dates';
 import { matchSectionHeading, sectionCv } from '../sections';
@@ -65,7 +65,7 @@ describe('format detection and upload validation', () => {
 
   it('rejects an empty file and an oversized file', async () => {
     expect(await code(async () => validateUploadBytes('cv.pdf', Buffer.alloc(0)))).toBe('FILE_EMPTY');
-    const oversized = Buffer.concat([minimalPdf(['x']), Buffer.alloc(MAX_CV_UPLOAD_BYTES)]);
+    const oversized = Buffer.concat([minimalPdf(['x']), Buffer.alloc(UPLOAD_POLICY.cv.maxBytes)]);
     expect(await code(async () => validateUploadBytes('cv.pdf', oversized))).toBe('FILE_TOO_LARGE');
   });
 
