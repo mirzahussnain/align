@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
-import { render, screen } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { cleanup, render, screen } from '@testing-library/react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('next/navigation', () => ({
   usePathname: () => '/dashboard/settings/account',
@@ -10,7 +10,9 @@ vi.mock('next/navigation', () => ({
 import SettingsNav from '../SettingsNav';
 
 describe('SettingsNav', () => {
-  it('links every approved settings section and marks the current one', () => {
+  afterEach(cleanup);
+
+  it('links the approved settings sections without a separate privacy tab', () => {
     render(<SettingsNav />);
 
     expect(screen.getByRole('link', { name: 'Account' })).toHaveAttribute(
@@ -25,13 +27,32 @@ describe('SettingsNav', () => {
       'href',
       '/dashboard/settings/security'
     );
-    expect(screen.getByRole('link', { name: 'Data & Privacy' })).toHaveAttribute(
-      'href',
-      '/dashboard/settings/privacy'
-    );
+    expect(screen.queryByRole('link', { name: 'Data & Privacy' })).not.toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Account' })).toHaveAttribute(
       'aria-current',
       'page'
+    );
+  });
+
+  it('keeps the mobile tab row and restores the desktop side navigation styling', () => {
+    render(<SettingsNav />);
+
+    const nav = screen.getByRole('navigation', { name: 'Settings' });
+    expect(nav.parentElement).toHaveClass(
+      'rounded-2xl',
+      'border',
+      'border-slate-200',
+      'bg-white'
+    );
+    expect(nav).toHaveClass('overflow-x-auto', 'overscroll-x-contain', 'md:overflow-visible');
+    expect(nav).not.toHaveClass('overflow-y-auto');
+
+    const activeTab = screen.getByRole('link', { name: 'Account' });
+    expect(activeTab).toHaveClass(
+      'bg-slate-900/5',
+      'text-slate-900',
+      'md:bg-slate-900',
+      'md:text-white'
     );
   });
 });

@@ -39,6 +39,12 @@ describe('settings Better Auth actions', () => {
           createdAt: '2026-09-01T00:00:00.000Z',
           providers: ['credential'],
         }}
+        data={{
+          bytesUsed: 0,
+          sourceRetentionDays: 180,
+          maxGeneratedCvs: 3,
+          maxStoredAnalyses: 10,
+        }}
       />
     );
 

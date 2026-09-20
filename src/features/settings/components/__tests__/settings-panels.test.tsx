@@ -18,7 +18,6 @@ afterEach(() => cleanup());
 
 import AccountSettings from '../AccountSettings';
 import SecuritySettings from '../SecuritySettings';
-import PrivacySettings from '../PrivacySettings';
 
 describe('settings panels', () => {
   beforeEach(() => {
@@ -41,12 +40,45 @@ describe('settings panels', () => {
           createdAt: '2026-09-01T00:00:00.000Z',
           providers: ['credential'],
         }}
+        data={{
+          bytesUsed: 1536,
+          sourceRetentionDays: 180,
+          maxGeneratedCvs: 3,
+          maxStoredAnalyses: 10,
+        }}
       />
     );
 
     expect(screen.getByText('ada@example.test')).toBeVisible();
     expect(screen.getByText('Unverified')).toBeVisible();
     expect(screen.getByText('Email and password')).toBeVisible();
+  });
+
+  it('shows compact factual storage information on the Account page', () => {
+    render(
+      <AccountSettings
+        user={{
+          name: 'Ada Lovelace',
+          email: 'ada@example.test',
+          emailVerified: true,
+          createdAt: '2026-09-01T00:00:00.000Z',
+          providers: ['google'],
+        }}
+        data={{
+          bytesUsed: 1536,
+          sourceRetentionDays: 180,
+          maxGeneratedCvs: 3,
+          maxStoredAnalyses: 10,
+        }}
+      />
+    );
+
+    const section = screen.getByRole('region', { name: 'Your data' });
+    expect(section).toHaveTextContent('1.5 KB');
+    expect(section).toHaveTextContent('180 days');
+    expect(section).toHaveTextContent('Up to 3');
+    expect(section).toHaveTextContent('Up to 10');
+    expect(section).not.toHaveTextContent(/GDPR|compliant/i);
   });
 
   it('changes a credential password and revokes other sessions', async () => {
@@ -81,18 +113,4 @@ describe('settings panels', () => {
     expect(screen.queryByRole('button', { name: 'Change password' })).not.toBeInTheDocument();
   });
 
-  it('states only implemented privacy behavior', () => {
-    render(
-      <PrivacySettings
-        storage={{
-          sourceRetentionDays: 180,
-          maxGeneratedCvs: 5,
-          maxStoredAnalyses: 10,
-        }}
-      />
-    );
-
-    expect(screen.getByText(/kept for 180 days/i)).toBeVisible();
-    expect(screen.queryByText(/GDPR compliant/i)).not.toBeInTheDocument();
-  });
 });

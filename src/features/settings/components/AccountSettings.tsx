@@ -12,6 +12,23 @@ export interface AccountSettingsUser {
   providers: string[];
 }
 
+export interface AccountSettingsData {
+  bytesUsed: number;
+  sourceRetentionDays: number | null;
+  maxGeneratedCvs: number | null;
+  maxStoredAnalyses: number | null;
+}
+
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function countLimit(limit: number | null): string {
+  return limit === null ? 'No plan count limit' : `Up to ${limit}`;
+}
+
 function providerLabel(provider: string): string {
   if (provider === 'credential') return 'Email and password';
   if (provider === 'google') return 'Google';
@@ -20,9 +37,11 @@ function providerLabel(provider: string): string {
 
 export default function AccountSettings({
   user,
+  data,
   dangerZone,
 }: {
   user: AccountSettingsUser;
+  data: AccountSettingsData;
   dangerZone?: React.ReactNode;
 }) {
   const [name, setName] = useState(user.name);
@@ -110,6 +129,34 @@ export default function AccountSettings({
           Account created {new Date(user.createdAt).toLocaleDateString('en-GB')}.
         </p>
       </SettingsPanel>
+      <div role="region" aria-label="Your data">
+        <SettingsPanel title="Your data" description="Storage facts for your current plan.">
+          <dl className="grid gap-x-6 gap-y-4 text-sm sm:grid-cols-2">
+            <div>
+              <dt className="font-semibold text-slate-700">Archived file storage</dt>
+              <dd className="mt-1 tabular-nums text-slate-600">{formatBytes(data.bytesUsed)}</dd>
+            </div>
+            <div>
+              <dt className="font-semibold text-slate-700">Source CV retention</dt>
+              <dd className="mt-1 text-slate-600">
+                {data.sourceRetentionDays === null ? 'No automatic expiry' : `${data.sourceRetentionDays} days`}
+              </dd>
+            </div>
+            <div>
+              <dt className="font-semibold text-slate-700">Generated CVs stored</dt>
+              <dd className="mt-1 text-slate-600">{countLimit(data.maxGeneratedCvs)}</dd>
+            </div>
+            <div>
+              <dt className="font-semibold text-slate-700">Analyses retained</dt>
+              <dd className="mt-1 text-slate-600">{countLimit(data.maxStoredAnalyses)}</dd>
+            </div>
+          </dl>
+          <p className="mt-4 text-xs leading-5 text-slate-500">
+            Analysis history can remain available after an original source CV expires. Deleting
+            your account removes its records and stored files.
+          </p>
+        </SettingsPanel>
+      </div>
       {dangerZone}
     </div>
   );

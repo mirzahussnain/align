@@ -27,7 +27,7 @@ export default async function SettingsLayout({
       activeProfileId={activeProfile?.id ?? ''}
       maxProfiles={entitlement.capabilities.additional_career_profiles.limit ?? 1}
     >
-      <SettingsShell user={session.user}>{children}</SettingsShell>
+      <SettingsShell>{children}</SettingsShell>
     </DashboardRouteShell>
   );
 }
