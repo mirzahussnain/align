@@ -24,7 +24,7 @@
   </p>
 </div>
 
-![Abstract illustration of Align connecting career evidence, document analysis, role matching, and UK career intelligence](docs/images/align-repository-cover.png)
+![Align homepage hero showing the career-intelligence interface, CV calibration cards, and UK tech job tools](docs/images/align-repository-cover.png)
 
 ## What Align does
 
