@@ -1,5 +1,7 @@
 # Pre-deployment P1 Hardening Implementation Plan
 
+> Historical execution plan. Its checkbox state is not a current progress tracker; the planned P1 hardening is implemented. See [Project status](../../PROJECT_STATUS.md).
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox syntax for tracking.
 
 **Goal:** Close the five deployment-blocking defects without changing billing or unrelated behavior.

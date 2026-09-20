@@ -1,5 +1,7 @@
 # Pre-deployment P1 Hardening Design
 
+> Historical approved design retained for rationale. The described hardening work is implemented. See [Project status](../../PROJECT_STATUS.md) and [Architecture](../../ARCHITECTURE.md) for the current system.
+
 ## Scope
 
 Implement only the five approved P1 fixes: atomic Saved Job limits, atomic Career Profile limits, trusted provider-job persistence, bounded CV-regeneration context, and Vercel-compatible direct Stored CV uploads. Existing pricing, Stripe integration, billing models, ATS/Job Match scoring, navigation, and unrelated UI remain unchanged.

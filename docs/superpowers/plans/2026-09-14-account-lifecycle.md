@@ -1,5 +1,7 @@
 # Account Lifecycle v1 Implementation Plan
 
+> Historical execution plan. Its checkbox state is not a current progress tracker; account lifecycle v1 is implemented. See [Project status](../../PROJECT_STATUS.md).
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Add verified-email, password, session, settings, and subscription-safe account-deletion lifecycle features while keeping Better Auth and existing billing registries authoritative.

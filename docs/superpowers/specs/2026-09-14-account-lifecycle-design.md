@@ -1,5 +1,7 @@
 # Account Lifecycle v1 Design
 
+> Historical approved design. Account lifecycle v1 is implemented; later settings refinements consolidate data/privacy controls into Account. See [Project status](../../PROJECT_STATUS.md) and [Architecture](../../ARCHITECTURE.md) for current behaviour.
+
 ## Summary
 
 Align will add account lifecycle management while retaining Better Auth as the sole authentication authority. Better Auth owns email verification, password reset and change, sessions, recent-session checks, and final user deletion. Align owns pure product policies, branded Resend delivery, capability verification enforcement, settings presentation, billing-state evaluation, and private-object cleanup.

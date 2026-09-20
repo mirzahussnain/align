@@ -91,6 +91,8 @@ components:
 
 # Design System: Align
 
+> This file defines Align's visual and interaction language. It is not the system-architecture reference; see [Architecture](docs/ARCHITECTURE.md) and [Product](PRODUCT.md). Current implementation snapshot: 20 September 2026.
+
 ## Overview
 
 **Creative North Star: "The Career Workbench."**
@@ -159,6 +161,14 @@ The palette combines sober ink and slate neutrals with a single violet action vo
 
 ## Layout
 
+The application uses three stable layout contexts:
+
+- Public pages use editorial sections, strong chapter spacing, and focused calls to action.
+- Auth and onboarding use narrow task surfaces with explicit progress and low distraction.
+- Authenticated work uses the dashboard shell. Settings remain inside that shell, with a compact top bar, responsive local navigation, and one independently scrolling content region.
+
+On small screens, horizontal navigation must remain reachable without clipping. On desktop, persistent navigation may become vertical, but labels, route state, and keyboard order remain identical.
+
 Use a 4px-based spacing rhythm, with 12–20px gaps inside controls and cards and 28–36px separation between task chapters. Onboarding content is constrained to a readable 760px work area, with headings and descriptions held to shorter measures than form content.
 
 Controls and choice groups are one column by default and become two columns when width allows. Actions stack at narrow widths, then align horizontally; primary and secondary controls retain a 44px minimum touch height. Sticky action areas use a subtle divider and translucent paper background so progression stays available without obscuring content.
@@ -208,6 +218,11 @@ The form language is softly structured: 12px corners for controls and icon tiles
 - **Error / Disabled:** Errors use a pale rose status surface with readable dark rose text; disabled interactive elements reduce opacity and retain an explicit cursor state.
 
 ### Navigation
+
+- Active destinations use both a visual treatment and `aria-current=page`.
+- Route links remain links; action buttons never impersonate navigation.
+- Settings contains Account, Billing, and Security. Data and privacy controls live with Account rather than in an empty standalone destination.
+- Destructive actions belong in a clearly separated danger zone and require deliberate confirmation.
 
 On large onboarding screens, progress is a numbered vertical sequence on ink with cyan completed states and a white current marker. On narrow screens, it becomes a compact numeric label and a 4px progress bar above the task. Stage transitions preserve the user's sense of direction, while semantic progress labels remain available to assistive technology.
 

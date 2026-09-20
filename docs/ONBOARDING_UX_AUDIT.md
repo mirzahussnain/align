@@ -1,5 +1,7 @@
 # Align onboarding UX audit
 
+> Historical UX audit retained for decision context. The implemented onboarding remains authoritative; see [Architecture](./ARCHITECTURE.md) and [Project status](./PROJECT_STATUS.md) for current boundaries.
+
 ## Current step map
 
 | Existing stage | Purpose in the Career Profile | Branch | UX note |
