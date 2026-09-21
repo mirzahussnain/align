@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import Navbar from '@/shared/components/layout/Navbar';
+import LegalSectionNav from './LegalSectionNav';
 import styles from './LegalDocument.module.css';
 
 export interface LegalSection {
@@ -32,17 +33,7 @@ export default function LegalDocument({ title, summary, lastUpdated, sections }:
       <div className="mx-auto grid w-full max-w-7xl gap-12 px-4 py-16 sm:px-6 sm:py-20 lg:grid-cols-[14rem_minmax(0,46rem)] lg:justify-center lg:gap-20 lg:px-8 lg:py-24">
         <aside className="hidden lg:sticky lg:top-28 lg:block lg:self-start" aria-label={`${title} contents`}>
           <p className="text-sm font-semibold text-slate-950">On this page</p>
-          <nav className="mt-4 border-l border-slate-200" aria-label="Legal document sections">
-            <ol className="space-y-1">
-              {sections.map((section) => (
-                <li key={section.id}>
-                  <a href={`#${section.id}`} className="block border-l-2 border-transparent py-1.5 pl-4 text-sm leading-5 text-slate-500 transition-colors hover:border-cyan-500 hover:text-slate-950">
-                    {section.title}
-                  </a>
-                </li>
-              ))}
-            </ol>
-          </nav>
+          <LegalSectionNav sections={sections} ariaLabel="Legal document sections" className="mt-4" />
         </aside>
 
         <article className="min-w-0">
@@ -53,15 +44,7 @@ export default function LegalDocument({ title, summary, lastUpdated, sections }:
                 <span className="text-lg font-normal text-cyan-600 transition-transform group-open:rotate-45" aria-hidden="true">+</span>
               </span>
             </summary>
-            <nav className="mt-4 border-l border-slate-200" aria-label="Mobile legal document sections">
-              <ol className="space-y-1">
-                {sections.map((section) => (
-                  <li key={section.id}>
-                    <a href={`#${section.id}`} className="block py-1.5 pl-4 text-sm leading-5 text-slate-600">{section.title}</a>
-                  </li>
-                ))}
-              </ol>
-            </nav>
+            <LegalSectionNav sections={sections} ariaLabel="Mobile legal document sections" className="mt-4" />
           </details>
           <div className="mt-6 rounded-2xl border border-cyan-200/70 bg-cyan-50/70 p-5 text-sm leading-6 text-slate-700 sm:p-6 lg:mt-0">
             This document explains Align in plain language. It should be read together with the other legal page linked in the footer.
