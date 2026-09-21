@@ -23,13 +23,14 @@ export default function Navbar() {
   const isLinkActive = (href: string) =>
     !href.includes('#') && (pathname === href || pathname.startsWith(href));
 
-  // The navbar is always solid off the home page; only the home page needs to
-  // track scroll position for the transparent-at-top treatment.
-  const isScrolled = pathname !== '/' || scrolledPastTop;
+  // Public pages with a dark hero share the transparent-at-top treatment;
+  // inner utility pages stay solid immediately so controls remain legible.
+  const hasDarkHero = pathname === '/' || pathname === '/privacy' || pathname === '/terms';
+  const isScrolled = !hasDarkHero || scrolledPastTop;
   const isResourcesActive = MARKETING_NAV_RESOURCES.some(({ href }) => isLinkActive(href));
 
   useEffect(() => {
-    if (pathname !== '/') return;
+    if (!hasDarkHero) return;
 
     const handleScroll = () => {
       setScrolledPastTop(window.scrollY > 20);
@@ -41,7 +42,7 @@ export default function Navbar() {
       window.cancelAnimationFrame(frame);
       window.removeEventListener('scroll', handleScroll);
     };
-  }, [pathname]);
+  }, [hasDarkHero]);
 
   return (
     <nav

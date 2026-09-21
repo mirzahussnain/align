@@ -1,0 +1,72 @@
+.hero {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  min-height: 27rem;
+  background-color: #071627;
+  background-image:
+    linear-gradient(180deg, rgb(3 13 25 / 0.18), rgb(3 13 25 / 0.52)),
+    url('/assets/images/legal-header-bg.webp');
+  background-position: center;
+  background-size: cover;
+}
+
+.hero::after {
+  position: absolute;
+  inset: auto 0 0;
+  z-index: -1;
+  height: 8rem;
+  background: linear-gradient(180deg, transparent, rgb(3 13 25 / 0.42));
+  content: '';
+}
+
+.paper {
+  background:
+    radial-gradient(circle at 12% 8%, hsl(var(--accent-cyan) / 0.035), transparent 22rem),
+    hsl(var(--bg-primary));
+}
+
+.section {
+  scroll-margin-top: 7rem;
+}
+
+.section :global(p + p) {
+  margin-top: 1rem;
+}
+
+.section :global(ul) {
+  margin-top: 1rem;
+  display: grid;
+  gap: 0.75rem;
+  padding-left: 1.25rem;
+  list-style: disc;
+}
+
+.section :global(li)::marker {
+  color: hsl(var(--accent-cyan));
+}
+
+.section :global(a) {
+  color: hsl(var(--accent-cyan-hover));
+  font-weight: 600;
+  text-decoration: underline;
+  text-decoration-color: hsl(var(--accent-cyan) / 0.28);
+  text-underline-offset: 0.2em;
+}
+
+.section :global(a:hover) {
+  text-decoration-color: currentColor;
+}
+
+@media (max-width: 767px) {
+  .hero {
+    min-height: 24rem;
+    background-position: 54% center;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .section {
+    scroll-margin-top: 6rem;
+  }
+}

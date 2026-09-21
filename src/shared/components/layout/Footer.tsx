@@ -35,6 +35,8 @@ export default function Footer() {
               {link.label}
             </Link>
           ))}
+          <Link href="/privacy" className="text-slate-500 hover:text-sky-500 transition-colors duration-200 font-medium text-[14px]">Privacy Policy</Link>
+          <Link href="/terms" className="text-slate-500 hover:text-sky-500 transition-colors duration-200 font-medium text-[14px]">Terms of Service</Link>
         </div>
 
         {/* Copyright */}
