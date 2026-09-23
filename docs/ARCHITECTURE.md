@@ -95,6 +95,10 @@ sequenceDiagram
 
 Analysis domains are stored separately so ATS analysis and job matching retain their own inputs, versions, and result contracts. Generation uses canonical profile evidence and provenance checks; unsupported claims are rejected or deterministically repaired within bounded policy.
 
+Every provider attempt writes best-effort operational telemetry at the AI orchestrator boundary, including failed attempts before fallback. Telemetry contains provider/model, capability, token counts when reported, latency, stable error codes, fallback position, and estimated cost when pricing is known. It never contains prompts, CV or job text, generated output, secrets, or raw provider errors, and a telemetry failure never changes the AI result.
+
+Known structured-output limitation: profile/CV reconciliation and CV regeneration perform some domain validation after the orchestrator has accepted syntactically valid JSON. A domain-invalid but syntactically valid response in those flows may therefore stop provider fallback. This hardening pass intentionally preserves that behavior.
+
 Capability reservations protect metered work from double charging. An operation is reserved before provider work, committed after durable success, and released or expires after failure. Request idempotency and PostgreSQL locks handle retries and concurrency.
 
 ### Career profiles and evidence

@@ -1,15 +1,3 @@
-export const AI_CONFIG = {
-  gemini: {
-    apiKey: process.env.GEMINI_API_KEY || '',
-    model: 'gemini-3.5-flash',
-    fallbackModel: 'gemini-3.5-flash',
-  },
-  groq: {
-    apiKey: process.env.GROQ_API_KEY || '',
-    model: 'llama-3.3-70b-versatile',
-  }
-};
-
 /**
  * Per-task Gemini thinking budgets, in tokens.
  *

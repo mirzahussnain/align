@@ -45,6 +45,7 @@ export async function rewriteCVWithProvenance(
   input: LedgerNativeRewriteInput
 ): Promise<RewriteWithProvenance | null> {
   const result = await generateJSONFromAIWithProvenance<StructuredCvRewriteOutput>({
+    capability: 'cv_regeneration',
     prompt: composeRewritePrompt(input),
     temperature: 0.2,
     thinkingBudget: THINKING_BUDGETS.rewrite,

@@ -305,6 +305,9 @@ Return only JSON in this shape:
   let raw: { findings?: unknown } | null = null;
   try {
     raw = await generateJSONFromAI<{ findings?: unknown }>({
+      capability: 'cv_import_reconciliation',
+      userId: args.userId,
+      operationId: args.operationId,
       prompt,
       temperature: 0.1,
       thinkingBudget: THINKING_BUDGETS.cvImportReconcile,

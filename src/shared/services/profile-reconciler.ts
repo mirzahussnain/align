@@ -299,6 +299,7 @@ Return only JSON in this shape:
 }`;
 
   const raw = await generateJSONFromAI<{ suggestions?: RawProfileEvidenceSuggestion[] }>({
+    capability: 'profile_reconciliation',
     prompt,
     temperature: 0.15,
     thinkingBudget: THINKING_BUDGETS.profileReconcile,

@@ -1,13 +1,25 @@
 import { GoogleGenAI } from '@google/genai';
 import Groq from 'groq-sdk';
 import type { ZodType } from 'zod';
-import { AI_CONFIG } from '@/shared/lib/config';
-import { AI_BOUNDS } from '@/shared/config/analysis-domain';
+import {
+  AI_RUNTIME_CONFIG,
+  type AiUsageCapability,
+  type SupportedAiProvider,
+} from '@/shared/config/ai-runtime';
+import {
+  recordAiUsageAttempt,
+  type AiAttemptErrorCode,
+} from './ai-usage-telemetry';
 
-const geminiClient = AI_CONFIG.gemini.apiKey ? new GoogleGenAI({ apiKey: AI_CONFIG.gemini.apiKey }) : null;
-const groqClient = AI_CONFIG.groq.apiKey ? new Groq({ apiKey: AI_CONFIG.groq.apiKey }) : null;
+const geminiConfig = AI_RUNTIME_CONFIG.providers.find(({ provider }) => provider === 'gemini');
+const groqConfig = AI_RUNTIME_CONFIG.providers.find(({ provider }) => provider === 'groq');
+const geminiClient = geminiConfig?.apiKey ? new GoogleGenAI({ apiKey: geminiConfig.apiKey }) : null;
+const groqClient = groqConfig?.apiKey ? new Groq({ apiKey: groqConfig.apiKey }) : null;
 
 interface AIOrchestratorOptions {
+  capability: AiUsageCapability;
+  userId?: string;
+  operationId?: string;
   prompt: string;
   temperature?: number;
   /**
@@ -92,14 +104,28 @@ export async function generateJSONFromAIWithProvenance<T>(
     temperature = 0.1,
     thinkingBudget,
     schema,
-    timeoutMs = AI_BOUNDS.timeoutMs,
-    maxOutputTokens = AI_BOUNDS.maxOutputTokens,
+    capability,
+    userId,
+    operationId,
+    timeoutMs = AI_RUNTIME_CONFIG.timeoutMs,
+    maxOutputTokens = AI_RUNTIME_CONFIG.maxOutputTokens,
   } = options;
 
-  const attempts: { label: string; provider: string; model: string; run: (signal: AbortSignal) => Promise<string> }[] = [];
+  interface AttemptResponse {
+    text: string;
+    inputTokens: number | null;
+    outputTokens: number | null;
+  }
+  const attempts: {
+    label: string;
+    provider: SupportedAiProvider;
+    model: string;
+    run: (signal: AbortSignal) => Promise<AttemptResponse>;
+  }[] = [];
 
-  if (geminiClient) {
-    for (const model of [AI_CONFIG.gemini.model, AI_CONFIG.gemini.fallbackModel]) {
+  for (const providerConfig of AI_RUNTIME_CONFIG.providers) {
+    if (providerConfig.provider === 'gemini' && geminiClient) {
+      const model = providerConfig.model;
       attempts.push({
         label: `Gemini ${model}`,
         provider: 'gemini',
@@ -116,28 +142,43 @@ export async function generateJSONFromAIWithProvenance<T>(
               ...(thinkingBudget !== undefined ? { thinkingConfig: { thinkingBudget } } : {}),
             },
           });
-          return response.text || '';
+          const candidateTokens = response.usageMetadata?.candidatesTokenCount;
+          const thinkingTokens = response.usageMetadata?.thoughtsTokenCount;
+          return {
+            text: response.text || '',
+            inputTokens: response.usageMetadata?.promptTokenCount ?? null,
+            outputTokens:
+              candidateTokens === undefined && thinkingTokens === undefined
+                ? null
+                : (candidateTokens ?? 0) + (thinkingTokens ?? 0),
+          };
+        },
+      });
+      continue;
+    }
+
+    if (providerConfig.provider === 'groq' && groqClient) {
+      const model = providerConfig.model;
+      attempts.push({
+        label: `Groq ${model}`,
+        provider: 'groq',
+        model,
+        run: async (signal) => {
+          const chatCompletion = await groqClient.chat.completions.create({
+            messages: [{ role: 'user', content: prompt }],
+            model,
+            response_format: { type: 'json_object' },
+            temperature,
+            max_tokens: maxOutputTokens,
+          }, { signal });
+          return {
+            text: chatCompletion.choices[0]?.message?.content || '',
+            inputTokens: chatCompletion.usage?.prompt_tokens ?? null,
+            outputTokens: chatCompletion.usage?.completion_tokens ?? null,
+          };
         },
       });
     }
-  }
-
-  if (groqClient) {
-    attempts.push({
-      label: `Groq ${AI_CONFIG.groq.model}`,
-      provider: 'groq',
-      model: AI_CONFIG.groq.model,
-      run: async (signal) => {
-        const chatCompletion = await groqClient.chat.completions.create({
-          messages: [{ role: 'user', content: prompt }],
-          model: AI_CONFIG.groq.model,
-          response_format: { type: 'json_object' },
-          temperature,
-          max_tokens: maxOutputTokens,
-        }, { signal });
-        return chatCompletion.choices[0]?.message?.content || '';
-      },
-    });
   }
 
   if (attempts.length === 0) {
@@ -153,24 +194,56 @@ export async function generateJSONFromAIWithProvenance<T>(
       attempt: index + 1,
       fallbackUsed: index > 0,
     };
+    const startedAt = Date.now();
+    let timedOut = false;
+    const record = (
+      success: boolean,
+      errorCode: AiAttemptErrorCode | null,
+      usage: { inputTokens: number | null; outputTokens: number | null }
+    ) => {
+      void recordAiUsageAttempt({
+        userId,
+        operationId,
+        capability,
+        provider: attempt.provider,
+        model: attempt.model,
+        inputTokens: usage.inputTokens,
+        outputTokens: usage.outputTokens,
+        latencyMs: Date.now() - startedAt,
+        success,
+        errorCode,
+        fallbackUsed: provenance.fallbackUsed,
+        attemptNumber: provenance.attempt,
+      });
+    };
 
     try {
       console.info(`[ai-orchestrator] Querying ${attempt.label} (attempt ${index + 1}/${attempts.length}).`);
       const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), timeoutMs);
-      let raw: string;
+      const timeout = setTimeout(() => {
+        timedOut = true;
+        controller.abort();
+      }, timeoutMs);
+      let response: AttemptResponse;
       try {
-        raw = await attempt.run(controller.signal);
+        response = await attempt.run(controller.signal);
       } finally {
         clearTimeout(timeout);
       }
-      const parsed = parseJSONContent<T>(raw);
+      const parsed = parseJSONContent<T>(response.text);
       if (parsed !== null) {
-        if (!schema) return { data: parsed, provenance };
+        if (!schema) {
+          record(true, null, response);
+          return { data: parsed, provenance };
+        }
 
         const validated = schema.safeParse(parsed);
-        if (validated.success) return { data: validated.data, provenance };
+        if (validated.success) {
+          record(true, null, response);
+          return { data: validated.data, provenance };
+        }
 
+        record(false, 'SCHEMA_VALIDATION_FAILED', response);
         console.warn(
           `[ai-orchestrator] ${attempt.label} returned JSON that failed schema validation: ${validated.error.issues
             .slice(0, 3)
@@ -180,10 +253,15 @@ export async function generateJSONFromAIWithProvenance<T>(
         continue;
       }
 
+      record(false, 'INVALID_JSON', response);
       console.warn(
         `[ai-orchestrator] ${attempt.label} returned no usable JSON.${isLast ? ' All providers exhausted.' : ' Trying next provider…'}`
       );
     } catch (err) {
+      record(false, timedOut ? 'TIMEOUT' : 'PROVIDER_ERROR', {
+        inputTokens: null,
+        outputTokens: null,
+      });
       const message = err instanceof Error ? err.message : String(err);
       console.warn(
         `[ai-orchestrator] ${attempt.label} failed: ${message}.${isLast ? ' All providers exhausted.' : ' Trying next provider…'}`

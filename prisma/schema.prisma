@@ -36,6 +36,7 @@ model User {
   generatedCVs                GeneratedCV[]
   usage                       UsageCounter[]
   capabilityReservations      CapabilityReservation[]
+  aiUsageEvents               AiUsageEvent[]
   applicationEvidenceContexts ApplicationEvidenceContext[]
   profileEvidenceApprovals    ProfileEvidenceApproval[]
   billingAccount              BillingAccount?
@@ -1383,6 +1384,36 @@ model CapabilityReservation {
   @@unique([userId, capability, operationId])
   @@index([userId, capability, period, status])
   @@map("capability_reservation")
+}
+
+/**
+ * Append-only operational telemetry for one AI provider attempt. This table
+ * deliberately excludes prompts, candidate content, generated output, secrets,
+ * and raw provider errors.
+ */
+model AiUsageEvent {
+  id               String   @id @default(cuid())
+  userId           String?
+  user             User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  operationId      String?
+  capability       String
+  provider         String
+  model            String
+  inputTokens      Int?
+  outputTokens     Int?
+  latencyMs        Int
+  success          Boolean
+  errorCode        String?
+  fallbackUsed     Boolean
+  attemptNumber    Int
+  estimatedCostUsd Decimal? @db.Decimal(12, 8)
+  createdAt        DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([capability, createdAt])
+  @@index([userId, createdAt])
+  @@index([operationId])
+  @@map("ai_usage_event")
 }
 
 // Persisted output of cv-rewriter.ts. Optionally linked to the Analysis it

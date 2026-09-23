@@ -55,6 +55,7 @@ Schema:
 { "occupation": "one occupation code", "sector": "one sector code", "seniority": "entry|mid|senior|lead|unknown", "confidence": number 0..1 }`;
 
   return generateJSONFromAI<AIClassificationOutput>({
+    capability: 'ai_target_classification',
     prompt,
     temperature: 0,
     thinkingBudget: THINKING_BUDGETS.classification,
@@ -82,6 +83,7 @@ export async function getSemanticCVFeedbackWithProvenance(
   // Zod's loose objects widen the inferred type with an index signature, so
   // the schema is bridged to the declared output interface explicitly.
   return generateJSONFromAIWithProvenance<AISemanticOutput>({
+    capability: 'ai_enhanced_ats_analysis',
     prompt: composeSemanticPrompt(cvText, baseResult, profile, classification),
     temperature: 0.1,
     thinkingBudget: THINKING_BUDGETS.semanticFeedback,
@@ -107,6 +109,7 @@ export async function getJobMatchFeedbackWithProvenance(
   classification: Classification
 ): Promise<AIResultWithProvenance<JobMatchDataV2> | null> {
   const result = await generateJSONFromAIWithProvenance<JobMatchDataV2Draft>({
+    capability: 'job_match_analysis',
     prompt: composeJobMatchPrompt(cvText, jobDescription, profile, classification),
     temperature: 0.1,
     thinkingBudget: THINKING_BUDGETS.jobMatch,

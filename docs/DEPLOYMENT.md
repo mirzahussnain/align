@@ -61,12 +61,12 @@ Configure Google OAuth with:
 
 | Variable | Requirement | Notes |
 | --- | --- | --- |
-| `GEMINI_API_KEY` | Required | Primary analysis and generation provider |
-| `GROQ_API_KEY` | Recommended | Fallback provider after Gemini attempts fail |
+| `GEMINI_API_KEY` | Conditionally required | Primary provider when configured |
+| `GROQ_API_KEY` | Conditionally required | Fallback after Gemini, or the sole provider when Gemini is unset |
 | `AI_PROVIDER_TIMEOUT_MS` | Optional | Positive integer; defaults to `45000` |
 | `AI_MAX_OUTPUT_TOKENS` | Optional | Positive integer; defaults to `8192` |
 
-The environment check requires Gemini. Configure Groq for graceful provider fallback and test both providers before launch.
+Production requires at least one supported AI provider: Gemini only, Groq only, and both are valid. When both are configured, the runtime tries Gemini then Groq. Configure both for graceful provider fallback and test both providers before launch.
 
 ### Rate limiting and caching
 

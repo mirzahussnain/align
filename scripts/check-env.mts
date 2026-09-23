@@ -11,6 +11,7 @@
 //
 // Run it in CI before a deploy, or locally after editing .env.local.
 import { config } from 'dotenv';
+import { aiProviderEnvironmentErrors } from '../src/shared/config/ai-runtime.ts';
 
 // Mirrors Next.js's own precedence: .env.local wins over .env. On a real
 // platform (Vercel, Fly, a container) neither file exists and the variables are
@@ -96,8 +97,8 @@ const CHECKS: Check[] = [
   },
 
   // ── AI + third-party data ──────────────────────────────────────────────────
-  { name: 'GEMINI_API_KEY', required: true, note: 'Primary analysis model' },
-  { name: 'GROQ_API_KEY', required: false, note: 'Fallback model' },
+  { name: 'GEMINI_API_KEY', required: false, note: 'Primary AI provider when configured' },
+  { name: 'GROQ_API_KEY', required: false, note: 'Fallback AI provider when Gemini is configured' },
   { name: 'REED_API_KEY', required: false, note: 'Job source (that source is skipped if unset)' },
   { name: 'ADZUNA_APP_ID', required: false, note: 'Job source' },
   { name: 'ADZUNA_APP_KEY', required: false, note: 'Job source' },
@@ -212,6 +213,7 @@ if (process.env.STRIPE_SECRET_KEY) {
 }
 
 if (process.env.NODE_ENV === 'production') {
+  errors.push(...aiProviderEnvironmentErrors(process.env));
   if (!process.env.RESEND_API_KEY) {
     errors.push('RESEND_API_KEY is required in production for lifecycle email delivery');
   }
