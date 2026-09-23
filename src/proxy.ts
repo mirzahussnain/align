@@ -6,12 +6,19 @@ export function proxy(request: NextRequest) {
   const sessionCookie = getSessionCookie(request);
 
   if (!sessionCookie) {
-    return NextResponse.redirect(new URL('/login', request.url));
+    const loginUrl = new URL('/login', request.url);
+    if (request.nextUrl.pathname.startsWith('/admin')) {
+      loginUrl.searchParams.set(
+        'redirect',
+        `${request.nextUrl.pathname}${request.nextUrl.search}`
+      );
+    }
+    return NextResponse.redirect(loginUrl);
   }
 
   return NextResponse.next();
 }
 
 export const config = {
-  matcher: ['/dashboard/:path*', '/onboarding'],
+  matcher: ['/dashboard/:path*', '/onboarding', '/admin/:path*'],
 };

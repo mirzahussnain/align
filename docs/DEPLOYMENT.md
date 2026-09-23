@@ -39,6 +39,7 @@ For Neon, `DATABASE_URL` normally contains the `-pooler` host and `DIRECT_URL` u
 | --- | --- | --- |
 | `BETTER_AUTH_SECRET` | Required | Unique random value of at least 32 characters |
 | `BETTER_AUTH_URL` | Required | The public HTTPS origin |
+| `ADMIN_EMAILS` | Required to enable admin access | Comma-separated Better Auth account emails; server-only and case-insensitive |
 | `GOOGLE_CLIENT_ID` | Required for Google sign-in | Google OAuth web client |
 | `GOOGLE_CLIENT_SECRET` | Required for Google sign-in | Server-only OAuth secret |
 | `RESEND_API_KEY` | Required in production | Server-only Resend API key |
@@ -49,6 +50,8 @@ Generate the auth secret with a cryptographically secure generator, for example:
 ```bash
 openssl rand -base64 32
 ```
+
+Admin routes reuse Better Auth sessions and then apply the `ADMIN_EMAILS` allowlist server-side in both page and data boundaries. Leaving the variable empty safely disables all admin access; changing to a persisted `USER | ADMIN` role later requires replacing only the central authorization policy.
 
 Verify the sender domain in Resend and publish the SPF/DKIM records Resend supplies. Credential verification and password reset intentionally fail when email cannot be delivered; welcome, password-change, and deletion notices are best-effort after their primary action succeeds.
 
@@ -151,6 +154,7 @@ Checkout does not grant access. Effective plan access changes only after a signe
 NEXT_PUBLIC_APP_URL=https://align.vyndra.tech
 BETTER_AUTH_URL=https://align.vyndra.tech
 BETTER_AUTH_SECRET=<random-secret>
+ADMIN_EMAILS=<comma-separated-admin-emails>
 
 DATABASE_URL=<pooled-postgres-url>
 DIRECT_URL=<unpooled-postgres-url>

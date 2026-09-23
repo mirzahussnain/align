@@ -301,3 +301,41 @@ export async function resolveBillingAccess(
 
   return freeResolution(explanatory?.status ?? 'FREE');
 }
+
+/**
+ * Resolve a set of users with one database read while preserving the exact
+ * single-user billing policy above. The in-memory client only supplies rows
+ * already loaded by the bulk query; it never becomes a second plan authority.
+ */
+export async function resolveBillingAccessForUsers(
+  userIds: readonly string[],
+  now: Date = new Date(),
+  client: BillingAccessClient = prisma
+): Promise<Map<string, BillingAccessResolution>> {
+  const uniqueUserIds = [...new Set(userIds)];
+  if (uniqueUserIds.length === 0) return new Map();
+
+  const users = await client.user.findMany({
+    where: { id: { in: uniqueUserIds } },
+    select: {
+      id: true,
+      billingAccount: { select: { purchases: true } },
+    },
+  });
+  const usersById = new Map(users.map((user) => [user.id, user]));
+  const loadedClient = {
+    user: {
+      findUnique: async ({ where }: { where: { id: string } }) => {
+        const user = usersById.get(where.id);
+        return user ? { billingAccount: user.billingAccount } : null;
+      },
+    },
+  } as unknown as BillingAccessClient;
+
+  const entries = await Promise.all(
+    uniqueUserIds.map(async (userId) =>
+      [userId, await resolveBillingAccess(userId, now, loadedClient)] as const
+    )
+  );
+  return new Map(entries);
+}
