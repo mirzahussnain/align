@@ -3,7 +3,15 @@
 import { config } from "dotenv";
 import { defineConfig } from "prisma/config";
 
-config({ path: ".env.local" });
+// Treat an externally supplied datasource as one authoritative configuration
+// source. In particular, do not let a local DIRECT_URL outrank an injected
+// DATABASE_URL merely because DIRECT_URL was missing from the parent process.
+const hasExternalDatasource =
+  process.env["DIRECT_URL"] !== undefined || process.env["DATABASE_URL"] !== undefined;
+
+if (!hasExternalDatasource) {
+  config({ path: ".env.local", override: false, quiet: true });
+}
 
 export default defineConfig({
   schema: "prisma/schema.prisma",

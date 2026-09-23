@@ -29,6 +29,7 @@
     "db:nuke": "docker compose down -v",
     "db:migrate": "prisma migrate dev",
     "db:deploy": "prisma migrate deploy",
+    "db:migrate:production": "node --experimental-strip-types --no-warnings scripts/migrate-production.mts",
     "db:studio": "prisma studio",
     "db:reset": "prisma migrate reset --force",
     "db:setup": "npm run dev:up && prisma migrate deploy && prisma generate",

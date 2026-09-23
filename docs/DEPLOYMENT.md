@@ -218,11 +218,23 @@ npm run check:env:live
 
 ### 3. Apply migrations
 
+Pull the production environment into the explicitly ignored temporary file, run
+the guarded migration helper, and delete the file immediately afterward:
+
 ```bash
-npx prisma migrate deploy
+npx vercel env pull .env.production.local --environment=production
+npm run db:migrate:production
+node -e "require('node:fs').unlinkSync('.env.production.local')"
 ```
 
-Run migrations with `DIRECT_URL` available before the new application build serves traffic.
+The helper requires both `DATABASE_URL` and `DIRECT_URL`, refuses loopback and
+obvious local-development database hosts, runs `prisma migrate deploy`, and then
+checks `prisma migrate status`. It does not print either URL. Delete
+`.env.production.local` even when a migration attempt fails; the file is
+gitignored as a second line of defense, but production secrets should not remain
+on disk.
+
+Run migrations before the new application build serves traffic.
 
 ### 4. Verify the build
 
