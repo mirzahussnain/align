@@ -5,6 +5,7 @@ import type { NormalisedJob, ProviderSearchResult } from '@/shared/types/job';
 import {
   buildCareerMarketSnapshot,
   careerMarketKey,
+  isUkMarketJob,
   resolveCareerMarketSnapshot,
 } from '../career-market';
 
@@ -25,6 +26,11 @@ function result(jobs: NormalisedJob[]): ProviderSearchResult {
 }
 
 describe('Career Market snapshots', () => {
+  it('classifies provider jobs without precomputed UK eligibility before sampling', () => {
+    expect(isUkMarketJob(job({ locationText: 'Leeds', region: 'Yorkshire', ukEligibility: undefined }))).toBe(true);
+    expect(isUkMarketJob(job({ locationText: 'New York, NY', region: 'New York', ukEligibility: undefined }))).toBe(false);
+  });
+
   it('uses normalized role and location for a stable market key', () => {
     expect(careerMarketKey('  Product   Manager ', ' Greater London ')).toBe(
       careerMarketKey('product manager', 'greater london'),

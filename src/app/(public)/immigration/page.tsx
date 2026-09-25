@@ -7,7 +7,6 @@ import Navbar from '@/shared/components/layout/Navbar';
 import PublicPageBackdrop from '@/shared/components/layout/PublicPageBackdrop';
 import { Input } from '@/shared/components/ui/Input';
 import GlassCard from '@/shared/components/ui/GlassCard';
-import { cn } from '@/shared/utils/cn';
 import VisaRouteDetails from '@/features/immigration/components/VisaRouteDetails';
 import Tabs from '@/shared/components/ui/Tabs';
 import { useSponsors } from '@/features/immigration/hooks/useSponsors';

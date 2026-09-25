@@ -27,7 +27,7 @@ function officialVacancyUrl(value: string): string | null {
   } catch { return null; }
 }
 
-export function parseNhsJobsXml(xml: string, page: number): { jobs: ProviderJob[]; total: number; totalPages: number } {
+export function parseNhsJobsXml(xml: string): { jobs: ProviderJob[]; total: number; totalPages: number; rawReceived: number } {
   if (!/<nhsSearch\b[^>]*>/i.test(xml) || !/<\/nhsSearch>/i.test(xml)) {
     throw new JobProviderError('NHS_JOBS', 'INVALID_RESPONSE');
   }
@@ -67,7 +67,7 @@ export function parseNhsJobsXml(xml: string, page: number): { jobs: ProviderJob[
       hasSponsorship: false,
     }];
   });
-  return { jobs, total: Number(totalText), totalPages: Number(pagesText) };
+  return { jobs, total: Number(totalText), totalPages: Number(pagesText), rawReceived: blocks.length };
 }
 
 const contractType = (value: JobSearchParams['contractType']) => ({
@@ -104,11 +104,11 @@ export const nhsJobsAdapter: SearchJobProviderAdapter = {
       signal: context.signal,
     });
     if (!response.ok) throw providerResponseError('NHS_JOBS', response);
-    const parsed = parseNhsJobsXml(await response.text(), params.page);
+    const parsed = parseNhsJobsXml(await response.text());
     return {
       jobs: parsed.jobs,
       total: parsed.total,
-      rawReceived: parsed.jobs.length,
+      rawReceived: parsed.rawReceived,
       nextCursor: params.page < parsed.totalPages ? String(params.page + 1) : undefined,
     };
   },

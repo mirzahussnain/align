@@ -23,8 +23,8 @@ afterEach(() => vi.unstubAllGlobals());
 
 describe('NHS Jobs XML adapter', () => {
   it('parses documented XML fields without leaking the transport shape', () => {
-    const parsed = parseNhsJobsXml(xml, 1);
-    expect(parsed).toMatchObject({ total: 6, totalPages: 2 });
+    const parsed = parseNhsJobsXml(xml);
+    expect(parsed).toMatchObject({ total: 6, totalPages: 2, rawReceived: 1 });
     expect(parsed.jobs[0]).toMatchObject({
       id: 'nhs_jobs-C1234', title: 'Registered Nurse', company: 'North NHS Trust',
       location: 'Leeds, LS1 1AA; Bradford, BD1 1AA', contractType: 'Permanent',
@@ -34,8 +34,8 @@ describe('NHS Jobs XML adapter', () => {
   });
 
   it('accepts a documented empty result and rejects malformed XML', () => {
-    expect(parseNhsJobsXml('<nhsSearch><totalPages>0</totalPages><totalResults>0</totalResults></nhsSearch>', 1).jobs).toEqual([]);
-    expect(() => parseNhsJobsXml('<html>upstream error</html>', 1)).toThrowError(JobProviderError);
+    expect(parseNhsJobsXml('<nhsSearch><totalPages>0</totalPages><totalResults>0</totalResults></nhsSearch>')).toMatchObject({ jobs: [], rawReceived: 0 });
+    expect(() => parseNhsJobsXml('<html>upstream error</html>')).toThrowError(JobProviderError);
   });
 
   it('maps documented query, location-distance, filters, sorting and pagination parameters', () => {
@@ -53,7 +53,7 @@ describe('NHS Jobs XML adapter', () => {
   });
 
   it('normalizes and preserves official NHS provenance and closing date', () => {
-    const normalized = normaliseProviderJob(parseNhsJobsXml(xml, 1).jobs[0]);
+    const normalized = normaliseProviderJob(parseNhsJobsXml(xml).jobs[0]);
     expect(normalized).toMatchObject({
       source: 'NHS_JOBS', sourceJobId: 'C1234', canonicalUrl: 'https://www.jobs.nhs.uk/candidate/jobadvert/C1234',
       expiresAt: '2026-10-10T00:00:00.000Z', descriptionAvailability: 'PARTIAL',
@@ -76,8 +76,8 @@ describe('NHS Jobs XML adapter', () => {
   });
 
   it('merges the same vacancy across NHS Jobs and another provider', () => {
-    const nhs = normaliseProviderJob(parseNhsJobsXml(xml, 1).jobs[0]);
-    const other = normaliseProviderJob({ ...parseNhsJobsXml(xml, 1).jobs[0], id: 'adzuna-99', source: 'adzuna', url: 'https://adzuna.test/jobs/99', hostedUrl: 'https://adzuna.test/jobs/99' });
+    const nhs = normaliseProviderJob(parseNhsJobsXml(xml).jobs[0]);
+    const other = normaliseProviderJob({ ...parseNhsJobsXml(xml).jobs[0], id: 'adzuna-99', source: 'adzuna', url: 'https://adzuna.test/jobs/99', hostedUrl: 'https://adzuna.test/jobs/99' });
     const merged = deduplicateJobs([nhs, other]);
     expect(merged).toHaveLength(1);
     expect(merged[0].providerReferences.map((reference) => reference.provider)).toEqual(expect.arrayContaining(['NHS_JOBS', 'ADZUNA']));

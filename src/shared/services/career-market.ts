@@ -6,7 +6,7 @@ import { getCacheBackend, getCacheStore } from '@/shared/lib/cache/cache-provide
 import type { CacheStore } from '@/shared/lib/cache/cache-store';
 import { acquireRefreshLock } from '@/shared/lib/cache/refresh-lock';
 import { deduplicateJobs, searchProvider } from '@/shared/services/job-search';
-import { isUkDiscoverable } from '@/shared/services/uk-location';
+import { assessUkLocation, isUkDiscoverable } from '@/shared/services/uk-location';
 import { SEARCH_JOB_PROVIDERS, type NormalisedJob, type ProviderSearchResult } from '@/shared/types/job';
 import type { CareerMarketSnapshotView, MarketMixItem } from '@/shared/types/career-market';
 
@@ -21,6 +21,17 @@ type SnapshotResolution = {
 };
 
 const normalize = (value: string) => value.trim().replace(/\s+/g, ' ').toLowerCase();
+
+export function isUkMarketJob(job: NormalisedJob): boolean {
+  const eligibility = job.ukEligibility ?? assessUkLocation({
+    locationText: job.locationText,
+    city: job.city,
+    region: job.region,
+    country: job.country,
+    remote: job.remoteType === 'REMOTE',
+  }).eligibility;
+  return isUkDiscoverable(eligibility);
+}
 
 export function careerMarketKey(role: string, location: string): string {
   return createHash('sha256')
@@ -154,7 +165,7 @@ async function generateSnapshot(input: MarketInput, store: CacheStore): Promise<
   }
   const ukResults = results.map((result) => ({
     ...result,
-    jobs: result.jobs.filter((job) => job.ukEligibility ? isUkDiscoverable(job.ukEligibility) : false),
+    jobs: result.jobs.filter(isUkMarketJob),
   }));
   const draft = buildCareerMarketSnapshot(input, ukResults, startedAt, new Date());
   const row = await prisma.careerMarketSnapshot.create({ data: {

@@ -34,9 +34,10 @@ afterEach(() => {
 
 describe('public job discovery', () => {
   it('searches anonymously and renders original provider vacancies without personalized actions', async () => {
-    const fetchMock = vi.fn(async (_input: RequestInfo | URL) =>
-      new Response(JSON.stringify(response), { status: 200 }),
-    );
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      void input;
+      return new Response(JSON.stringify(response), { status: 200 });
+    });
     vi.stubGlobal('fetch', fetchMock);
     const user = userEvent.setup();
     render(<PublicJobsSearch />);
