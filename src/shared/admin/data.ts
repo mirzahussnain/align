@@ -7,6 +7,7 @@ import { configuredAdminEmails } from './admin-runtime';
 import { requireAdminDataAccess } from './authorization';
 import {
   mergeRecentActivity,
+  type AdminProviderAttempts,
   type AdminRecentActivityItem,
 } from './metrics';
 
@@ -63,7 +64,7 @@ export interface AdminOverview {
   fallbackRate: number | null;
   fallbackAttemptsThisMonth: number;
   averageLatencyMs: number | null;
-  providerBreakdown: Record<string, number>;
+  providerBreakdown: AdminProviderAttempts[];
   estimatedAiCostUsd: number | null;
   knownCostCoverage: number | null;
   mostUsedAiCapability: string | null;
@@ -484,7 +485,7 @@ interface AiUsageSummaryRow {
   estimatedCostUsd: Prisma.Decimal | number | null;
   knownCostAttempts: number;
   tokenBearingAttempts: number;
-  providerBreakdown: Record<string, number> | null;
+  providerBreakdown: AdminProviderAttempts[] | null;
 }
 
 async function loadAiUsageSummary(filters: AdminAiUsageFilters) {
@@ -527,14 +528,20 @@ async function loadAiUsageSummary(filters: AdminAiUsageFilters) {
       FROM runs
     )
     SELECT run_totals.*, attempts.*,
-      COALESCE((SELECT JSONB_OBJECT_AGG("provider", total) FROM providers), '{}'::jsonb) AS "providerBreakdown"
+      COALESCE((
+        SELECT JSONB_AGG(
+          JSONB_BUILD_OBJECT('provider', "provider", 'attempts', total)
+          ORDER BY total DESC, "provider"
+        )
+        FROM providers
+      ), '[]'::jsonb) AS "providerBreakdown"
     FROM run_totals CROSS JOIN attempts
   `);
   const row = rows[0] ?? {
     featureRuns: 0, providerAttempts: 0, unattributedAttempts: 0,
     successfulFeatureRuns: 0, fallbackFeatureRuns: 0, fallbackAttempts: 0,
     averageLatencyMs: null, totalTokens: BigInt(0), estimatedCostUsd: null,
-    knownCostAttempts: 0, tokenBearingAttempts: 0, providerBreakdown: {},
+    knownCostAttempts: 0, tokenBearingAttempts: 0, providerBreakdown: [],
   };
   return {
     featureRuns: Number(row.featureRuns),
@@ -545,7 +552,7 @@ async function loadAiUsageSummary(filters: AdminAiUsageFilters) {
     fallbackFeatureRuns: Number(row.fallbackFeatureRuns),
     fallbackRate: row.featureRuns === 0 ? null : (Number(row.fallbackFeatureRuns) / Number(row.featureRuns)) * 100,
     fallbackAttempts: Number(row.fallbackAttempts),
-    providerBreakdown: row.providerBreakdown ?? {},
+    providerBreakdown: row.providerBreakdown ?? [],
     averageLatencyMs: row.averageLatencyMs == null ? null : Number(row.averageLatencyMs),
     totalTokens: row.totalTokens == null ? null : Number(row.totalTokens),
     estimatedCostUsd: row.providerAttempts > 0 && row.knownCostAttempts === 0 ? null : decimalToNumber(row.estimatedCostUsd) ?? 0,

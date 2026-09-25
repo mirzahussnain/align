@@ -50,19 +50,26 @@ describe('admin metrics', () => {
       { operationId: 'run-1', provider: 'groq', inputTokens: 100, outputTokens: 20, latencyMs: 200, success: true, fallbackUsed: true, attemptNumber: 2, estimatedCostUsd: null },
       { operationId: 'run-2', provider: 'gemini', inputTokens: 50, outputTokens: 10, latencyMs: 300, success: true, fallbackUsed: false, attemptNumber: 1, estimatedCostUsd: 0.002 },
       { operationId: null, provider: 'gemini', inputTokens: 10, outputTokens: 5, latencyMs: 400, success: true, fallbackUsed: false, attemptNumber: 1, estimatedCostUsd: 0.003 },
+      { operationId: 'run-3', provider: 'open_router', inputTokens: 10, outputTokens: 5, latencyMs: 250, success: true, fallbackUsed: false, attemptNumber: 1, estimatedCostUsd: null },
+      { operationId: 'run-4', provider: 'anthropic', inputTokens: 10, outputTokens: 5, latencyMs: 150, success: true, fallbackUsed: false, attemptNumber: 1, estimatedCostUsd: null },
     ]);
 
     expect(result).toMatchObject({
-      featureRuns: 2,
-      providerAttempts: 4,
+      featureRuns: 4,
+      providerAttempts: 6,
       unattributedAttempts: 1,
-      successfulFeatureRuns: 2,
+      successfulFeatureRuns: 4,
       aiSuccessRate: 100,
       fallbackFeatureRuns: 1,
-      fallbackRate: 50,
+      fallbackRate: 25,
       fallbackAttempts: 1,
-      providerBreakdown: { gemini: 3, groq: 1 },
-      averageLatencyMs: 250,
+      providerBreakdown: [
+        { provider: 'gemini', attempts: 3 },
+        { provider: 'anthropic', attempts: 1 },
+        { provider: 'groq', attempts: 1 },
+        { provider: 'open_router', attempts: 1 },
+      ],
+      averageLatencyMs: 233,
     });
   });
 

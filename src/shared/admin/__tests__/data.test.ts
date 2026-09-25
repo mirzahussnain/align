@@ -114,7 +114,10 @@ describe('admin data', () => {
         successfulFeatureRuns: 1, fallbackFeatureRuns: 1, fallbackAttempts: 1,
         averageLatencyMs: 200, totalTokens: 265, estimatedCostUsd: 0.002,
         knownCostAttempts: 2, tokenBearingAttempts: 3,
-        providerBreakdown: { gemini: 2, groq: 1 },
+        providerBreakdown: [
+          { provider: 'gemini', attempts: 2 },
+          { provider: 'open_router', attempts: 1 },
+        ],
       }])
       .mockResolvedValueOnce([{ today: 1, last7Days: 2, last30Days: 2 }]);
     mocks.aiFindMany
@@ -137,7 +140,10 @@ describe('admin data', () => {
       unattributedAttemptsThisMonth: 1,
       aiSuccessRate: 100,
       fallbackRate: 100,
-      providerBreakdown: { gemini: 2, groq: 1 },
+      providerBreakdown: [
+        { provider: 'gemini', attempts: 2 },
+        { provider: 'open_router', attempts: 1 },
+      ],
       knownCostCoverage: 66.66666666666666,
       estimatedAiCostUsd: 0.002,
       mostUsedAiCapability: 'job_match_analysis',
@@ -176,7 +182,8 @@ describe('admin data', () => {
       featureRuns: 1, providerAttempts: 2, unattributedAttempts: 1,
       successfulFeatureRuns: 0, fallbackFeatureRuns: 1, fallbackAttempts: 1,
       averageLatencyMs: 175, totalTokens: null, estimatedCostUsd: null,
-      knownCostAttempts: 0, tokenBearingAttempts: 1, providerBreakdown: { groq: 2 },
+      knownCostAttempts: 0, tokenBearingAttempts: 1,
+      providerBreakdown: [{ provider: 'groq', attempts: 2 }],
     }]);
     mocks.aiFindMany
       .mockResolvedValueOnce([
@@ -203,7 +210,7 @@ describe('admin data', () => {
       unattributedAttempts: 1,
       fallbackRate: 100,
       fallbackAttempts: 1,
-      providerBreakdown: { groq: 2 },
+      providerBreakdown: [{ provider: 'groq', attempts: 2 }],
       knownCostCoverage: 0,
       estimatedCostUsd: null,
       totalTokens: null,

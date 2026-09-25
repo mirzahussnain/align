@@ -16,6 +16,7 @@ import {
 } from '@/features/admin/components/AdminUi';
 import { loadAdminOverview } from '@/shared/admin/data';
 import type { AdminRecentActivityType } from '@/shared/admin/metrics';
+import { formatProviderBreakdown } from '@/shared/admin/presentation';
 import { loadAdminSystemHealth } from '@/shared/admin/system-health';
 
 const activityLabels: Record<AdminRecentActivityType, string> = {
@@ -44,7 +45,6 @@ function Stat({ label, value, detail }: { label: string; value: string; detail: 
 export default async function AdminOverviewPage() {
   const [data, health] = await Promise.all([loadAdminOverview(), loadAdminSystemHealth()]);
   const number = new Intl.NumberFormat('en-GB');
-  const providerAttempts = (provider: string) => data.providerBreakdown[provider] ?? 0;
 
   return (
     <div className="mx-auto max-w-[1440px]">
@@ -104,7 +104,7 @@ export default async function AdminOverviewPage() {
           </div>
           <div className="flex items-center gap-3">
             <Activity className="h-4 w-4 text-text-tertiary" />
-            <div><p className="text-xs text-text-tertiary">Provider breakdown</p><p className="text-sm font-semibold text-text-primary tabular-nums">Gemini {number.format(providerAttempts('gemini'))} · Groq {number.format(providerAttempts('groq'))}</p></div>
+            <div><p className="text-xs text-text-tertiary">Provider breakdown</p><p className="text-sm font-semibold text-text-primary tabular-nums">{formatProviderBreakdown(data.providerBreakdown)}</p></div>
           </div>
           <div className="flex items-center gap-3">
             <CircleDollarSign className="h-4 w-4 text-text-tertiary" />

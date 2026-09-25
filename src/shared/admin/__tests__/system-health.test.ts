@@ -5,6 +5,13 @@ const mocks = vi.hoisted(() => ({ requireAdminDataAccess: vi.fn() }));
 vi.mock('../authorization', () => ({
   requireAdminDataAccess: mocks.requireAdminDataAccess,
 }));
+vi.mock('@/shared/config/ai-runtime', () => ({
+  AI_PROVIDER_DEFINITIONS: [
+    { provider: 'gemini', label: 'Gemini', model: 'gemini-model', apiKeyEnv: 'GEMINI_API_KEY', pricing: null },
+    { provider: 'groq', label: 'Groq', model: 'groq-model', apiKeyEnv: 'GROQ_API_KEY', pricing: null },
+    { provider: 'open_router', label: 'OpenRouter', model: 'open-router-model', apiKeyEnv: 'OPENROUTER_API_KEY', pricing: null },
+  ],
+}));
 
 import {
   collectSystemHealth,
@@ -47,6 +54,7 @@ describe('admin system health', () => {
         RESEND_API_KEY: 'secret-resend',
         AUTH_EMAIL_FROM: 'support@example.com',
         GEMINI_API_KEY: 'secret-gemini',
+        OPENROUTER_API_KEY: 'secret-openrouter',
         STRIPE_SECRET_KEY: 'secret-stripe',
         STRIPE_WEBHOOK_SECRET: 'secret-webhook',
         STRIPE_PRO_MONTHLY_PRICE_ID: 'secret-price',
@@ -63,6 +71,7 @@ describe('admin system health', () => {
       { name: 'Resend', status: 'configured', detail: 'Configured; connectivity not checked' },
       { name: 'Gemini', status: 'configured', detail: 'Configured; connectivity not checked' },
       { name: 'Groq', status: 'unavailable', detail: 'Not configured' },
+      { name: 'OpenRouter', status: 'configured', detail: 'Configured; connectivity not checked' },
       { name: 'Stripe', status: 'configured', detail: 'Configured; connectivity not checked' },
     ]);
   });

@@ -9,6 +9,7 @@ import {
   formatAdminDateTime,
 } from '@/features/admin/components/AdminUi';
 import { defaultAdminAiUsageFrom, loadAdminAiUsage } from '@/shared/admin/data';
+import { formatProviderBreakdown, providerLabel } from '@/shared/admin/presentation';
 
 function single(value: string | string[] | undefined): string | undefined {
   return Array.isArray(value) ? value[0] : value;
@@ -33,7 +34,6 @@ export default async function AdminAiUsagePage({
   const number = new Intl.NumberFormat('en-GB');
   const hasFilters = Boolean(requestedFrom || to || capability || provider || model || successParam);
   const percentage = (value: number | null) => value == null ? 'Unavailable' : `${value.toFixed(1)}%`;
-  const providerAttempts = (name: string) => data.summary.providerBreakdown[name] ?? 0;
 
   return (
     <div className="mx-auto max-w-[1800px]">
@@ -51,7 +51,7 @@ export default async function AdminAiUsagePage({
         <MetricCard icon={Clock3} label="Average latency" value={data.summary.averageLatencyMs == null ? 'Unavailable' : `${number.format(data.summary.averageLatencyMs)} ms`} detail="Across filtered provider attempts" />
         <MetricCard icon={CircleDollarSign} label="Estimated cost" value={data.summary.estimatedCostUsd == null ? 'Unavailable' : `$${data.summary.estimatedCostUsd.toFixed(4)}`} detail="Known pricing only; unknown pricing excluded" />
         <MetricCard icon={CircleDollarSign} label="Known cost coverage" value={percentage(data.summary.knownCostCoverage)} detail="Token-bearing attempts with configured pricing" />
-        <MetricCard icon={Activity} label="Provider breakdown" value={`Gemini ${number.format(providerAttempts('gemini'))}`} detail={`Groq ${number.format(providerAttempts('groq'))} · Fallback ${number.format(data.summary.fallbackAttempts)}`} />
+        <MetricCard icon={Activity} label="Provider breakdown" value={formatProviderBreakdown(data.summary.providerBreakdown)} detail={`${number.format(data.summary.fallbackAttempts)} fallback attempts`} />
       </div>
 
       <p className="mt-4 text-xs text-text-tertiary">
@@ -62,7 +62,7 @@ export default async function AdminAiUsagePage({
         <label className="text-xs font-semibold text-text-secondary">From<input type="date" name="from" defaultValue={from} className="mt-1.5 w-full" /></label>
         <label className="text-xs font-semibold text-text-secondary">To<input type="date" name="to" defaultValue={to} className="mt-1.5 w-full" /></label>
         <label className="text-xs font-semibold text-text-secondary">Capability<select name="capability" defaultValue={capability} className="mt-1.5 w-full"><option value="">All capabilities</option>{data.options.capabilities.map((value) => <option key={value} value={value}>{capabilityLabel(value)}</option>)}</select></label>
-        <label className="text-xs font-semibold text-text-secondary">Provider<select name="provider" defaultValue={provider} className="mt-1.5 w-full"><option value="">All providers</option>{data.options.providers.map((value) => <option key={value} value={value}>{value}</option>)}</select></label>
+        <label className="text-xs font-semibold text-text-secondary">Provider<select name="provider" defaultValue={provider} className="mt-1.5 w-full"><option value="">All providers</option>{data.options.providers.map((value) => <option key={value} value={value}>{providerLabel(value)}</option>)}</select></label>
         <label className="text-xs font-semibold text-text-secondary">Model<select name="model" defaultValue={model} className="mt-1.5 w-full"><option value="">All models</option>{data.options.models.map((value) => <option key={value} value={value}>{value}</option>)}</select></label>
         <label className="text-xs font-semibold text-text-secondary">Outcome<select name="success" defaultValue={successParam} className="mt-1.5 w-full"><option value="">All outcomes</option><option value="true">Successful</option><option value="false">Failed</option></select></label>
         <div className="flex gap-2 sm:col-span-2 xl:col-span-6 xl:justify-end">
@@ -80,7 +80,7 @@ export default async function AdminAiUsagePage({
                 <tr key={event.id} className="hover:bg-bg-primary">
                   <td className="whitespace-nowrap px-4 py-3.5 text-text-secondary">{formatAdminDateTime(event.createdAt)}</td>
                   <td className="px-4 py-3.5 font-semibold text-text-primary">{capabilityLabel(event.capability)}</td>
-                  <td className="px-4 py-3.5 capitalize text-text-secondary">{event.provider}</td>
+                  <td className="px-4 py-3.5 text-text-secondary">{providerLabel(event.provider)}</td>
                   <td className="px-4 py-3.5 font-mono text-[11px] text-text-secondary">{event.model}</td>
                   <td className="px-4 py-3.5 text-text-primary tabular-nums">{event.inputTokens == null ? 'Unavailable' : number.format(event.inputTokens)}</td>
                   <td className="px-4 py-3.5 text-text-primary tabular-nums">{event.outputTokens == null ? 'Unavailable' : number.format(event.outputTokens)}</td>

@@ -22,6 +22,11 @@ export interface AiMetricEvent {
   estimatedCostUsd: number | null;
 }
 
+export interface AdminProviderAttempts {
+  provider: string;
+  attempts: number;
+}
+
 export type AdminRecentActivityType =
   | 'user_signed_up'
   | 'ats_completed'
@@ -74,7 +79,7 @@ export function aggregateCustomerKpis(users: CustomerMetricUser[], now: Date) {
 
 export function aggregateAiUsage(events: AiMetricEvent[]) {
   const runs = new Map<string, { successful: boolean; usedFallback: boolean }>();
-  const providerBreakdown: Record<string, number> = {};
+  const providerCounts = new Map<string, number>();
   let latency = 0;
   let totalTokens = 0;
   let hasUnknownTokens = false;
@@ -84,7 +89,7 @@ export function aggregateAiUsage(events: AiMetricEvent[]) {
   let fallbackAttempts = 0;
 
   for (const event of events) {
-    providerBreakdown[event.provider] = (providerBreakdown[event.provider] ?? 0) + 1;
+    providerCounts.set(event.provider, (providerCounts.get(event.provider) ?? 0) + 1);
     latency += event.latencyMs;
     if (event.inputTokens == null || event.outputTokens == null) {
       hasUnknownTokens = true;
@@ -106,6 +111,11 @@ export function aggregateAiUsage(events: AiMetricEvent[]) {
   const successfulFeatureRuns = [...runs.values()].filter(({ successful }) => successful).length;
   const fallbackFeatureRuns = [...runs.values()].filter(({ usedFallback }) => usedFallback).length;
   const featureRuns = runs.size;
+  const providerBreakdown: AdminProviderAttempts[] = [...providerCounts]
+    .map(([provider, attempts]) => ({ provider, attempts }))
+    .sort((left, right) =>
+      right.attempts - left.attempts || left.provider.localeCompare(right.provider)
+    );
 
   return {
     featureRuns,

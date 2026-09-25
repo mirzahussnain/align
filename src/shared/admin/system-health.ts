@@ -1,5 +1,6 @@
 import 'server-only';
 
+import { AI_PROVIDER_DEFINITIONS } from '@/shared/config/ai-runtime';
 import { prisma } from '@/shared/lib/prisma';
 import { getRateLimitRedis } from '@/shared/lib/rate-limit';
 import { RedisCacheStore } from '@/shared/lib/cache/redis-cache-store';
@@ -132,8 +133,9 @@ export async function collectSystemHealth(input: {
       redisTcp,
       r2,
       configuration('Resend', configured(environment, ['RESEND_API_KEY', 'AUTH_EMAIL_FROM'])),
-      configuration('Gemini', configured(environment, ['GEMINI_API_KEY'])),
-      configuration('Groq', configured(environment, ['GROQ_API_KEY'])),
+      ...AI_PROVIDER_DEFINITIONS.map(({ label, apiKeyEnv }) =>
+        configuration(label, configured(environment, [apiKeyEnv]))
+      ),
       configuration(
         'Stripe',
         configured(environment, [

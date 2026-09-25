@@ -15,6 +15,7 @@ interface ModelPricing {
 
 export interface AiProviderDefinition {
   provider: SupportedAiProvider;
+  label: string;
   model: string;
   apiKeyEnv: 'GEMINI_API_KEY' | 'GROQ_API_KEY';
   pricing: ModelPricing | null;
@@ -28,12 +29,14 @@ export interface AiProviderDefinition {
 export const AI_PROVIDER_DEFINITIONS: readonly AiProviderDefinition[] = [
   {
     provider: 'gemini',
+    label: 'Gemini',
     model: 'gemini-3.5-flash',
     apiKeyEnv: 'GEMINI_API_KEY',
     pricing: { inputUsdPerMillionTokens: 1.5, outputUsdPerMillionTokens: 9 },
   },
   {
     provider: 'groq',
+    label: 'Groq',
     model: 'openai/gpt-oss-120b',
     apiKeyEnv: 'GROQ_API_KEY',
     pricing: { inputUsdPerMillionTokens: 0.15, outputUsdPerMillionTokens: 0.6 },
@@ -62,7 +65,7 @@ export function aiProviderEnvironmentErrors(
   );
   return configured
     ? []
-    : ['At least one supported AI provider must be configured: GEMINI_API_KEY or GROQ_API_KEY'];
+    : [`At least one supported AI provider must be configured: ${AI_PROVIDER_DEFINITIONS.map(({ apiKeyEnv }) => apiKeyEnv).join(' or ')}`];
 }
 
 export function estimateAiCostUsd(

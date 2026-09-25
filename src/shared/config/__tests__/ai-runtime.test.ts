@@ -8,9 +8,9 @@ import {
 
 describe('AI runtime provider configuration', () => {
   it('keeps one ordered Gemini attempt before Groq', () => {
-    expect(AI_PROVIDER_DEFINITIONS.map(({ provider, model }) => ({ provider, model }))).toEqual([
-      { provider: 'gemini', model: 'gemini-3.5-flash' },
-      { provider: 'groq', model: 'openai/gpt-oss-120b' },
+    expect(AI_PROVIDER_DEFINITIONS.map(({ provider, label, model }) => ({ provider, label, model }))).toEqual([
+      { provider: 'gemini', label: 'Gemini', model: 'gemini-3.5-flash' },
+      { provider: 'groq', label: 'Groq', model: 'openai/gpt-oss-120b' },
     ]);
   });
 
