@@ -1122,6 +1122,34 @@ model JobSnapshot {
   @@map("job_snapshot")
 }
 
+// Durable, versioned samples behind the public UK Career Market surface. A row
+// describes only the bounded vacancies observed from Align's integrated sources
+// at one point in time; it is not a claim about the complete labour market.
+model CareerMarketSnapshot {
+  id                 String   @id @default(cuid())
+  marketKey          String
+  roleQuery          String
+  locationQuery      String
+  normalizedRole     String
+  normalizedLocation String
+  providerCoverage   Json
+  sampleSize         Int
+  samplingStartedAt  DateTime
+  samplingCompletedAt DateTime
+  generatedAt        DateTime @default(now())
+  expiresAt          DateTime
+  calculationVersion String
+  salaryDisclosedCount Int
+  salaryEligibleCount  Int
+  dataQuality        Json
+  metrics            Json
+  createdAt          DateTime @default(now())
+
+  @@index([marketKey, generatedAt(sort: Desc)])
+  @@index([expiresAt])
+  @@map("career_market_snapshot")
+}
+
 // Canonical employer identity. Sponsor-register evidence belongs here, while
 // ATS identity and verification belong on EmployerJobSource below.
 model CompanyRecord {

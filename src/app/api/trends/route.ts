@@ -1,63 +1,34 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { API_CONFIG } from '@/shared/lib/config';
-import { FALLBACK_TRENDS } from '@/shared/constants/trends-fallback';
+import { type NextRequest, NextResponse } from 'next/server';
+
+import { applyRateLimit, trendsLimiter } from '@/shared/lib/rate-limit';
+import { resolveCareerMarketSnapshot } from '@/shared/services/career-market';
 
 export async function GET(request: NextRequest) {
+  const limited = await applyRateLimit(
+    trendsLimiter,
+    request.headers.get('x-forwarded-for') ?? 'anonymous-market',
+  );
+  if (limited) return limited;
+
+  const searchParams = new URL(request.url).searchParams;
+  const role = searchParams.get('role')?.trim() ?? '';
+  const location = searchParams.get('location')?.trim() || 'UK';
+  if (role.length < 2 || role.length > 100 || location.length > 100) {
+    return NextResponse.json({ error: { code: 'INVALID_MARKET_QUERY' } }, { status: 400 });
+  }
+
   try {
-    const { appId, appKey, histogramUrl } = API_CONFIG.adzuna;
-
-    if (!appId || !appKey) {
-      console.warn('Adzuna API keys are not configured. Using cached fallback trends data.');
-      return NextResponse.json({
-        ...FALLBACK_TRENDS,
-        isFallback: true,
-        message: 'Adzuna API keys are not configured. Using cached market fallback trends.'
-      });
-    }
-
-    // 1. Fetch Salary Data
-    const salaryUrl = `${histogramUrl}?app_id=${appId}&app_key=${appKey}&what=software%20developer`;
-    
-    console.log('Fetching live salary stats from Adzuna...');
-    // Cache for 24 hours to prevent rate limit issues
-    const response = await fetch(salaryUrl, { next: { revalidate: 86400 } });
-    
-    if (!response.ok) {
-      throw new Error(`Adzuna stats API returned status ${response.status}`);
-    }
-
-    const data = await response.json();
-    
-    // Scale standard salaries if we got a real mean salary
-    const liveMean = data.mean;
-    if (liveMean && typeof liveMean === 'number') {
-      const scaleFactor = liveMean / 68000; // Base baseline average software developer salary
-      
-      const dynamicSalaryTrends = FALLBACK_TRENDS.salaryTrends.map(item => ({
-        ...item,
-        london: Math.round(item.london * scaleFactor),
-        regional: Math.round(item.regional * scaleFactor),
-      }));
-
-      return NextResponse.json({
-        stackDominance: FALLBACK_TRENDS.stackDominance,
-        salaryTrends: dynamicSalaryTrends,
-        regionalDemand: FALLBACK_TRENDS.regionalDemand,
-        keywordTrends: FALLBACK_TRENDS.keywordTrends,
-        isFallback: false,
-      });
-    }
-
+    const result = await resolveCareerMarketSnapshot({ role, location });
     return NextResponse.json({
-      ...FALLBACK_TRENDS,
-      isFallback: false,
-    });
-  } catch (error) {
-    console.warn('Failed to fetch dynamic trends, falling back to cached constants:', error);
-    return NextResponse.json({
-      ...FALLBACK_TRENDS,
-      isFallback: true,
-      message: 'Failed to connect to API. Showing cached market intelligence fallback data.'
-    });
+      ...result,
+      methodology: {
+        scope: 'BOUNDED_SAMPLE',
+        statement: "Sampled current vacancies from Align's integrated sources, not the complete UK labour market.",
+        salaryMethod: 'Disclosure rate uses any stated salary; distribution uses only normalized annual GBP values.',
+        sponsorshipMethod: 'Employer register context does not confirm sponsorship for a vacancy or candidate.',
+      },
+    }, { status: result.freshness === 'PENDING' ? 202 : 200 });
+  } catch {
+    return NextResponse.json({ error: { code: 'MARKET_SAMPLE_UNAVAILABLE' } }, { status: 503 });
   }
 }

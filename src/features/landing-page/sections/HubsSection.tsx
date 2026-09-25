@@ -32,11 +32,11 @@ const MODULES = [
   },
   {
     icon: TrendingUp,
-    title: 'Technology Trends',
+    title: 'UK Career Market',
     description: 'Explore the product’s technology-specific salary, skills, and regional demand resource.',
     href: '/trends',
     color: 'from-[hsl(340,80%,55%)] to-[hsl(310,75%,50%)]',
-    actionText: 'View Trends',
+    actionText: 'Explore the market',
   },
 ];
 

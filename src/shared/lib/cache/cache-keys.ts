@@ -74,6 +74,12 @@ export const cacheKeys = {
   /** Single-flight lock for the production retention and ATS refresh schedule. */
   scheduledMaintenanceLock: () => key('lock', 'scheduled-maintenance'),
 
+  /** Latest durable Career Market snapshot for one normalized role/location. */
+  marketSnapshot: (marketKey: string) => key('market', marketKey),
+
+  /** Single-flight lock for lazy generation of one Career Market sample. */
+  marketRefreshLock: (marketKey: string) => key('lock', 'market', marketKey),
+
   /** Rolling provider health (recent failures/timeouts) for status display. */
   providerHealth: (provider: JobProvider) => key('provider-health', provider),
 
@@ -134,6 +140,8 @@ export const CACHE_TTL_SECONDS = {
   sponsorMatch: 24 * 60 * 60,
   sponsorRefreshLock: 5 * 60,
   scheduledMaintenanceLock: 10 * 60,
+  marketSnapshot: 24 * 60 * 60,
+  marketRefreshLock: 60,
   providerHealth: 10 * 60,
   searchSession: 15 * 60,
   employerBoard: 60 * 60,
