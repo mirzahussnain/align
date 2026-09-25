@@ -31,14 +31,19 @@ export const MARKETING_NAV_LINKS = [
 
 export const MARKETING_NAV_RESOURCES = [
   {
-    label: 'Immigration',
-    href: '/immigration',
-    description: 'Visa sponsors and immigration guidance',
+    label: 'Jobs',
+    href: '/jobs',
+    description: 'Search current UK vacancies',
   },
   {
-    label: 'Insights',
+    label: 'UK Career Market',
     href: '/trends',
-    description: 'UK technology salary and demand data',
+    description: 'Sampled vacancy and salary insights',
+  },
+  {
+    label: 'Sponsorship & Visas',
+    href: '/immigration',
+    description: 'Qualified sponsorship and visa resources',
   },
 ] as const;
 
@@ -57,16 +62,16 @@ export const NAV_LINKS = [
     description: 'Search vacancies across UK role families',
   },
   {
-    label: 'Immigration Hub',
+    label: 'Sponsorship & Visas',
     href: '/immigration',
     icon: 'Shield',
     description: 'Visa sponsors & immigration rules',
   },
   {
-    label: 'Technology Trends',
+    label: 'UK Career Market',
     href: '/trends',
     icon: 'TrendingUp',
-    description: 'UK technology salary and demand data',
+    description: 'Sampled vacancy and salary insights',
   },
 ] as const;
 
