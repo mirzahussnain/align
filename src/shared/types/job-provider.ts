@@ -112,7 +112,8 @@ export class JobProviderError extends Error {
   constructor(
     readonly provider: JobProvider,
     readonly code: JobProviderFailureCode,
-    message?: string
+    message?: string,
+    readonly retryAfterSeconds?: number,
   ) {
     super(message ?? `${provider} request failed: ${code}`);
     this.name = 'JobProviderError';

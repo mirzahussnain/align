@@ -2,6 +2,7 @@
 
 import type { ProviderJob, JobSearchParams, JobSearchResult } from '@/shared/types/job';
 import { API_CONFIG } from '@/shared/lib/config';
+import { providerResponseError } from '@/shared/services/job-providers/provider-errors';
 
 interface AdzunaJob {
   id: string;
@@ -76,8 +77,7 @@ export async function searchAdzunaJobs(
   const response = await fetch(url, { next: { revalidate: 300 }, signal: options.signal }); // Cache 5 min
 
   if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`Adzuna API error: ${response.status} - ${errorText}`);
+    throw providerResponseError('ADZUNA', response);
   }
 
   const data: AdzunaResponse = await response.json();

@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { MemoryCacheStore } from '@/shared/lib/cache/memory-cache-store';
 import type { JobSearchParams, JobSearchResult, ProviderJob } from '@/shared/types/job';
+import { JobProviderError } from '@/shared/types/job-provider';
 
 // Every provider is configured, so capability gating rather than credentials
 // decides what happens. The three network adapters are replaced outright.
@@ -188,6 +189,22 @@ describe('provider results are served from the cache', () => {
     clock.mockRestore();
   });
 
+  it('keeps a stale page when its refresh is rate limited', async () => {
+    const store = new MemoryCacheStore();
+    const clock = vi.spyOn(Date, 'now');
+    const base = Date.now();
+    clock.mockReturnValue(base);
+    await searchProvidersInteractive(baseParams(), ['REED'], { store });
+    clock.mockReturnValue(base + 6 * 60_000);
+    reed.mockRejectedValue(new JobProviderError('REED', 'RATE_LIMITED'));
+
+    const outcome = await searchProvidersInteractive(baseParams(), ['REED'], { store });
+
+    expect(outcome.results[0]).toMatchObject({ provider: 'REED', status: 'STALE_CACHE', cacheHit: true });
+    expect(outcome.results[0].jobs).toHaveLength(1);
+    clock.mockRestore();
+  });
+
   it('stops serving an entry once it is past the stale boundary', async () => {
     const store = new MemoryCacheStore();
     const clock = vi.spyOn(Date, 'now');
@@ -282,6 +299,18 @@ describe('one slow provider does not block the page', () => {
     const outcome = await searchProvidersInteractive(baseParams(), ['REED', 'ADZUNA'], { store });
     expect(outcome.results.find((r) => r.provider === 'ADZUNA')?.status).toBe('FAILED');
     expect(outcome.results.find((r) => r.provider === 'REED')?.status).toBe('SUCCESS');
+  });
+
+  it('reports a typed rate limit separately while keeping successful providers', async () => {
+    const store = new MemoryCacheStore();
+    adzuna.mockRejectedValue(new JobProviderError('ADZUNA', 'RATE_LIMITED'));
+
+    const outcome = await searchProvidersInteractive(baseParams(), ['REED', 'ADZUNA'], { store });
+
+    expect(outcome.results.find((item) => item.provider === 'ADZUNA')).toMatchObject({
+      status: 'RATE_LIMITED', errorCode: 'RATE_LIMITED',
+    });
+    expect(outcome.results.find((item) => item.provider === 'REED')?.status).toBe('SUCCESS');
   });
 
   it('returns early once enough unique jobs are in hand', async () => {

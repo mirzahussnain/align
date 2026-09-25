@@ -701,7 +701,7 @@ export async function GET(request: NextRequest) {
           exhausted: outcome.exhausted,
           pagesRequested: outcome.pagesRequested,
         },
-        CACHE_TTL_SECONDS.searchFresh,
+        outcome.pendingProviders.length ? 0 : CACHE_TTL_SECONDS.searchFresh,
         CACHE_TTL_SECONDS.searchStale,
       );
       await timings.measure("cacheWriteMs", () =>

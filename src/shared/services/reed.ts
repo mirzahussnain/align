@@ -2,6 +2,7 @@
 
 import type { ProviderJob, JobSearchParams, JobSearchResult } from '@/shared/types/job';
 import { API_CONFIG } from '@/shared/lib/config';
+import { providerResponseError } from '@/shared/services/job-providers/provider-errors';
 
 interface ReedJob {
   jobId: number;
@@ -82,8 +83,7 @@ export async function searchReedJobs(
   });
 
   if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`Reed API error: ${response.status} - ${errorText}`);
+    throw providerResponseError('REED', response);
   }
 
   const data: ReedResponse = await response.json();

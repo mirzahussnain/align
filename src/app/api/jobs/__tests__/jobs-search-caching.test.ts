@@ -342,6 +342,23 @@ describe("pending providers", () => {
     expect(response.body.meta.partialResults).toBe(true);
   });
 
+  it('does not cache a partial combined page as fresh', async () => {
+    searchProvidersInteractive.mockResolvedValue(
+      fanOut(
+        [
+          providerResult([job()]),
+          providerResult([], { provider: 'ADZUNA', status: 'PENDING' }),
+        ],
+        ['ADZUNA'],
+      ),
+    );
+
+    await call('query=partialfreshness&location=Leeds');
+    const second = await call('query=partialfreshness&location=Leeds');
+
+    expect(second.body.meta.cacheState).toBe('STALE');
+  });
+
   it("reports a pending provider as PENDING in the counts", async () => {
     searchProvidersInteractive.mockResolvedValue(
       fanOut(

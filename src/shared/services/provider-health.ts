@@ -50,7 +50,7 @@ function classify(consecutiveFailures: number): ProviderHealthState['status'] {
 export function isFailureStatus(status: ProviderSearchStatus): boolean {
   // NOT_CONFIGURED is a deployment fact, not a provider fault, and PENDING means
   // the interactive deadline arrived first — neither says the source is unwell.
-  return status === 'FAILED' || status === 'TIMED_OUT';
+  return status === 'FAILED' || status === 'TIMED_OUT' || status === 'RATE_LIMITED';
 }
 
 export async function readProviderHealth(
