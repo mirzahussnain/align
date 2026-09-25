@@ -48,4 +48,19 @@ describe('scheduled maintenance', () => {
     release();
     await first;
   });
+
+  it('keeps the overlap lock until sibling tasks settle after one task fails', async () => {
+    const store = new MemoryCacheStore();
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    const retention = vi.fn(async () => { throw new Error('retention failed'); });
+    const refresher = vi.fn(async () => { await gate; return summary; });
+    const deps = { store, retention, refreshers: { greenhouse: refresher, lever: refresher, ashby: refresher } };
+
+    const first = runScheduledMaintenance(deps);
+    await vi.waitFor(() => expect(refresher).toHaveBeenCalledTimes(3));
+    await expect(runScheduledMaintenance(deps)).resolves.toEqual({ status: 'already_running' });
+    release();
+    await expect(first).rejects.toThrow('retention failed');
+  });
 });

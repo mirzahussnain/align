@@ -30,6 +30,7 @@ const {
   __resetInFlight,
   providerCacheKey,
   providerQueryDescriptor,
+  searchProvider,
   searchProvidersInteractive,
 } = await import('@/shared/services/job-search');
 
@@ -189,6 +190,15 @@ describe('provider results are served from the cache', () => {
     clock.mockRestore();
   });
 
+  it('isolates NHS filters that are pushed to the provider', () => {
+    expect(providerCacheKey('NHS_JOBS', baseParams({ remote: true }))).not.toBe(
+      providerCacheKey('NHS_JOBS', baseParams({ remote: false })),
+    );
+    expect(providerCacheKey('NHS_JOBS', baseParams({ postedWithinDays: 7 }))).not.toBe(
+      providerCacheKey('NHS_JOBS', baseParams({ postedWithinDays: 30 })),
+    );
+  });
+
   it('keeps a stale page when its refresh is rate limited', async () => {
     const store = new MemoryCacheStore();
     const clock = vi.spyOn(Date, 'now');
@@ -255,6 +265,24 @@ describe('provider results are served from the cache', () => {
 });
 
 describe('one slow provider does not block the page', () => {
+  it('aborts the provider request when its background safety timeout expires', async () => {
+    vi.useFakeTimers();
+    const store = new MemoryCacheStore();
+    let providerSignal: AbortSignal | undefined;
+    reed.mockImplementation((_params: JobSearchParams, options: { signal?: AbortSignal }) => {
+      providerSignal = options.signal;
+      return new Promise((_resolve, reject) => options.signal?.addEventListener('abort', () => {
+        reject(new DOMException('aborted', 'AbortError'));
+      }));
+    });
+
+    const pending = searchProvider('REED', baseParams(), store, new AbortController().signal);
+    await vi.advanceTimersByTimeAsync(5_000);
+    await expect(pending).resolves.toMatchObject({ status: 'TIMED_OUT', errorCode: 'TIMEOUT' });
+    expect(providerSignal?.aborted).toBe(true);
+    vi.useRealTimers();
+  });
+
   it('answers at the deadline and reports the straggler as PENDING, not failed', async () => {
     const store = new MemoryCacheStore();
     reed.mockImplementation(async (params: JobSearchParams) => result([providerJob('reed')], params));
@@ -311,6 +339,18 @@ describe('one slow provider does not block the page', () => {
       status: 'RATE_LIMITED', errorCode: 'RATE_LIMITED',
     });
     expect(outcome.results.find((item) => item.provider === 'REED')?.status).toBe('SUCCESS');
+  });
+
+  it('honours Retry-After before calling a rate-limited provider again', async () => {
+    const store = new MemoryCacheStore();
+    reed.mockRejectedValue(new JobProviderError('REED', 'RATE_LIMITED', undefined, 60));
+
+    const first = await searchProvider('REED', baseParams(), store, new AbortController().signal);
+    const second = await searchProvider('REED', baseParams(), store, new AbortController().signal);
+
+    expect(first.status).toBe('RATE_LIMITED');
+    expect(second.status).toBe('RATE_LIMITED');
+    expect(reed).toHaveBeenCalledOnce();
   });
 
   it('returns early once enough unique jobs are in hand', async () => {

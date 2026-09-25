@@ -51,6 +51,9 @@ export const cacheKeys = {
   providerResponse: (provider: JobProvider, queryHash: string, cursor: string) =>
     key('provider', provider, queryHash, cursor),
 
+  /** Provider-wide cooldown after an upstream 429 carrying Retry-After. */
+  providerRateLimit: (provider: JobProvider) => key('provider-rate-limit', provider),
+
   /** Normalised jobs for one provider query page. */
   providerNormalised: (provider: JobProvider, queryHash: string, cursor: string) =>
     key('provider-normalised', provider, queryHash, cursor),

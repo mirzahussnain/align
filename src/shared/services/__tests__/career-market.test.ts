@@ -6,6 +6,7 @@ import {
   buildCareerMarketSnapshot,
   careerMarketKey,
   isUkMarketJob,
+  marketProviderLocation,
   resolveCareerMarketSnapshot,
 } from '../career-market';
 
@@ -29,6 +30,12 @@ describe('Career Market snapshots', () => {
   it('classifies provider jobs without precomputed UK eligibility before sampling', () => {
     expect(isUkMarketJob(job({ locationText: 'Leeds', region: 'Yorkshire', ukEligibility: undefined }))).toBe(true);
     expect(isUkMarketJob(job({ locationText: 'New York, NY', region: 'New York', ukEligibility: undefined }))).toBe(false);
+  });
+
+  it('does not turn the default UK-wide sample into a provider radius search', () => {
+    expect(marketProviderLocation('UK')).toBe('');
+    expect(marketProviderLocation(' United Kingdom ')).toBe('');
+    expect(marketProviderLocation('Leeds')).toBe('Leeds');
   });
 
   it('uses normalized role and location for a stable market key', () => {

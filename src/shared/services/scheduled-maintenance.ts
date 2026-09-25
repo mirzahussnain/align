@@ -37,12 +37,17 @@ export async function runScheduledMaintenance(dependencies: MaintenanceDependenc
   };
 
   try {
-    const [retentionResult, greenhouse, lever, ashby] = await Promise.all([
+    const settled = await Promise.allSettled([
       retention(),
       refreshers.greenhouse(REFRESH_INPUT),
       refreshers.lever(REFRESH_INPUT),
       refreshers.ashby(REFRESH_INPUT),
     ]);
+    const failed = settled.find((item): item is PromiseRejectedResult => item.status === 'rejected');
+    if (failed) throw failed.reason;
+    const [retentionResult, greenhouse, lever, ashby] = settled.map(
+      (item) => (item as PromiseFulfilledResult<unknown>).value,
+    ) as [Awaited<ReturnType<typeof retention>>, RefreshSummary, RefreshSummary, RefreshSummary];
     const result = {
       status: 'completed' as const,
       durationMs: Date.now() - startedAt,

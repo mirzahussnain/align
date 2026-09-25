@@ -33,6 +33,11 @@ export function isUkMarketJob(job: NormalisedJob): boolean {
   return isUkDiscoverable(eligibility);
 }
 
+export function marketProviderLocation(location: string): string {
+  const trimmed = location.trim();
+  return /^(?:uk|united kingdom)$/i.test(trimmed) ? '' : trimmed;
+}
+
 export function careerMarketKey(role: string, location: string): string {
   return createHash('sha256')
     .update(`${normalize(role)}\n${normalize(location) || 'uk'}`)
@@ -158,7 +163,7 @@ async function findLatestSnapshot(marketKey: string): Promise<CareerMarketSnapsh
 async function generateSnapshot(input: MarketInput, store: CacheStore): Promise<CareerMarketSnapshotView> {
   const startedAt = new Date();
   const controller = new AbortController();
-  const params = { query: input.role, location: input.location, page: 1, perPage: 50, contractType: 'all' as const, sortBy: 'date' as const };
+  const params = { query: input.role, location: marketProviderLocation(input.location), page: 1, perPage: 50, contractType: 'all' as const, sortBy: 'date' as const };
   const results = await Promise.all(SEARCH_JOB_PROVIDERS.map((provider) => searchProvider(provider, params, store, controller.signal)));
   if (!results.some((result) => ['SUCCESS', 'EMPTY', 'STALE_CACHE'].includes(result.status))) {
     throw new Error('MARKET_SAMPLE_UNAVAILABLE');

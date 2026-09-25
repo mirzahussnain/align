@@ -70,6 +70,8 @@ export function providerQueryDescriptor(provider: SearchJobProvider, params: Job
     salaryMin: pushdown.salary ? params.salaryMin : undefined,
     salaryMax: pushdown.salary ? params.salaryMax : undefined,
     contractType: pushdown.contractType && params.contractType !== 'all' ? params.contractType : undefined,
+    remote: pushdown.remote ? Boolean(params.remote) : undefined,
+    postedWithinDays: pushdown.postedWithin ? params.postedWithinDays : undefined,
     sortBy: params.sortBy && capabilities.sortOptions.includes(params.sortBy) ? params.sortBy : undefined,
   };
 }
@@ -158,7 +160,7 @@ async function fetchProviderPage(
     // interactive deadline that bounds the WAIT: a provider answering at 3 s is
     // too late for this response but its result is still worth caching.
     const response = await withTimeout(
-      adapter.search(params, { mode: 'background', signal }),
+      (requestSignal) => adapter.search(params, { mode: 'background', signal: requestSignal }),
       capabilities.backgroundTimeoutMs,
       signal
     );
@@ -190,6 +192,10 @@ async function fetchProviderPage(
     return clone(result, false);
   } catch (error) {
     const failure = classifyProviderError(provider, error);
+    if (failure.code === 'RATE_LIMITED' && failure.retryAfterSeconds && failure.retryAfterSeconds > 0) {
+      const cooldownSeconds = Math.min(Math.ceil(failure.retryAfterSeconds), 24 * 60 * 60);
+      await store.set(cacheKeys.providerRateLimit(provider), true, cooldownSeconds);
+    }
     const result: ProviderSearchResult = {
       provider,
       status: failure.status,
@@ -212,21 +218,29 @@ async function fetchProviderPage(
   }
 }
 
-/** Reject with a named TimeoutError after `ms`, without leaking the timer. */
-function withTimeout<T>(promise: Promise<T>, ms: number, signal: AbortSignal): Promise<T> {
+/** Abort the underlying request and reject after `ms`, without leaking listeners or timers. */
+function withTimeout<T>(start: (signal: AbortSignal) => Promise<T>, ms: number, signal: AbortSignal): Promise<T> {
   return new Promise<T>((resolve, reject) => {
+    const requestController = new AbortController();
     const timer = setTimeout(() => {
+      requestController.abort();
       const error = new Error('timeout');
       error.name = 'TimeoutError';
       reject(error);
     }, ms);
     const onAbort = () => {
+      requestController.abort(signal.reason);
       const error = new Error('aborted');
       error.name = 'AbortError';
       reject(error);
     };
+    if (signal.aborted) {
+      onAbort();
+      clearTimeout(timer);
+      return;
+    }
     signal.addEventListener('abort', onAbort, { once: true });
-    promise.then(resolve, reject).finally(() => {
+    start(requestController.signal).then(resolve, reject).finally(() => {
       clearTimeout(timer);
       signal.removeEventListener('abort', onAbort);
     });
@@ -252,6 +266,18 @@ export async function searchProvider(
   if (cached.freshness === 'FRESH') {
     logJobBoardEvent('cache_hit', { provider, cacheLayer: 'provider', cacheHit: 'FRESH', ageMs: cached.ageMs });
     return fromCachedPage(provider, cached.value, Date.now() - started);
+  }
+
+  if (await store.get<boolean>(cacheKeys.providerRateLimit(provider))) {
+    return {
+      provider,
+      status: 'RATE_LIMITED',
+      jobs: [],
+      rawReceived: 0,
+      validNormalised: 0,
+      errorCode: 'RATE_LIMITED',
+      durationMs: Date.now() - started,
+    };
   }
 
   const existing = inFlight.get(key);
