@@ -22,8 +22,8 @@ export interface AiProviderDefinition {
 
 /**
  * Ordered provider/model runtime configuration. Array order is fallback order.
- * Groq's configured enterprise model has contract-specific pricing, so its cost
- * remains unknown rather than being guessed.
+ * Pricing uses the providers' published per-million-token rates; unknown pricing
+ * must remain null rather than being estimated.
  */
 export const AI_PROVIDER_DEFINITIONS: readonly AiProviderDefinition[] = [
   {
@@ -34,9 +34,9 @@ export const AI_PROVIDER_DEFINITIONS: readonly AiProviderDefinition[] = [
   },
   {
     provider: 'groq',
-    model: 'llama-3.3-70b-versatile',
+    model: 'openai/gpt-oss-120b',
     apiKeyEnv: 'GROQ_API_KEY',
-    pricing: null,
+    pricing: { inputUsdPerMillionTokens: 0.15, outputUsdPerMillionTokens: 0.6 },
   },
 ] as const;
 

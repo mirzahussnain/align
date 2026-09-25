@@ -150,6 +150,8 @@ export async function POST(request: Request) {
     let reconciliation: Awaited<ReturnType<typeof reconcileProfileWithCv>>;
     try {
       reconciliation = await reconcileProfileWithCv({
+        userId: session.user.id,
+        operationId,
         profile,
         cvText,
         jobDescription,

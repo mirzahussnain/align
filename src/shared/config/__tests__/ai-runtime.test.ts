@@ -10,14 +10,14 @@ describe('AI runtime provider configuration', () => {
   it('keeps one ordered Gemini attempt before Groq', () => {
     expect(AI_PROVIDER_DEFINITIONS.map(({ provider, model }) => ({ provider, model }))).toEqual([
       { provider: 'gemini', model: 'gemini-3.5-flash' },
-      { provider: 'groq', model: 'llama-3.3-70b-versatile' },
+      { provider: 'groq', model: 'openai/gpt-oss-120b' },
     ]);
   });
 
   it('calculates cost only when model pricing and both token counts are available', () => {
     expect(estimateAiCostUsd('gemini', 'gemini-3.5-flash', 100, 50)).toBeCloseTo(0.0006, 10);
     expect(estimateAiCostUsd('gemini', 'gemini-3.5-flash', null, 50)).toBeNull();
-    expect(estimateAiCostUsd('groq', 'llama-3.3-70b-versatile', 100, 50)).toBeNull();
+    expect(estimateAiCostUsd('groq', 'openai/gpt-oss-120b', 100, 50)).toBeCloseTo(0.000045, 10);
     expect(estimateAiCostUsd('gemini', 'unknown-model', 100, 50)).toBeNull();
   });
 });

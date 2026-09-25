@@ -22,6 +22,7 @@ import {
   generateJSONFromAIWithProvenance,
   type AIResultWithProvenance,
 } from './ai-orchestrator';
+import type { AiTelemetryContext } from './ai-telemetry-context';
 import { normalizeJobMatchDataV2 } from './job-match-ledger';
 
 /**
@@ -31,7 +32,8 @@ import { normalizeJobMatchDataV2 } from './job-match-ledger';
  */
 export async function getClassification(
   cvExcerpt: string,
-  targetRoleTitle?: string
+  targetRoleTitle?: string,
+  telemetry: AiTelemetryContext = {}
 ): Promise<AIClassificationOutput | null> {
   const prompt = `Classify the candidate below. Return ONLY a JSON object, no markdown.
 
@@ -55,6 +57,7 @@ Schema:
 { "occupation": "one occupation code", "sector": "one sector code", "seniority": "entry|mid|senior|lead|unknown", "confidence": number 0..1 }`;
 
   return generateJSONFromAI<AIClassificationOutput>({
+    ...telemetry,
     capability: 'ai_target_classification',
     prompt,
     temperature: 0,
@@ -68,9 +71,10 @@ export async function getSemanticCVFeedback(
   cvText: string,
   baseResult: CVAnalysisResult,
   profile: OccupationProfile,
-  classification: Classification
+  classification: Classification,
+  telemetry: AiTelemetryContext = {}
 ): Promise<AISemanticOutput | null> {
-  const result = await getSemanticCVFeedbackWithProvenance(cvText, baseResult, profile, classification);
+  const result = await getSemanticCVFeedbackWithProvenance(cvText, baseResult, profile, classification, telemetry);
   return result?.data ?? null;
 }
 
@@ -78,11 +82,13 @@ export async function getSemanticCVFeedbackWithProvenance(
   cvText: string,
   baseResult: CVAnalysisResult,
   profile: OccupationProfile,
-  classification: Classification
+  classification: Classification,
+  telemetry: AiTelemetryContext = {}
 ): Promise<AIResultWithProvenance<AISemanticOutput> | null> {
   // Zod's loose objects widen the inferred type with an index signature, so
   // the schema is bridged to the declared output interface explicitly.
   return generateJSONFromAIWithProvenance<AISemanticOutput>({
+    ...telemetry,
     capability: 'ai_enhanced_ats_analysis',
     prompt: composeSemanticPrompt(cvText, baseResult, profile, classification),
     temperature: 0.1,
@@ -96,9 +102,10 @@ export async function getJobMatchFeedback(
   cvText: string,
   jobDescription: string,
   profile: OccupationProfile,
-  classification: Classification
+  classification: Classification,
+  telemetry: AiTelemetryContext = {}
 ): Promise<JobMatchDataV2 | null> {
-  const result = await getJobMatchFeedbackWithProvenance(cvText, jobDescription, profile, classification);
+  const result = await getJobMatchFeedbackWithProvenance(cvText, jobDescription, profile, classification, telemetry);
   return result?.data ?? null;
 }
 
@@ -106,9 +113,11 @@ export async function getJobMatchFeedbackWithProvenance(
   cvText: string,
   jobDescription: string,
   profile: OccupationProfile,
-  classification: Classification
+  classification: Classification,
+  telemetry: AiTelemetryContext = {}
 ): Promise<AIResultWithProvenance<JobMatchDataV2> | null> {
   const result = await generateJSONFromAIWithProvenance<JobMatchDataV2Draft>({
+    ...telemetry,
     capability: 'job_match_analysis',
     prompt: composeJobMatchPrompt(cvText, jobDescription, profile, classification),
     temperature: 0.1,

@@ -118,7 +118,7 @@ export async function runAtsAnalysis(input: AtsAnalysisInput): Promise<CVAnalysi
 
   let provenance: { provider: string; model: string } | null = null;
   if (aiAllowed) {
-    const enhanced = await getSemanticCVFeedbackWithProvenance(source.text, result, occupationProfile, classification).catch(() => null);
+    const enhanced = await getSemanticCVFeedbackWithProvenance(source.text, result, occupationProfile, classification, { userId: input.userId, operationId: input.operationId }).catch(() => null);
     if (enhanced) {
       applySemantic(result, enhanced.data);
       provenance = enhanced.provenance;

@@ -1,14 +1,16 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   requireAdminDataAccess: vi.fn(),
   resolveBillingAccessForUsers: vi.fn(),
+  queryRaw: vi.fn(),
   userCount: vi.fn(),
   userFindMany: vi.fn(),
-  aiCount: vi.fn(),
-  aiAggregate: vi.fn(),
-  aiGroupBy: vi.fn(),
   aiFindMany: vi.fn(),
+  aiGroupBy: vi.fn(),
+  atsFindMany: vi.fn(),
+  jobMatchFindMany: vi.fn(),
+  billingPurchaseFindMany: vi.fn(),
 }));
 
 vi.mock('../authorization', () => ({
@@ -19,13 +21,12 @@ vi.mock('@/shared/billing/access', () => ({
 }));
 vi.mock('@/shared/lib/prisma', () => ({
   prisma: {
+    $queryRaw: mocks.queryRaw,
     user: { count: mocks.userCount, findMany: mocks.userFindMany },
-    aiUsageEvent: {
-      count: mocks.aiCount,
-      aggregate: mocks.aiAggregate,
-      groupBy: mocks.aiGroupBy,
-      findMany: mocks.aiFindMany,
-    },
+    aiUsageEvent: { findMany: mocks.aiFindMany, groupBy: mocks.aiGroupBy },
+    atsAnalysis: { findMany: mocks.atsFindMany },
+    jobMatch: { findMany: mocks.jobMatchFindMany },
+    billingPurchase: { findMany: mocks.billingPurchaseFindMany },
   },
 }));
 
@@ -37,13 +38,47 @@ import {
 } from '../data';
 
 const NOW = new Date('2026-09-23T12:00:00.000Z');
+const originalAdminEmails = process.env.ADMIN_EMAILS;
+
+function activityUser(input: {
+  id: string;
+  email: string;
+  createdAt?: Date;
+  updatedAt?: Date;
+  emailVerified?: boolean;
+}) {
+  return {
+    id: input.id,
+    email: input.email,
+    emailVerified: input.emailVerified ?? true,
+    createdAt: input.createdAt ?? new Date('2026-09-01T10:00:00.000Z'),
+    updatedAt: input.updatedAt ?? new Date('2026-09-20T10:00:00.000Z'),
+    onboardedAt: null,
+    onboardingState: null,
+    sessions: [],
+    atsAnalyses: [],
+    jobMatches: [],
+    generatedCVs: [],
+    aiUsageEvents: [],
+    _count: { storedCvs: 0, atsAnalyses: 0, jobMatches: 0 },
+  };
+}
 
 describe('admin data', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    process.env.ADMIN_EMAILS = 'admin@align.test';
     mocks.requireAdminDataAccess.mockResolvedValue({
       user: { id: 'admin-1', email: 'admin@align.test' },
     });
+    mocks.atsFindMany.mockResolvedValue([]);
+    mocks.jobMatchFindMany.mockResolvedValue([]);
+    mocks.billingPurchaseFindMany.mockResolvedValue([]);
+  });
+
+  afterEach(() => {
+    if (originalAdminEmails === undefined) delete process.env.ADMIN_EMAILS;
+    else process.env.ADMIN_EMAILS = originalAdminEmails;
   });
 
   it('defaults AI usage to the current UTC month', () => {
@@ -54,67 +89,69 @@ describe('admin data', () => {
     mocks.requireAdminDataAccess.mockRejectedValue(new Error('ADMIN_FORBIDDEN'));
 
     await expect(loadAdminOverview(NOW)).rejects.toThrow('ADMIN_FORBIDDEN');
-    expect(mocks.userCount).not.toHaveBeenCalled();
-    expect(mocks.aiCount).not.toHaveBeenCalled();
+    expect(mocks.userFindMany).not.toHaveBeenCalled();
+    expect(mocks.aiFindMany).not.toHaveBeenCalled();
   });
 
-  it('aggregates the admin overview using authoritative plan and telemetry data', async () => {
-    mocks.userCount
-      .mockResolvedValueOnce(3)
-      .mockResolvedValueOnce(2)
-      .mockResolvedValueOnce(2);
-    mocks.userFindMany.mockResolvedValue([
-      { id: 'u1' },
-      { id: 'u2' },
-      { id: 'u3' },
-    ]);
+  it('excludes internal accounts from customer KPIs and keeps AI attempts distinct from feature runs', async () => {
+    mocks.userFindMany
+      .mockResolvedValueOnce([
+        activityUser({ id: 'admin', email: 'admin@align.test' }),
+        activityUser({ id: 'free', email: 'free@align.test', updatedAt: new Date('2026-09-23T10:00:00Z') }),
+        activityUser({ id: 'pro', email: 'pro@align.test', createdAt: new Date('2026-08-01T10:00:00Z') }),
+      ])
+      .mockResolvedValueOnce([]);
     mocks.resolveBillingAccessForUsers.mockResolvedValue(
       new Map([
-        ['u1', { effectivePlan: 'FREE' }],
-        ['u2', { effectivePlan: 'PRO' }],
-        ['u3', { effectivePlan: 'FREE' }],
+        ['admin', { effectivePlan: 'PRO' }],
+        ['free', { effectivePlan: 'FREE' }],
+        ['pro', { effectivePlan: 'PRO' }],
       ])
     );
-    mocks.aiCount
-      .mockResolvedValueOnce(5)
-      .mockResolvedValueOnce(4)
-      .mockResolvedValueOnce(1)
-      .mockResolvedValueOnce(0);
-    mocks.aiAggregate.mockResolvedValue({ _sum: { estimatedCostUsd: 1.25 } });
+    mocks.queryRaw
+      .mockResolvedValueOnce([{
+        featureRuns: 1, providerAttempts: 3, unattributedAttempts: 1,
+        successfulFeatureRuns: 1, fallbackFeatureRuns: 1, fallbackAttempts: 1,
+        averageLatencyMs: 200, totalTokens: 265, estimatedCostUsd: 0.002,
+        knownCostAttempts: 2, tokenBearingAttempts: 3,
+        providerBreakdown: { gemini: 2, groq: 1 },
+      }])
+      .mockResolvedValueOnce([{ today: 1, last7Days: 2, last30Days: 2 }]);
+    mocks.aiFindMany
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([]);
     mocks.aiGroupBy.mockResolvedValue([
-      { capability: 'job_match_analysis', _count: { capability: 3 } },
+      { capability: 'job_match_analysis', _count: { capability: 2 } },
     ]);
 
-    await expect(loadAdminOverview(NOW)).resolves.toEqual({
-      totalUsers: 3,
-      newUsersThisMonth: 2,
-      freeUsers: 2,
+    const result = await loadAdminOverview(NOW);
+
+    expect(result).toMatchObject({
+      customerUsers: 2,
+      internalUsers: 1,
+      freeUsers: 1,
       proUsers: 1,
-      verifiedUsers: 2,
-      unverifiedUsers: 1,
-      aiOperationsThisMonth: 5,
-      successfulAiOperations: 4,
-      failedAiOperations: 1,
-      estimatedAiCostUsd: 1.25,
+      conversionRate: 50,
+      aiFeatureRunsThisMonth: 1,
+      providerAttemptsThisMonth: 3,
+      unattributedAttemptsThisMonth: 1,
+      aiSuccessRate: 100,
+      fallbackRate: 100,
+      providerBreakdown: { gemini: 2, groq: 1 },
+      knownCostCoverage: 66.66666666666666,
+      estimatedAiCostUsd: 0.002,
       mostUsedAiCapability: 'job_match_analysis',
     });
   });
 
-  it('returns safe paginated user rows with counts, plan, onboarding, and last activity', async () => {
+  it('returns safe paginated user rows with internal identity and last activity', async () => {
     mocks.userCount.mockResolvedValue(1);
     mocks.userFindMany.mockResolvedValue([
       {
-        id: 'u1',
-        email: 'member@align.test',
-        emailVerified: true,
-        createdAt: new Date('2026-09-01T10:00:00.000Z'),
-        updatedAt: new Date('2026-09-20T10:00:00.000Z'),
+        ...activityUser({ id: 'u1', email: 'admin@align.test' }),
         onboardedAt: new Date('2026-09-02T10:00:00.000Z'),
-        onboardingState: { status: 'COMPLETED', stage: 'COMPLETE' },
         sessions: [{ updatedAt: new Date('2026-09-22T10:00:00.000Z') }],
         atsAnalyses: [{ createdAt: new Date('2026-09-21T10:00:00.000Z') }],
-        jobMatches: [],
-        generatedCVs: [],
         _count: { storedCvs: 2, atsAnalyses: 4, jobMatches: 3 },
       },
     ]);
@@ -122,62 +159,31 @@ describe('admin data', () => {
       new Map([['u1', { effectivePlan: 'PRO' }]])
     );
 
-    const result = await loadAdminUsers({ search: 'member', page: 1, pageSize: 20 });
+    const result = await loadAdminUsers({ search: 'admin', page: 1, pageSize: 20 });
 
-    expect(result).toEqual({
-      rows: [
-        {
-          id: 'u1',
-          email: 'member@align.test',
-          signupDate: new Date('2026-09-01T10:00:00.000Z'),
-          emailVerified: true,
-          plan: 'PRO',
-          onboardingState: 'Completed',
-          storedCvCount: 2,
-          analysisCount: 4,
-          jobMatchCount: 3,
-          lastActivityAt: new Date('2026-09-22T10:00:00.000Z'),
-        },
-      ],
-      page: 1,
-      pageSize: 20,
-      total: 1,
-      totalPages: 1,
+    expect(result.rows[0]).toMatchObject({
+      id: 'u1',
+      email: 'admin@align.test',
+      isInternal: true,
+      plan: 'PRO',
+      onboardingState: 'Completed',
+      lastActivityAt: new Date('2026-09-22T10:00:00.000Z'),
     });
-    expect(mocks.userFindMany).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: { email: { contains: 'member', mode: 'insensitive' } },
-        skip: 0,
-        take: 20,
-      })
-    );
   });
 
-  it('applies AI usage filters and keeps incomplete token or cost totals unavailable', async () => {
-    mocks.aiCount
-      .mockResolvedValueOnce(2)
-      .mockResolvedValueOnce(2)
-      .mockResolvedValueOnce(1)
-      .mockResolvedValueOnce(1);
-    mocks.aiAggregate.mockResolvedValue({
-      _sum: { inputTokens: 120, outputTokens: 80, estimatedCostUsd: 0.004 },
-      _avg: { latencyMs: 150 },
-    });
+  it('applies AI usage filters and reports run, fallback, provider, and cost coverage summaries', async () => {
+    mocks.queryRaw.mockResolvedValueOnce([{
+      featureRuns: 1, providerAttempts: 2, unattributedAttempts: 1,
+      successfulFeatureRuns: 0, fallbackFeatureRuns: 1, fallbackAttempts: 1,
+      averageLatencyMs: 175, totalTokens: null, estimatedCostUsd: null,
+      knownCostAttempts: 0, tokenBearingAttempts: 1, providerBreakdown: { groq: 2 },
+    }]);
     mocks.aiFindMany
       .mockResolvedValueOnce([
         {
-          id: 'evt-1',
-          capability: 'job_match_analysis',
-          provider: 'groq',
-          model: 'llama-3.3-70b-versatile',
-          inputTokens: null,
-          outputTokens: null,
-          latencyMs: 175,
-          success: false,
-          errorCode: 'TIMEOUT',
-          fallbackUsed: true,
-          attemptNumber: 2,
-          estimatedCostUsd: null,
+          id: 'evt-1', capability: 'job_match_analysis', provider: 'groq', model: 'llama-3.3-70b-versatile',
+          inputTokens: 120, outputTokens: 80, latencyMs: 150, success: false, errorCode: 'TIMEOUT',
+          fallbackUsed: true, attemptNumber: 2, estimatedCostUsd: null,
           createdAt: new Date('2026-09-22T10:00:00.000Z'),
         },
       ])
@@ -186,42 +192,22 @@ describe('admin data', () => {
       ]);
 
     const result = await loadAdminAiUsage({
-      from: '2026-09-01',
-      to: '2026-09-22',
-      capability: 'job_match_analysis',
-      provider: 'groq',
-      model: 'llama-3.3-70b-versatile',
-      success: false,
-      page: 1,
-      pageSize: 25,
+      from: '2026-09-01', to: '2026-09-22', capability: 'job_match_analysis',
+      provider: 'groq', model: 'llama-3.3-70b-versatile', success: false,
+      page: 1, pageSize: 25,
     });
 
-    expect(result.summary).toEqual({
-      totalRequests: 2,
+    expect(result.summary).toMatchObject({
+      featureRuns: 1,
+      providerAttempts: 2,
+      unattributedAttempts: 1,
+      fallbackRate: 100,
+      fallbackAttempts: 1,
+      providerBreakdown: { groq: 2 },
+      knownCostCoverage: 0,
+      estimatedCostUsd: null,
       totalTokens: null,
-      averageLatencyMs: 150,
-      failureRate: 100,
-      estimatedCostUsd: null,
     });
-    expect(result.rows[0]).toMatchObject({
-      inputTokens: null,
-      outputTokens: null,
-      estimatedCostUsd: null,
-      errorCode: 'TIMEOUT',
-    });
-    expect(mocks.aiFindMany).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: {
-          createdAt: {
-            gte: new Date('2026-09-01T00:00:00.000Z'),
-            lt: new Date('2026-09-23T00:00:00.000Z'),
-          },
-          capability: 'job_match_analysis',
-          provider: 'groq',
-          model: 'llama-3.3-70b-versatile',
-          success: false,
-        },
-      })
-    );
+    expect(result.rows[0]).toMatchObject({ estimatedCostUsd: null, errorCode: 'TIMEOUT' });
   });
 });

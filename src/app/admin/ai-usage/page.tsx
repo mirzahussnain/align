@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { Activity, CircleDollarSign, Clock3, Gauge, Sigma } from 'lucide-react';
+import { Activity, CircleDollarSign, Clock3, Gauge, Sigma, Workflow } from 'lucide-react';
 import {
   AdminPageHeader,
   MetricCard,
@@ -32,6 +32,8 @@ export default async function AdminAiUsagePage({
   const data = await loadAdminAiUsage({ from, to, capability, provider, model, success, page });
   const number = new Intl.NumberFormat('en-GB');
   const hasFilters = Boolean(requestedFrom || to || capability || provider || model || successParam);
+  const percentage = (value: number | null) => value == null ? 'Unavailable' : `${value.toFixed(1)}%`;
+  const providerAttempts = (name: string) => data.summary.providerBreakdown[name] ?? 0;
 
   return (
     <div className="mx-auto max-w-[1800px]">
@@ -40,13 +42,21 @@ export default async function AdminAiUsagePage({
         description="Provider-attempt telemetry for operational monitoring. Prompts and generated content are never included."
       />
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
-        <MetricCard icon={Activity} label="Total requests" value={number.format(data.summary.totalRequests)} detail="Provider attempts in this result" />
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        <MetricCard icon={Workflow} label="Feature runs" value={number.format(data.summary.featureRuns)} detail={`${number.format(data.summary.unattributedAttempts)} unattributed attempts excluded`} />
+        <MetricCard icon={Activity} label="Provider attempts" value={number.format(data.summary.providerAttempts)} detail={`${number.format(data.summary.fallbackAttempts)} fallback attempts`} />
+        <MetricCard icon={Gauge} label="AI success rate" value={percentage(data.summary.aiSuccessRate)} detail="Successful feature runs" />
+        <MetricCard icon={Gauge} label="Fallback rate" value={percentage(data.summary.fallbackRate)} detail="Feature runs using fallback" />
         <MetricCard icon={Sigma} label="Total tokens" value={data.summary.totalTokens == null ? 'Unavailable' : number.format(data.summary.totalTokens)} detail={data.summary.totalTokens == null ? 'Some providers did not report usage' : 'Reported input and output tokens'} />
         <MetricCard icon={Clock3} label="Average latency" value={data.summary.averageLatencyMs == null ? 'Unavailable' : `${number.format(data.summary.averageLatencyMs)} ms`} detail="Across filtered provider attempts" />
-        <MetricCard icon={Gauge} label="Failure rate" value={`${data.summary.failureRate.toFixed(1)}%`} detail="Failed attempts in this result" />
-        <MetricCard icon={CircleDollarSign} label="Estimated cost" value={data.summary.estimatedCostUsd == null ? 'Unavailable' : `$${data.summary.estimatedCostUsd.toFixed(4)}`} detail={data.summary.estimatedCostUsd == null ? 'Unknown usage or pricing is present' : 'Configured runtime pricing'} />
+        <MetricCard icon={CircleDollarSign} label="Estimated cost" value={data.summary.estimatedCostUsd == null ? 'Unavailable' : `$${data.summary.estimatedCostUsd.toFixed(4)}`} detail="Known pricing only; unknown pricing excluded" />
+        <MetricCard icon={CircleDollarSign} label="Known cost coverage" value={percentage(data.summary.knownCostCoverage)} detail="Token-bearing attempts with configured pricing" />
+        <MetricCard icon={Activity} label="Provider breakdown" value={`Gemini ${number.format(providerAttempts('gemini'))}`} detail={`Groq ${number.format(providerAttempts('groq'))} · Fallback ${number.format(data.summary.fallbackAttempts)}`} />
       </div>
+
+      <p className="mt-4 text-xs text-text-tertiary">
+        Feature runs are counted only when telemetry has an explicit operation ID. Historical unattributed rows remain visible as provider attempts and are never guessed into feature totals.
+      </p>
 
       <form method="get" className="mt-6 grid gap-3 rounded-2xl border border-border-subtle bg-bg-secondary p-4 sm:grid-cols-2 xl:grid-cols-6">
         <label className="text-xs font-semibold text-text-secondary">From<input type="date" name="from" defaultValue={from} className="mt-1.5 w-full" /></label>

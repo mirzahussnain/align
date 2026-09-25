@@ -98,7 +98,7 @@ describe('AI orchestrator attempt telemetry', () => {
 
     expect(result?.provenance).toEqual({
       provider: 'groq',
-      model: 'llama-3.3-70b-versatile',
+      model: 'openai/gpt-oss-120b',
       attempt: 2,
       fallbackUsed: true,
     });
@@ -124,7 +124,7 @@ describe('AI orchestrator attempt telemetry', () => {
         attemptNumber: 2,
         inputTokens: 80,
         outputTokens: 20,
-        estimatedCostUsd: null,
+        estimatedCostUsd: 0.000024,
       }),
     ]);
   });
