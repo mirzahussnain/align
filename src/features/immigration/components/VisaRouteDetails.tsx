@@ -12,6 +12,7 @@ interface VisaData {
   requirements: string[];
   process: string[];
   roadmap: string[];
+  officialUrl: string;
 }
 
 interface VisaRouteDetailsProps {
@@ -76,7 +77,7 @@ export default function VisaRouteDetails({ visa, className }: VisaRouteDetailsPr
       <div>
         <h3 className="text-lg font-bold text-text-primary mb-4 flex items-center gap-2">
           <span className={cn('w-2 h-6 rounded-full bg-slate-200')} />
-          Settlement Roadmap
+          Possible route and next steps
         </h3>
         <ul className="grid grid-cols-1 md:grid-cols-2 gap-y-4 gap-x-8 w-full">
           {visa.roadmap.map((point, i) => (
@@ -86,6 +87,14 @@ export default function VisaRouteDetails({ visa, className }: VisaRouteDetailsPr
             </li>
           ))}
         </ul>
+      </div>
+
+      <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-950">
+        This is general route information, not immigration advice. Rules, fees and eligibility can change.{' '}
+        <a href={visa.officialUrl} target="_blank" rel="noopener noreferrer" className="font-semibold underline underline-offset-4">
+          Check the current official GOV.UK guidance
+        </a>{' '}
+        before making a decision or application.
       </div>
       
       {/* Decorative gradient blur */}

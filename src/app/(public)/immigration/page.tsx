@@ -9,7 +9,6 @@ import { Input } from '@/shared/components/ui/Input';
 import GlassCard from '@/shared/components/ui/GlassCard';
 import { cn } from '@/shared/utils/cn';
 import VisaRouteDetails from '@/features/immigration/components/VisaRouteDetails';
-import VisaCalculator from '@/features/immigration/components/VisaCalculator';
 import Tabs from '@/shared/components/ui/Tabs';
 import { useSponsors } from '@/features/immigration/hooks/useSponsors';
 import { VISAS, INDUSTRY_SECTORS } from '@/shared/constants/immigration-config';
@@ -47,51 +46,11 @@ function ImmigrationHubContent() {
         >
           <h1 className="text-3xl font-bold text-text-primary mb-2 flex items-center gap-2">
             <ShieldCheck className="text-accent-cyan" />
-            UK Immigration Hub
+            Sponsorship & Visas
           </h1>
           <p className="text-text-secondary">
-            Search 90,000+ official visa sponsors, understand visa routes, and explore KTPs.
+            Search the official sponsor register and review neutral, qualified information about common work routes.
           </p>
-        </motion.div>
-
-        {/* KTP Opportunities Banner */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1 }}
-          className="mb-8"
-        >
-          <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-sky-50/50 to-slate-50/50 border border-sky-200 p-6 sm:p-8">
-            <div className="relative z-10 flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
-              <div className="flex-1">
-                <div className="flex items-center gap-2 mb-2">
-                  <span className="px-2.5 py-1 rounded-full text-[10px] font-bold tracking-wider uppercase bg-slate-900 text-white">Recommended</span>
-                  <h2 className="text-xl font-bold text-text-primary">Knowledge Transfer Partnerships (KTPs)</h2>
-                </div>
-                <p className="text-text-secondary text-sm mb-4 max-w-3xl">
-                  As an MSc graduate with strong technical skills, KTPs are a goldmine. You work as an Associate for 1-3 years on an innovative project between a business and a university. 
-                  <strong className="text-text-primary ml-1">Universities are licensed sponsors and can sponsor your Skilled Worker Visa.</strong>
-                </p>
-                <div className="flex flex-wrap gap-4">
-                  <a href={EXTERNAL_LINKS.ktpJobs} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 text-sm font-semibold text-accent-cyan hover:text-accent-cyan-glow transition-colors">
-                    View Official KTP Jobs <ExternalLink size={16} />
-                  </a>
-                  <a href={`${EXTERNAL_LINKS.jobsAcUk}KTP+Associate`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 text-sm font-semibold text-accent-cyan hover:text-accent-cyan-glow transition-colors">
-                    Search on jobs.ac.uk <ExternalLink size={16} />
-                  </a>
-                </div>
-              </div>
-              <div className="hidden md:flex flex-col items-center justify-center p-4 bg-bg-primary rounded-xl border border-border-subtle w-48 text-center flex-shrink-0 shadow-lg">
-                <span className="text-xs text-text-tertiary mb-1">Typical Salary</span>
-                <span className="text-xl font-bold text-gradient-cyan">£28k - £40k</span>
-                <span className="text-[10px] text-text-tertiary mt-1">+ Training Budget</span>
-              </div>
-            </div>
-            
-            {/* Decorative background elements */}
-            <div className="absolute top-0 right-0 -translate-y-1/2 translate-x-1/3 w-64 h-64 bg-accent-cyan/15 rounded-full blur-3xl pointer-events-none" />
-            <div className="absolute bottom-0 left-0 translate-y-1/2 -translate-x-1/3 w-64 h-64 bg-accent-cyan/20 rounded-full blur-3xl pointer-events-none" />
-          </div>
         </motion.div>
 
         <div className="flex flex-col gap-12">
@@ -109,6 +68,7 @@ function ImmigrationHubContent() {
                         ? `GOV.UK register · Version ${register.releaseVersion} · ${register.rowCount.toLocaleString()} entries${register.publishedAt ? ` · ${new Date(`${register.publishedAt}T00:00:00Z`).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' })}` : ''}`
                         : 'Data sourced directly from the live GOV.UK CSV'}
                   </p>
+                  <p className="mt-2 max-w-3xl text-xs leading-5 text-slate-500">An organisation’s presence on the register does not confirm that it will sponsor a particular vacancy or that a candidate is eligible.</p>
                 </div>
                 <a href={EXTERNAL_LINKS.govSponsorList} target="_blank" rel="noopener noreferrer" className="text-xs flex items-center gap-1 text-text-tertiary hover:text-text-primary transition-colors">
                   Official Source <ExternalLink size={12} />
@@ -267,33 +227,27 @@ function ImmigrationHubContent() {
             </GlassCard>
           </div>
 
+          <section className="rounded-2xl border border-slate-200 bg-white p-5 sm:p-6">
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-violet-700">One career route</p>
+            <h2 className="mt-2 text-xl font-bold text-text-primary">Knowledge Transfer Partnerships (KTPs)</h2>
+            <p className="mt-2 max-w-3xl text-sm leading-6 text-text-secondary">KTP Associate roles connect a business with a university or other knowledge base for a defined project. They span technical, operational and management disciplines. Visa arrangements vary by role and employing partner; a partner’s sponsor status does not confirm sponsorship for a specific KTP vacancy.</p>
+            <div className="mt-4 flex flex-wrap gap-4"><a href={EXTERNAL_LINKS.ktpJobs} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 text-sm font-semibold text-accent-cyan">View official KTP jobs <ExternalLink size={16} /></a><a href={`${EXTERNAL_LINKS.jobsAcUk}KTP+Associate`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 text-sm font-semibold text-accent-cyan">Search jobs.ac.uk <ExternalLink size={16} /></a></div>
+          </section>
+
           {/* Bottom Section: Rules Info */}
           <div className="w-full space-y-6">
-            <h2 className="text-2xl font-bold text-text-primary px-1">Key Visa Routes & Costs</h2>
+            <h2 className="text-2xl font-bold text-text-primary px-1">Visa routes and planning</h2>
             
             <div className="bg-white rounded-2xl border border-border-subtle shadow-sm overflow-hidden">
               <Tabs
-                tabs={[
-                  ...VISAS.map(v => ({ label: v.title, value: v.title })),
-                  { label: "Cost Calculator", value: "calculator" }
-                ]}
+                tabs={VISAS.map(v => ({ label: v.title, value: v.title }))}
                 activeTab={activeVisaTab}
                 onChange={setActiveVisaTab}
                 variant="underline"
               />
 
               <div className="p-6">
-                {activeVisaTab === 'calculator' ? (
-                  <motion.div
-                    key="calculator"
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="w-full text-left"
-                  >
-                    <VisaCalculator className="mt-0 shadow-none border-0" />
-                  </motion.div>
-                ) : (
-                  <motion.div
+                <motion.div
                     key={activeVisaTab}
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
@@ -305,7 +259,6 @@ function ImmigrationHubContent() {
                       </div>
                     ))}
                   </motion.div>
-                )}
               </div>
             </div>
           </div>
