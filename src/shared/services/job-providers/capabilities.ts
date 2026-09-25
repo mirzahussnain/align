@@ -83,6 +83,25 @@ export const JOB_PROVIDER_CAPABILITIES: Record<JobProvider, JobProviderCapabilit
     interactiveTimeoutMs: INTERACTIVE_MS,
     backgroundTimeoutMs: BACKGROUND_MS,
   },
+  NHS_JOBS: {
+    kind: 'SEARCH',
+    keywordSearch: true,
+    locationSearch: true,
+    locationRadius: true,
+    pagination: 'PAGE',
+    maxPerPage: 5,
+    salaryFilter: true,
+    contractTypeFilter: true,
+    remoteFilter: true,
+    postedWithinFilter: true,
+    sortOptions: ['date', 'salary'],
+    descriptionSemantics: 'PARTIAL',
+    // Official NHS Jobs vacancy page, but not the employer's own ATS page.
+    employerDirectUrl: false,
+    requiresEmployerIdentifier: false,
+    interactiveTimeoutMs: INTERACTIVE_MS,
+    backgroundTimeoutMs: BACKGROUND_MS,
+  },
 
   // ── Employer-direct boards. No network integration yet (Phase 8). ──────────
   // Each returns one employer's whole board, so there is no query, no paging and

@@ -41,8 +41,8 @@ describe('provider taxonomy', () => {
     );
   });
 
-  it('preserves the three existing market-wide providers', () => {
-    expect(listSearchProviders()).toEqual(['ADZUNA', 'REED', 'JOOBLE']);
+  it('preserves provider order and includes NHS Jobs as the fourth market-wide source', () => {
+    expect(listSearchProviders()).toEqual(['ADZUNA', 'REED', 'JOOBLE', 'NHS_JOBS']);
   });
 
   it('declares the four employer-ATS providers ahead of their integrations', () => {
@@ -84,11 +84,12 @@ describe('search provider capabilities', () => {
     expect(pushdownFilters('JOOBLE').contractType).toBe(false);
     // Reed's integration sends no sort parameter, so every order is local.
     expect(getProviderCapabilities('REED').sortOptions).toEqual([]);
-    // No search provider currently filters on work style or posting age.
-    for (const provider of SEARCH_JOB_PROVIDERS) {
+    // The existing commercial integrations do not send work-style or age filters.
+    for (const provider of SEARCH_JOB_PROVIDERS.filter((value) => value !== 'NHS_JOBS')) {
       expect(pushdownFilters(provider).remote).toBe(false);
       expect(pushdownFilters(provider).postedWithin).toBe(false);
     }
+    expect(pushdownFilters('NHS_JOBS')).toMatchObject({ remote: true, postedWithin: true });
   });
 
   it('records that aggregator descriptions are never a guaranteed full advert', () => {
@@ -96,7 +97,7 @@ describe('search provider capabilities', () => {
     expect(getProviderCapabilities('JOOBLE').descriptionSemantics).toBe('SNIPPET');
     for (const provider of SEARCH_JOB_PROVIDERS) {
       expect(getProviderCapabilities(provider).descriptionSemantics).not.toBe('FULL');
-      // None of the three link to the employer's own application page.
+      // Aggregators and the official NHS listings do not claim to be an employer ATS.
       expect(getProviderCapabilities(provider).employerDirectUrl).toBe(false);
     }
   });

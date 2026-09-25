@@ -1,0 +1,1 @@
+ALTER TYPE "JobProvider" ADD VALUE 'NHS_JOBS';

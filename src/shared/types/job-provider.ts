@@ -13,8 +13,8 @@
  *                   known board synchronously is not a supported access pattern.
  *
  * Nothing here performs I/O. These are the contracts the existing services are
- * expressed through and that future adapters must satisfy; the three live
- * integrations keep their current network code unchanged behind them.
+ * expressed through and that future adapters must satisfy; provider-specific
+ * network and transport code stays behind each adapter.
  */
 
 import type {

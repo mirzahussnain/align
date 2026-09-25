@@ -1,11 +1,11 @@
 /**
- * The three live market-wide integrations, expressed as {@link SearchJobProviderAdapter}s.
+ * Live market-wide integrations, expressed as {@link SearchJobProviderAdapter}s.
  *
  * These are thin wrappers: every network call, query parameter and payload
  * mapping still lives in `adzuna.ts`, `reed.ts` and `jooble.ts` exactly as
  * before. Nothing about provider behaviour changes here — the adapters give the
  * existing services a declared shape so the orchestrator can treat all sources
- * uniformly, and so future employer-ATS adapters plug into the same contract.
+ * uniformly. NHS XML remains contained in its own adapter.
  *
  * `job-search.ts` consumes only these registered adapters. Provider transport,
  * credentials and payload mapping remain contained in the underlying service.
@@ -15,6 +15,7 @@ import { searchAdzunaJobs } from '@/shared/services/adzuna';
 import { searchReedJobs } from '@/shared/services/reed';
 import { searchJoobleJobs } from '@/shared/services/jooble';
 import { API_CONFIG } from '@/shared/lib/config';
+import { nhsJobsAdapter } from './nhs-jobs-adapter';
 import { JOB_PROVIDER_CAPABILITIES } from './capabilities';
 import type { JobSearchParams, JobSearchResult, SearchJobProvider } from '@/shared/types/job';
 import type {
@@ -87,4 +88,5 @@ export const SEARCH_PROVIDER_ADAPTERS: Record<SearchJobProvider, SearchJobProvid
   ADZUNA: adzunaAdapter,
   REED: reedAdapter,
   JOOBLE: joobleAdapter,
+  NHS_JOBS: nhsJobsAdapter,
 };

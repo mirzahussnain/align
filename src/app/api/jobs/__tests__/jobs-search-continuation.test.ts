@@ -142,6 +142,7 @@ const exhaustedFanOut = (jobs: NormalisedJob[]) =>
     providerResult(jobs, { provider: "REED", nextCursor: undefined }),
     providerResult([], { provider: "ADZUNA", nextCursor: undefined }),
     providerResult([], { provider: "JOOBLE", nextCursor: undefined }),
+    providerResult([], { provider: "NHS_JOBS", nextCursor: undefined }),
   ]);
 
 const call = async (query: string) => {

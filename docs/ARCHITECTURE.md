@@ -15,7 +15,7 @@ flowchart LR
   N --> R[(Redis cache)]
   N --> Q[Upstash rate limiting]
   N --> AI[Gemini / Groq]
-  N --> J[Adzuna / Reed / Jooble]
+  N --> J[Adzuna / Reed / Jooble / NHS Jobs]
   N --> E[Resend]
   N --> B[Stripe]
   N --> G[GOV.UK sponsor register]

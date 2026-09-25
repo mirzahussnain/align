@@ -13,7 +13,7 @@ flowchart TB
   Web --> RL[Upstash REST rate limits]
   Web --> RC[Redis job cache]
   Web --> AI[Gemini / Groq]
-  Web --> Jobs[Adzuna / Reed / Jooble]
+  Web --> Jobs[Adzuna / Reed / Jooble / NHS Jobs]
   Web --> Mail[Resend]
   Web --> Pay[Stripe]
   Browser --> Web
@@ -94,7 +94,7 @@ These are separate clients and are not interchangeable. In production, missing U
 | `JOOBLE_API_KEY` | Required for Jooble | That source is skipped when absent |
 | `GOVUK_SPONSOR_CSV_URL` | Optional override | The app otherwise discovers the current file and has a pinned fallback |
 
-For full job-search coverage, configure all three commercial providers. Their failures are isolated so one provider does not invalidate successful results from another.
+For full commercial job-search coverage, configure all three credentialed providers. NHS Jobs uses its documented public XML endpoint and needs no credential. Every source is isolated so one provider does not invalidate successful results from another.
 
 ### Object storage
 
