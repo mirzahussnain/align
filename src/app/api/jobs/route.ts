@@ -47,7 +47,10 @@ import {
   searchProvidersInteractive,
 } from "@/shared/services/job-search";
 import { getAtsSnapshotProviderResults } from "@/shared/services/job-discovery";
-import { materialiseSearchJobCards } from "@/shared/services/job-search-view";
+import {
+  materialiseSearchJobCards,
+  projectPublicSearchJobCards,
+} from "@/shared/services/job-search-view";
 import {
   logJobBoardEvent,
   SearchTimings,
@@ -934,9 +937,11 @@ async function respond(input: {
     partial: Boolean(input.partialMessage),
   });
 
-  const jobs = await input.timings.measure("snapshotMs", () =>
-    materialiseSearchJobCards(input.jobs, input.userId, input.careerTrack),
-  );
+  const jobs = input.userId
+    ? await input.timings.measure("snapshotMs", () =>
+        materialiseSearchJobCards(input.jobs, input.userId, input.careerTrack),
+      )
+    : projectPublicSearchJobCards(input.jobs);
 
   return NextResponse.json({
     jobs,

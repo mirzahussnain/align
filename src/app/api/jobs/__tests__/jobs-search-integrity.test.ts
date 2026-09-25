@@ -27,6 +27,8 @@ vi.mock("@/shared/services/job-search-view", () => ({
   materialiseSearchJobCards: vi.fn(async (jobs: NormalisedJob[]) =>
     jobs.map((item) => ({ ...item, id: item.canonicalJobId })),
   ),
+  projectPublicSearchJobCards: (jobs: readonly NormalisedJob[]) =>
+    jobs.map((item) => ({ ...item, id: item.canonicalJobId })),
 }));
 
 const searchProvidersInteractive = vi.fn();

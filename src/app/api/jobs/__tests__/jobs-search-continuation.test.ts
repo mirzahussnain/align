@@ -33,10 +33,15 @@ vi.mock("@/shared/services/sponsor-registry", () => ({
   getSponsorRegisterVersion: vi.fn(async () => "test-register"),
   standardizeCompanyName: (name: string) => name.toLowerCase().trim(),
 }));
+const materialiseSearchJobCards = vi.fn(async (jobs: NormalisedJob[]) =>
+  jobs.map((item) => ({ ...item, id: `snapshot-${item.canonicalJobId}` })),
+);
+const projectPublicSearchJobCards = vi.fn((jobs: readonly NormalisedJob[]) =>
+  jobs.map((item) => ({ ...item, id: item.canonicalJobId })),
+);
 vi.mock("@/shared/services/job-search-view", () => ({
-  materialiseSearchJobCards: vi.fn(async (jobs: NormalisedJob[]) =>
-    jobs.map((item) => ({ ...item, id: item.canonicalJobId })),
-  ),
+  materialiseSearchJobCards: (jobs: NormalisedJob[]) => materialiseSearchJobCards(jobs),
+  projectPublicSearchJobCards: (jobs: readonly NormalisedJob[]) => projectPublicSearchJobCards(jobs),
 }));
 
 const atsSnapshots = vi.fn(async () => [] as unknown[]);
@@ -153,6 +158,8 @@ beforeEach(() => {
   atsSnapshots.mockResolvedValue([]);
   getSession.mockReset();
   getSession.mockResolvedValue(null);
+  materialiseSearchJobCards.mockClear();
+  projectPublicSearchJobCards.mockClear();
   cache = new MemoryCacheStore();
   restoreCache = __setCacheStore(cache);
 });
@@ -194,6 +201,8 @@ describe("page two is served from the session buffer", () => {
     expect(searchProvidersInteractive).toHaveBeenCalledTimes(1);
     // And no employer-ATS catalogue query either.
     expect(atsSnapshots).toHaveBeenCalledTimes(1);
+    expect(materialiseSearchJobCards).not.toHaveBeenCalled();
+    expect(projectPublicSearchJobCards).toHaveBeenCalledTimes(2);
   });
 
   it("returns no duplicate jobs across the two pages", async () => {

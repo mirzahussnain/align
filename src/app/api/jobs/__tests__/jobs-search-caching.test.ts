@@ -25,10 +25,15 @@ vi.mock("@/shared/services/sponsor-registry", () => ({
   standardizeCompanyName: (name: string) => name.toLowerCase().trim(),
 }));
 
+const materialiseSearchJobCards = vi.fn(async (jobs: NormalisedJob[]) =>
+  jobs.map((item) => ({ ...item, id: `snapshot-${item.canonicalJobId}` })),
+);
+const projectPublicSearchJobCards = vi.fn((jobs: readonly NormalisedJob[]) =>
+  jobs.map((item) => ({ ...item, id: item.canonicalJobId })),
+);
 vi.mock("@/shared/services/job-search-view", () => ({
-  materialiseSearchJobCards: vi.fn(async (jobs: NormalisedJob[]) =>
-    jobs.map((item) => ({ ...item, id: item.canonicalJobId })),
-  ),
+  materialiseSearchJobCards: (jobs: NormalisedJob[]) => materialiseSearchJobCards(jobs),
+  projectPublicSearchJobCards: (jobs: readonly NormalisedJob[]) => projectPublicSearchJobCards(jobs),
 }));
 
 const searchProvidersInteractive = vi.fn();
@@ -117,6 +122,8 @@ beforeEach(() => {
   searchProvidersInteractive.mockReset();
   getSession.mockReset();
   getSession.mockResolvedValue(null);
+  materialiseSearchJobCards.mockClear();
+  projectPublicSearchJobCards.mockClear();
   cache = new MemoryCacheStore();
   restoreCache = __setCacheStore(cache);
 });
@@ -127,6 +134,27 @@ afterEach(() => {
 });
 
 describe("merged search-response cache", () => {
+  it("keeps anonymous live and cached responses outside durable persistence", async () => {
+    searchProvidersInteractive.mockResolvedValue(fanOut([providerResult([job("Public role")])]));
+
+    await call("query=publicboundary&location=Leeds");
+    await call("query=publicboundary&location=Leeds");
+
+    expect(materialiseSearchJobCards).not.toHaveBeenCalled();
+    expect(projectPublicSearchJobCards).toHaveBeenCalledTimes(2);
+  });
+
+  it("preserves durable materialisation for authenticated dashboard searches", async () => {
+    getSession.mockResolvedValue({ user: { id: "user-1" } });
+    searchProvidersInteractive.mockResolvedValue(fanOut([providerResult([job("Dashboard role")])]));
+
+    const response = await call("query=dashboardboundary&location=Leeds");
+
+    expect(materialiseSearchJobCards).toHaveBeenCalledTimes(1);
+    expect(projectPublicSearchJobCards).not.toHaveBeenCalled();
+    expect(response.body.jobs[0].id).toMatch(/^snapshot-/);
+  });
+
   it("serves a second identical search from the cache without calling providers", async () => {
     searchProvidersInteractive.mockResolvedValue(
       fanOut([providerResult([job("Cached role")])]),
