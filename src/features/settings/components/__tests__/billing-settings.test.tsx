@@ -36,6 +36,26 @@ describe('billing settings presentation', () => {
       capability: 'stored_analyses', plan: 'PRO', mode: 'resource_limit', allowed: true,
       reason: 'allowed', used: 9, limit: 100, remaining: 91,
     },
+    profile_reconciliation: {
+      capability: 'profile_reconciliation', plan: 'PRO', mode: 'quota', allowed: true,
+      reason: 'quota_available', used: 1, limit: 10, remaining: 9, period: 'month',
+    },
+    cv_import_reconciliation: {
+      capability: 'cv_import_reconciliation', plan: 'PRO', mode: 'quota', allowed: true,
+      reason: 'quota_available', used: 2, limit: 10, remaining: 8, period: 'month',
+    },
+    human_evidence_capture: {
+      capability: 'human_evidence_capture', plan: 'PRO', mode: 'quota', allowed: true,
+      reason: 'quota_available', used: 3, limit: 100, remaining: 97, period: 'month',
+    },
+    profile_evidence_storage: {
+      capability: 'profile_evidence_storage', plan: 'PRO', mode: 'resource_limit', allowed: true,
+      reason: 'allowed', used: 20, limit: 500, remaining: 480,
+    },
+    saved_jobs: {
+      capability: 'saved_jobs', plan: 'PRO', mode: 'resource_limit', allowed: true,
+      reason: 'allowed', used: 8, limit: 100, remaining: 92,
+    },
   } as const;
 
   function renderBilling() {
@@ -88,7 +108,7 @@ describe('billing settings presentation', () => {
     renderBilling();
 
     const monthly = screen.getByRole('region', { name: 'Monthly Usage' });
-    expect(monthly).toHaveTextContent('AI analyses');
+    expect(monthly).toHaveTextContent('AI-enhanced ATS analyses');
     expect(monthly).toHaveTextContent('4 / 15');
     expect(monthly).toHaveTextContent('11 remaining');
     expect(monthly).toHaveTextContent('Resets monthly');
@@ -96,6 +116,9 @@ describe('billing settings presentation', () => {
     expect(monthly).toHaveTextContent('6 / 30');
     expect(monthly).toHaveTextContent('CV regenerations');
     expect(monthly).toHaveTextContent('2 / 10');
+    expect(monthly).toHaveTextContent('Profile reconciliations');
+    expect(monthly).toHaveTextContent('CV-import reconciliations');
+    expect(monthly).toHaveTextContent('Human evidence captures');
 
     const limits = screen.getByRole('region', { name: 'Account Limits' });
     expect(limits).toHaveTextContent('Career Profiles');
@@ -103,6 +126,8 @@ describe('billing settings presentation', () => {
     expect(limits).toHaveTextContent('Stored CVs');
     expect(limits).toHaveTextContent('Generated CVs');
     expect(limits).toHaveTextContent('Analyses retained');
+    expect(limits).toHaveTextContent('Reusable evidence');
+    expect(limits).toHaveTextContent('Saved jobs');
     expect(limits).not.toHaveTextContent(/reset/i);
   });
 
@@ -114,7 +139,8 @@ describe('billing settings presentation', () => {
     expect(storage).toHaveTextContent('365 days');
 
     const comparison = screen.getByRole('region', { name: 'Plan Comparison' });
-    expect(within(comparison).getAllByText('Free')).toHaveLength(2);
+    expect(within(comparison).getByText('Free')).toBeVisible();
+    expect(within(comparison).getByText('£0')).toBeVisible();
     expect(within(comparison).getByText('Pro')).toBeVisible();
     expect(comparison).not.toHaveTextContent(/token/i);
   });

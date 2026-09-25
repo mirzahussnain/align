@@ -21,7 +21,7 @@ const TEMPLATES: Template[] = [
   {
     id: 'architect',
     name: 'The Architect',
-    description: 'Deep navy & warm slate. Strong typographic hierarchy. Perfect for Senior & Staff-level UK Tech roles.',
+    description: 'Deep navy and warm slate with strong hierarchy for experienced professional roles.',
     atsSafe: true,
   },
   {
@@ -49,7 +49,7 @@ export default function TemplateSelectionStep({ selected, onSelect }: Props) {
     <div className="space-y-6">
       <div className="mb-4">
         <h3 className="text-lg font-semibold text-slate-800">Choose a design</h3>
-        <p className="text-sm text-slate-500">All our templates strictly follow UK market rules and are 100% ATS-friendly.</p>
+        <p className="text-sm text-slate-500">Each template uses a clear, single-column-friendly structure designed for reliable ATS parsing.</p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -81,7 +81,7 @@ export default function TemplateSelectionStep({ selected, onSelect }: Props) {
             
             {tpl.atsSafe && (
               <span className="inline-block px-2.5 py-1 bg-green-100 text-green-700 text-[10px] font-bold rounded-full uppercase tracking-wider">
-                ATS Approved
+                ATS-conscious
               </span>
             )}
           </div>

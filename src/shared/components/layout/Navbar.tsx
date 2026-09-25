@@ -73,7 +73,7 @@ export default function Navbar() {
               <span className={cn(
                 "text-[9px] font-semibold leading-tight tracking-wider uppercase transition-colors duration-300",
                 isScrolled ? "text-neutral-500" : "text-white/70"
-              )}>UK Tech Intelligence</span>
+              )}>UK Career Intelligence</span>
             </div>
           </Link>
 

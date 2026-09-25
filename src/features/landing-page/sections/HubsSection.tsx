@@ -4,7 +4,6 @@ import React from 'react';
 import { motion } from 'framer-motion';
 import { FileSearch, Briefcase, Shield, TrendingUp, ArrowRight } from 'lucide-react';
 import Link from 'next/link';
-import Image from 'next/image';
 
 const MODULES = [
   {
@@ -18,7 +17,7 @@ const MODULES = [
   {
     icon: Briefcase,
     title: 'UK Job Boards',
-    description: 'Search Reed, Adzuna & Jooble in one place with real-time visa sponsorship detection.',
+    description: 'Search UK vacancies across providers, with employer sponsor-register evidence kept separate from vacancy wording.',
     href: '/jobs',
     color: 'from-[hsl(170,80%,50%)] to-[hsl(190,75%,45%)]',
     actionText: 'Search Jobs',
@@ -26,15 +25,15 @@ const MODULES = [
   {
     icon: Shield,
     title: 'Immigration Hub',
-    description: '90,000+ official visa sponsors searchable. Explore KTP opportunities and visa routes.',
+    description: 'Search the official UK sponsor register and review practical visa-route guidance without eligibility guarantees.',
     href: '/immigration',
     color: 'from-[hsl(40,95%,55%)] to-[hsl(25,90%,50%)]',
     actionText: 'Explore Sponsors',
   },
   {
     icon: TrendingUp,
-    title: 'Tech Trends',
-    description: 'UK tech stack dominance, salary bands, and regional demand intelligence.',
+    title: 'Technology Trends',
+    description: 'Explore the product’s technology-specific salary, skills, and regional demand resource.',
     href: '/trends',
     color: 'from-[hsl(340,80%,55%)] to-[hsl(310,75%,50%)]',
     actionText: 'View Trends',
@@ -71,10 +70,10 @@ export default function HubsSection() {
           className="text-center mb-20"
         >
           <h2 className="text-[2.5rem] sm:text-5xl md:text-[3.5rem] font-medium text-[#1e293b] tracking-[-0.03em] leading-[1.1] mt-4">
-            Explore Our Core Hubs
+            Explore the Application Workspace
           </h2>
           <p className="text-[15px] md:text-[16px] text-slate-500 leading-relaxed mt-6 max-w-2xl mx-auto font-medium">
-            Navigate between ATS analysis, visa sponsor registries, dynamic salary dashboards, and job boards.
+            Move from CV readiness and job discovery to role matching, sponsor context, and evidence-backed application work.
           </p>
         </motion.div>
 

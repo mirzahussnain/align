@@ -15,7 +15,7 @@ export const UPGRADE_HEADLINES: Partial<Record<ProductCapability, string>> = {
   view_full_ats_report: 'Unlock the full ATS report',
   view_full_job_match_report: 'Unlock the full requirement report',
   view_requirement_ledger: 'Unlock the full requirement report',
-  job_match_analysis: 'Unlock AI Job Match Analysis',
+  job_match_analysis: 'Unlock Job Match',
   cv_regeneration: 'Generate a truthful tailored CV',
   human_evidence_capture: 'Add and reuse verified Career Profile evidence',
   approve_evidence_for_application: 'Approve more evidence for this application',
@@ -25,6 +25,13 @@ export const UPGRADE_HEADLINES: Partial<Record<ProductCapability, string>> = {
   stored_source_cvs: 'Keep more source CVs in Align',
   advanced_tools: 'Access advanced application intelligence',
 };
+
+const PLAN_SECTION_LABELS = {
+  core: 'Included',
+  monthly: 'Monthly allowances',
+  lifetime: 'Lifetime allowances',
+  account: 'Account limits',
+} as const;
 
 function detailFor(decision?: CapabilityDecision) {
   if (!decision) return 'Compare the plans before you decide what is right for your job search.';
@@ -130,14 +137,27 @@ export function PricingDetailsDialog({
                     )}
                   </div>
                   <p className="mt-3 text-xs leading-5 text-slate-600">{plan.tagline}</p>
-                  <ul className="mt-4 space-y-2.5 border-t border-slate-200/80 pt-4">
-                    {plan.features.slice(0, 5).map((feature) => (
-                      <li key={feature} className="flex items-start gap-2 text-xs leading-5 text-slate-700">
-                        <Check className={`mt-0.5 h-3.5 w-3.5 shrink-0 ${isPro ? 'text-accent-cyan' : 'text-slate-400'}`} strokeWidth={2.5} aria-hidden="true" />
-                        <span>{feature}</span>
-                      </li>
-                    ))}
-                  </ul>
+                  <div className="mt-4 space-y-4 border-t border-slate-200/80 pt-4">
+                    {(Object.keys(PLAN_SECTION_LABELS) as Array<keyof typeof PLAN_SECTION_LABELS>).map((section) => {
+                      const features = plan.sections[section];
+                      if (features.length === 0) return null;
+                      return (
+                        <div key={section}>
+                          <h3 className="text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-400">
+                            {PLAN_SECTION_LABELS[section]}
+                          </h3>
+                          <ul className="mt-2 space-y-2">
+                            {features.map((feature) => (
+                              <li key={feature} className="flex items-start gap-2 text-xs leading-5 text-slate-700">
+                                <Check className={`mt-0.5 h-3.5 w-3.5 shrink-0 ${isPro ? 'text-accent-cyan' : 'text-slate-400'}`} strokeWidth={2.5} aria-hidden="true" />
+                                <span>{feature}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </article>
               );
             })}

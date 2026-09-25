@@ -33,9 +33,9 @@ export default function HeroSection() {
                 className="text-4xl sm:text-5xl lg:text-7xl font-extrabold mb-4 leading-tight tracking-tight text-white"
                 style={{ textShadow: '0 4px 12px rgba(0, 0, 0, 0.35)' }}
               >
-                The rise of <span className="text-white/60 font-light italic">your tech career</span>
+                Turn Your Experience Into
                 <br />
-                begins here
+                <span className="text-white/60 font-light italic">Stronger UK Applications</span>
               </motion.h1>
 
               <motion.p
@@ -44,7 +44,7 @@ export default function HeroSection() {
                 transition={{ duration: 0.6, delay: 0.15 }}
                 className="text-sm md:text-base text-white/90 max-w-xl sm:max-w-2xl mx-auto mb-8 leading-relaxed font-semibold animate-pulse"
               >
-                A turnkey way to calibrate your CV, search aggregated job boards, and discover UK tech placements with visa sponsorship intelligence.
+                Build a reusable Career Profile, check ATS readiness, compare your evidence with UK roles, and generate truthful tailored CVs.
               </motion.p>
 
               {/* QClay Style Capsule Buttons */}
@@ -66,7 +66,7 @@ export default function HeroSection() {
                   className="bg-accent-cyan hover:bg-accent-cyan/90 text-white rounded-full px-6 py-3 border border-white/10 hover:shadow-[0_0_25px_hsla(var(--accent-cyan),0.45)] transition-all duration-300 text-xs font-bold flex items-center gap-2"
                 >
                   <Sparkles size={14} className="text-white animate-pulse" />
-                  <span>Search Tech Jobs</span>
+                  <span>Explore UK Jobs</span>
                 </Link>
               </motion.div>
             </div>
@@ -80,17 +80,17 @@ export default function HeroSection() {
             <div className="md:hidden relative w-full h-[280px] flex items-center justify-center mt-6 z-10">
               <div className="w-[250px] h-[270px] bg-slate-900/90 border border-white/25 rounded-2xl p-5 flex flex-col justify-between text-left text-white shadow-2xl">
                 <div>
-                  <span className="text-[9px] text-accent-cyan uppercase font-bold tracking-wider">ATS CV Calibration</span>
-                  <h3 className="text-sm font-bold mt-1">Calibrate your tech profile effortlessly</h3>
+                  <span className="text-[9px] text-accent-cyan uppercase font-bold tracking-wider">Evidence-led ATS analysis</span>
+                  <h3 className="text-sm font-bold mt-1">See Where Your CV Is Strong and What Needs Work</h3>
                 </div>
                 <div className="my-auto py-2">
-                  <span className="text-[9px] text-white/50 uppercase font-bold">Estimated Compensation</span>
-                  <p className="text-xl font-black text-white">£65,000.00</p>
-                  <span className="text-[9px] text-accent-cyan font-bold block">Average Mid-Level Dev (London)</span>
+                  <span className="text-[9px] text-white/50 uppercase font-bold">Application workflow</span>
+                  <p className="text-xl font-black text-white">ATS + Job Match</p>
+                  <span className="text-[9px] text-accent-cyan font-bold block">Evidence-backed CV generation</span>
                 </div>
                 <div className="flex items-center gap-1.5 text-xs text-emerald-400 font-bold pt-2 border-t border-white/10">
                   <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
-                  Live UK API Verified
+                  UK jobs and sponsor context
                 </div>
               </div>
             </div>
@@ -99,12 +99,8 @@ export default function HeroSection() {
 
         </section>
 
-        {/* Social Proof/Stars footer positioned outside the clipped section relative to the parent wrapper */}
+        {/* Scroll prompt positioned outside the clipped hero. */}
         <div className="absolute bottom-[50px] left-1/2 -translate-x-1/2 z-20 flex flex-col items-center gap-0.5 pointer-events-none">
-          <p className="text-xs font-semibold text-white/80 select-none">Rated 4.9/5 by 2700+ candidates</p>
-          <div className="flex gap-0.5 text-amber-300 text-[10px] select-none">
-            <span>★</span><span>★</span><span>★</span><span>★</span><span>★</span>
-          </div>
 
           {/* Custom Pixel-Grid Chevron Scroll Indicator */}
           <div className="mt-1 flex flex-col items-center select-none">

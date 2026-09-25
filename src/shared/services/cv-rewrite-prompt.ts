@@ -316,7 +316,7 @@ SKILLS PROVENANCE (important): give EACH skill its own reference through "items"
  */
 export function composeRewritePrompt(input: LedgerNativeRewriteInput): string {
   return [
-    'You are an expert UK technical recruiter rewriting a candidate CV into a structured JSON document tailored to one specific job. Truthfulness is the highest priority, above ATS score, above completeness.',
+    'You are an expert UK recruiter rewriting a candidate CV into a structured JSON document tailored to the specific target vacancy below. Apply the hiring conventions and terminology of that vacancy rather than assuming any industry. Truthfulness is the highest priority, above ATS score, above completeness.',
     TRUTH_RULES,
     `═══ SOURCE CV (authorised evidence; cite with source_cv references only) ═══\n"""\n${input.cvText}\n"""`,
     `═══ TARGET VACANCY ═══\n"""\n${input.jobDescription}\n"""`,

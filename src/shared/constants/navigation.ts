@@ -10,7 +10,7 @@ export const MARKETING_NAV_LINKS = [
   {
     label: 'How it Works',
     href: '/#how-it-works',
-    description: 'From upload to a UK-ready CV in three steps',
+    description: 'From Career Profile to evidence-backed application',
   },
   {
     label: 'Features',
@@ -38,14 +38,14 @@ export const MARKETING_NAV_RESOURCES = [
   {
     label: 'Insights',
     href: '/trends',
-    description: 'UK tech market salary and demand data',
+    description: 'UK technology salary and demand data',
   },
 ] as const;
 
 /** Destination links for the footer — the real product surfaces. */
 export const NAV_LINKS = [
   {
-    label: 'AI Analysis',
+    label: 'ATS Analysis',
     href: '/analyze',
     icon: 'FileSearch',
     description: 'Upload and analyze your CV',
@@ -54,7 +54,7 @@ export const NAV_LINKS = [
     label: 'Job Board',
     href: '/jobs',
     icon: 'Briefcase',
-    description: 'Search UK tech jobs',
+    description: 'Search vacancies across UK role families',
   },
   {
     label: 'Immigration Hub',
@@ -63,10 +63,10 @@ export const NAV_LINKS = [
     description: 'Visa sponsors & immigration rules',
   },
   {
-    label: 'Tech Trends',
+    label: 'Technology Trends',
     href: '/trends',
     icon: 'TrendingUp',
-    description: 'UK tech market intelligence',
+    description: 'UK technology salary and demand data',
   },
 ] as const;
 

@@ -76,7 +76,7 @@ export function planPresentations(): PlanPresentation[] {
       id: plan.id,
       displayName: plan.displayName,
       description: plan.description,
-      priceLabel: offer?.priceLabel ?? 'Free',
+      priceLabel: offer?.priceLabel ?? '\u00A30',
       periodLabel: offer?.periodLabel ?? '',
     };
   });

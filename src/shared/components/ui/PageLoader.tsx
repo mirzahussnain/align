@@ -67,7 +67,7 @@ export default function PageLoader() {
             transition={{ delay: 0.4, duration: 0.8 }}
             className="text-[10px] text-white/50 tracking-[0.4em] uppercase font-bold pl-[0.4em]"
           >
-            UK Tech Career Intelligence
+            Evidence-led UK career intelligence
           </motion.p>
         </div>
       </div>

@@ -1,67 +1,125 @@
-import { limitsForTier, type Tier } from '@/shared/lib/entitlements';
-import { offerPresentationForPlan } from '@/shared/billing/config';
+import { planPresentations } from '@/shared/billing/config';
+import {
+  getPlanEntitlement,
+  type CapabilityEntitlement,
+  type PlanId,
+  type ProductCapability,
+} from '@/shared/entitlements/registry';
+
+export interface PlanSections {
+  core: string[];
+  monthly: string[];
+  lifetime: string[];
+  account: string[];
+}
 
 export interface Plan {
-  id: Tier;
+  id: Lowercase<PlanId>;
   name: string;
-  /** Price label; sourced from the central billing configuration (§15). */
   price: string;
   period: string;
   tagline: string;
-  features: string[];
+  sections: PlanSections;
   highlight?: boolean;
 }
 
-/** Pro Monthly price/period, read from the one authoritative billing config. */
-const proOffer = offerPresentationForPlan('PRO');
+type PresentationItem = {
+  capability: ProductCapability;
+  singular: string;
+  plural: string;
+};
 
-function enforcedLimits(tier: Tier): string[] {
-  const limits = limitsForTier(tier);
-  const perMonth = (value: number | null, one: string, many: string) =>
-    value === null ? `Unlimited ${many}` : `${value} ${value === 1 ? one : many} / month`;
-  return [
-    perMonth(limits.monthlyLimits.aiAnalyses, 'AI analysis', 'AI analyses'),
-    perMonth(limits.monthlyLimits.cvGenerations, 'tailored CV generation', 'tailored CV generations'),
-    `${limits.maxProfiles} career profile${limits.maxProfiles === 1 ? '' : 's'}`,
-    `${limits.maxStoredCvs} generated CVs kept`,
-    Number.isFinite(limits.maxStoredAnalyses)
-      ? `Last ${limits.maxStoredAnalyses} analyses kept`
-      : 'Unlimited analysis history',
-    limits.sourceRetentionDays === null
-      ? 'Uploaded files kept indefinitely'
-      : `Uploaded files kept ${limits.sourceRetentionDays} days`,
-    limits.profileReasoning ? 'Profile-vs-CV reasoning included' : 'Profile-vs-CV reasoning not included',
-  ];
+/**
+ * Labels and ordering are presentation concerns. Limits, periods and access
+ * remain in the entitlement registry and are read when the plan view is built.
+ */
+const PLAN_PRESENTATION = {
+  core: [
+    { capability: 'ats_analysis', singular: 'rule-based ATS analysis', plural: 'rule-based ATS analyses' },
+  ],
+  allowances: [
+    { capability: 'ai_enhanced_ats_analysis', singular: 'AI-enhanced ATS analysis', plural: 'AI-enhanced ATS analyses' },
+    { capability: 'job_match_analysis', singular: 'Job Match', plural: 'Job Matches' },
+    { capability: 'cv_regeneration', singular: 'CV regeneration', plural: 'CV regenerations' },
+    { capability: 'profile_reconciliation', singular: 'profile reconciliation', plural: 'profile reconciliations' },
+    { capability: 'cv_import_reconciliation', singular: 'CV-import reconciliation', plural: 'CV-import reconciliations' },
+    { capability: 'human_evidence_capture', singular: 'human evidence capture', plural: 'human evidence captures' },
+  ],
+  account: [
+    { capability: 'additional_career_profiles', singular: 'Career Profile', plural: 'Career Profiles' },
+    { capability: 'stored_source_cvs', singular: 'stored source CV', plural: 'stored source CVs' },
+    { capability: 'stored_generated_cvs', singular: 'stored generated CV', plural: 'stored generated CVs' },
+    { capability: 'stored_analyses', singular: 'stored analysis', plural: 'stored analyses' },
+    { capability: 'profile_evidence_storage', singular: 'reusable evidence item', plural: 'reusable evidence items' },
+    { capability: 'saved_jobs', singular: 'saved job', plural: 'saved jobs' },
+  ],
+} as const satisfies {
+  core: readonly PresentationItem[];
+  allowances: readonly PresentationItem[];
+  account: readonly PresentationItem[];
+};
+
+function quantityLabel(limit: number, item: PresentationItem): string {
+  return `${limit} ${limit === 1 ? item.singular : item.plural}`;
 }
 
-/** Public pricing comes from the central billing configuration, never a literal. */
-export const PLANS: Plan[] = [
-  {
-    id: 'free',
-    name: 'Free',
-    price: 'Free',
-    period: '',
-    tagline: 'Check where your CV stands before you commit.',
-    features: [
-      'Unlimited rule-based UK ATS scoring',
-      'Limited AI CV analysis and job matching',
-      'UK visa sponsor lookup & job board',
-      ...enforcedLimits('free'),
-    ],
-  },
-  {
-    id: 'pro',
-    name: 'Pro',
-    price: proOffer?.priceLabel ?? 'Free',
-    period: proOffer?.periodLabel ?? '',
-    tagline: 'For an active job search across multiple roles.',
-    highlight: true,
-    features: [
-      'Everything in Free',
-      'Full reports and requirement ledgers',
-      'Tailored CV regeneration from job matches',
-      'Reusable Career Profile evidence',
-      ...enforcedLimits('pro'),
-    ],
-  },
-];
+function allowanceLabel(entitlement: CapabilityEntitlement, item: PresentationItem): string {
+  if (entitlement.mode === 'disabled') return `No ${item.plural} included`;
+  if (entitlement.mode !== 'quota') return `Unlimited ${item.plural}`;
+  return `${quantityLabel(entitlement.limit, item)} / ${entitlement.period}`;
+}
+
+function resourceLabel(entitlement: CapabilityEntitlement, item: PresentationItem): string {
+  if (entitlement.mode !== 'resource_limit') {
+    throw new Error(`${item.capability} must be a resource limit to appear in account limits.`);
+  }
+  return quantityLabel(entitlement.limit, item);
+}
+
+function retentionLabel(plan: PlanId): string {
+  const entitlement = getPlanEntitlement(plan, 'source_file_retention');
+  if (entitlement.mode !== 'partial') {
+    throw new Error('source_file_retention must expose a duration access level.');
+  }
+  const days = Number.parseInt(entitlement.accessLevel, 10);
+  return `${days}-day uploaded-file retention`;
+}
+
+function sectionsFor(plan: PlanId): PlanSections {
+  const core = PLAN_PRESENTATION.core.map((item) => {
+    const entitlement = getPlanEntitlement(plan, item.capability);
+    return entitlement.mode === 'enabled'
+      ? `Unlimited ${item.singular}`
+      : allowanceLabel(entitlement, item);
+  });
+
+  const monthly: string[] = [];
+  const lifetime: string[] = [];
+  for (const item of PLAN_PRESENTATION.allowances) {
+    const entitlement = getPlanEntitlement(plan, item.capability);
+    const label = allowanceLabel(entitlement, item);
+    if (entitlement.mode === 'quota' && entitlement.period === 'lifetime') {
+      lifetime.push(label);
+    } else {
+      monthly.push(label);
+    }
+  }
+
+  const account = PLAN_PRESENTATION.account.map((item) =>
+    resourceLabel(getPlanEntitlement(plan, item.capability), item)
+  );
+  account.push(retentionLabel(plan));
+
+  return { core, monthly, lifetime, account };
+}
+
+/** Public plan presentation, derived from billing offers and entitlements. */
+export const PLANS: Plan[] = planPresentations().map((plan) => ({
+  id: plan.id.toLowerCase() as Lowercase<PlanId>,
+  name: plan.displayName,
+  price: plan.priceLabel,
+  period: plan.periodLabel,
+  tagline: plan.description,
+  sections: sectionsFor(plan.id),
+  highlight: plan.id === 'PRO',
+}));

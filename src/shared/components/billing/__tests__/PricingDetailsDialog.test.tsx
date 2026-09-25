@@ -20,6 +20,8 @@ describe('PricingDetailsDialog', () => {
     expect(screen.getByRole('dialog', { name: 'See what Pro includes' })).toBeInTheDocument();
     expect(screen.getAllByText('Free').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Pro').length).toBeGreaterThan(0);
+    expect(screen.getByText('No Job Matches included')).toBeInTheDocument();
+    expect(screen.getAllByText('Monthly allowances')).toHaveLength(2);
 
     await userEvent.click(screen.getByRole('button', { name: /view full plan & billing/i }));
     expect(onClose).toHaveBeenCalledTimes(1);
