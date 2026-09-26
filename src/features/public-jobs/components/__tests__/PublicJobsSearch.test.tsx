@@ -46,6 +46,7 @@ describe('public job discovery', () => {
 
     const chapter = screen.getByTestId('jobs-search-chapter');
     const results = screen.getByTestId('jobs-results-canvas');
+    expect(chapter.className).toContain('linear-gradient');
     expect(within(chapter).getByRole('link', { name: /continue in your dashboard/i })).toBeInTheDocument();
     expect(within(results).queryByRole('link', { name: /continue in your dashboard/i })).not.toBeInTheDocument();
   });
@@ -61,10 +62,14 @@ describe('public job discovery', () => {
     render(<PublicJobsSearch initialQuery="Engineer" />);
 
     const filterRail = screen.getByRole('complementary', { name: /job filters/i });
-    expect(filterRail).toHaveClass('lg:sticky', 'lg:overflow-y-auto');
+    const filterScroller = within(filterRail).getByTestId('jobs-filter-scroll');
+    const resultsShell = screen.getByTestId('jobs-results-shell');
+    expect(resultsShell).toContainElement(filterRail);
+    expect(filterRail).toHaveClass('lg:rounded-none', 'lg:border-l');
+    expect(filterScroller).toHaveClass('lg:sticky', 'lg:overflow-y-auto');
     expect(filterRail.className).not.toMatch(/(?:^|\s)overflow-y-auto(?:\s|$)/);
 
-    fireEvent.scroll(filterRail, { target: { scrollTop: 120 } });
+    fireEvent.scroll(filterScroller, { target: { scrollTop: 120 } });
 
     expect(screen.getByLabelText(/job title/i)).toHaveValue('Engineer');
     expect(fetchMock).not.toHaveBeenCalled();

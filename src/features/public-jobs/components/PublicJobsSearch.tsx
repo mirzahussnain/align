@@ -302,7 +302,7 @@ export default function PublicJobsSearch({
     <div>
       <section
         data-testid="jobs-search-chapter"
-        className="relative border-b border-violet-100/80 pt-24"
+        className="relative overflow-hidden border-b border-violet-100 pt-24 [background:radial-gradient(circle_at_16%_78%,rgba(186,230,253,0.95),transparent_31%),radial-gradient(circle_at_72%_105%,rgba(216,180,254,0.88),transparent_34%),linear-gradient(108deg,#f7f6ff_0%,#eef6ff_48%,#fff7fc_100%)]"
       >
         <div className="relative mx-auto max-w-7xl px-4 py-10 sm:px-6 sm:py-12 lg:px-8">
           <div className="mx-auto max-w-3xl text-center">
@@ -417,14 +417,22 @@ export default function PublicJobsSearch({
             </button>
           </div>
 
-          <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_280px] lg:items-start">
+          <div
+            data-testid="jobs-results-shell"
+            className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_280px] lg:items-start lg:gap-0 lg:rounded-2xl lg:border lg:border-slate-200 lg:bg-white/70"
+          >
             <aside
               aria-label="Job filters"
-              className={`${filtersOpen ? "block" : "hidden"} rounded-2xl border border-slate-200 bg-white p-5 lg:sticky lg:top-24 lg:col-start-2 lg:row-start-1 lg:block lg:max-h-[calc(100dvh-7rem)] lg:overflow-y-auto lg:overscroll-contain`}
+              className={`${filtersOpen ? "block" : "hidden"} rounded-2xl border border-slate-200 bg-white p-5 lg:col-start-2 lg:row-start-1 lg:block lg:self-stretch lg:rounded-none lg:rounded-r-2xl lg:border-0 lg:border-l lg:border-slate-200 lg:bg-slate-50/80 lg:p-0`}
             >
-              {filters}
+              <div
+                data-testid="jobs-filter-scroll"
+                className="lg:sticky lg:top-24 lg:max-h-[calc(100dvh-7rem)] lg:overflow-y-auto lg:overscroll-contain lg:p-6"
+              >
+                {filters}
+              </div>
             </aside>
-            <div className="min-w-0 space-y-3 lg:col-start-1 lg:row-start-1">
+            <div className="min-w-0 space-y-3 lg:col-start-1 lg:row-start-1 lg:p-4">
               {!searched && !loading && (
                 <div className="rounded-2xl border border-slate-200 bg-white px-5 py-12 text-center">
                   <BriefcaseBusiness
