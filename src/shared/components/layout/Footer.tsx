@@ -20,7 +20,7 @@ export default function Footer() {
           </div>
           <div className="flex flex-col text-left">
             <span className="text-sm font-semibold text-slate-800 tracking-tight">Align</span>
-            <span className="text-[10px] text-slate-400 font-medium">Evidence-led UK career intelligence</span>
+            <span className="text-[10px] text-slate-400 font-medium">UK Career Intelligence</span>
           </div>
         </div>
 

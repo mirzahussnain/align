@@ -50,7 +50,7 @@ export default function JobCard({ job, saved, saving, onToggleSave }: JobCardPro
                 target="_blank"
                 rel="noopener noreferrer"
                 className="inline-flex items-center gap-0.5 ml-1 text-accent-cyan hover:underline"
-                title={`Verify ${job.company} on Immigration Hub`}
+                title={`Verify ${job.company} in Sponsorship & Visas`}
               >
                 <span>Verify</span>
                 <ExternalLink size={9} />

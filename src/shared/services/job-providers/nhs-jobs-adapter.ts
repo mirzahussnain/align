@@ -21,14 +21,16 @@ function tagText(xml: string, tag: string): string {
 function officialVacancyUrl(value: string): string | null {
   try {
     const url = new URL(value);
-    return url.protocol === 'https:' && url.hostname === 'www.jobs.nhs.uk' && url.pathname.startsWith('/candidate/jobadvert/')
+    return url.protocol === 'https:'
+      && ['www.jobs.nhs.uk', 'beta.jobs.nhs.uk'].includes(url.hostname)
+      && url.pathname.startsWith('/candidate/jobadvert/')
       ? url.toString()
       : null;
   } catch { return null; }
 }
 
 export function parseNhsJobsXml(xml: string): { jobs: ProviderJob[]; total: number; totalPages: number; rawReceived: number } {
-  if (!/<nhsSearch\b[^>]*>/i.test(xml) || !/<\/nhsSearch>/i.test(xml)) {
+  if (!/<(nhsJobs|nhsSearch)\b[^>]*>[\s\S]*<\/\1>/i.test(xml)) {
     throw new JobProviderError('NHS_JOBS', 'INVALID_RESPONSE');
   }
   const totalText = tagText(xml, 'totalResults');

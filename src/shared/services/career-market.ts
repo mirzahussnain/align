@@ -76,6 +76,7 @@ export function buildCareerMarketSnapshot(
   });
   const contractValues = jobs.map((job) => job.contractType || job.employmentType || 'NOT_STATED');
   const workStyleValues = jobs.map((job) => job.remoteType || 'UNKNOWN');
+  const disclosedWorkStyles = workStyleValues.filter((value) => value !== 'UNKNOWN');
   const regionValues = jobs.map((job) => job.region || job.city || '').filter(Boolean);
   const sponsorValues = jobs.map((job) => job.sponsorSignal.registerMatchStatus);
   const disclosedRate = jobs.length ? Math.round((salaryDisclosed.length / jobs.length) * 1000) / 10 : 0;
@@ -113,7 +114,7 @@ export function buildCareerMarketSnapshot(
         ...(annualSalaries.length ? { annualGbp: { minimum: Math.min(...annualSalaries), median: median(annualSalaries), maximum: Math.max(...annualSalaries) } } : {}),
       },
       contractTypeMix: mix(contractValues),
-      workStyleMix: mix(workStyleValues) as CareerMarketSnapshotView['metrics']['workStyleMix'],
+      workStyleMix: mix(disclosedWorkStyles) as CareerMarketSnapshotView['metrics']['workStyleMix'],
       regions: mix(regionValues),
       topEmployers: mix(jobs.map((job) => job.company), 6),
       sponsorshipEmployerContext: mix(sponsorValues),

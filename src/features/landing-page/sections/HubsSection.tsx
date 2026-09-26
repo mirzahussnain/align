@@ -16,7 +16,7 @@ const MODULES = [
   },
   {
     icon: Briefcase,
-    title: 'UK Job Boards',
+    title: 'Jobs',
     description: 'Search UK vacancies across providers, with employer sponsor-register evidence kept separate from vacancy wording.',
     href: '/jobs',
     color: 'from-[hsl(170,80%,50%)] to-[hsl(190,75%,45%)]',
@@ -24,7 +24,7 @@ const MODULES = [
   },
   {
     icon: Shield,
-    title: 'Immigration Hub',
+    title: 'Sponsorship & Visas',
     description: 'Search the official UK sponsor register and review practical visa-route guidance without eligibility guarantees.',
     href: '/immigration',
     color: 'from-[hsl(40,95%,55%)] to-[hsl(25,90%,50%)]',
@@ -33,7 +33,7 @@ const MODULES = [
   {
     icon: TrendingUp,
     title: 'UK Career Market',
-    description: 'Explore the product’s technology-specific salary, skills, and regional demand resource.',
+    description: 'Explore sampled vacancies, advertised salaries, employers, regions, and work styles from Align\'s integrated job sources.',
     href: '/trends',
     color: 'from-[hsl(340,80%,55%)] to-[hsl(310,75%,50%)]',
     actionText: 'Explore the market',

@@ -19,6 +19,19 @@ const xml = `<?xml version="1.0" encoding="UTF-8"?>
   </vacancyDetails>
 </nhsSearch>`;
 
+const currentXml = `<?xml version="1.0" encoding="UTF-8"?>
+<nhsJobs>
+  <vacancyDetails>
+    <closeDate>2026-10-04</closeDate><description>Support safe care.</description>
+    <employer>NHS England</employer><id>5609848</id>
+    <locations><location>Leeds, LS1 4AP</location></locations>
+    <postDate>2026-09-18T14:07:28.457687</postDate><reference>M9990-26-0677</reference>
+    <salary>£59,264.40 to £67,818.00</salary><title>Cyber Security Analyst</title><type>Permanent</type>
+    <url>https://beta.jobs.nhs.uk/candidate/jobadvert/M9990-26-0677</url>
+  </vacancyDetails>
+  <totalPages>1</totalPages><totalResults>1</totalResults>
+</nhsJobs>`;
+
 afterEach(() => vi.unstubAllGlobals());
 
 describe('NHS Jobs XML adapter', () => {
@@ -36,6 +49,17 @@ describe('NHS Jobs XML adapter', () => {
   it('accepts a documented empty result and rejects malformed XML', () => {
     expect(parseNhsJobsXml('<nhsSearch><totalPages>0</totalPages><totalResults>0</totalResults></nhsSearch>')).toMatchObject({ jobs: [], rawReceived: 0 });
     expect(() => parseNhsJobsXml('<html>upstream error</html>')).toThrowError(JobProviderError);
+  });
+
+  it('parses the current NHS Jobs wrapper and official beta vacancy hostname', () => {
+    const parsed = parseNhsJobsXml(currentXml);
+    expect(parsed).toMatchObject({ total: 1, totalPages: 1, rawReceived: 1 });
+    expect(parsed.jobs[0]).toMatchObject({
+      id: 'nhs_jobs-5609848',
+      title: 'Cyber Security Analyst',
+      location: 'Leeds, LS1 4AP',
+      url: 'https://beta.jobs.nhs.uk/candidate/jobadvert/M9990-26-0677',
+    });
   });
 
   it('maps documented query, location-distance, filters, sorting and pagination parameters', () => {

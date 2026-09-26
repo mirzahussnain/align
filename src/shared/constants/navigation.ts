@@ -56,7 +56,7 @@ export const NAV_LINKS = [
     description: 'Upload and analyze your CV',
   },
   {
-    label: 'Job Board',
+    label: 'Jobs',
     href: '/jobs',
     icon: 'Briefcase',
     description: 'Search vacancies across UK role families',

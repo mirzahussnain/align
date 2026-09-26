@@ -125,6 +125,69 @@ export type SponsorFilters = {
   industry: string;
 };
 
+export type SponsorSummaryItem = { label: string; count: number; share: number };
+export type SponsorRegisterSummary = {
+  totalEntries: number;
+  sectorCount: number;
+  locationCount: number;
+  routeCount: number;
+  topSectors: SponsorSummaryItem[];
+  topLocations: SponsorSummaryItem[];
+  routeDistribution: SponsorSummaryItem[];
+};
+
+const sponsorSummaryCache = new WeakMap<readonly Sponsor[], SponsorRegisterSummary>();
+
+function titleCaseLocation(value: string): string {
+  return value
+    .trim()
+    .replace(/\s+/g, ' ')
+    .toLocaleLowerCase('en-GB')
+    .replace(/(^|[\s-])\p{L}/gu, (character) => character.toLocaleUpperCase('en-GB'));
+}
+
+function distribution(
+  values: string[],
+  denominator: number,
+  limit: number,
+  normalizeLabel: (value: string) => string = (value) => value.trim(),
+): SponsorSummaryItem[] {
+  const counts = new Map<string, number>();
+  for (const value of values.map(normalizeLabel).filter(Boolean)) {
+    counts.set(value, (counts.get(value) ?? 0) + 1);
+  }
+  return [...counts.entries()]
+    .map(([label, count]) => ({
+      label,
+      count,
+      share: denominator ? Math.round((count / denominator) * 1_000) / 10 : 0,
+    }))
+    .sort((left, right) => right.count - left.count || left.label.localeCompare(right.label))
+    .slice(0, limit);
+}
+
+/** Derived once from the complete indexed register array, never from a filtered page. */
+export function summarizeSponsorRegister(sponsors: readonly Sponsor[]): SponsorRegisterSummary {
+  const cached = sponsorSummaryCache.get(sponsors);
+  if (cached) return cached;
+
+  const sectors = sponsors.map((sponsor) => sponsor.industry ?? '').filter(Boolean);
+  const locations = sponsors.map((sponsor) => sponsor.townCity).filter(Boolean);
+  const normalizedLocations = locations.map(titleCaseLocation);
+  const routes = sponsors.flatMap((sponsor) => sponsor.route.split(',').map((route) => route.trim()).filter(Boolean));
+  const summary = {
+    totalEntries: sponsors.length,
+    sectorCount: new Set(sectors).size,
+    locationCount: new Set(normalizedLocations).size,
+    routeCount: new Set(routes).size,
+    topSectors: distribution(sectors, sponsors.length, 5),
+    topLocations: distribution(locations, sponsors.length, 5, titleCaseLocation),
+    routeDistribution: distribution(routes, sponsors.length, 6),
+  } satisfies SponsorRegisterSummary;
+  sponsorSummaryCache.set(sponsors, summary);
+  return summary;
+}
+
 const normaliseFilter = (value: string) => value.trim().toLocaleLowerCase('en-GB');
 
 /** All sponsor-list filters are case-insensitive, including select values. */

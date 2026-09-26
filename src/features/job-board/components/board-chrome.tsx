@@ -230,7 +230,7 @@ export function SponsorEvidenceLine({
           target="_blank"
           rel="noopener noreferrer"
           className="inline-flex items-center gap-0.5 text-[11px] font-medium text-accent-cyan hover:underline shrink-0 ml-1"
-          title={`Check ${companyName} on Immigration Hub`}
+          title={`Check ${companyName} in Sponsorship & Visas`}
         >
           <span>Verify</span>
           <ExternalLink className="h-2.5 w-2.5" />

@@ -1,21 +1,150 @@
-'use client';
+"use client";
 
-import { useState, Suspense } from 'react';
-import { motion } from 'framer-motion';
-import { Search, ShieldCheck, Building2, ExternalLink, Loader2, Info } from 'lucide-react';
-import Navbar from '@/shared/components/layout/Navbar';
-import PublicPageBackdrop from '@/shared/components/layout/PublicPageBackdrop';
-import { Input } from '@/shared/components/ui/Input';
-import GlassCard from '@/shared/components/ui/GlassCard';
-import VisaRouteDetails from '@/features/immigration/components/VisaRouteDetails';
-import Tabs from '@/shared/components/ui/Tabs';
-import { useSponsors } from '@/features/immigration/hooks/useSponsors';
-import { VISAS, INDUSTRY_SECTORS } from '@/shared/constants/immigration-config';
-import { EXTERNAL_LINKS } from '@/shared/constants/navigation';
+import { Suspense, useState } from "react";
+import {
+  ArrowUpRight,
+  Building2,
+  CheckCircle2,
+  ExternalLink,
+  Info,
+  Loader2,
+  Search,
+  ShieldCheck,
+} from "lucide-react";
+import Navbar from "@/shared/components/layout/Navbar";
+import VisaRouteDetails from "@/features/immigration/components/VisaRouteDetails";
+import { useSponsors } from "@/features/immigration/hooks/useSponsors";
+import { VISAS, INDUSTRY_SECTORS } from "@/shared/constants/immigration-config";
+import { EXTERNAL_LINKS } from "@/shared/constants/navigation";
+import ResourcePageBackdrop from "@/shared/components/ui/ResourcePageBackdrop";
 
-function ImmigrationHubContent() {
-  const [activeVisaTab, setActiveVisaTab] = useState<string>(VISAS[0].title);
-  
+function Bars({
+  title,
+  items,
+}: {
+  title: string;
+  items: Array<{ label: string; count: number; share: number }>;
+}) {
+  const max = Math.max(...items.map((item) => item.count), 1);
+  return (
+    <section className="rounded-2xl border border-slate-200 bg-white p-5">
+      <h3 className="font-semibold text-slate-950">{title}</h3>
+      <div className="mt-4 space-y-3">
+        {items.map((item) => (
+          <div key={item.label}>
+            <div className="flex items-start justify-between gap-3 text-xs">
+              <span className="min-w-0 text-slate-600">{item.label}</span>
+              <span className="shrink-0 font-semibold tabular-nums text-slate-950">
+                {item.count.toLocaleString()}
+              </span>
+            </div>
+            <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-slate-100">
+              <div
+                className="h-full rounded-full bg-violet-500"
+                style={{ width: `${(item.count / max) * 100}%` }}
+              />
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+const chartColors = [
+  "#7c3aed",
+  "#0891b2",
+  "#2563eb",
+  "#8b5cf6",
+  "#0e7490",
+  "#4f46e5",
+];
+
+function DonutChart({
+  title,
+  items,
+}: {
+  title: string;
+  items: Array<{ label: string; count: number; share: number }>;
+}) {
+  const total = items.reduce((sum, item) => sum + item.count, 0);
+  const segments = items.reduce<
+    Array<(typeof items)[number] & { chartShare: number; chartOffset: number }>
+  >((result, item) => {
+    const chartShare = total ? (item.count / total) * 100 : 0;
+    const chartOffset = result.reduce(
+      (sum, segment) => sum + segment.chartShare,
+      0,
+    );
+    return [...result, { ...item, chartShare, chartOffset }];
+  }, []);
+  return (
+    <section className="rounded-2xl border border-slate-200 bg-white p-5">
+      <h3 className="font-semibold text-slate-950">{title}</h3>
+      {segments.length ? (
+        <div className="mt-4 grid grid-cols-[104px_minmax(0,1fr)] items-center gap-4">
+          <svg
+            role="img"
+            aria-label={`${title} chart`}
+            className="h-[104px] w-[104px] -rotate-90"
+            viewBox="0 0 42 42"
+          >
+            <circle
+              cx="21"
+              cy="21"
+              r="15.9"
+              fill="none"
+              stroke="#f1f5f9"
+              strokeWidth="6"
+            />
+            {segments.map((item, index) => {
+              return (
+                <circle
+                  key={item.label}
+                  cx="21"
+                  cy="21"
+                  r="15.9"
+                  fill="none"
+                  stroke={chartColors[index % chartColors.length]}
+                  strokeWidth="6"
+                  pathLength="100"
+                  strokeDasharray={`${item.chartShare} ${100 - item.chartShare}`}
+                  strokeDashoffset={-item.chartOffset}
+                />
+              );
+            })}
+            <circle cx="21" cy="21" r="11.5" fill="white" />
+          </svg>
+          <div className="space-y-2.5">
+            {segments.map((item, index) => (
+              <div key={item.label} className="flex items-start gap-2 text-xs">
+                <span
+                  className="mt-1 h-2 w-2 shrink-0 rounded-sm"
+                  style={{
+                    backgroundColor: chartColors[index % chartColors.length],
+                  }}
+                />
+                <span className="min-w-0 flex-1 text-slate-600">
+                  {item.label}
+                </span>
+                <span className="font-semibold tabular-nums text-slate-950">
+                  {item.count.toLocaleString()}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : (
+        <p className="mt-4 text-sm text-slate-500">
+          No route data is available.
+        </p>
+      )}
+    </section>
+  );
+}
+
+function SponsorshipVisasContent() {
+  const [activeVisaTab, setActiveVisaTab] = useState(VISAS[0].title);
   const {
     query,
     setQuery,
@@ -29,249 +158,395 @@ function ImmigrationHubContent() {
     page,
     error,
     register,
+    summary,
     handlePageChange,
   } = useSponsors();
+  const activeVisa =
+    VISAS.find((visa) => visa.title === activeVisaTab) ?? VISAS[0];
+  const refreshed = register?.publishedAt
+    ? new Date(`${register.publishedAt}T00:00:00Z`).toLocaleDateString(
+        "en-GB",
+        { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" },
+      )
+    : register?.source === "LIVE_FALLBACK"
+      ? "Current GOV.UK fallback"
+      : "Loading";
 
   return (
-    <main className="relative isolate min-h-screen overflow-hidden bg-hero-gradient">
+    <main className="relative min-h-screen overflow-hidden bg-slate-100">
       <Navbar />
-      <PublicPageBackdrop variant="immigration" />
+      <ResourcePageBackdrop variant="visas" />
+      <section className="relative mx-auto max-w-7xl space-y-8 px-4 pb-16 pt-28 sm:px-6 lg:px-8">
+        <header className="grid gap-4 lg:grid-cols-[minmax(0,1.6fr)_minmax(190px,.55fr)_minmax(190px,.55fr)]">
+          <div className="rounded-2xl border border-slate-200 bg-white p-6 sm:p-8">
+            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-violet-50 text-violet-700">
+              <ShieldCheck className="h-5 w-5" />
+            </div>
+            <h1 className="mt-5 text-3xl font-semibold tracking-[-0.035em] text-slate-950 sm:text-4xl">
+              Sponsorship & Visas
+            </h1>
+            <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-600 sm:text-base">
+              Search indexed GOV.UK sponsor-register data, understand employer
+              context, and review maintained guidance for common visa routes.
+            </p>
+            <div className="mt-6 flex flex-wrap gap-5 border-t border-slate-100 pt-5 text-xs text-slate-500">
+              <span>
+                <strong className="text-slate-800">Official source</strong>
+                <br />
+                GOV.UK licensed sponsors
+              </span>
+              <span>
+                <strong className="text-slate-800">Register date</strong>
+                <br />
+                {refreshed}
+              </span>
+            </div>
+          </div>
+          <div className="rounded-2xl border border-slate-200 bg-white p-5">
+            <p className="text-xs font-semibold text-slate-500">
+              Indexed sponsors
+            </p>
+            <p className="mt-5 text-3xl font-semibold tabular-nums text-slate-950">
+              {(
+                summary?.totalEntries ??
+                register?.rowCount ??
+                0
+              ).toLocaleString()}
+            </p>
+            <p className="mt-1 text-sm text-slate-600">
+              entries in the full indexed register
+            </p>
+          </div>
+          <div className="rounded-2xl border border-slate-200 bg-white p-5">
+            <p className="text-xs font-semibold text-slate-500">
+              Register breadth
+            </p>
+            <p className="mt-5 text-3xl font-semibold tabular-nums text-slate-950">
+              {summary?.locationCount.toLocaleString() ?? "—"}
+            </p>
+            <p className="mt-1 text-sm text-slate-600">
+              indexed towns and cities across {summary?.routeCount ?? "—"} route
+              categories
+            </p>
+          </div>
+        </header>
 
-      <section className="relative z-10 pt-24 pb-12 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="mb-8"
-        >
-          <h1 className="text-3xl font-bold text-text-primary mb-2 flex items-center gap-2">
-            <ShieldCheck className="text-accent-cyan" />
-            Sponsorship & Visas
-          </h1>
-          <p className="text-text-secondary">
-            Search the official sponsor register and review neutral, qualified information about common work routes.
-          </p>
-        </motion.div>
-
-        <div className="flex flex-col gap-12">
-          
-          {/* Top Section: Sponsor Search */}
-          <div className="w-full space-y-6">
-            <GlassCard hover={false} padding="md">
-              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
+        <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_280px] lg:items-start">
+          <section className="min-w-0 overflow-hidden rounded-2xl border border-slate-200 bg-white">
+            <div className="p-5 sm:p-6">
+              <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-start">
                 <div>
-                  <h2 className="text-xl font-bold text-text-primary mb-1">Register of Licensed Sponsors</h2>
-                  <p className="text-xs text-text-tertiary">
-                    {!register
-                      ? 'Loading register details…'
-                      : register.source === 'BUNDLED_RELEASE'
-                        ? `GOV.UK register · Version ${register.releaseVersion} · ${register.rowCount.toLocaleString()} entries${register.publishedAt ? ` · ${new Date(`${register.publishedAt}T00:00:00Z`).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' })}` : ''}`
-                        : 'Data sourced directly from the live GOV.UK CSV'}
+                  <h2 className="text-xl font-semibold text-slate-950">
+                    Register of Licensed Sponsors
+                  </h2>
+                  <p className="mt-1 text-xs text-slate-500">
+                    {register
+                      ? `Version ${register.releaseVersion} · ${register.rowCount.toLocaleString()} indexed entries · ${refreshed}`
+                      : "Loading register metadata…"}
                   </p>
-                  <p className="mt-2 max-w-3xl text-xs leading-5 text-slate-500">An organisation’s presence on the register does not confirm that it will sponsor a particular vacancy or that a candidate is eligible.</p>
                 </div>
-                <a href={EXTERNAL_LINKS.govSponsorList} target="_blank" rel="noopener noreferrer" className="text-xs flex items-center gap-1 text-text-tertiary hover:text-text-primary transition-colors">
-                  Official Source <ExternalLink size={12} />
+                <a
+                  href={EXTERNAL_LINKS.govSponsorList}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex min-h-10 items-center gap-1.5 text-sm font-semibold text-violet-700"
+                >
+                  Official source <ArrowUpRight className="h-4 w-4" />
                 </a>
               </div>
-
-              <div className="flex flex-col md:flex-row gap-3 mb-6">
-                {/* Search Term input */}
-                <div className="flex-1">
-                  <Input
-                    icon={<Search size={16} />}
-                    type="text"
-                    value={query}
-                    onChange={(e) => setQuery(e.target.value)}
-                    placeholder="Search company or city..."
-                  />
+              <div className="mt-5 rounded-xl border border-cyan-200/80 p-4 text-sm leading-6 text-cyan-950 [background:radial-gradient(circle_at_100%_0%,rgba(186,230,253,0.82),transparent_38%),linear-gradient(105deg,#e0f2fe_0%,#f8fafc_56%,#eff6ff_100%)]">
+                <div className="flex gap-2">
+                  <Info className="mt-0.5 h-4 w-4 shrink-0" />
+                  <p>
+                    An organisation appearing on the register does not confirm
+                    that a specific vacancy offers sponsorship, that a
+                    Certificate of Sponsorship is available, or that a candidate
+                    is eligible.
+                  </p>
                 </div>
-
-                {/* Industry category select */}
-                <div className="sm:w-52">
+              </div>
+              <div className="mt-5 grid gap-3 md:grid-cols-[minmax(0,1fr)_220px_200px]">
+                <label className="relative">
+                  <span className="sr-only">Search company, town or city</span>
+                  <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                  <input
+                    value={query}
+                    onChange={(event) => setQuery(event.target.value)}
+                    placeholder="Search company, town or city"
+                    className="min-h-11 w-full rounded-xl border border-slate-200 bg-slate-50 pl-10 pr-4 text-sm outline-none focus:border-violet-500 focus:bg-white focus:ring-4 focus:ring-violet-100"
+                  />
+                </label>
+                <label>
+                  <span className="sr-only">Industry</span>
                   <select
                     value={industry}
-                    onChange={(e) => setIndustry(e.target.value)}
-                    className="w-full px-3 py-2.5 bg-bg-tertiary border border-border-subtle rounded-xl text-sm font-medium"
+                    onChange={(event) => setIndustry(event.target.value)}
+                    className="min-h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm"
                   >
-                    {INDUSTRY_SECTORS.map((sec) => (
-                      <option key={sec.value} value={sec.value}>
-                        {sec.label}
+                    <option value="all">All industries</option>
+                    {INDUSTRY_SECTORS.filter(
+                      (item) => item.value !== "all",
+                    ).map((item) => (
+                      <option key={item.value} value={item.value}>
+                        {item.label}
                       </option>
                     ))}
                   </select>
-                </div>
-
-                {/* Visa Route select */}
-                <div className="sm:w-48">
+                </label>
+                <label>
+                  <span className="sr-only">Visa route</span>
                   <select
                     value={route}
-                    onChange={(e) => setRoute(e.target.value)}
-                    className="w-full px-3 py-2.5 bg-bg-tertiary border border-border-subtle rounded-xl text-sm"
+                    onChange={(event) => setRoute(event.target.value)}
+                    className="min-h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm"
                   >
-                    <option value="all">All Routes</option>
+                    <option value="all">All routes</option>
                     <option value="skilled worker">Skilled Worker</option>
-                    <option value="global business mobility">Global Business Mobility</option>
+                    <option value="global business mobility">
+                      Global Business Mobility
+                    </option>
                   </select>
-                </div>
+                </label>
               </div>
-
               {error && (
-                <div className="p-4 rounded-xl bg-error/10 border border-error/20 text-error text-sm mb-6 flex items-start gap-2">
-                  <Info size={18} className="flex-shrink-0 mt-0.5" />
-                  <p>{error}</p>
+                <div
+                  role="alert"
+                  className="mt-4 rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-900"
+                >
+                  {error}
                 </div>
               )}
-
-              <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-sm">
-                    <thead className="bg-bg-elevated text-text-secondary text-xs uppercase tracking-wider">
-                      <tr>
-                        <th className="px-4 py-3 font-semibold text-slate-600 w-[25%]">Organisation Name</th>
-                        <th className="px-4 py-3 font-semibold text-slate-600 hidden sm:table-cell w-[15%]">Town/City</th>
-                        <th className="px-4 py-3 font-semibold text-slate-600 hidden md:table-cell w-[20%]">Sector</th>
-                        <th className="px-4 py-3 font-semibold text-slate-600 hidden md:table-cell w-[15%]">Rating</th>
-                        <th className="px-4 py-3 font-semibold text-slate-600 w-[15%]">Route</th>
-                        <th className="px-4 py-3 font-semibold text-slate-600 text-right w-[10%] min-w-[100px]">Actions</th>
+            </div>
+            <div className="overflow-x-auto border-t border-slate-200">
+              <table className="w-full min-w-[680px] text-left text-sm">
+                <thead className="bg-slate-50 text-xs text-slate-500">
+                  <tr>
+                    <th className="w-[36%] px-5 py-3 font-semibold">
+                      Organisation
+                    </th>
+                    <th className="w-[19%] px-4 py-3 font-semibold">
+                      Town / City
+                    </th>
+                    <th className="w-[25%] px-4 py-3 font-semibold">Sector</th>
+                    <th className="w-[20%] px-4 py-3 font-semibold">Route</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {isLoading && sponsors.length === 0 ? (
+                    <tr>
+                      <td
+                        colSpan={4}
+                        className="px-5 py-10 text-center text-sm text-slate-500"
+                      >
+                        <Loader2 className="mx-auto mb-2 h-5 w-5 animate-spin text-violet-600" />
+                        Loading sponsors…
+                      </td>
+                    </tr>
+                  ) : sponsors.length === 0 ? (
+                    <tr>
+                      <td
+                        colSpan={4}
+                        className="px-5 py-10 text-center text-slate-500"
+                      >
+                        No sponsors match these filters.
+                      </td>
+                    </tr>
+                  ) : (
+                    sponsors.map((sponsor, index) => (
+                      <tr
+                        key={`${sponsor.organisationName}-${index}`}
+                        className="align-top hover:bg-slate-50"
+                      >
+                        <td className="px-5 py-4">
+                          <div className="flex gap-3">
+                            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-500">
+                              <Building2 className="h-4 w-4" />
+                            </span>
+                            <span className="max-w-[300px] font-semibold leading-5 text-slate-900">
+                              {sponsor.organisationName}
+                            </span>
+                          </div>
+                        </td>
+                        <td className="px-4 py-4 text-slate-600">
+                          {sponsor.townCity || "Not stated"}
+                        </td>
+                        <td className="px-4 py-4">
+                          <span className="inline-flex max-w-[200px] rounded-lg bg-slate-100 px-2.5 py-1.5 text-xs leading-4 text-slate-600">
+                            {sponsor.industry}
+                          </span>
+                        </td>
+                        <td className="px-4 py-4 text-xs leading-5 text-slate-600">
+                          {sponsor.route}
+                        </td>
                       </tr>
-                    </thead>
-                    <tbody className="divide-y divide-border-subtle">
-                      {isLoading && sponsors.length === 0 ? (
-                        <tr>
-                          <td colSpan={5} className="px-4 py-8 text-center">
-                            <Loader2 size={24} className="animate-spin text-accent-cyan mx-auto mb-2" />
-                            <span className="text-text-tertiary text-xs">Loading sponsors...</span>
-                          </td>
-                        </tr>
-                      ) : sponsors.length === 0 ? (
-                        <tr>
-                          <td colSpan={5} className="px-4 py-8 text-center text-text-tertiary">
-                            No sponsors found matching your criteria.
-                          </td>
-                        </tr>
-                      ) : (
-                        sponsors.map((sponsor, i) => (
-                          <tr key={`${sponsor.organisationName}-${i}`} className="hover:bg-slate-50 transition-colors group">
-                            <td className="px-4 py-3 font-medium text-slate-800">
-                              <div className="flex items-center gap-3">
-                                <div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center flex-shrink-0">
-                                  <Building2 size={14} className="text-slate-500" />
-                                </div>
-                                <span className="truncate max-w-[150px] sm:max-w-[220px]">{sponsor.organisationName}</span>
-                              </div>
-                            </td>
-                            <td className="px-4 py-3 text-slate-500 hidden sm:table-cell truncate max-w-[120px]">
-                              {sponsor.townCity}
-                            </td>
-                            <td className="px-4 py-3 hidden md:table-cell">
-                              <span className="inline-flex px-2 py-1.5 rounded-md text-[9px] font-bold bg-slate-100 text-slate-600 border border-slate-200 uppercase tracking-wider leading-tight w-full text-center items-center justify-center">
-                                {sponsor.industry}
-                              </span>
-                            </td>
-                            <td className="px-4 py-3 hidden md:table-cell">
-                              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[10px] font-bold bg-emerald-50 text-emerald-600 border border-emerald-200 uppercase tracking-wider whitespace-nowrap" title={sponsor.rating}>
-                                <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 flex-shrink-0" />
-                                {sponsor.rating.includes('rating') 
-                                  ? sponsor.rating.replace('Worker (', '').replace(')', '') 
-                                  : sponsor.rating || 'A RATING'}
-                              </span>
-                            </td>
-                            <td className="px-4 py-3 text-slate-500 text-[11px]">
-                              <div className="flex flex-col gap-1">
-                                {sponsor.route.split(',').map((r, idx) => (
-                                  <span key={idx} className="leading-tight" title={r.trim()}>{r.trim()}</span>
-                                ))}
-                              </div>
-                            </td>
-                            <td className="px-4 py-3 text-right">
-                              <a
-                                href={`/jobs?query=${encodeURIComponent(sponsor.organisationName)}`}
-                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-bold bg-slate-900 text-white hover:bg-purple-700 hover:shadow-md transition-all opacity-0 group-hover:opacity-100 focus:opacity-100 whitespace-nowrap"
-                              >
-                                View Jobs
-                              </a>
-                            </td>
-                          </tr>
-                        ))
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-                
-                {/* Pagination Info */}
-                {!isLoading && sponsors.length > 0 && (
-                  <div className="px-5 py-4 border-t border-slate-200 bg-slate-50 flex items-center justify-between">
-                    <span className="text-xs font-medium text-slate-500">
-                      Showing {((page - 1) * 10) + 1} - {Math.min(page * 10, total)} of {total.toLocaleString()}
-                    </span>
-                    <div className="flex gap-2">
-                      <button 
-                        disabled={page === 1}
-                        onClick={() => handlePageChange(page - 1)}
-                        className="px-4 py-2 rounded-lg bg-white border border-slate-200 text-xs font-bold text-slate-600 disabled:opacity-50 disabled:bg-slate-50 hover:bg-slate-50 hover:border-slate-300 transition-all shadow-sm"
-                      >
-                        Previous
-                      </button>
-                      <button 
-                        disabled={page * 10 >= total}
-                        onClick={() => handlePageChange(page + 1)}
-                        className="px-4 py-2 rounded-lg bg-white border border-slate-200 text-xs font-bold text-slate-600 disabled:opacity-50 disabled:bg-slate-50 hover:bg-slate-50 hover:border-slate-300 transition-all shadow-sm"
-                      >
-                        Next
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </GlassCard>
-          </div>
-
-          <section className="rounded-2xl border border-slate-200 bg-white p-5 sm:p-6">
-            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-violet-700">One career route</p>
-            <h2 className="mt-2 text-xl font-bold text-text-primary">Knowledge Transfer Partnerships (KTPs)</h2>
-            <p className="mt-2 max-w-3xl text-sm leading-6 text-text-secondary">KTP Associate roles connect a business with a university or other knowledge base for a defined project. They span technical, operational and management disciplines. Visa arrangements vary by role and employing partner; a partner’s sponsor status does not confirm sponsorship for a specific KTP vacancy.</p>
-            <div className="mt-4 flex flex-wrap gap-4"><a href={EXTERNAL_LINKS.ktpJobs} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 text-sm font-semibold text-accent-cyan">View official KTP jobs <ExternalLink size={16} /></a><a href={`${EXTERNAL_LINKS.jobsAcUk}KTP+Associate`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 text-sm font-semibold text-accent-cyan">Search jobs.ac.uk <ExternalLink size={16} /></a></div>
-          </section>
-
-          {/* Bottom Section: Rules Info */}
-          <div className="w-full space-y-6">
-            <h2 className="text-2xl font-bold text-text-primary px-1">Visa routes and planning</h2>
-            
-            <div className="bg-white rounded-2xl border border-border-subtle shadow-sm overflow-hidden">
-              <Tabs
-                tabs={VISAS.map(v => ({ label: v.title, value: v.title }))}
-                activeTab={activeVisaTab}
-                onChange={setActiveVisaTab}
-                variant="underline"
-              />
-
-              <div className="p-6">
-                <motion.div
-                    key={activeVisaTab}
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="w-full text-left"
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+            {!isLoading && sponsors.length > 0 && (
+              <div className="flex flex-col gap-3 border-t border-slate-200 bg-slate-50 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+                <p className="text-xs text-slate-500">
+                  Showing {(page - 1) * 10 + 1}–{Math.min(page * 10, total)} of{" "}
+                  {total.toLocaleString()} matching entries
+                </p>
+                <div className="flex gap-2">
+                  <button
+                    disabled={page === 1}
+                    onClick={() => handlePageChange(page - 1)}
+                    className="min-h-10 rounded-xl border border-slate-200 bg-white px-4 text-xs font-semibold text-slate-700 disabled:opacity-40"
                   >
-                    {VISAS.map((visa) => visa.title === activeVisaTab && (
-                      <div key={visa.title} className="relative overflow-hidden w-full">
-                        <VisaRouteDetails visa={visa} />
-                      </div>
-                    ))}
-                  </motion.div>
+                    Previous
+                  </button>
+                  <button
+                    disabled={page * 10 >= total}
+                    onClick={() => handlePageChange(page + 1)}
+                    className="min-h-10 rounded-xl border border-slate-200 bg-white px-4 text-xs font-semibold text-slate-700 disabled:opacity-40"
+                  >
+                    Next
+                  </button>
+                </div>
               </div>
+            )}
+          </section>
+          <aside className="space-y-4">
+            <Bars
+              title="Top Indexed Sectors"
+              items={summary?.topSectors ?? []}
+            />
+            <Bars
+              title="Top Sponsor Locations"
+              items={summary?.topLocations ?? []}
+            />
+            <DonutChart
+              title="Route Distribution"
+              items={summary?.routeDistribution ?? []}
+            />
+          </aside>
+        </div>
+
+        <section className="relative grid overflow-hidden rounded-2xl border border-cyan-200/80 p-6 shadow-[0_18px_50px_rgba(14,165,233,0.10)] [background:radial-gradient(circle_at_100%_0%,rgba(186,230,253,0.88),transparent_36%),linear-gradient(105deg,#e0f2fe_0%,#f8fafc_56%,#eff6ff_100%)] sm:p-8 lg:grid-cols-[minmax(0,1.5fr)_minmax(260px,.6fr)] lg:items-center lg:gap-8">
+          <svg
+            aria-hidden="true"
+            className="pointer-events-none absolute -right-10 -top-12 h-64 w-64 text-cyan-300/35"
+            viewBox="0 0 256 256"
+            fill="none"
+          >
+            <circle cx="128" cy="128" r="92" stroke="currentColor" />
+            <circle
+              cx="128"
+              cy="128"
+              r="66"
+              stroke="currentColor"
+              strokeDasharray="3 10"
+            />
+          </svg>
+          <div className="relative">
+            <p className="inline-flex rounded-full border border-cyan-300/80 bg-white/75 px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.14em] text-cyan-800 shadow-[0_6px_18px_rgba(14,116,144,0.10)]">
+              One Career Route · Spotlight
+            </p>
+            <h2 className="mt-3 text-2xl font-semibold tracking-[-0.025em] text-slate-950 sm:text-3xl">
+              Knowledge Transfer Partnerships (KTPs)
+            </h2>
+            <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-700">
+              KTP Associate roles connect a business with a university or other
+              knowledge base for a defined innovation project. Roles span
+              technical, operational and management disciplines. Visa
+              arrangements vary by role and partner, and sponsor-register status
+              does not confirm sponsorship for a specific vacancy.
+            </p>
+            <div className="mt-5 flex flex-wrap gap-3">
+              <a
+                href={EXTERNAL_LINKS.ktpJobs}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-violet-600 px-4 text-sm font-semibold text-white shadow-[0_8px_24px_rgba(103,87,217,0.20)] hover:bg-violet-700"
+              >
+                View official KTP jobs <ExternalLink className="h-4 w-4" />
+              </a>
+              <a
+                href={`${EXTERNAL_LINKS.jobsAcUk}KTP+Associate`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-cyan-300 bg-white px-4 text-sm font-semibold text-slate-800 hover:border-cyan-400"
+              >
+                Search jobs.ac.uk <ExternalLink className="h-4 w-4" />
+              </a>
             </div>
           </div>
+          <div className="relative rounded-2xl bg-white/95 p-5 shadow-[0_12px_32px_rgba(15,23,42,0.08)]">
+            <h3 className="text-sm font-semibold text-slate-950">
+              Useful Context
+            </h3>
+            <ul className="mt-4 space-y-3 text-sm leading-6 text-slate-600">
+              <li className="flex gap-2">
+                <CheckCircle2 className="mt-1 h-4 w-4 shrink-0 text-cyan-700" />
+                Projects are jointly delivered by a business and a
+                knowledge-base partner.
+              </li>
+              <li className="flex gap-2">
+                <CheckCircle2 className="mt-1 h-4 w-4 shrink-0 text-cyan-700" />
+                Opportunities span multiple industries and professional
+                disciplines.
+              </li>
+              <li className="flex gap-2">
+                <CheckCircle2 className="mt-1 h-4 w-4 shrink-0 text-cyan-700" />
+                Check each vacancy and employer independently for sponsorship
+                wording.
+              </li>
+            </ul>
+          </div>
+        </section>
 
-        </div>
+        <section>
+          <div className="flex flex-col gap-4 rounded-2xl border border-slate-200 bg-white p-5 sm:p-6 lg:flex-row lg:items-center lg:justify-between">
+            <div>
+              <h2 className="text-2xl font-semibold tracking-[-0.025em] text-slate-950">
+                Visa Routes and Planning
+              </h2>
+              <p className="mt-1 text-sm text-slate-600">
+                Compare maintained route guidance and continue to the official
+                source.
+              </p>
+            </div>
+            <div
+              role="tablist"
+              aria-label="Visa routes"
+              className="flex max-w-full gap-1 overflow-x-auto rounded-xl bg-slate-100 p-1"
+            >
+              {VISAS.map((visa) => (
+                <button
+                  key={visa.title}
+                  type="button"
+                  role="tab"
+                  aria-selected={activeVisaTab === visa.title}
+                  onClick={() => setActiveVisaTab(visa.title)}
+                  className={`min-h-11 shrink-0 rounded-lg px-3 text-xs font-semibold transition ${activeVisaTab === visa.title ? "bg-white text-violet-700 shadow-sm" : "text-slate-600 hover:text-slate-950"}`}
+                >
+                  {visa.title.replace(" Visa", "")}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="mt-4">
+            <VisaRouteDetails visa={activeVisa} />
+          </div>
+        </section>
       </section>
     </main>
   );
 }
 
-export default function ImmigrationHubPage() {
+export default function SponsorshipVisasPage() {
   return (
-    <Suspense fallback={<div className="min-h-screen bg-hero-gradient flex items-center justify-center text-text-secondary">Loading Immigration Hub...</div>}>
-      <ImmigrationHubContent />
+    <Suspense
+      fallback={
+        <div className="flex min-h-screen items-center justify-center bg-slate-100 text-slate-600">
+          Loading Sponsorship & Visas…
+        </div>
+      }
+    >
+      <SponsorshipVisasContent />
     </Suspense>
   );
 }

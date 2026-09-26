@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { filterSponsors } from '@/shared/utils/sponsor';
+import { filterSponsors, summarizeSponsorRegister } from '@/shared/utils/sponsor';
 import type { Sponsor } from '@/shared/types/job';
 
 const sponsors: Sponsor[] = [
@@ -36,5 +36,54 @@ describe('filterSponsors', () => {
       route: 'SKILLED WORKER',
       industry: 'all',
     })).toEqual([sponsors[0]]);
+  });
+});
+
+describe('summarizeSponsorRegister', () => {
+  it('derives distributions from the complete indexed register', () => {
+    const fullRegister: Sponsor[] = [
+      ...sponsors,
+      {
+        organisationName: 'North Research Institute',
+        townCity: 'Leeds',
+        county: '',
+        rating: 'Worker (A rating)',
+        route: 'Global Business Mobility, Skilled Worker',
+        industry: 'Education & Research',
+      },
+    ];
+
+    expect(summarizeSponsorRegister(fullRegister)).toEqual({
+      totalEntries: 3,
+      sectorCount: 3,
+      locationCount: 2,
+      routeCount: 2,
+      topSectors: [
+        { label: 'Education & Research', count: 1, share: 33.3 },
+        { label: 'Healthcare & Life Sciences', count: 1, share: 33.3 },
+        { label: 'Technology & Software', count: 1, share: 33.3 },
+      ],
+      topLocations: [
+        { label: 'Leeds', count: 2, share: 66.7 },
+        { label: 'London', count: 1, share: 33.3 },
+      ],
+      routeDistribution: [
+        { label: 'Skilled Worker', count: 3, share: 100 },
+        { label: 'Global Business Mobility', count: 1, share: 33.3 },
+      ],
+    });
+  });
+
+  it('combines sponsor locations that differ only by casing', () => {
+    const summary = summarizeSponsorRegister([
+      sponsors[0],
+      { ...sponsors[1], townCity: 'LONDON' },
+      { ...sponsors[1], organisationName: 'Third sponsor', townCity: ' london ' },
+    ]);
+
+    expect(summary.locationCount).toBe(1);
+    expect(summary.topLocations).toEqual([
+      { label: 'London', count: 3, share: 100 },
+    ]);
   });
 });

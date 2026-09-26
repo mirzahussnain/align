@@ -1,7 +1,16 @@
 import CareerMarketExplorer from '@/features/career-market/components/CareerMarketExplorer';
 import Navbar from '@/shared/components/layout/Navbar';
-import PublicPageBackdrop from '@/shared/components/layout/PublicPageBackdrop';
+import ResourcePageBackdrop from '@/shared/components/ui/ResourcePageBackdrop';
 
 export default function CareerMarketPage() {
-  return <main className="relative isolate min-h-screen overflow-hidden bg-hero-gradient"><Navbar /><PublicPageBackdrop variant="insights" /><section className="relative z-10 mx-auto max-w-6xl px-4 pb-16 pt-28 sm:px-6 lg:px-8"><div className="mb-8 max-w-3xl"><p className="text-sm font-semibold uppercase tracking-[0.16em] text-violet-700">UK Career Market</p><h1 className="mt-3 text-balance text-4xl font-semibold tracking-[-0.035em] text-slate-950 sm:text-5xl">A transparent view of current vacancy samples.</h1><p className="mt-4 max-w-2xl text-base leading-7 text-slate-600 sm:text-lg">Explore salary disclosure, contract and work-style mix, regions, employers, and current listings for a role. Every view states its sample size, source coverage, freshness, and missing data.</p></div><CareerMarketExplorer /></section></main>;
+  return (
+    <main className="relative min-h-screen overflow-hidden bg-slate-100">
+      <Navbar />
+      <ResourcePageBackdrop variant="market" />
+      <section className="relative mx-auto max-w-7xl px-4 pb-16 pt-28 sm:px-6 lg:px-8">
+        <header className="mb-7 max-w-3xl"><h1 className="text-3xl font-semibold tracking-[-0.035em] text-slate-950 sm:text-4xl">UK Career Market</h1><p className="mt-3 text-xl font-medium tracking-[-0.02em] text-slate-800 sm:text-2xl">Explore the market for your role.</p><p className="mt-3 max-w-2xl text-sm leading-6 text-slate-600 sm:text-base">Compare current advertised pay, vacancy mix, employers, regions, work styles and opportunities from Align&apos;s integrated job sources.</p></header>
+        <CareerMarketExplorer />
+      </section>
+    </main>
+  );
 }

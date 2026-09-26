@@ -64,6 +64,21 @@ describe('Career Market snapshots', () => {
     expect(snapshot.metrics).not.toHaveProperty('demandScore');
   });
 
+  it('keeps unknown work style as missingness instead of chart data', () => {
+    const snapshot = buildCareerMarketSnapshot(
+      { role: 'Analyst', location: 'UK' },
+      [result([
+        job({ remoteType: 'UNKNOWN' }),
+        job({ sourceJobId: '2', canonicalJobId: 'job-2', canonicalUrl: 'https://jobs.test/2', dedupeFingerprint: 'fp-2', title: 'Senior Analyst', company: 'Beta', locationText: 'Leeds', region: 'Yorkshire', remoteType: 'HYBRID' }),
+      ])],
+    );
+
+    expect(snapshot.dataQuality.workStyleUnknown).toBe(1);
+    expect(snapshot.metrics.workStyleMix).toEqual([
+      { label: 'HYBRID', count: 1, share: 100 },
+    ]);
+  });
+
   it('serves fresh snapshots without regeneration', async () => {
     const store = new MemoryCacheStore();
     const fresh = { ...buildCareerMarketSnapshot({ role: 'Nurse', location: 'Leeds' }, [result([job()])]), id: 'snapshot-1' };
