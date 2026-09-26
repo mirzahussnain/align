@@ -17,6 +17,8 @@ import { useSponsors } from "@/features/immigration/hooks/useSponsors";
 import { VISAS, INDUSTRY_SECTORS } from "@/shared/constants/immigration-config";
 import { EXTERNAL_LINKS } from "@/shared/constants/navigation";
 import ResourcePageBackdrop from "@/shared/components/ui/ResourcePageBackdrop";
+import { OrbitMotif } from "@/shared/components/ui/ResourceBackdropMotifs";
+import { DonutDistributionChart } from "@/shared/components/charts/PublicDataCharts";
 
 function Bars({
   title,
@@ -47,98 +49,6 @@ function Bars({
           </div>
         ))}
       </div>
-    </section>
-  );
-}
-
-const chartColors = [
-  "#7c3aed",
-  "#0891b2",
-  "#2563eb",
-  "#8b5cf6",
-  "#0e7490",
-  "#4f46e5",
-];
-
-function DonutChart({
-  title,
-  items,
-}: {
-  title: string;
-  items: Array<{ label: string; count: number; share: number }>;
-}) {
-  const total = items.reduce((sum, item) => sum + item.count, 0);
-  const segments = items.reduce<
-    Array<(typeof items)[number] & { chartShare: number; chartOffset: number }>
-  >((result, item) => {
-    const chartShare = total ? (item.count / total) * 100 : 0;
-    const chartOffset = result.reduce(
-      (sum, segment) => sum + segment.chartShare,
-      0,
-    );
-    return [...result, { ...item, chartShare, chartOffset }];
-  }, []);
-  return (
-    <section className="rounded-2xl border border-slate-200 bg-white p-5">
-      <h3 className="font-semibold text-slate-950">{title}</h3>
-      {segments.length ? (
-        <div className="mt-4 grid grid-cols-[104px_minmax(0,1fr)] items-center gap-4">
-          <svg
-            role="img"
-            aria-label={`${title} chart`}
-            className="h-[104px] w-[104px] -rotate-90"
-            viewBox="0 0 42 42"
-          >
-            <circle
-              cx="21"
-              cy="21"
-              r="15.9"
-              fill="none"
-              stroke="#f1f5f9"
-              strokeWidth="6"
-            />
-            {segments.map((item, index) => {
-              return (
-                <circle
-                  key={item.label}
-                  cx="21"
-                  cy="21"
-                  r="15.9"
-                  fill="none"
-                  stroke={chartColors[index % chartColors.length]}
-                  strokeWidth="6"
-                  pathLength="100"
-                  strokeDasharray={`${item.chartShare} ${100 - item.chartShare}`}
-                  strokeDashoffset={-item.chartOffset}
-                />
-              );
-            })}
-            <circle cx="21" cy="21" r="11.5" fill="white" />
-          </svg>
-          <div className="space-y-2.5">
-            {segments.map((item, index) => (
-              <div key={item.label} className="flex items-start gap-2 text-xs">
-                <span
-                  className="mt-1 h-2 w-2 shrink-0 rounded-sm"
-                  style={{
-                    backgroundColor: chartColors[index % chartColors.length],
-                  }}
-                />
-                <span className="min-w-0 flex-1 text-slate-600">
-                  {item.label}
-                </span>
-                <span className="font-semibold tabular-nums text-slate-950">
-                  {item.count.toLocaleString()}
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
-      ) : (
-        <p className="mt-4 text-sm text-slate-500">
-          No route data is available.
-        </p>
-      )}
     </section>
   );
 }
@@ -178,7 +88,10 @@ function SponsorshipVisasContent() {
       <ResourcePageBackdrop variant="visas" />
       <section className="relative mx-auto max-w-7xl space-y-8 px-4 pb-16 pt-28 sm:px-6 lg:px-8">
         <header className="grid gap-4 lg:grid-cols-[minmax(0,1.6fr)_minmax(190px,.55fr)_minmax(190px,.55fr)]">
-          <div className="rounded-2xl border border-slate-200 bg-white p-6 sm:p-8">
+          <div
+            data-testid="visas-overview-card"
+            className="rounded-2xl border border-violet-200/80 p-6 shadow-[0_18px_48px_rgba(76,65,155,0.07)] [background:radial-gradient(circle_at_92%_4%,rgba(221,214,254,0.74),transparent_36%),linear-gradient(135deg,rgba(255,255,255,0.98),rgba(248,250,252,0.94))] sm:p-8"
+          >
             <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-violet-50 text-violet-700">
               <ShieldCheck className="h-5 w-5" />
             </div>
@@ -202,7 +115,10 @@ function SponsorshipVisasContent() {
               </span>
             </div>
           </div>
-          <div className="rounded-2xl border border-slate-200 bg-white p-5">
+          <div
+            data-testid="visas-indexed-card"
+            className="rounded-2xl border border-cyan-200/80 p-5 shadow-[0_18px_48px_rgba(14,116,144,0.06)] [background:radial-gradient(circle_at_100%_0%,rgba(165,243,252,0.42),transparent_48%),linear-gradient(145deg,rgba(255,255,255,0.98),rgba(240,249,255,0.92))]"
+          >
             <p className="text-xs font-semibold text-slate-500">
               Indexed sponsors
             </p>
@@ -217,15 +133,18 @@ function SponsorshipVisasContent() {
               entries in the full indexed register
             </p>
           </div>
-          <div className="rounded-2xl border border-slate-200 bg-white p-5">
+          <div
+            data-testid="visas-breadth-card"
+            className="rounded-2xl border border-indigo-200/80 p-5 shadow-[0_18px_48px_rgba(79,70,229,0.06)] [background:radial-gradient(circle_at_100%_0%,rgba(199,210,254,0.52),transparent_46%),linear-gradient(145deg,rgba(255,255,255,0.98),rgba(245,243,255,0.92))]"
+          >
             <p className="text-xs font-semibold text-slate-500">
               Register breadth
             </p>
             <p className="mt-5 text-3xl font-semibold tabular-nums text-slate-950">
-              {summary?.locationCount.toLocaleString() ?? "—"}
+              {summary?.locationCount.toLocaleString() ?? "Not available"}
             </p>
             <p className="mt-1 text-sm text-slate-600">
-              indexed towns and cities across {summary?.routeCount ?? "—"} route
+              indexed towns and cities across {summary?.routeCount ?? "Not available"} route
               categories
             </p>
           </div>
@@ -418,29 +337,22 @@ function SponsorshipVisasContent() {
               title="Top Sponsor Locations"
               items={summary?.topLocations ?? []}
             />
-            <DonutChart
+            <DonutDistributionChart
               title="Route Distribution"
+              description="Share of the complete indexed sponsor register"
               items={summary?.routeDistribution ?? []}
+              noun="sponsors"
+              context="of indexed sponsors"
+              showLegend={false}
             />
           </aside>
         </div>
 
         <section className="relative grid overflow-hidden rounded-2xl border border-cyan-200/80 p-6 shadow-[0_18px_50px_rgba(14,165,233,0.10)] [background:radial-gradient(circle_at_100%_0%,rgba(186,230,253,0.88),transparent_36%),linear-gradient(105deg,#e0f2fe_0%,#f8fafc_56%,#eff6ff_100%)] sm:p-8 lg:grid-cols-[minmax(0,1.5fr)_minmax(260px,.6fr)] lg:items-center lg:gap-8">
-          <svg
+          <OrbitMotif
             aria-hidden="true"
-            className="pointer-events-none absolute -right-10 -top-12 h-64 w-64 text-cyan-300/35"
-            viewBox="0 0 256 256"
-            fill="none"
-          >
-            <circle cx="128" cy="128" r="92" stroke="currentColor" />
-            <circle
-              cx="128"
-              cy="128"
-              r="66"
-              stroke="currentColor"
-              strokeDasharray="3 10"
-            />
-          </svg>
+            className="pointer-events-none absolute -right-10 -top-12 h-64 w-64 text-cyan-300/35 motion-reduce:animate-none"
+          />
           <div className="relative">
             <p className="inline-flex rounded-full border border-cyan-300/80 bg-white/75 px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.14em] text-cyan-800 shadow-[0_6px_18px_rgba(14,116,144,0.10)]">
               One Career Route · Spotlight

@@ -8,9 +8,19 @@ export interface CareerMarketMetrics {
     disclosedCount: number;
     eligibleAnnualCount: number;
     disclosureRate: number;
-    annualGbp?: { minimum: number; median: number; maximum: number };
+    annualGbp?: {
+      minimum: number;
+      median: number;
+      maximum: number;
+      range?: {
+        kind: 'QUARTILE' | 'OBSERVED';
+        minimum: number;
+        maximum: number;
+      };
+    };
   };
-  contractTypeMix: MarketMixItem[];
+  employmentTypeMix: MarketMixItem[];
+  workingHoursMix: MarketMixItem[];
   workStyleMix: Array<MarketMixItem & { label: JobRemoteType | 'NOT_STATED' }>;
   regions: MarketMixItem[];
   topEmployers: MarketMixItem[];
@@ -47,6 +57,7 @@ export interface CareerMarketSnapshotView {
   dataQuality: {
     salaryMissing: number;
     contractTypeMissing: number;
+    workingHoursMissing?: number;
     workStyleUnknown: number;
     locationMissing: number;
     note: string;

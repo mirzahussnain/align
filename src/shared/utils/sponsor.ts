@@ -149,7 +149,7 @@ function titleCaseLocation(value: string): string {
 function distribution(
   values: string[],
   denominator: number,
-  limit: number,
+  limit = Number.POSITIVE_INFINITY,
   normalizeLabel: (value: string) => string = (value) => value.trim(),
 ): SponsorSummaryItem[] {
   const counts = new Map<string, number>();
@@ -182,7 +182,7 @@ export function summarizeSponsorRegister(sponsors: readonly Sponsor[]): SponsorR
     routeCount: new Set(routes).size,
     topSectors: distribution(sectors, sponsors.length, 5),
     topLocations: distribution(locations, sponsors.length, 5, titleCaseLocation),
-    routeDistribution: distribution(routes, sponsors.length, 6),
+    routeDistribution: distribution(routes, sponsors.length),
   } satisfies SponsorRegisterSummary;
   sponsorSummaryCache.set(sponsors, summary);
   return summary;

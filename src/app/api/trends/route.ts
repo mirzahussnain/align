@@ -24,7 +24,7 @@ export async function GET(request: NextRequest) {
       methodology: {
         scope: 'BOUNDED_SAMPLE',
         statement: "Sampled current vacancies from Align's integrated sources, not the complete UK labour market.",
-        salaryMethod: 'Disclosure rate uses any stated salary; distribution uses only normalized annual GBP values.',
+        salaryMethod: 'Disclosure rate uses any stated salary. Annual GBP ranges use P25?P75 from samples of eight or more, otherwise the observed minimum and maximum.',
         sponsorshipMethod: 'Employer register context does not confirm sponsorship for a vacancy or candidate.',
       },
     }, { status: result.freshness === 'PENDING' ? 202 : 200 });

@@ -10,8 +10,11 @@ import { assessUkLocation, isUkDiscoverable } from '@/shared/services/uk-locatio
 import { SEARCH_JOB_PROVIDERS, type NormalisedJob, type ProviderSearchResult } from '@/shared/types/job';
 import type { CareerMarketSnapshotView, MarketMixItem } from '@/shared/types/career-market';
 
-export const CAREER_MARKET_CALCULATION_VERSION = 'market-sample-v1';
+export const CAREER_MARKET_CALCULATION_VERSION = 'market-sample-v2';
 const SNAPSHOT_TTL_MS = 24 * 60 * 60 * 1000;
+// Eight observations give each outer quartile at least two real observations.
+// Below that boundary, interpolated quartiles are too sensitive to one listing.
+const MIN_STABLE_QUARTILE_SAMPLE = 8;
 
 type SnapshotDraft = Omit<CareerMarketSnapshotView, 'id'>;
 type MarketInput = { role: string; location: string };
@@ -60,6 +63,39 @@ function median(values: number[]) {
   return ordered.length % 2 ? ordered[middle] : Math.round((ordered[middle - 1] + ordered[middle]) / 2);
 }
 
+function percentile(values: number[], percentileValue: number) {
+  const ordered = [...values].sort((a, b) => a - b);
+  const position = (ordered.length - 1) * percentileValue;
+  const lowerIndex = Math.floor(position);
+  const upperIndex = Math.ceil(position);
+  const lower = ordered[lowerIndex];
+  const upper = ordered[upperIndex];
+  return Math.round(lower + (upper - lower) * (position - lowerIndex));
+}
+
+function normalizedEmploymentText(value: string | undefined) {
+  return (value ?? '').trim().toLocaleLowerCase('en-GB').replace(/[_-]+/g, ' ').replace(/\s+/g, ' ');
+}
+
+function employmentType(value: string | undefined): string {
+  const normalized = normalizedEmploymentText(value);
+  if (/\bpermanent\b/.test(normalized)) return 'Permanent';
+  if (/\b(fixed term|temporary|temp)\b/.test(normalized)) return 'Fixed-term / Temporary';
+  if (/\bcontract(or)?\b/.test(normalized)) return 'Contract';
+  if (/\bbank\b/.test(normalized)) return 'Bank';
+  if (/\blocum\b/.test(normalized)) return 'Locum';
+  if (/\b(casual|freelance|intern(ship)?|apprentice(ship)?|volunteer)\b/.test(normalized)) return 'Other';
+  return 'Not stated';
+}
+
+function workingHours(value: string | undefined): string {
+  const normalized = normalizedEmploymentText(value);
+  if (/\bfull\s*time\b/.test(normalized)) return 'Full-time';
+  if (/\bpart\s*time\b/.test(normalized)) return 'Part-time';
+  if (/\b(flexible|variable hours|zero hours|compressed hours)\b/.test(normalized)) return 'Flexible / Other';
+  return 'Not stated';
+}
+
 export function buildCareerMarketSnapshot(
   input: MarketInput,
   providerResults: ProviderSearchResult[],
@@ -74,7 +110,8 @@ export function buildCareerMarketSnapshot(
     const upper = job.salaryMax ?? job.salaryMin;
     return lower == null || upper == null ? [] : [Math.round((lower + upper) / 2)];
   });
-  const contractValues = jobs.map((job) => job.contractType || job.employmentType || 'NOT_STATED');
+  const employmentValues = jobs.map((job) => employmentType(job.contractType || job.employmentType));
+  const workingHoursValues = jobs.map((job) => workingHours(job.contractType || job.employmentType));
   const workStyleValues = jobs.map((job) => job.remoteType || 'UNKNOWN');
   const disclosedWorkStyles = workStyleValues.filter((value) => value !== 'UNKNOWN');
   const regionValues = jobs.map((job) => job.region || job.city || '').filter(Boolean);
@@ -100,7 +137,8 @@ export function buildCareerMarketSnapshot(
     calculationVersion: CAREER_MARKET_CALCULATION_VERSION,
     dataQuality: {
       salaryMissing: jobs.length - salaryDisclosed.length,
-      contractTypeMissing: contractValues.filter((value) => value === 'NOT_STATED').length,
+      contractTypeMissing: employmentValues.filter((value) => value === 'Not stated').length,
+      workingHoursMissing: workingHoursValues.filter((value) => value === 'Not stated').length,
       workStyleUnknown: workStyleValues.filter((value) => value === 'UNKNOWN').length,
       locationMissing: jobs.filter((job) => !job.locationText.trim()).length,
       note: "A bounded vacancy sample from Align's integrated sources; coverage and missing fields are shown explicitly.",
@@ -111,9 +149,19 @@ export function buildCareerMarketSnapshot(
         disclosedCount: salaryDisclosed.length,
         eligibleAnnualCount: annualSalaries.length,
         disclosureRate: disclosedRate,
-        ...(annualSalaries.length ? { annualGbp: { minimum: Math.min(...annualSalaries), median: median(annualSalaries), maximum: Math.max(...annualSalaries) } } : {}),
+        ...(annualSalaries.length ? {
+          annualGbp: {
+            minimum: Math.min(...annualSalaries),
+            median: median(annualSalaries),
+            maximum: Math.max(...annualSalaries),
+            range: annualSalaries.length >= MIN_STABLE_QUARTILE_SAMPLE
+              ? { kind: 'QUARTILE' as const, minimum: percentile(annualSalaries, 0.25), maximum: percentile(annualSalaries, 0.75) }
+              : { kind: 'OBSERVED' as const, minimum: Math.min(...annualSalaries), maximum: Math.max(...annualSalaries) },
+          },
+        } : {}),
       },
-      contractTypeMix: mix(contractValues),
+      employmentTypeMix: mix(employmentValues),
+      workingHoursMix: mix(workingHoursValues),
       workStyleMix: mix(disclosedWorkStyles) as CareerMarketSnapshotView['metrics']['workStyleMix'],
       regions: mix(regionValues),
       topEmployers: mix(jobs.map((job) => job.company), 6),
@@ -211,11 +259,19 @@ export async function resolveCareerMarketSnapshot(
   const key = careerMarketKey(input.role, input.location);
   const cacheKey = cacheKeys.marketSnapshot(key);
   const cached = await store.get<CareerMarketSnapshotView>(cacheKey);
-  if (cached && new Date(cached.expiresAt) > now) return { freshness: 'FRESH', snapshot: cached };
+  if (
+    cached
+    && cached.calculationVersion === CAREER_MARKET_CALCULATION_VERSION
+    && new Date(cached.expiresAt) > now
+  ) return { freshness: 'FRESH', snapshot: cached };
 
   const findLatest = dependencies.findLatest ?? findLatestSnapshot;
   const persisted = await findLatest(key);
-  if (persisted && new Date(persisted.expiresAt) > now) {
+  if (
+    persisted
+    && persisted.calculationVersion === CAREER_MARKET_CALCULATION_VERSION
+    && new Date(persisted.expiresAt) > now
+  ) {
     await store.set(cacheKey, persisted, CACHE_TTL_SECONDS.marketSnapshot);
     return { freshness: 'FRESH', snapshot: persisted };
   }

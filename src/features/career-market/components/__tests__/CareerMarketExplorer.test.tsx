@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -13,8 +13,8 @@ const snapshot = {
   dataQuality: { salaryMissing: 2, contractTypeMissing: 1, workStyleUnknown: 1, locationMissing: 0, note: 'Current sample.' },
   metrics: {
     sampledVacancyCount: 8,
-    salary: { disclosedCount: 6, eligibleAnnualCount: 4, disclosureRate: 75, annualGbp: { minimum: 30000, median: 42000, maximum: 60000 } },
-    contractTypeMix: [{ label: 'permanent', count: 6, share: 75 }], workStyleMix: [{ label: 'HYBRID', count: 5, share: 62.5 }],
+    salary: { disclosedCount: 6, eligibleAnnualCount: 4, disclosureRate: 75, annualGbp: { minimum: 30000, median: 42000, maximum: 60000, range: { kind: 'OBSERVED', minimum: 30000, maximum: 60000 } } },
+    employmentTypeMix: [{ label: 'Permanent', count: 6, share: 75 }, { label: 'Not stated', count: 2, share: 25 }], workingHoursMix: [{ label: 'Full-time', count: 5, share: 62.5 }, { label: 'Not stated', count: 3, share: 37.5 }], workStyleMix: [{ label: 'HYBRID', count: 5, share: 62.5 }],
     regions: [{ label: 'London', count: 4, share: 50 }], topEmployers: [{ label: 'Acme', count: 2, share: 25 }], sponsorshipEmployerContext: [],
     currentVacancies: [{ id: 'job-1', title: 'Data Analyst', employer: 'Acme', location: 'London', provider: 'REED', url: 'https://jobs.test/1', salaryText: '£40,000' }],
   },
@@ -34,7 +34,37 @@ describe('UK Career Market explorer', () => {
     expect(screen.getByText('Sources included')).toBeInTheDocument();
     expect(screen.getByText('Salary available')).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: /market overview/i })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /employment type/i })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /working hours/i })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /workplace arrangement/i })).toBeInTheDocument();
+    const bentoRow = screen.getByTestId('geography-employers-row');
+    expect(within(bentoRow).getByRole('heading', { name: /geographical distribution/i })).toBeInTheDocument();
+    expect(within(bentoRow).getByRole('heading', { name: /leading employers/i })).toBeInTheDocument();
+    expect(screen.getByText('Observed salary range')).toBeInTheDocument();
+    expect(screen.queryByText('Current sample')).not.toBeInTheDocument();
     expect(screen.getByRole('link', { name: /view original posting/i })).toHaveAttribute('href', 'https://jobs.test/1');
+  });
+
+  it('labels an eligible percentile range as typical without changing the median', async () => {
+    const quartileSnapshot = {
+      ...snapshot,
+      metrics: {
+        ...snapshot.metrics,
+        salary: {
+          ...snapshot.metrics.salary,
+          eligibleAnnualCount: 8,
+          annualGbp: { minimum: 20000, median: 55000, maximum: 90000, range: { kind: 'QUARTILE', minimum: 37500, maximum: 72500 } },
+        },
+      },
+    };
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ freshness: 'GENERATED', snapshot: quartileSnapshot, methodology: { statement: 'Current sample.', salaryMethod: 'Disclosed salaries only.', sponsorshipMethod: 'Register context only.' } }), { status: 200 })));
+    const user = userEvent.setup();
+    render(<CareerMarketExplorer />);
+    await user.type(screen.getByLabelText(/role or occupation/i), 'Engineer');
+    await user.click(screen.getByRole('button', { name: /explore market/i }));
+
+    expect(await screen.findByText('Typical advertised range')).toBeInTheDocument();
+    expect(screen.getAllByText(/55,000/).length).toBeGreaterThan(0);
   });
 
   it('omits the work-style chart when the sample has no disclosed work style', async () => {

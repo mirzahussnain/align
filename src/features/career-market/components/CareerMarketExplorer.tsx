@@ -15,6 +15,10 @@ import type {
   CareerMarketSnapshotView,
   MarketMixItem,
 } from "@/shared/types/career-market";
+import {
+  DonutDistributionChart,
+  HorizontalDistributionChart,
+} from "@/shared/components/charts/PublicDataCharts";
 
 type ApiResponse = {
   freshness: "FRESH" | "GENERATED" | "STALE" | "PENDING";
@@ -42,122 +46,30 @@ const money = (value: number) =>
     maximumFractionDigits: 0,
   }).format(value);
 
-function MixBars({
-  title,
-  description,
-  items,
+function SalaryRange({
+  minimum,
+  median,
+  maximum,
+  kind,
 }: {
-  title: string;
-  description: string;
-  items: MarketMixItem[];
+  minimum: number;
+  median: number;
+  maximum: number;
+  kind: "QUARTILE" | "OBSERVED";
 }) {
-  return (
-    <section className="rounded-2xl border border-slate-200 bg-white p-5">
-      <h3 className="font-semibold text-slate-950">{title}</h3>
-      <p className="mt-1 text-xs text-slate-500">{description}</p>
-      <div className="mt-5 space-y-3">
-        {items.length ? (
-          items.map((item) => (
-            <div key={item.label}>
-              <div className="flex items-start justify-between gap-3 text-sm">
-                <span className="min-w-0 break-words capitalize text-slate-700">
-                  {item.label.toLowerCase().replaceAll("_", " ")}
-                </span>
-                <span className="shrink-0 font-medium tabular-nums text-slate-950">
-                  {item.count} · {item.share}%
-                </span>
-              </div>
-              <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-slate-100">
-                <div
-                  className="h-full rounded-full bg-violet-500"
-                  style={{ width: `${item.share}%` }}
-                />
-              </div>
-            </div>
-          ))
-        ) : (
-          <p className="text-sm text-slate-500">
-            Not enough disclosed data in this view.
-          </p>
-        )}
-      </div>
-    </section>
-  );
-}
-
-const mixColors = ["#7c3aed", "#0891b2", "#2563eb", "#8b5cf6", "#0e7490"];
-
-function MixDonut({
-  title,
-  description,
-  items,
-}: {
-  title: string;
-  description: string;
-  items: MarketMixItem[];
-}) {
-  const segments = items.reduce<
-    Array<MarketMixItem & { chartOffset: number }>
-  >((result, item) => {
-    const chartOffset = result.reduce(
-      (sum, segment) => sum + segment.share,
-      0,
-    );
-    return [...result, { ...item, chartOffset }];
-  }, []);
-  return (
-    <section className="rounded-2xl border border-slate-200 bg-white p-5">
-      <h3 className="font-semibold text-slate-950">{title}</h3>
-      <p className="mt-1 text-xs text-slate-500">{description}</p>
-      <div className="mt-5 grid grid-cols-[112px_minmax(0,1fr)] items-center gap-5">
-        <svg
-          role="img"
-          aria-label={`${title} chart`}
-          className="h-28 w-28 -rotate-90"
-          viewBox="0 0 42 42"
-        >
-          <circle cx="21" cy="21" r="15.9" fill="none" stroke="#f1f5f9" strokeWidth="6" />
-          {segments.map((item, index) => {
-            return (
-              <circle
-                key={item.label}
-                cx="21"
-                cy="21"
-                r="15.9"
-                fill="none"
-                stroke={mixColors[index % mixColors.length]}
-                strokeWidth="6"
-                pathLength="100"
-                strokeDasharray={`${item.share} ${100 - item.share}`}
-                strokeDashoffset={-item.chartOffset}
-              />
-            );
-          })}
-          <circle cx="21" cy="21" r="11.5" fill="white" />
-        </svg>
-        <div className="space-y-3">
-          {items.map((item, index) => (
-            <div key={item.label} className="flex items-start gap-2 text-xs">
-              <span className="mt-1 h-2.5 w-2.5 shrink-0 rounded-sm" style={{ backgroundColor: mixColors[index % mixColors.length] }} />
-              <span className="min-w-0 flex-1 capitalize text-slate-600">{item.label.toLowerCase().replaceAll("_", " ")}</span>
-              <span className="font-semibold tabular-nums text-slate-950">{item.share}%</span>
-            </div>
-          ))}
-        </div>
-      </div>
-    </section>
-  );
-}
-
-function SalaryRange({ minimum, median, maximum }: { minimum: number; median: number; maximum: number }) {
   const medianPosition = maximum === minimum ? 50 : ((median - minimum) / (maximum - minimum)) * 100;
+  const label = kind === "QUARTILE" ? "Typical advertised range" : "Observed salary range";
   return (
-    <div className="mt-6" aria-label={`Salary range from ${money(minimum)} to ${money(maximum)}, median ${money(median)}`}>
+    <div className="mt-6" aria-label={`${label} from ${money(minimum)} to ${money(maximum)}`}>
+      <p className="mb-2 text-xs font-semibold text-slate-600">{label}</p>
       <div className="relative h-2 rounded-full bg-slate-100">
         <div className="absolute inset-y-0 left-0 right-0 rounded-full bg-gradient-to-r from-cyan-400 via-violet-500 to-blue-600" />
         <span className="absolute top-1/2 h-4 w-1 -translate-x-1/2 -translate-y-1/2 rounded-full bg-slate-950 shadow-sm" style={{ left: `${medianPosition}%` }} />
       </div>
-      <div className="mt-2 flex justify-between text-xs tabular-nums text-slate-500"><span>{money(minimum)}</span><span className="font-semibold text-slate-800">Median {money(median)}</span><span>{money(maximum)}</span></div>
+      <div className="mt-2 flex justify-between text-xs tabular-nums text-slate-500">
+        <span>{money(minimum)}</span>
+        <span>{money(maximum)}</span>
+      </div>
     </div>
   );
 }
@@ -244,6 +156,7 @@ export default function CareerMarketExplorer() {
   );
   const disclosedWorkStyles = disclosedWorkStyleRows.map((item) => ({
     ...item,
+    label: ({ ONSITE: "On-site", HYBRID: "Hybrid", REMOTE: "Remote" } as Record<string, string>)[item.label] ?? item.label,
     share: disclosedWorkStyleTotal
       ? Math.round((item.count / disclosedWorkStyleTotal) * 1000) / 10
       : 0,
@@ -412,11 +325,12 @@ export default function CareerMarketExplorer() {
                       </span>
                     </div>
                     <SalaryRange
-                      minimum={snapshot.metrics.salary.annualGbp.minimum}
+                      minimum={snapshot.metrics.salary.annualGbp.range?.minimum ?? snapshot.metrics.salary.annualGbp.minimum}
                       median={snapshot.metrics.salary.annualGbp.median}
-                      maximum={snapshot.metrics.salary.annualGbp.maximum}
+                      maximum={snapshot.metrics.salary.annualGbp.range?.maximum ?? snapshot.metrics.salary.annualGbp.maximum}
+                      kind={snapshot.metrics.salary.annualGbp.range?.kind ?? "OBSERVED"}
                     />
-                    <div className="mt-6 grid gap-3 border-t border-slate-100 pt-4 sm:grid-cols-3">
+                    <div className="mt-6 grid gap-3 border-t border-slate-100 pt-4 sm:grid-cols-2">
                       <div>
                         <p className="text-xs text-slate-500">
                           Annual GBP listings
@@ -431,12 +345,6 @@ export default function CareerMarketExplorer() {
                           {snapshot.metrics.salary.disclosureRate}%
                         </p>
                       </div>
-                      <div>
-                        <p className="text-xs text-slate-500">Current sample</p>
-                        <p className="mt-1 font-semibold tabular-nums text-slate-900">
-                          {snapshot.metrics.sampledVacancyCount}
-                        </p>
-                      </div>
                     </div>
                   </>
                 ) : (
@@ -449,30 +357,41 @@ export default function CareerMarketExplorer() {
             </div>
           </section>
 
-          <div className={`grid gap-4 ${disclosedWorkStyles.length ? "lg:grid-cols-2" : "lg:grid-cols-1"}`}>
-            <MixDonut
-              title="Contract Type"
-              description="Mix within current sampled vacancies"
-              items={snapshot.metrics.contractTypeMix}
-            />
-            {disclosedWorkStyles.length > 0 && (
-              <MixDonut
-                title="Work Style"
-                description="Remote, hybrid and onsite mix where stated"
-                items={disclosedWorkStyles}
-              />
-            )}
-          </div>
           <div className="grid gap-4 lg:grid-cols-2">
+            <HorizontalDistributionChart
+              title="Employment type"
+              description="Contract basis across the current sampled vacancies"
+              items={snapshot.metrics.employmentTypeMix ?? []}
+            />
+            <HorizontalDistributionChart
+              title="Working hours"
+              description="Full-time, part-time and other stated hours"
+              items={snapshot.metrics.workingHoursMix ?? []}
+            />
+          </div>
+          {disclosedWorkStyles.length > 0 && (
+            <DonutDistributionChart
+              title="Workplace arrangement"
+              description="Remote, hybrid and on-site mix where stated"
+              items={disclosedWorkStyles}
+              noun="vacancies"
+              context="of vacancies with a stated workplace arrangement"
+            />
+          )}
+          <div
+            className="grid items-stretch gap-4 lg:grid-cols-2"
+            data-testid="geography-employers-row"
+          >
+            <HorizontalDistributionChart
+              title="Geographical Distribution"
+              description="Regional distribution within sampled vacancies"
+              items={snapshot.metrics.regions}
+              scaleToData
+            />
             <RankedList
               title="Leading Employers"
               description="Top employers within this sampled provider set"
               items={snapshot.metrics.topEmployers}
-            />
-            <MixBars
-              title="Geographical Distribution"
-              description="Regional distribution within sampled vacancies"
-              items={snapshot.metrics.regions}
             />
           </div>
 
@@ -540,8 +459,9 @@ export default function CareerMarketExplorer() {
               <p>
                 Unavailable fields in this view:{" "}
                 {snapshot.dataQuality.salaryMissing} salary,{" "}
-                {snapshot.dataQuality.contractTypeMissing} contract type,{" "}
-                {snapshot.dataQuality.workStyleUnknown} work style and{" "}
+                {snapshot.dataQuality.contractTypeMissing} employment type,{" "}
+                {snapshot.dataQuality.workingHoursMissing ?? snapshot.sampleSize} working hours,{" "}
+                {snapshot.dataQuality.workStyleUnknown} workplace arrangement and{" "}
                 {snapshot.dataQuality.locationMissing} location.
               </p>
               <div className="flex flex-wrap gap-2">

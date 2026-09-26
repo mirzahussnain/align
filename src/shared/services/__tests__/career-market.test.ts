@@ -27,6 +27,80 @@ function result(jobs: NormalisedJob[]): ProviderSearchResult {
 }
 
 describe('Career Market snapshots', () => {
+  it('normalizes working-hours variants separately from employment type without losing sample counts', () => {
+    const values = ['Full-Time', 'Full Time', 'full_time', 'FullTime', 'Permanent', 'Permanent, Full Time'];
+    const snapshot = buildCareerMarketSnapshot(
+      { role: 'Analyst', location: 'UK' },
+      [result(values.map((contractType, index) => job({
+        sourceJobId: String(index + 1),
+        canonicalJobId: `job-${index + 1}`,
+        dedupeFingerprint: `fp-${index + 1}`,
+        canonicalUrl: `https://jobs.test/${index + 1}`,
+        title: `Analyst ${index + 1}`,
+        contractType,
+        employmentType: contractType,
+      })))],
+    );
+
+    expect(snapshot.metrics.employmentTypeMix).toEqual([
+      { label: 'Not stated', count: 4, share: 66.7 },
+      { label: 'Permanent', count: 2, share: 33.3 },
+    ]);
+    expect(snapshot.metrics.workingHoursMix).toEqual([
+      { label: 'Full-time', count: 5, share: 83.3 },
+      { label: 'Not stated', count: 1, share: 16.7 },
+    ]);
+    expect(snapshot.metrics.employmentTypeMix.reduce((sum, item) => sum + item.count, 0)).toBe(6);
+    expect(snapshot.metrics.workingHoursMix.reduce((sum, item) => sum + item.count, 0)).toBe(6);
+    expect(snapshot.dataQuality).toMatchObject({ contractTypeMissing: 4, workingHoursMissing: 1 });
+  });
+
+  it('uses a quartile salary range only when the annual sample has stable quartile coverage', () => {
+    const salaries = [20_000, 30_000, 40_000, 50_000, 60_000, 70_000, 80_000, 90_000];
+    const snapshot = buildCareerMarketSnapshot(
+      { role: 'Engineer', location: 'UK' },
+      [result(salaries.map((salary, index) => job({
+        sourceJobId: String(index + 1),
+        canonicalJobId: `salary-job-${index + 1}`,
+        dedupeFingerprint: `salary-fp-${index + 1}`,
+        canonicalUrl: `https://jobs.test/salary-${index + 1}`,
+        title: `Engineer ${index + 1}`,
+        salaryMin: salary,
+        salaryMax: salary,
+      })))],
+    );
+
+    expect(snapshot.metrics.salary.annualGbp).toEqual({
+      minimum: 20_000,
+      median: 55_000,
+      maximum: 90_000,
+      range: { kind: 'QUARTILE', minimum: 37_500, maximum: 72_500 },
+    });
+  });
+
+  it('keeps an observed salary range when the annual sample is too small for stable quartiles', () => {
+    const salaries = [20_000, 30_000, 80_000, 90_000, 100_000, 110_000, 120_000];
+    const snapshot = buildCareerMarketSnapshot(
+      { role: 'Engineer', location: 'UK' },
+      [result(salaries.map((salary, index) => job({
+        sourceJobId: String(index + 1),
+        canonicalJobId: `small-salary-job-${index + 1}`,
+        dedupeFingerprint: `small-salary-fp-${index + 1}`,
+        canonicalUrl: `https://jobs.test/small-salary-${index + 1}`,
+        title: `Engineer ${index + 1}`,
+        salaryMin: salary,
+        salaryMax: salary,
+      })))],
+    );
+
+    expect(snapshot.metrics.salary.annualGbp).toMatchObject({
+      minimum: 20_000,
+      median: 90_000,
+      maximum: 120_000,
+      range: { kind: 'OBSERVED', minimum: 20_000, maximum: 120_000 },
+    });
+  });
+
   it('classifies provider jobs without precomputed UK eligibility before sampling', () => {
     expect(isUkMarketJob(job({ locationText: 'Leeds', region: 'Yorkshire', ukEligibility: undefined }))).toBe(true);
     expect(isUkMarketJob(job({ locationText: 'New York, NY', region: 'New York', ukEligibility: undefined }))).toBe(false);
@@ -88,6 +162,28 @@ describe('Career Market snapshots', () => {
     const resolved = await resolveCareerMarketSnapshot({ role: 'Nurse', location: 'Leeds' }, { store, findLatest, generate });
     expect(resolved).toMatchObject({ freshness: 'FRESH', snapshot: { id: 'snapshot-1' } });
     expect(generate).not.toHaveBeenCalled();
+  });
+
+  it('regenerates a fresh snapshot whose calculation version cannot provide the new presentation dimensions', async () => {
+    const store = new MemoryCacheStore();
+    const legacy = {
+      ...buildCareerMarketSnapshot({ role: 'Nurse', location: 'Leeds' }, [result([job()])]),
+      id: 'snapshot-legacy',
+      calculationVersion: 'market-sample-v1',
+    };
+    const current = {
+      ...buildCareerMarketSnapshot({ role: 'Nurse', location: 'Leeds' }, [result([job()])]),
+      id: 'snapshot-current',
+    };
+    const generate = vi.fn(async () => current);
+
+    const resolved = await resolveCareerMarketSnapshot(
+      { role: 'Nurse', location: 'Leeds' },
+      { store, findLatest: vi.fn(async () => legacy), generate },
+    );
+
+    expect(generate).toHaveBeenCalledOnce();
+    expect(resolved).toMatchObject({ freshness: 'GENERATED', snapshot: { id: 'snapshot-current' } });
   });
 
   it('returns stale data when another request owns the refresh lock', async () => {

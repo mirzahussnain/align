@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -33,6 +33,14 @@ afterEach(() => {
 });
 
 describe('public job discovery', () => {
+  it('uses title case for the public job-board heading', () => {
+    render(<PublicJobsSearch />);
+
+    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent(
+      'Find Your Next UK Opportunity',
+    );
+  });
+
   it('keeps the dashboard continuation with the search controls above the results canvas', () => {
     render(<PublicJobsSearch />);
 
@@ -45,6 +53,21 @@ describe('public job discovery', () => {
   it('uses an incoming public resource query as the initial search value', () => {
     render(<PublicJobsSearch initialQuery="North NHS Trust" />);
     expect(screen.getByLabelText(/job title/i)).toHaveValue('North NHS Trust');
+  });
+
+  it('bounds independent filter scrolling to the desktop sidebar breakpoint', () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    render(<PublicJobsSearch initialQuery="Engineer" />);
+
+    const filterRail = screen.getByRole('complementary', { name: /job filters/i });
+    expect(filterRail).toHaveClass('lg:sticky', 'lg:overflow-y-auto');
+    expect(filterRail.className).not.toMatch(/(?:^|\s)overflow-y-auto(?:\s|$)/);
+
+    fireEvent.scroll(filterRail, { target: { scrollTop: 120 } });
+
+    expect(screen.getByLabelText(/job title/i)).toHaveValue('Engineer');
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it('prevents an empty request before it reaches the jobs API', async () => {

@@ -86,4 +86,17 @@ describe('summarizeSponsorRegister', () => {
       { label: 'London', count: 3, share: 100 },
     ]);
   });
+
+  it('keeps every genuine route in the distribution instead of truncating the chart data', () => {
+    const manyRoutes = Array.from({ length: 8 }, (_, index): Sponsor => ({
+      organisationName: `Sponsor ${index + 1}`,
+      townCity: 'London',
+      county: '',
+      rating: 'Worker (A rating)',
+      route: `Route ${index + 1}`,
+      industry: 'General Business Services',
+    }));
+
+    expect(summarizeSponsorRegister(manyRoutes).routeDistribution).toHaveLength(8);
+  });
 });

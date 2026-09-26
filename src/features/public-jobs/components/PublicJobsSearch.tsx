@@ -299,15 +299,15 @@ export default function PublicJobsSearch({
   );
 
   return (
-    <div className="bg-white">
+    <div>
       <section
         data-testid="jobs-search-chapter"
-        className="relative overflow-hidden border-b border-violet-100 pt-24 [background:radial-gradient(circle_at_16%_78%,rgba(186,230,253,0.95),transparent_31%),radial-gradient(circle_at_72%_105%,rgba(216,180,254,0.88),transparent_34%),linear-gradient(108deg,#f7f6ff_0%,#eef6ff_48%,#fff7fc_100%)]"
+        className="relative border-b border-violet-100/80 pt-24"
       >
         <div className="relative mx-auto max-w-7xl px-4 py-10 sm:px-6 sm:py-12 lg:px-8">
           <div className="mx-auto max-w-3xl text-center">
             <h1 className="text-balance text-3xl font-semibold tracking-[-0.035em] text-slate-950 sm:text-4xl">
-              Find your next UK opportunity.
+              Find Your Next UK Opportunity
             </h1>
             <p className="mx-auto mt-3 max-w-2xl text-sm leading-6 text-slate-700 sm:text-base">
               Search current vacancies from Align&apos;s integrated sources and
@@ -379,52 +379,8 @@ export default function PublicJobsSearch({
 
       <section
         data-testid="jobs-results-canvas"
-        className="relative overflow-hidden bg-white"
+        className="relative"
       >
-        <div
-          aria-hidden="true"
-          className="pointer-events-none absolute inset-0 overflow-hidden"
-        >
-          <svg
-            className="absolute -right-24 top-8 h-[34rem] w-[34rem] text-violet-100/80"
-            viewBox="0 0 544 544"
-            fill="none"
-          >
-            <circle cx="272" cy="272" r="158" stroke="currentColor" />
-            <circle
-              cx="272"
-              cy="272"
-              r="214"
-              stroke="currentColor"
-              strokeDasharray="3 12"
-            />
-            <path
-              d="M70 332C166 229 257 209 365 251C426 275 480 268 525 222"
-              stroke="currentColor"
-              strokeWidth="1.25"
-            />
-          </svg>
-          <svg
-            className="absolute -left-16 bottom-8 h-72 w-72 text-cyan-100/85"
-            viewBox="0 0 288 288"
-            fill="none"
-          >
-            <path
-              d="M18 248C48 138 119 74 250 34"
-              stroke="currentColor"
-              strokeWidth="1.2"
-            />
-            {Array.from({ length: 8 }, (_, index) => (
-              <circle
-                key={index}
-                cx={38 + index * 24}
-                cy={226 - index * 22}
-                r="2.5"
-                fill="currentColor"
-              />
-            ))}
-          </svg>
-        </div>
         <div className="relative mx-auto max-w-7xl px-4 pb-16 pt-8 sm:px-6 lg:px-8">
           {error && (
             <p
@@ -463,7 +419,8 @@ export default function PublicJobsSearch({
 
           <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_280px] lg:items-start">
             <aside
-              className={`${filtersOpen ? "block" : "hidden"} rounded-2xl border border-slate-200 bg-white p-5 lg:col-start-2 lg:row-start-1 lg:block`}
+              aria-label="Job filters"
+              className={`${filtersOpen ? "block" : "hidden"} rounded-2xl border border-slate-200 bg-white p-5 lg:sticky lg:top-24 lg:col-start-2 lg:row-start-1 lg:block lg:max-h-[calc(100dvh-7rem)] lg:overflow-y-auto lg:overscroll-contain`}
             >
               {filters}
             </aside>
