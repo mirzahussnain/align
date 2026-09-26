@@ -87,7 +87,7 @@ function SponsorshipVisasContent() {
       <Navbar />
       <ResourcePageBackdrop variant="visas" />
       <section className="relative mx-auto max-w-7xl space-y-8 px-4 pb-16 pt-28 sm:px-6 lg:px-8">
-        <header className="grid gap-4 lg:grid-cols-[minmax(0,1.6fr)_minmax(190px,.55fr)_minmax(190px,.55fr)]">
+        <header className="grid gap-4 lg:grid-cols-[minmax(0,1.85fr)_minmax(280px,.7fr)]">
           <div
             data-testid="visas-overview-card"
             className="rounded-2xl border border-violet-200/80 p-6 shadow-[0_18px_48px_rgba(76,65,155,0.07)] [background:radial-gradient(circle_at_92%_4%,rgba(221,214,254,0.74),transparent_36%),linear-gradient(135deg,rgba(255,255,255,0.98),rgba(248,250,252,0.94))] sm:p-8"
@@ -116,37 +116,43 @@ function SponsorshipVisasContent() {
             </div>
           </div>
           <div
-            data-testid="visas-indexed-card"
-            className="rounded-2xl border border-cyan-200/80 p-5 shadow-[0_18px_48px_rgba(14,116,144,0.06)] [background:radial-gradient(circle_at_100%_0%,rgba(165,243,252,0.42),transparent_48%),linear-gradient(145deg,rgba(255,255,255,0.98),rgba(240,249,255,0.92))]"
+            role="group"
+            aria-label="Sponsor register highlights"
+            className="grid gap-4 sm:grid-cols-2 lg:grid-cols-1 lg:grid-rows-2"
           >
-            <p className="text-xs font-semibold text-slate-500">
-              Indexed sponsors
-            </p>
-            <p className="mt-5 text-3xl font-semibold tabular-nums text-slate-950">
-              {(
-                summary?.totalEntries ??
-                register?.rowCount ??
-                0
-              ).toLocaleString()}
-            </p>
-            <p className="mt-1 text-sm text-slate-600">
-              entries in the full indexed register
-            </p>
-          </div>
-          <div
-            data-testid="visas-breadth-card"
-            className="rounded-2xl border border-indigo-200/80 p-5 shadow-[0_18px_48px_rgba(79,70,229,0.06)] [background:radial-gradient(circle_at_100%_0%,rgba(199,210,254,0.52),transparent_46%),linear-gradient(145deg,rgba(255,255,255,0.98),rgba(245,243,255,0.92))]"
-          >
-            <p className="text-xs font-semibold text-slate-500">
-              Register breadth
-            </p>
-            <p className="mt-5 text-3xl font-semibold tabular-nums text-slate-950">
-              {summary?.locationCount.toLocaleString() ?? "Not available"}
-            </p>
-            <p className="mt-1 text-sm text-slate-600">
-              indexed towns and cities across {summary?.routeCount ?? "Not available"} route
-              categories
-            </p>
+            <div
+              data-testid="visas-indexed-card"
+              className="flex min-h-0 flex-col justify-center rounded-2xl border border-cyan-200/80 p-5 shadow-[0_18px_48px_rgba(14,116,144,0.06)] [background:radial-gradient(circle_at_100%_0%,rgba(165,243,252,0.42),transparent_48%),linear-gradient(145deg,rgba(255,255,255,0.98),rgba(240,249,255,0.92))]"
+            >
+              <p className="text-xs font-semibold text-slate-500">
+                Indexed sponsors
+              </p>
+              <p className="mt-3 text-3xl font-semibold tabular-nums text-slate-950">
+                {(
+                  summary?.totalEntries ??
+                  register?.rowCount ??
+                  0
+                ).toLocaleString()}
+              </p>
+              <p className="mt-1 text-sm text-slate-600">
+                entries in the full indexed register
+              </p>
+            </div>
+            <div
+              data-testid="visas-breadth-card"
+              className="flex min-h-0 flex-col justify-center rounded-2xl border border-indigo-200/80 p-5 shadow-[0_18px_48px_rgba(79,70,229,0.06)] [background:radial-gradient(circle_at_100%_0%,rgba(199,210,254,0.52),transparent_46%),linear-gradient(145deg,rgba(255,255,255,0.98),rgba(245,243,255,0.92))]"
+            >
+              <p className="text-xs font-semibold text-slate-500">
+                Register breadth
+              </p>
+              <p className="mt-3 text-3xl font-semibold tabular-nums text-slate-950">
+                {summary?.locationCount.toLocaleString() ?? "Not available"}
+              </p>
+              <p className="mt-1 text-sm text-slate-600">
+                indexed towns and cities across{" "}
+                {summary?.routeCount ?? "Not available"} route categories
+              </p>
+            </div>
           </div>
         </header>
 

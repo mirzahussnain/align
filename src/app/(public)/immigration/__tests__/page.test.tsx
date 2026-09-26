@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -39,6 +39,16 @@ describe('Sponsorship & Visas page', () => {
       expect(card).not.toHaveClass('bg-white');
     });
     expect(new Set(cards.map((card) => card.className)).size).toBe(3);
+  });
+
+  it('groups both register highlights in the supporting bento column', () => {
+    render(<SponsorshipVisasPage />);
+
+    const highlights = screen.getByRole('group', {
+      name: /sponsor register highlights/i,
+    });
+    expect(within(highlights).getByText('Indexed sponsors')).toBeInTheDocument();
+    expect(within(highlights).getByText('Register breadth')).toBeInTheDocument();
   });
 
   it('does not offer a role-keyword job search as an employer action', () => {
