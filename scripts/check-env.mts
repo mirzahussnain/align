@@ -103,6 +103,12 @@ const CHECKS: Check[] = [
   { name: 'ADZUNA_APP_ID', required: false, note: 'Job source' },
   { name: 'ADZUNA_APP_KEY', required: false, note: 'Job source' },
   { name: 'JOOBLE_API_KEY', required: false, note: 'Job source' },
+  {
+    name: 'CRON_SECRET',
+    required: false,
+    note: 'Vercel Cron bearer secret (required in production)',
+    validate: (v) => (v.length >= 16 ? undefined : 'must be at least 16 characters'),
+  },
   { name: 'GOVUK_SPONSOR_CSV_URL', required: false, note: 'Sponsor register (falls back to a pinned URL)' },
   {
     name: 'UPSTASH_REDIS_REST_URL',
@@ -222,6 +228,12 @@ if (process.env.NODE_ENV === 'production') {
   }
   if (!process.env.UPSTASH_REDIS_REST_URL || !process.env.UPSTASH_REDIS_REST_TOKEN) {
     errors.push('UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN are required in production');
+  }
+  if (!process.env.CRON_SECRET) {
+    errors.push('CRON_SECRET is required in production for authenticated scheduled maintenance');
+  }
+  if (!process.env.REDIS_URL) {
+    errors.push('REDIS_URL is required in production for maintenance overlap protection');
   }
   if (endpoint.includes('localhost')) {
     errors.push('S3_ENDPOINT points at localhost in a production build');

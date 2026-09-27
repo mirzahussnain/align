@@ -25,7 +25,7 @@ export default function AuthLayout({
           <div className="flex flex-1 items-center justify-center py-12">{children}</div>
 
           <p className="text-center text-[11px] text-white/25">
-            Align — UK tech career intelligence
+            Align — evidence-led UK career intelligence
           </p>
         </div>
 

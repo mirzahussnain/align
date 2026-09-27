@@ -47,7 +47,10 @@ import {
   searchProvidersInteractive,
 } from "@/shared/services/job-search";
 import { getAtsSnapshotProviderResults } from "@/shared/services/job-discovery";
-import { materialiseSearchJobCards } from "@/shared/services/job-search-view";
+import {
+  materialiseSearchJobCards,
+  projectPublicSearchJobCards,
+} from "@/shared/services/job-search-view";
 import {
   logJobBoardEvent,
   SearchTimings,
@@ -70,6 +73,7 @@ import {
   isUkDiscoverable,
 } from "@/shared/services/uk-location";
 import { readProviderHealthMap } from "@/shared/services/provider-health";
+import { listSearchProviders } from "@/shared/services/job-providers/registry";
 import { matchSponsorCompaniesCached } from "@/shared/services/sponsor-match-cache";
 import type {
   JobSearchParams,
@@ -114,7 +118,7 @@ function canServeMorePages(
 // providers answer per-board, never per-query, so they are orchestrated separately.
 const selectedProviders = (source: string): SearchJobProvider[] =>
   source === "all"
-    ? ["ADZUNA", "REED", "JOOBLE"]
+    ? [...listSearchProviders()]
     : [source.toUpperCase() as SearchJobProvider];
 
 function relevance(job: NormalisedJob, query: string) {
@@ -133,6 +137,7 @@ function applyFilters(
     experience: string;
     remoteType: string;
     postedWithinDays?: number;
+    contractType: string;
   },
 ) {
   const after = data.postedWithinDays
@@ -165,6 +170,15 @@ function applyFilters(
       return false;
     if (after && (!job.postedAt || Date.parse(job.postedAt) < after))
       return false;
+    if (data.contractType !== "all") {
+      const value = `${job.contractType ?? ""} ${job.employmentType ?? ""}`.toLowerCase();
+      const matches = data.contractType === "permanent"
+        ? /\bpermanent\b/.test(value)
+        : data.contractType === "contract"
+          ? /\b(contract|fixed[- ]?term|locum|secondment)\b/.test(value)
+          : /\b(temporary|temp|bank|locum)\b/.test(value);
+      if (!matches) return false;
+    }
     const title = job.title.toLowerCase();
     const junior = /\b(junior|graduate|associate|trainee|intern)\b/.test(title);
     const senior = /\b(senior|lead|principal|head|director|manager)\b/.test(
@@ -481,6 +495,8 @@ export async function GET(request: NextRequest) {
             : "relevance",
       sponsorship: "all",
       experience: data.experience,
+      remote: data.remoteType === "REMOTE",
+      postedWithinDays: data.postedWithinDays,
     };
 
     // Everything that changes WHICH jobs come back or IN WHAT ORDER. `sortBy` is
@@ -701,7 +717,7 @@ export async function GET(request: NextRequest) {
           exhausted: outcome.exhausted,
           pagesRequested: outcome.pagesRequested,
         },
-        CACHE_TTL_SECONDS.searchFresh,
+        outcome.pendingProviders.length ? 0 : CACHE_TTL_SECONDS.searchFresh,
         CACHE_TTL_SECONDS.searchStale,
       );
       await timings.measure("cacheWriteMs", () =>
@@ -934,9 +950,11 @@ async function respond(input: {
     partial: Boolean(input.partialMessage),
   });
 
-  const jobs = await input.timings.measure("snapshotMs", () =>
-    materialiseSearchJobCards(input.jobs, input.userId, input.careerTrack),
-  );
+  const jobs = input.userId
+    ? await input.timings.measure("snapshotMs", () =>
+        materialiseSearchJobCards(input.jobs, input.userId, input.careerTrack),
+      )
+    : projectPublicSearchJobCards(input.jobs);
 
   return NextResponse.json({
     jobs,

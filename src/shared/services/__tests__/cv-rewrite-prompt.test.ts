@@ -42,6 +42,26 @@ function makeInput(overrides: Partial<LedgerNativeRewriteInput> = {}): LedgerNat
 }
 
 describe('composeRewritePrompt', () => {
+  it('uses an industry-neutral recruiter perspective for a technical vacancy', () => {
+    const prompt = composeRewritePrompt(makeInput({
+      cvText: 'Software engineer with TypeScript experience.',
+      jobDescription: 'Software Engineer building TypeScript services.',
+    }));
+
+    expect(prompt).toContain('expert UK recruiter');
+    expect(prompt).not.toMatch(/technical recruiter/i);
+  });
+
+  it('uses an industry-neutral recruiter perspective for a non-technical vacancy', () => {
+    const prompt = composeRewritePrompt(makeInput({
+      cvText: 'Warehouse operative experienced in goods-in and stock control.',
+      jobDescription: 'Warehouse Operative responsible for dispatch and inventory accuracy.',
+    }));
+
+    expect(prompt).toContain('expert UK recruiter');
+    expect(prompt).not.toMatch(/technical recruiter/i);
+  });
+
   it('leads with the non-negotiable truthfulness rules', () => {
     const prompt = composeRewritePrompt(makeInput());
     expect(prompt).toContain('NON-NEGOTIABLE TRUTHFULNESS RULES');

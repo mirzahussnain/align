@@ -39,12 +39,26 @@ type BillingEntitlementKey =
   | 'ai_enhanced_ats_analysis'
   | 'job_match_analysis'
   | 'cv_regeneration'
+  | 'profile_reconciliation'
+  | 'cv_import_reconciliation'
+  | 'human_evidence_capture'
   | 'additional_career_profiles'
   | 'stored_source_cvs'
   | 'stored_generated_cvs'
-  | 'stored_analyses';
+  | 'stored_analyses'
+  | 'profile_evidence_storage'
+  | 'saved_jobs';
 
 export type BillingEntitlements = Record<BillingEntitlementKey, CapabilityDecision>;
+
+const ALLOWANCE_METERS: Array<{ key: BillingEntitlementKey; label: string }> = [
+  { key: 'ai_enhanced_ats_analysis', label: 'AI-enhanced ATS analyses' },
+  { key: 'job_match_analysis', label: 'Job Matches' },
+  { key: 'cv_regeneration', label: 'CV regenerations' },
+  { key: 'profile_reconciliation', label: 'Profile reconciliations' },
+  { key: 'cv_import_reconciliation', label: 'CV-import reconciliations' },
+  { key: 'human_evidence_capture', label: 'Human evidence captures' },
+];
 
 const STATUS_LABEL: Record<BillingStatusView['status'], string> = {
   FREE: 'Free plan',
@@ -176,6 +190,8 @@ export default function BillingView({
   const accessEnds = formatDate(billing.accessEndsAt);
   const isPro = billing.plan === 'PRO';
   const currentPlan = PLANS.find((plan) => plan.id === tier) ?? PLANS[0];
+  const monthlyAllowances = ALLOWANCE_METERS.filter(({ key }) => entitlements[key].period === 'month');
+  const lifetimeAllowances = ALLOWANCE_METERS.filter(({ key }) => entitlements[key].period === 'lifetime');
   const dateLabel =
     billing.status === 'TRIALING'
       ? 'Trial ends'
@@ -268,25 +284,25 @@ export default function BillingView({
 
         <section aria-label="Monthly Usage" className="mb-6 rounded-2xl border border-slate-200 bg-white p-6">
           <h2 className="text-base font-bold text-slate-900">Monthly Usage</h2>
-          <p className="mt-1 text-xs text-slate-500">Usage from your current allowance period.</p>
+          <p className="mt-1 text-xs text-slate-500">Allowances that reset each month.</p>
           <div className="mt-5 grid grid-cols-1 gap-5 sm:grid-cols-3">
-            <UsageMeter
-              label="AI analyses"
-              decision={entitlements.ai_enhanced_ats_analysis}
-              showPeriod
-            />
-            <UsageMeter
-              label="Job Matches"
-              decision={entitlements.job_match_analysis}
-              showPeriod
-            />
-            <UsageMeter
-              label="CV regenerations"
-              decision={entitlements.cv_regeneration}
-              showPeriod
-            />
+            {monthlyAllowances.map(({ key, label }) => (
+              <UsageMeter key={key} label={label} decision={entitlements[key]} showPeriod />
+            ))}
           </div>
         </section>
+
+        {lifetimeAllowances.length > 0 && (
+          <section aria-label="Lifetime Allowances" className="mb-6 rounded-2xl border border-slate-200 bg-white p-6">
+            <h2 className="text-base font-bold text-slate-900">Lifetime Allowances</h2>
+            <p className="mt-1 text-xs text-slate-500">One-time allowances that do not reset monthly.</p>
+            <div className="mt-5 grid grid-cols-1 gap-5 sm:grid-cols-2">
+              {lifetimeAllowances.map(({ key, label }) => (
+                <UsageMeter key={key} label={label} decision={entitlements[key]} showPeriod />
+              ))}
+            </div>
+          </section>
+        )}
 
         <section aria-label="Account Limits" className="mb-6 rounded-2xl border border-slate-200 bg-white p-6">
           <h2 className="text-base font-bold text-slate-900">Account Limits</h2>
@@ -296,6 +312,8 @@ export default function BillingView({
             <UsageMeter label="Stored CVs" decision={entitlements.stored_source_cvs} />
             <UsageMeter label="Generated CVs" decision={entitlements.stored_generated_cvs} />
             <UsageMeter label="Analyses retained" decision={entitlements.stored_analyses} />
+            <UsageMeter label="Reusable evidence" decision={entitlements.profile_evidence_storage} />
+            <UsageMeter label="Saved jobs" decision={entitlements.saved_jobs} />
           </div>
         </section>
 
@@ -339,14 +357,26 @@ export default function BillingView({
                   <span className="text-sm font-medium text-slate-400">{t.period}</span>
                 </p>
                 <p className="mt-2 text-xs leading-relaxed text-slate-500">{t.tagline}</p>
-                <ul className="mb-6 mt-5 flex flex-col gap-2.5">
-                  {t.features.map((f) => (
-                    <li key={f} className="flex items-start gap-2 text-xs text-slate-600">
-                      <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-accent-cyan" strokeWidth={2.5} />
-                      {f}
-                    </li>
+                <div className="mb-6 mt-5 space-y-4">
+                  {([
+                    ['Included', t.sections.core],
+                    ['Monthly allowances', t.sections.monthly],
+                    ['Lifetime allowances', t.sections.lifetime],
+                    ['Account limits', t.sections.account],
+                  ] as const).map(([heading, features]) => features.length > 0 && (
+                    <div key={heading}>
+                      <h3 className="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-400">{heading}</h3>
+                      <ul className="mt-2 flex flex-col gap-2">
+                        {features.map((feature) => (
+                          <li key={feature} className="flex items-start gap-2 text-xs text-slate-600">
+                            <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-accent-cyan" strokeWidth={2.5} aria-hidden="true" />
+                            {feature}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
                   ))}
-                </ul>
+                </div>
               </div>
               );
             })}

@@ -112,14 +112,17 @@ export function normaliseProviderJob(raw: ProviderJob): NormalisedJob {
   const extractedWording = wording(description);
   const companyNormalised = normaliseCompanyName(raw.company);
   const dedupeFingerprint = createHash('sha256').update(`${normaliseTitle(raw.title)}|${companyNormalised}|${normaliseLocationKey(raw.location)}`).digest('hex').slice(0, 24);
-  const sourceJobId = raw.id.replace(/^[a-z]+-/, '');
+  const providerPrefix = `${raw.source}-`;
+  const sourceJobId = raw.id.startsWith(providerPrefix)
+    ? raw.id.slice(providerPrefix.length)
+    : raw.id.replace(/^[a-z]+-/, '');
   return {
     source, sourceJobId, providerReferences: [{ provider: source, sourceJobId, sourceUrl: raw.hostedUrl ?? raw.url, ...(raw.applicationUrl ? { applicationUrl: raw.applicationUrl } : {}) }],
     canonicalUrl: raw.url, title: clean(raw.title), company: clean(raw.company), companyNormalised: companyNormalised || undefined,
     ...location, description: description || undefined,
     descriptionAvailability: classifyDescriptionAvailability(source, description),
     ...salary, employmentType: raw.contractType ?? undefined, contractType: raw.contractType ?? undefined,
-    postedAt: validDate(raw.postedDate), remoteType: raw.isRemote && location.remoteType === 'UNKNOWN' ? 'REMOTE' : location.remoteType,
+    postedAt: validDate(raw.postedDate), expiresAt: raw.closingDate ? validDate(raw.closingDate) : undefined, remoteType: raw.isRemote && location.remoteType === 'UNKNOWN' ? 'REMOTE' : location.remoteType,
     sponsorSignal: { ...blankSponsorSignal(), ...extractedWording, explanation: wordingExplanation(extractedWording.jobWording) },
     ...(raw.employerSourceId ? { employerSourceId: raw.employerSourceId } : {}), ...(raw.companyRecordId ? { companyRecordId: raw.companyRecordId } : {}),
     ...(raw.departments?.length ? { departments: raw.departments } : {}), ...(raw.offices?.length ? { offices: raw.offices } : {}),

@@ -27,7 +27,7 @@ export const JobsQuerySchema = z.object({
   experience: z.enum(["all", "junior", "mid", "senior"]).default("all"),
   remoteType: z.enum(["all", "REMOTE", "HYBRID", "ONSITE"]).default("all"),
   postedWithinDays: z.coerce.number().int().min(1).max(90).optional(),
-  source: z.enum(["all", "adzuna", "reed", "jooble"]).default("all"),
+  source: z.enum(["all", "adzuna", "reed", "jooble", "nhs_jobs"]).default("all"),
   sessionId: z.string().uuid().optional(),
   careerTrackId: z.string().min(1).max(200).optional(),
   refresh: z.enum(["true"]).optional(),

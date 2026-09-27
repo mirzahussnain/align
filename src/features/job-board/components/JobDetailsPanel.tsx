@@ -288,7 +288,7 @@ function SponsorEvidenceCard({ data }: { data: JobDetailsViewModel }) {
             rel="noopener noreferrer"
             className="inline-flex items-center gap-1 text-xs font-semibold text-accent-cyan hover:underline"
           >
-            Check on Immigration Hub <ExternalLink className="h-3 w-3" />
+            Check in Sponsorship & Visas <ExternalLink className="h-3 w-3" />
           </a>
         ) : null
       }

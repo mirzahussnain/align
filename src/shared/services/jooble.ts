@@ -2,6 +2,7 @@
 
 import type { ProviderJob, JobSearchParams, JobSearchResult } from '@/shared/types/job';
 import { API_CONFIG } from '@/shared/lib/config';
+import { providerResponseError } from '@/shared/services/job-providers/provider-errors';
 
 interface JoobleJob {
   title: string;
@@ -66,8 +67,7 @@ export async function searchJoobleJobs(
   });
 
   if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`Jooble API error: ${response.status} - ${errorText}`);
+    throw providerResponseError('JOOBLE', response);
   }
 
   const data: JoobleResponse = await response.json();

@@ -26,11 +26,11 @@ export default function WorkflowSection() {
           className="text-center max-w-3xl mx-auto z-20 relative"
         >
           <h2 className="text-[2.5rem] sm:text-5xl md:text-[3.5rem] font-medium text-slate-800 tracking-[-0.03em] leading-[1.1] mt-4">
-            A clear entry point to <span className="text-slate-500">UK-ready CVs</span>, role matching, and visa insights
+            One Evidence Base for <span className="text-slate-500">Every UK Application</span>
           </h2>
           <p className="text-[15px] md:text-[16px] text-slate-500 leading-relaxed mt-6 max-w-2xl mx-auto font-medium">
-            Align turns your resume into a living profile, scoring ATS readiness, surfacing
-            sponsor-friendly roles, and revealing the fastest path to placement.
+            Align turns your experience into a reusable Career Profile, checks ATS readiness, compares
+            role requirements against your evidence, and carries approved facts into tailored CVs.
           </p>
 
           {/* CTA Buttons */}
@@ -39,10 +39,10 @@ export default function WorkflowSection() {
               href="/analyze"
               className="px-6 py-2.5 rounded-full bg-slate-900 text-white text-[13px] font-semibold tracking-wide shadow-xl shadow-slate-900/10 hover:bg-black hover:scale-[1.02] transition-all"
             >
-              View Sample Report
+              Analyze your CV
             </Link>
             <span className="px-5 py-2.5 rounded-full border border-slate-200/80 text-[12px] font-semibold text-slate-500 bg-white/60 backdrop-blur-sm">
-              3-minute CV audit
+              Unlimited rule-based ATS
             </span>
           </div>
         </motion.div>

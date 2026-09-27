@@ -1,4 +1,4 @@
 export const QUOTE_DATA = {
-  text: "The best engineering minds have been seeking structured approaches to placement for decades.",
-  subtext: "Empowering global software developers to successfully transition into the UK market."
+  text: "A stronger application starts with clear evidence: what you have done, what the role needs, and where the two align.",
+  subtext: "Evidence-led guidance for UK job applications."
 };

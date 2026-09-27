@@ -7,31 +7,30 @@ export const VISAS = [
     color: 'text-accent-cyan',
     bg: 'bg-accent-cyan/10',
     border: 'border-accent-cyan/20',
+    officialUrl: 'https://www.gov.uk/skilled-worker-visa',
     overview: [
-      'The primary route for overseas professionals to work in the UK.',
-      'Requires sponsorship from a Home Office licensed employer.',
-      'Leads directly to permanent settlement (ILR).'
+      'A sponsored work route for eligible jobs with an approved UK employer.',
+      'A sponsor licence entry is employer-level evidence; it does not confirm that a particular vacancy will be sponsored.',
+      'The route may lead to settlement if the applicant continues to meet the rules in force.'
     ],
     requirements: [
-      'Confirmed job offer from a licensed sponsor',
-      'Certificate of Sponsorship (CoS) reference number',
-      'Meet the general salary threshold (£38,700/year) or the going rate for the role',
-      'Discounts ("New Entrant") available for recent graduates (£30,960 minimum)',
-      'Meet English language requirements (CEFR Level B1)'
+      'An eligible job offer from a Home Office approved employer',
+      'A valid Certificate of Sponsorship reference assigned for the role',
+      'The applicable salary threshold and occupation going rate; exceptions and transitional rules can differ',
+      'The English-language and other eligibility requirements that apply at the date of application'
     ],
     process: [
-      '1. Secure a job offer from an eligible UK employer',
-      '2. Employer assigns a Certificate of Sponsorship (CoS)',
-      '3. Submit online visa application (within 3 months of start date)',
-      '4. Prove identity (via UK Immigration: ID Check app or biometric appointment)',
-      '5. Pay application fees and Immigration Health Surcharge (IHS)',
-      '6. Wait for decision (typically 3 weeks outside UK, 8 weeks inside)'
+      '1. Check the job, occupation code, salary and employer against current GOV.UK rules',
+      '2. Receive a Certificate of Sponsorship from the employer',
+      '3. Submit the correct online application within the stated CoS window',
+      '4. Prove identity and provide the documents requested for your circumstances',
+      '5. Pay the current fees and healthcare surcharge where applicable'
     ],
     roadmap: [
-      'Initial visa can be granted for up to 5 years',
-      'Can be extended indefinitely as long as you meet requirements',
-      'Eligible to apply for Indefinite Leave to Remain (ILR) after 5 continuous years',
-      'Partners and children can apply as dependents'
+      'Permission may be granted for the sponsored employment period, within route limits',
+      'Extensions or changes of employment require a further eligible application',
+      'You may be eligible to apply for ILR after 5 continuous years, subject to the residence, sponsor, salary, English-language and other settlement rules',
+      'Eligible partners and children may be able to apply as dependants'
     ]
   },
   {
@@ -40,30 +39,30 @@ export const VISAS = [
     color: 'text-accent-cyan',
     bg: 'bg-accent-cyan/10',
     border: 'border-accent-cyan/20',
+    officialUrl: 'https://www.gov.uk/graduate-visa',
     overview: [
-      'Unsponsored route for international students to work post-graduation.',
-      'Highly flexible: work in almost any job, switch employers freely.',
-      'Designed as a bridge to the Skilled Worker route.'
+      'An unsponsored post-study route for people who completed an eligible UK course.',
+      'It allows work in most jobs and does not require a job offer.',
+      'It cannot be extended, though an eligible holder may be able to switch to another route.'
     ],
     requirements: [
-      'Currently hold a valid UK Student visa or Tier 4 visa',
-      'Successfully completed an eligible UK degree (Bachelors, Masters, or PhD)',
-      'University must have notified the Home Office that you successfully completed the course',
-      'Must apply from INSIDE the UK'
+      'Be in the UK with valid Student or eligible Tier 4 permission when applying',
+      'Have successfully completed an eligible course in the UK for the required study period',
+      'The education provider must have notified the Home Office of successful completion',
+      'Apply before the current Student permission expires'
     ],
     process: [
-      '1. Wait for university confirmation of course completion',
-      '2. Submit application online before current Student visa expires',
-      '3. Prove identity using the UK Immigration: ID Check app',
-      '4. Pay the application fee (£822) and IHS (£1,035 per year)',
-      '5. Wait for decision (typically within 8 weeks)'
+      '1. Confirm that the education provider has reported course completion',
+      '2. Check the course, study-period and current-permission requirements',
+      '3. Apply online from inside the UK before Student permission expires',
+      '4. Prove identity and provide any documents requested',
+      '5. Pay the current application fee and healthcare surcharge'
     ],
     roadmap: [
-      'Valid for 2 years (3 years for PhD graduates)',
-      'Cannot be extended. You can only hold a Graduate visa once',
-      'Time spent does NOT count towards the 5-year route to settlement (ILR)',
-      'Time spent DOES count towards the 10-year long residence route',
-      'Most candidates switch to the Skilled Worker visa before expiry'
+      'For non-doctoral graduates, permission is 2 years for applications made by 31 December 2026 and 18 months for applications from 1 January 2027',
+      'Doctoral graduates receive 3 years under the current published rules',
+      'The Graduate route is not itself a direct route to settlement',
+      'Time may count toward long-residence eligibility, subject to the rules and the applicant’s circumstances'
     ]
   },
   {
@@ -72,30 +71,30 @@ export const VISAS = [
     color: 'text-success',
     bg: 'bg-success/10',
     border: 'border-success/20',
+    officialUrl: 'https://www.gov.uk/global-talent',
     overview: [
-      'Prestigious unsponsored route for top talent globally.',
-      'No job offer required. You can work as an employee, director, or be self-employed.',
-      'Offers a fast-track to UK settlement.'
+      'An unsponsored route for eligible leaders or potential leaders in specified fields.',
+      'A job offer is not normally required, and permitted work can include employment or self-employment.',
+      'Settlement timing depends on the endorsement or qualifying award and all other rules.'
     ],
     requirements: [
-      'Be a leader (Exceptional Talent) or potential leader (Exceptional Promise)',
-      'Fields: Academia/Research, Arts/Culture, or Digital Technology',
-      'Must receive an endorsement from an approved endorsing body (e.g. Tech Nation)',
-      'Alternatively, hold an eligible prestigious international award (e.g. Nobel Prize)'
+      'Qualify in academia or research, arts and culture, or digital technology under the published criteria',
+      'Usually obtain endorsement from the relevant approved body',
+      'Some holders of listed prestigious prizes can apply without endorsement',
+      'Meet the suitability and permission requirements for the route'
     ],
     process: [
-      '1. Stage 1: Apply for endorsement (unless holding an eligible award)',
-      '2. Gather extensive evidence of impact, innovation, and leadership',
-      '3. Wait for endorsement decision (can take 1-8 weeks)',
-      '4. Stage 2: Apply for the visa itself (within 3 months of endorsement)',
-      '5. Receive decision (typically 3 weeks outside UK, 8 weeks inside)'
+      '1. Identify the relevant field, endorsing body and eligibility criteria',
+      '2. Apply for endorsement unless an eligible listed prize applies',
+      '3. Prepare evidence in the format required by that endorsing body',
+      '4. Apply for immigration permission within the permitted endorsement window',
+      '5. Prove identity and provide the documents requested'
     ],
     roadmap: [
-      'Initial visa can be granted for 1 to 5 years (you choose the duration)',
-      'Exceptional Talent: Eligible for Indefinite Leave to Remain (ILR) after 3 years',
-      'Exceptional Promise: Eligible for Indefinite Leave to Remain (ILR) after 5 years',
-      'Can be extended indefinitely',
-      'Highly attractive to employers due to lack of sponsorship overhead'
+      'Permission can be requested for a period within the route’s published limits',
+      'Further permission may be available if the route requirements remain satisfied',
+      'Depending on the qualifying endorsement or award, you may be eligible for ILR after 3 or 5 years, subject to all settlement rules',
+      'Absence, earnings and continuing-field requirements can affect settlement eligibility'
     ]
   },
   {
@@ -104,29 +103,30 @@ export const VISAS = [
     color: 'text-amber-500',
     bg: 'bg-amber-500/10',
     border: 'border-amber-500/20',
+    officialUrl: 'https://www.gov.uk/innovator-founder-visa',
     overview: [
-      'For entrepreneurs seeking to set up a business in the UK.',
-      'Business idea must be innovative, viable, and scalable.',
-      'Replaced the old Innovator and Start-up visa routes.'
+      'A route for an eligible founder establishing and running an innovative business in the UK.',
+      'The business idea must be assessed as new, innovative, viable and scalable.',
+      'An approved endorsing body must support the application.'
     ],
     requirements: [
-      'Business plan endorsed by an approved UK endorsing body',
-      'No minimum investment funds required (unlike previous routes)',
-      'Must demonstrate English language proficiency (CEFR Level B2)',
-      'Must have sufficient personal savings to support yourself (£1,270)'
+      'An endorsement letter for the applicant and business idea',
+      'Evidence that the business meets the published innovation, viability and scalability criteria',
+      'The applicable English-language requirement',
+      'The maintenance-funds and other eligibility requirements that apply to the applicant'
     ],
     process: [
-      '1. Develop a highly innovative, viable, and scalable business plan',
-      '2. Apply for and secure an endorsement from an approved body',
-      '3. Submit online visa application within 3 months of endorsement',
-      '4. Provide biometrics and identity verification',
-      '5. Pay application fees (£1,191) and Immigration Health Surcharge'
+      '1. Develop the business proposal and check it against current endorsement criteria',
+      '2. Obtain an endorsement from an approved body',
+      '3. Apply online within the endorsement letter’s validity window',
+      '4. Prove identity and provide the required documents',
+      '5. Maintain the required contact with the endorsing body during the permission period'
     ],
     roadmap: [
-      'Initial visa granted for exactly 3 years',
-      'Can be extended indefinitely in 3-year increments',
-      'Eligible for Indefinite Leave to Remain (ILR) after just 3 years',
-      'Must show significant business achievements for settlement'
+      'Initial permission is granted for up to 3 years under the current rules',
+      'A further 3-year application may be available with a new endorsement',
+      'You may be eligible for ILR after 3 years, subject to a new endorsement, continuous residence and the business-growth criteria',
+      'Settlement is not automatic and requires a separate application meeting the rules in force'
     ]
   }
 ];

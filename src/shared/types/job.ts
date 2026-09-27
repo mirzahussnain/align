@@ -2,10 +2,10 @@
 
 /**
  * Providers that answer a free-text keyword/location query across the whole
- * market. These are the three integrations that exist today and their behaviour
- * is unchanged.
+ * market. NHS Jobs joins the existing commercial integrations through the same
+ * transport-neutral contract.
  */
-export type SearchJobProvider = 'ADZUNA' | 'REED' | 'JOOBLE';
+export type SearchJobProvider = 'ADZUNA' | 'REED' | 'JOOBLE' | 'NHS_JOBS';
 
 /**
  * Employer-direct applicant-tracking systems. These are NOT market-wide search
@@ -18,7 +18,7 @@ export type EmployerAtsProvider = 'GREENHOUSE' | 'LEVER' | 'SMARTRECRUITERS' | '
 
 export type JobProvider = SearchJobProvider | EmployerAtsProvider;
 
-export const SEARCH_JOB_PROVIDERS = ['ADZUNA', 'REED', 'JOOBLE'] as const satisfies readonly SearchJobProvider[];
+export const SEARCH_JOB_PROVIDERS = ['ADZUNA', 'REED', 'JOOBLE', 'NHS_JOBS'] as const satisfies readonly SearchJobProvider[];
 export const EMPLOYER_ATS_PROVIDERS = ['GREENHOUSE', 'LEVER', 'SMARTRECRUITERS', 'ASHBY'] as const satisfies readonly EmployerAtsProvider[];
 
 export function isSearchJobProvider(value: string): value is SearchJobProvider {
@@ -80,6 +80,7 @@ export interface JobSearchParams {
   salaryMin?: number; salaryMax?: number; contractType?: 'permanent' | 'contract' | 'temporary' | 'all';
   remote?: boolean; sortBy?: 'relevance' | 'date' | 'salary'; sponsorship?: 'all' | 'offered' | 'required' | 'registered' | 'exclude_no_sponsorship';
   experience?: 'all' | 'junior' | 'mid' | 'senior';
+  postedWithinDays?: number;
 }
 
 /** Internal common shape returned by existing provider adapters. */
@@ -94,6 +95,8 @@ export interface ProviderJob {
   hostedUrl?: string;
   /** Strictly validated direct application page, separate from hosted provenance. */
   applicationUrl?: string;
+  /** Provider-supplied application closing date, when present. */
+  closingDate?: string;
 }
 export interface JobSearchResult { jobs: ProviderJob[]; total: number; page: number; perPage: number; source: string; }
 /**

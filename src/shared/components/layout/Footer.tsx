@@ -20,7 +20,7 @@ export default function Footer() {
           </div>
           <div className="flex flex-col text-left">
             <span className="text-sm font-semibold text-slate-800 tracking-tight">Align</span>
-            <span className="text-[10px] text-slate-400 font-medium">UK Tech Career Intelligence</span>
+            <span className="text-[10px] text-slate-400 font-medium">UK Career Intelligence</span>
           </div>
         </div>
 
@@ -42,7 +42,7 @@ export default function Footer() {
         {/* Copyright */}
         <div className="text-[10px] text-slate-400 text-center md:text-right">
           <p>© {new Date().getFullYear()} Align. All rights reserved.</p>
-          <p className="mt-1 text-slate-400/80">Data aggregated from Reed, Adzuna, Jooble & GOV.UK</p>
+          <p className="mt-1 text-slate-400/80">Data aggregated from Reed, Adzuna, Jooble, NHS Jobs & GOV.UK</p>
         </div>
 
       </div>

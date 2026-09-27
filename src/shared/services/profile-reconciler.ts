@@ -227,6 +227,8 @@ export function validateProfileEvidenceSuggestions(
 }
 
 export interface ReconcileInput {
+  userId?: string;
+  operationId?: string;
   profile: ProfileData;
   cvText: string;
   jobDescription: string;
@@ -299,6 +301,8 @@ Return only JSON in this shape:
 }`;
 
   const raw = await generateJSONFromAI<{ suggestions?: RawProfileEvidenceSuggestion[] }>({
+    userId: input.userId,
+    operationId: input.operationId,
     capability: 'profile_reconciliation',
     prompt,
     temperature: 0.15,

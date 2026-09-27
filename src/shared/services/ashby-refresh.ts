@@ -8,10 +8,10 @@ const chunks = <T>(values: T[], size: number) => Array.from({ length: Math.ceil(
 const errorCodeOf = (error: unknown) => error instanceof Error ? error.message.slice(0, 120) : 'ASHBY_UNAVAILABLE';
 
 /** Explicit administration path only. Interactive search never queries boards. */
-export async function refreshAshbyEmployerSources(input: { sourceIds?: string[]; companyRecordId?: string; all?: boolean; concurrency?: number } = {}): Promise<AshbyRefreshSummary> {
+export async function refreshAshbyEmployerSources(input: { sourceIds?: string[]; companyRecordId?: string; all?: boolean; concurrency?: number; limit?: number } = {}): Promise<AshbyRefreshSummary> {
   const started = Date.now();
   const where = { provider: 'ASHBY' as const, verificationStatus: 'VERIFIED' as const, enabled: true, ...(input.sourceIds?.length ? { id: { in: input.sourceIds } } : {}), ...(input.companyRecordId ? { companyRecordId: input.companyRecordId } : {}) };
-  const sources = await prisma.employerJobSource.findMany({ where, include: { companyRecord: { select: { id: true, displayName: true, websiteUrl: true, careersUrl: true } } }, orderBy: { providerIdentifier: 'asc' } });
+  const sources = await prisma.employerJobSource.findMany({ where, include: { companyRecord: { select: { id: true, displayName: true, websiteUrl: true, careersUrl: true } } }, orderBy: input.limit ? [{ lastAttemptedAt: { sort: 'asc', nulls: 'first' } }, { providerIdentifier: 'asc' }] : { providerIdentifier: 'asc' }, ...(input.limit ? { take: Math.max(1, Math.min(input.limit, 50)) } : {}) });
   const summary: AshbyRefreshSummary = { attempted: sources.length, successful: 0, empty: 0, failed: 0, timedOut: 0, jobsRetrieved: 0, uniqueJobsPersisted: 0, duplicateJobsMerged: 0, invalidUrls: 0, invalidHostedUrls: 0, invalidApplicationUrls: 0, invalidJobRecords: 0, invalidUrlReasons: {}, malformedPayloads: 0, durationMs: 0, perSourceFailures: {}, sources: [] };
   const persisted = new Set<string>(); let cursor = 0; const workers = Math.max(1, Math.min(input.concurrency ?? 3, 5));
   async function worker() { while (cursor < sources.length) {

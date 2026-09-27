@@ -13,8 +13,8 @@ export default function CalculatorSection() {
   // Dynamic calculations for salary estimator
   const baseSalaryLondon = 38000 + experience * 6500 + (atsScore - 50) * 450;
   const baseSalaryRegional = 29000 + experience * 5000 + (atsScore - 50) * 350;
-  const placementChance = atsScore >= 85 ? 'Excellent' : atsScore >= 70 ? 'Strong' : atsScore >= 50 ? 'Moderate' : 'Critical Action Required';
-  const placementColor = atsScore >= 85 ? 'text-success' : atsScore >= 70 ? 'text-[#0ea5e9]' : atsScore >= 50 ? 'text-warning' : 'text-error';
+  const readinessSignal = atsScore >= 85 ? 'Excellent' : atsScore >= 70 ? 'Strong' : atsScore >= 50 ? 'Moderate' : 'Needs attention';
+  const readinessColor = atsScore >= 85 ? 'text-success' : atsScore >= 70 ? 'text-[#0ea5e9]' : atsScore >= 50 ? 'text-warning' : 'text-error';
 
   return (
     <section
@@ -43,11 +43,11 @@ export default function CalculatorSection() {
           className="text-center mb-16 max-w-3xl mx-auto"
         >
           <h2 className="text-[2.5rem] sm:text-5xl md:text-[3.5rem] font-medium text-[#1e293b] tracking-[-0.03em] leading-[1.1] mt-4 flex items-center justify-center gap-3 flex-wrap">
-            See your growth potential
+            See Your Growth Potential
             <TrendingUp size={38} className="text-slate-600 animate-pulse" />
           </h2>
           <p className="text-[15px] md:text-[16px] text-slate-500 leading-relaxed mt-6 max-w-2xl mx-auto font-medium">
-            Adjust your experience and ATS score to estimate your UK salary expectation and visa placement probability instantly.
+            Explore an illustrative UK salary range and see how ATS readiness changes the application signal.
           </p>
         </motion.div>
 
@@ -120,7 +120,7 @@ export default function CalculatorSection() {
                 <Award size={18} />
               </div>
               <p className="text-xs text-neutral-500 leading-relaxed">
-                Calculations are based on the latest 2026 UK tech hiring market standards aggregated from Adzuna API salary metadata.
+                Illustrative estimates only. Actual salaries vary by role, sector, location, employer, and evidence of experience.
               </p>
             </div>
           </div>
@@ -146,8 +146,8 @@ export default function CalculatorSection() {
             {/* Placement Chance Output */}
             <div className="bg-neutral-50 rounded-3xl p-6 border border-neutral-100 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
               <div>
-                <span className="text-[10px] text-neutral-400 uppercase font-bold tracking-wider">Placement Chance</span>
-                <h4 className={cn('text-xl font-bold mt-1 uppercase tracking-wider', placementColor)}>{placementChance}</h4>
+                <span className="text-[10px] text-neutral-400 uppercase font-bold tracking-wider">ATS readiness signal</span>
+                <h4 className={cn('text-xl font-bold mt-1 uppercase tracking-wider', readinessColor)}>{readinessSignal}</h4>
               </div>
               <Link
                 href="/analyze"

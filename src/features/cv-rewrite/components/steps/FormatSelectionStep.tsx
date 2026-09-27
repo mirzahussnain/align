@@ -38,7 +38,7 @@ export default function FormatSelectionStep({ selected, onSelect }: Props) {
           </div>
 
           <h4 className="font-bold text-slate-800 mb-1">Microsoft Word (.docx)</h4>
-          <p className="text-xs text-slate-500 leading-relaxed mb-3">100% ATS Safe. Fully editable if you need to make final tweaks.</p>
+          <p className="text-xs text-slate-500 leading-relaxed mb-3">Designed for clear ATS parsing. Fully editable for final review.</p>
           <span className="inline-block px-2.5 py-1 bg-green-100 text-green-700 text-[10px] font-bold rounded-full uppercase tracking-wider">
             Recommended
           </span>

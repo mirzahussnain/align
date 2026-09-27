@@ -36,7 +36,7 @@ export interface JobSearchSession {
 
   /** Last page fetched per provider. Absent means "not yet fetched". */
   providerPages: Partial<Record<SearchJobProvider, number>>;
-  /** Reserved for cursor-paginating providers; the three live ones use pages. */
+  /** Reserved for future opaque-cursor providers; current search sources use numeric positions. */
   providerCursors?: Partial<Record<SearchJobProvider, string | null>>;
 
   /** Providers that reported no further pages. Not re-queried on Load more. */

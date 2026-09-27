@@ -13,7 +13,7 @@ flowchart TB
   Web --> RL[Upstash REST rate limits]
   Web --> RC[Redis job cache]
   Web --> AI[Gemini / Groq]
-  Web --> Jobs[Adzuna / Reed / Jooble]
+  Web --> Jobs[Adzuna / Reed / Jooble / NHS Jobs]
   Web --> Mail[Resend]
   Web --> Pay[Stripe]
   Browser --> Web
@@ -78,8 +78,11 @@ Production requires at least one supported AI provider: Gemini only, Groq only, 
 | `UPSTASH_REDIS_REST_URL` | Required in production | REST endpoint used only by distributed rate limits |
 | `UPSTASH_REDIS_REST_TOKEN` | Required in production | Matching REST token |
 | `REDIS_URL` | Required for full job-board behaviour | `redis://` or `rediss://` URL used by the job cache |
+| `CRON_SECRET` | Required in production | Random server-only value (at least 16 characters) used by Vercel Cron |
 
 These are separate clients and are not interchangeable. In production, missing Upstash rate-limit credentials cause protected routes to return HTTP 503. Missing `REDIS_URL` is a supported degraded mode, but shared caching, refresh locks, and continuation sessions are unavailable; that is not a complete production configuration.
+
+`vercel.json` invokes `/api/cron/maintenance` daily at 03:17 UTC. Vercel supplies `CRON_SECRET` as a Bearer credential. The route acquires a ten-minute distributed lock, runs the existing retention policy, and refreshes at most ten least-recently-attempted verified sources for each supported employer ATS with concurrency two. An overlapping invocation exits with HTTP 202. Check the `scheduled_maintenance_completed` or `scheduled_maintenance_failed` structured log after deployment; Vercel schedule timing is not exact.
 
 ### Job and sponsor providers
 
@@ -91,7 +94,7 @@ These are separate clients and are not interchangeable. In production, missing U
 | `JOOBLE_API_KEY` | Required for Jooble | That source is skipped when absent |
 | `GOVUK_SPONSOR_CSV_URL` | Optional override | The app otherwise discovers the current file and has a pinned fallback |
 
-For full job-search coverage, configure all three commercial providers. Their failures are isolated so one provider does not invalidate successful results from another.
+For full commercial job-search coverage, configure all three credentialed providers. NHS Jobs uses its documented public XML endpoint and needs no credential. Every source is isolated so one provider does not invalidate successful results from another.
 
 ### Object storage
 
@@ -170,6 +173,7 @@ GROQ_API_KEY=<groq-api-key>
 UPSTASH_REDIS_REST_URL=<upstash-rest-url>
 UPSTASH_REDIS_REST_TOKEN=<upstash-rest-token>
 REDIS_URL=<redis-or-rediss-url>
+CRON_SECRET=<random-16+-character-secret>
 
 ADZUNA_APP_ID=<adzuna-id>
 ADZUNA_APP_KEY=<adzuna-key>

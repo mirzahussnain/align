@@ -17,7 +17,7 @@ vi.mock("@/shared/services/job-snapshot", () => ({
   materialiseTrustedProviderSnapshotIds,
 }));
 
-const { materialiseSearchJobCards } = await import(
+const { materialiseSearchJobCards, projectPublicSearchJobCards } = await import(
   "@/shared/services/job-search-view"
 );
 
@@ -57,6 +57,16 @@ beforeEach(() => {
 });
 
 describe("search result materialisation", () => {
+  it("projects anonymous cards without creating durable snapshots", () => {
+    const [card] = projectPublicSearchJobCards([vacancy("public", "NHS Trust")]);
+    expect(card.id).toBe("canonical-public");
+    expect(card.fullDescriptionExternalUrl).toBe("https://example.test/public");
+    expect(card.saved).toBe(false);
+    expect(card).not.toHaveProperty("careerTrackRelevance");
+    expect(materialiseTrustedProviderSnapshotIds).not.toHaveBeenCalled();
+    expect(findMany).not.toHaveBeenCalled();
+  });
+
   it("gives equal-title jobs distinct durable snapshot ids", async () => {
     const cards = await materialiseSearchJobCards(
       [vacancy("one", "Alpha Ltd"), vacancy("two", "Beta Ltd")],

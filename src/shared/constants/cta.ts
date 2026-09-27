@@ -1,12 +1,12 @@
 export const CTA_DATA = {
-  title: "Ready to launch your UK tech career?",
-  subtitle: "Calibrate your tech profile, search sponsored job boards, and discover sponsor registries with real-time visa intelligence.",
+  title: "Ready to Strengthen Your Next UK Application?",
+  subtitle: "Build your Career Profile, check ATS readiness, compare role fit, and generate a CV grounded in evidence you can stand behind.",
   primaryButton: {
     text: "Analyze Your CV",
     href: "/analyze"
   },
   secondaryButton: {
-    text: "Search Sponsored Jobs",
+    text: "Explore UK Jobs",
     href: "/jobs"
   }
 };

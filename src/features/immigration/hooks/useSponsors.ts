@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useSearchParams } from 'next/navigation';
 import type { Sponsor } from '@/shared/types/job';
+import type { SponsorRegisterSummary } from '@/shared/utils/sponsor';
 
 export type SponsorRegisterMetadata = {
   releaseVersion: string;
@@ -25,6 +26,7 @@ export function useSponsors() {
   const [page, setPage] = useState(1);
   const [error, setError] = useState<string | null>(null);
   const [register, setRegister] = useState<SponsorRegisterMetadata | null>(null);
+  const [summary, setSummary] = useState<SponsorRegisterSummary | null>(null);
 
   useEffect(() => {
     const urlQuery = searchParams.get('q') || searchParams.get('query') || '';
@@ -61,6 +63,7 @@ export function useSponsors() {
       setTotal(data.total || 0);
       setPage(data.page || 1);
       setRegister(data.register || null);
+      setSummary(data.summary || null);
     } catch (err) {
       console.error(err);
       setError(err instanceof Error ? err.message : 'An error occurred loading sponsors');
@@ -96,6 +99,7 @@ export function useSponsors() {
     page,
     error,
     register,
+    summary,
     handlePageChange,
   };
 }

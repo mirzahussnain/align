@@ -4,6 +4,7 @@ import {
   generateJSONFromAIWithProvenance,
   type ProviderProvenance,
 } from './ai-orchestrator';
+import type { AiTelemetryContext } from './ai-telemetry-context';
 import { composeRewritePrompt } from './cv-rewrite-prompt';
 import { THINKING_BUDGETS } from '@/shared/lib/config';
 
@@ -29,9 +30,10 @@ export interface RewriteWithProvenance {
  * the route before anything is persisted or charged.
  */
 export async function rewriteCV(
-  input: LedgerNativeRewriteInput
+  input: LedgerNativeRewriteInput,
+  telemetry: AiTelemetryContext = {}
 ): Promise<StructuredCvRewriteOutput | null> {
-  const result = await rewriteCVWithProvenance(input);
+  const result = await rewriteCVWithProvenance(input, telemetry);
   return result ? result.output : null;
 }
 
@@ -42,9 +44,11 @@ export async function rewriteCV(
  * still one logical operation charged once, regardless of provider attempts.
  */
 export async function rewriteCVWithProvenance(
-  input: LedgerNativeRewriteInput
+  input: LedgerNativeRewriteInput,
+  telemetry: AiTelemetryContext = {}
 ): Promise<RewriteWithProvenance | null> {
   const result = await generateJSONFromAIWithProvenance<StructuredCvRewriteOutput>({
+    ...telemetry,
     capability: 'cv_regeneration',
     prompt: composeRewritePrompt(input),
     temperature: 0.2,

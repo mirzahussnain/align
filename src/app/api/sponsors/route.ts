@@ -3,7 +3,7 @@ import { getSponsorRegisterMetadata, getSponsors } from '@/shared/services/spons
 import { withErrorHandler, APIError } from '@/shared/utils/api-error';
 import { SponsorQuerySchema } from './schema';
 import { applyRateLimit, sponsorsLimiter } from '@/shared/lib/rate-limit';
-import { filterSponsors } from '@/shared/utils/sponsor';
+import { filterSponsors, summarizeSponsorRegister } from '@/shared/utils/sponsor';
 
 export async function GET(request: NextRequest) {
   return withErrorHandler(async () => {
@@ -24,6 +24,7 @@ export async function GET(request: NextRequest) {
       getSponsors(),
       getSponsorRegisterMetadata(),
     ]);
+    const summary = summarizeSponsorRegister(sponsors);
     const filtered = filterSponsors(sponsors, { query, route, industry });
 
     // Paginate
@@ -37,6 +38,7 @@ export async function GET(request: NextRequest) {
       page,
       perPage,
       register,
+      summary,
     });
   });
 }

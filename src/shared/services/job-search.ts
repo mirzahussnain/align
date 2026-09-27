@@ -34,24 +34,14 @@ import { createHash } from 'node:crypto';
 import { cacheKeys, CACHE_TTL_SECONDS } from '@/shared/lib/cache/cache-keys';
 import type { CacheStore } from '@/shared/lib/cache/cache-store';
 import { createEnvelope, envelopeTtlSeconds, readEnvelope } from '@/shared/lib/cache/cache-envelope';
-import { API_CONFIG } from '@/shared/lib/config';
-import { searchAdzunaJobs } from '@/shared/services/adzuna';
-import { searchReedJobs } from '@/shared/services/reed';
-import { searchJoobleJobs } from '@/shared/services/jooble';
 import { normaliseProviderJob } from '@/shared/services/job-normalisation';
 import { areCanonicalDuplicates, mergeCanonicalJobs } from '@/shared/services/job-discovery';
 import { getProviderCapabilities, pushdownFilters } from '@/shared/services/job-providers/capabilities';
+import { classifyProviderError } from '@/shared/services/job-providers/provider-errors';
+import { getSearchAdapter } from '@/shared/services/job-providers/registry';
 import { logJobBoardEvent, type SearchTimings } from '@/shared/services/job-board-observability';
 import { recordProviderOutcome } from '@/shared/services/provider-health';
 import type { JobSearchParams, NormalisedJob, ProviderSearchResult, SearchJobProvider } from '@/shared/types/job';
-
-type Adapter = (params: JobSearchParams, options: { signal?: AbortSignal }) => ReturnType<typeof searchAdzunaJobs>;
-
-const providers: Record<SearchJobProvider, { configured: () => boolean; search: Adapter }> = {
-  ADZUNA: { configured: () => Boolean(API_CONFIG.adzuna.appId && API_CONFIG.adzuna.appKey), search: searchAdzunaJobs },
-  REED: { configured: () => Boolean(API_CONFIG.reed.apiKey), search: searchReedJobs },
-  JOOBLE: { configured: () => Boolean(API_CONFIG.jooble.apiKey), search: searchJoobleJobs },
-};
 
 /**
  * Everything about a request that CHANGES WHAT THIS PROVIDER RETURNS, and
@@ -80,6 +70,8 @@ export function providerQueryDescriptor(provider: SearchJobProvider, params: Job
     salaryMin: pushdown.salary ? params.salaryMin : undefined,
     salaryMax: pushdown.salary ? params.salaryMax : undefined,
     contractType: pushdown.contractType && params.contractType !== 'all' ? params.contractType : undefined,
+    remote: pushdown.remote ? Boolean(params.remote) : undefined,
+    postedWithinDays: pushdown.postedWithin ? params.postedWithinDays : undefined,
     sortBy: params.sortBy && capabilities.sortOptions.includes(params.sortBy) ? params.sortBy : undefined,
   };
 }
@@ -134,8 +126,13 @@ function clone(result: ProviderSearchResult, cacheHit: boolean): ProviderSearchR
   };
 }
 
-function fromCachedPage(provider: SearchJobProvider, page: CachedProviderPage, durationMs: number): ProviderSearchResult {
-  return clone({ provider, ...page, durationMs }, true);
+function fromCachedPage(
+  provider: SearchJobProvider,
+  page: CachedProviderPage,
+  durationMs: number,
+  stale = false,
+): ProviderSearchResult {
+  return clone({ provider, ...page, ...(stale ? { status: 'STALE_CACHE' as const } : {}), durationMs }, true);
 }
 
 /**
@@ -152,7 +149,7 @@ async function fetchProviderPage(
   signal: AbortSignal
 ): Promise<ProviderSearchResult> {
   const started = Date.now();
-  const definition = providers[provider];
+  const adapter = getSearchAdapter(provider);
   const capabilities = getProviderCapabilities(provider);
   const key = providerCacheKey(provider, params);
 
@@ -163,7 +160,7 @@ async function fetchProviderPage(
     // interactive deadline that bounds the WAIT: a provider answering at 3 s is
     // too late for this response but its result is still worth caching.
     const response = await withTimeout(
-      definition.search(params, { signal }),
+      (requestSignal) => adapter.search(params, { mode: 'background', signal: requestSignal }),
       capabilities.backgroundTimeoutMs,
       signal
     );
@@ -175,9 +172,9 @@ async function fetchProviderPage(
     const page: CachedProviderPage = {
       status: jobs.length ? 'SUCCESS' : 'EMPTY',
       jobs,
-      rawReceived: response.jobs.length,
+      rawReceived: response.rawReceived,
       validNormalised: jobs.length,
-      nextCursor: jobs.length === params.perPage ? String(params.page + 1) : undefined,
+      nextCursor: response.nextCursor,
     };
 
     const envelope = createEnvelope(page, CACHE_TTL_SECONDS.providerResponse, CACHE_TTL_SECONDS.providerStale);
@@ -194,14 +191,18 @@ async function fetchProviderPage(
     });
     return clone(result, false);
   } catch (error) {
-    const timedOut = error instanceof Error && error.name === 'TimeoutError';
+    const failure = classifyProviderError(provider, error);
+    if (failure.code === 'RATE_LIMITED' && failure.retryAfterSeconds && failure.retryAfterSeconds > 0) {
+      const cooldownSeconds = Math.min(Math.ceil(failure.retryAfterSeconds), 24 * 60 * 60);
+      await store.set(cacheKeys.providerRateLimit(provider), true, cooldownSeconds);
+    }
     const result: ProviderSearchResult = {
       provider,
-      status: timedOut ? 'TIMED_OUT' : 'FAILED',
+      status: failure.status,
       jobs: [],
       rawReceived: 0,
       validNormalised: 0,
-      errorCode: timedOut ? 'TIMEOUT' : 'UNAVAILABLE',
+      errorCode: failure.code,
       durationMs: Date.now() - started,
     };
     await recordProviderOutcome(store, provider, result);
@@ -217,21 +218,29 @@ async function fetchProviderPage(
   }
 }
 
-/** Reject with a named TimeoutError after `ms`, without leaking the timer. */
-function withTimeout<T>(promise: Promise<T>, ms: number, signal: AbortSignal): Promise<T> {
+/** Abort the underlying request and reject after `ms`, without leaking listeners or timers. */
+function withTimeout<T>(start: (signal: AbortSignal) => Promise<T>, ms: number, signal: AbortSignal): Promise<T> {
   return new Promise<T>((resolve, reject) => {
+    const requestController = new AbortController();
     const timer = setTimeout(() => {
+      requestController.abort();
       const error = new Error('timeout');
       error.name = 'TimeoutError';
       reject(error);
     }, ms);
     const onAbort = () => {
+      requestController.abort(signal.reason);
       const error = new Error('aborted');
       error.name = 'AbortError';
       reject(error);
     };
+    if (signal.aborted) {
+      onAbort();
+      clearTimeout(timer);
+      return;
+    }
     signal.addEventListener('abort', onAbort, { once: true });
-    promise.then(resolve, reject).finally(() => {
+    start(requestController.signal).then(resolve, reject).finally(() => {
       clearTimeout(timer);
       signal.removeEventListener('abort', onAbort);
     });
@@ -248,7 +257,7 @@ export async function searchProvider(
   store: CacheStore,
   signal: AbortSignal
 ): Promise<ProviderSearchResult> {
-  if (!providers[provider].configured()) return notConfigured(provider);
+  if (!getSearchAdapter(provider).isConfigured()) return notConfigured(provider);
 
   const key = providerCacheKey(provider, params);
   const started = Date.now();
@@ -257,6 +266,18 @@ export async function searchProvider(
   if (cached.freshness === 'FRESH') {
     logJobBoardEvent('cache_hit', { provider, cacheLayer: 'provider', cacheHit: 'FRESH', ageMs: cached.ageMs });
     return fromCachedPage(provider, cached.value, Date.now() - started);
+  }
+
+  if (await store.get<boolean>(cacheKeys.providerRateLimit(provider))) {
+    return {
+      provider,
+      status: 'RATE_LIMITED',
+      jobs: [],
+      rawReceived: 0,
+      validNormalised: 0,
+      errorCode: 'RATE_LIMITED',
+      durationMs: Date.now() - started,
+    };
   }
 
   const existing = inFlight.get(key);
@@ -335,7 +356,7 @@ export async function searchProvidersInteractive(
   };
 
   const tasks = selected.map(async (provider) => {
-    if (!providers[provider].configured()) {
+    if (!getSearchAdapter(provider).isConfigured()) {
       record(provider, notConfigured(provider));
       return;
     }
@@ -352,7 +373,7 @@ export async function searchProvidersInteractive(
     const key = providerCacheKey(provider, providerParams);
     const cached = readEnvelope<CachedProviderPage>(await store.get(key));
     if (cached.freshness === 'STALE') {
-      slots.set(provider, fromCachedPage(provider, cached.value, 0));
+      slots.set(provider, fromCachedPage(provider, cached.value, 0, true));
       logJobBoardEvent('cache_stale_served', {
         provider,
         cacheLayer: 'provider',
@@ -368,7 +389,10 @@ export async function searchProvidersInteractive(
       logJobBoardEvent('cache_miss', { provider, cacheLayer: 'provider', cacheHit: 'MISS' });
     }
 
-    record(provider, await searchProvider(provider, providerParams, store, controller.signal));
+    const refreshed = await searchProvider(provider, providerParams, store, controller.signal);
+    const stale = slots.get(provider);
+    const failedRefresh = ['FAILED', 'RATE_LIMITED', 'TIMED_OUT'].includes(refreshed.status);
+    record(provider, stale?.status === 'STALE_CACHE' && failedRefresh ? stale : refreshed);
   });
 
   // Settles when every provider has answered; never rejects, because each task

@@ -2,9 +2,9 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Align — UK Tech Career Intelligence",
-  description: "Analyze your CV against UK tech market standards. Get ATS scores, keyword analysis, section ordering recommendations, and discover UK tech jobs with visa sponsorship intelligence.",
-  keywords: "Align, CV analyzer, ATS score, UK tech jobs, visa sponsorship, career intelligence",
+  title: "Align — Evidence-led UK career intelligence",
+  description: "Build a reusable Career Profile, check ATS readiness, compare your evidence with UK roles, discover vacancies, and generate truthful tailored CVs.",
+  keywords: "Align, career application intelligence, CV analysis, ATS analysis, UK jobs, Job Match, Career Profile, sponsorship evidence",
 };
 
 export default function RootLayout({

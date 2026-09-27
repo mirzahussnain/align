@@ -74,7 +74,7 @@ export async function runJobMatch(input: JobMatchInput): Promise<CVAnalysisResul
       aiAllowed: true,
     });
     const occupation = getOccupationProfile(classification.occupation);
-    const generated = await getJobMatchFeedbackWithProvenance(cv.text, jobRevision.description, occupation, classification);
+    const generated = await getJobMatchFeedbackWithProvenance(cv.text, jobRevision.description, occupation, classification, { userId: input.userId, operationId: input.operationId });
     if (!generated) throw new APIError('The Job Match provider did not return a valid result.', 502);
     const match = applyStructuredCandidateEvidence(generated.data, snapshotData);
     const result = analyzeCV(cv.text, cv.pageCount, { classification, profile: occupation });

@@ -539,7 +539,7 @@ export async function POST(request: Request) {
     // safe and a retry finalises/recovers it — never a second provider call).
     let persisted = false;
     try {
-      const firstRewrite = await rewriteCVWithProvenance(input);
+      const firstRewrite = await rewriteCVWithProvenance(input, { userId: session.user.id, operationId });
 
       // Provider failure spends no quota.
       if (!firstRewrite) {
@@ -641,7 +641,7 @@ export async function POST(request: Request) {
       durationFact,
       toolVocabulary: toolVocabularyFromRequirements(input.rewriteContext.requirements),
       rewrite: async (retryInput) => {
-        const retry = await rewriteCVWithProvenance(retryInput);
+        const retry = await rewriteCVWithProvenance(retryInput, { userId: session.user.id, operationId });
         if (!retry) return null;
         // A correction retry is held to the same provenance bar, with the same
         // deterministic salvage available so a single stray optional-skill ref does
