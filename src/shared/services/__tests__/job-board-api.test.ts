@@ -1,11 +1,14 @@
 import { describe, expect, it } from "vitest";
 import {
+  getNormalisedJobDetailsView,
   isUsableSnapshot,
   jobCard,
   safeUrl,
   snapshotFreshness,
   sponsorSummary,
 } from "@/shared/services/job-board-api";
+import { blankSponsorSignal } from "@/shared/services/job-normalisation";
+import type { NormalisedJob } from "@/shared/types/job";
 
 const now = new Date("2026-07-28T12:00:00.000Z");
 const snapshot = (
@@ -143,5 +146,57 @@ describe("Phase 10 job-board contract mapping", () => {
     expect(sponsorSummary("EXACT")).toEqual({ status: "MATCHED" });
     expect(sponsorSummary("AMBIGUOUS")).toEqual({ status: "AMBIGUOUS" });
     expect(sponsorSummary("NONE")).toEqual({ status: "NONE" });
+  });
+
+  it("projects buffered normalized content into a read-only details view", () => {
+    const job: NormalisedJob = {
+      source: "REED",
+      sourceJobId: "reed-1",
+      providerReferences: [{
+        provider: "REED",
+        sourceJobId: "reed-1",
+        identityStability: "STABLE",
+        sourceUrl: "https://jobs.example.test/1",
+        applicationUrl: "https://jobs.example.test/apply/1",
+      }],
+      canonicalUrl: "https://jobs.example.test/1",
+      title: "Support Engineer",
+      company: "Example Ltd",
+      locationText: "Birmingham, UK",
+      description: "Provide first-line support for colleagues across the organisation.",
+      descriptionAvailability: "FULL",
+      remoteType: "HYBRID",
+      sponsorSignal: blankSponsorSignal(),
+      eligibilityHints: [],
+      dedupeFingerprint: "support-engineer-example-birmingham",
+      canonicalJobId: "REED:reed-1",
+      fetchedAt: "2026-09-27T12:00:00.000Z",
+    };
+
+    const view = getNormalisedJobDetailsView(job);
+
+    expect(view).toMatchObject({
+      job: {
+        id: "REED:reed-1",
+        canonicalJobId: "REED:reed-1",
+        title: "Support Engineer",
+        saved: false,
+      },
+      description: {
+        text: job.description,
+        source: "PROVIDER_FULL",
+        completeness: "FULL",
+        hasReadableText: true,
+      },
+      applicationUrl: "https://jobs.example.test/apply/1",
+      hostedUrl: "https://jobs.example.test/1",
+      availability: "DISCOVERABLE",
+    });
+    expect(view.sourceProvenance).toEqual([{
+      provider: "REED",
+      providerJobId: "reed-1",
+      hostedUrl: "https://jobs.example.test/1",
+      applicationUrl: "https://jobs.example.test/apply/1",
+    }]);
   });
 });

@@ -4,6 +4,7 @@ import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { CheckMatchModal } from "@/features/job-board/components/CheckMatchModal";
+import { UPLOAD_POLICY } from "@/shared/policies";
 
 /**
  * Match preparation for an incomplete vacancy.
@@ -36,12 +37,14 @@ let fetchMock: ReturnType<typeof vi.fn>;
 const open = (
   completeness: "FULL" | "PARTIAL" | "EXTERNAL_ONLY",
   onDescriptionSaved = vi.fn(),
+  reference: { jobSnapshotId?: string; sessionId?: string } = {},
 ) => {
   render(
     <CheckMatchModal
       open
       onClose={() => {}}
-      jobId="snapshot-1"
+      canonicalJobId="canonical-1"
+      {...reference}
       jobTitle="IT Analyst"
       companyName="Alpha Ltd"
       descriptionCompleteness={completeness}
@@ -293,6 +296,37 @@ describe("saving a pasted description", () => {
  * nothing, and the analysis had not started.
  */
 describe("the analysis runs inside the modal", () => {
+  it("exposes every CV format allowed by the shared upload policy", async () => {
+    const user = userEvent.setup();
+    open("FULL");
+    await user.click(screen.getAllByRole("button", { name: /Continue/i })[0]);
+    await user.click(screen.getByRole("radio", { name: /Upload New CV/i }));
+
+    expect(
+      (document.querySelector('input[type="file"]') as HTMLInputElement).accept,
+    ).toBe(UPLOAD_POLICY.cv.fileInputAccept);
+  });
+
+  it("sends the canonical job, search session, and optional snapshot reference", async () => {
+    const user = userEvent.setup();
+    open("FULL", vi.fn(), {
+      jobSnapshotId: "snapshot-1",
+      sessionId: "session-1",
+    });
+    await reachDescriptionStep(user);
+    await user.click(screen.getByRole("button", { name: /Start Analysis/i }));
+
+    const call = fetchMock.mock.calls.find(([url]) =>
+      String(url).includes("match-preparation"),
+    );
+    expect(String(call?.[0])).toContain("/api/jobs/canonical-1/match-preparation");
+    expect(JSON.parse(String((call?.[1] as RequestInit).body))).toMatchObject({
+      canonicalJobId: "canonical-1",
+      jobSnapshotId: "snapshot-1",
+      sessionId: "session-1",
+    });
+  });
+
   it("blocks the CV step until a CV is actually chosen", async () => {
     fetchMock.mockImplementation(async (input: RequestInfo) => {
       const url = String(input);

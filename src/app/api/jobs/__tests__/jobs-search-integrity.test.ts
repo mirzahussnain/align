@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import type {
   NormalisedJob,
+  ProviderReference,
   ProviderSearchResult,
   SearchJobProvider,
 } from "@/shared/types/job";
@@ -24,11 +25,13 @@ vi.mock("@/shared/services/sponsor-registry", () => ({
 }));
 
 vi.mock("@/shared/services/job-search-view", () => ({
-  materialiseSearchJobCards: vi.fn(async (jobs: NormalisedJob[]) =>
-    jobs.map((item) => ({ ...item, id: item.canonicalJobId })),
+  projectSearchJobCards: vi.fn(async (jobs: NormalisedJob[]) =>
+    jobs.map((item) => ({
+      ...item,
+      id: item.canonicalJobId,
+      canonicalJobId: item.canonicalJobId,
+    })),
   ),
-  projectPublicSearchJobCards: (jobs: readonly NormalisedJob[]) =>
-    jobs.map((item) => ({ ...item, id: item.canonicalJobId })),
 }));
 
 const searchProvidersInteractive = vi.fn();
@@ -61,6 +64,10 @@ let restoreCache: () => void;
 
 let counter = 0;
 
+const stableReference = (
+  reference: Omit<ProviderReference, 'identityStability'>,
+): ProviderReference => ({ ...reference, identityStability: 'STABLE' });
+
 /** A minimal normalised vacancy. `remoteType` and title drive the route's filters. */
 function job(
   overrides: Partial<NormalisedJob> & { provider: SearchJobProvider },
@@ -71,7 +78,9 @@ function job(
     source: provider,
     sourceJobId: id,
     providerReferences: [
-      { provider, sourceJobId: id, sourceUrl: `https://example.com/${id}` },
+      stableReference(
+        { provider, sourceJobId: id, sourceUrl: `https://example.com/${id}` },
+      ),
     ],
     canonicalUrl: `https://example.com/${id}`,
     title: "Support Engineer",

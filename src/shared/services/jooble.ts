@@ -73,7 +73,7 @@ export async function searchJoobleJobs(
   const data: JoobleResponse = await response.json();
 
   const jobs: ProviderJob[] = (data.jobs || []).map((job, index) => ({
-    id: `jooble-${job.id || index}`,
+    id: `jooble-${job.id?.trim() || index}`,
     title: job.title,
     company: job.company || 'Company not specified',
     location: job.location || 'United Kingdom',
@@ -84,6 +84,7 @@ export async function searchJoobleJobs(
     url: job.link,
     postedDate: job.updated,
     source: 'jooble' as const,
+    identityStability: job.id?.trim() ? 'STABLE' as const : 'SESSION_ONLY' as const,
     contractType: job.type || null,
     isRemote: (job.location || '').toLowerCase().includes('remote'),
     hasSponsorship: false, // Jooble doesn't provide this

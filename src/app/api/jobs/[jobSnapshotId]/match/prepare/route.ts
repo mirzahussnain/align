@@ -1,14 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { auth } from '@/shared/lib/auth';
+import { getCacheStore } from '@/shared/lib/cache/cache-provider';
 import { loadProfileTarget, resolveProfileId } from '@/features/dashboard/data/load-profile';
-import { createMatchRequest } from '@/shared/services/job-snapshot';
+import { resolveDurableJobReference } from '@/shared/services/job-reference';
+import { createMatchRequest, ensurePersistedJob } from '@/shared/services/job-snapshot';
 import { assessAndPersistJobIntelligence } from '@/shared/services/job-intelligence-store';
 import { buildConfirmedCandidateFacts } from '@/shared/services/practical-compatibility-store';
 import { APIError, withErrorHandler } from '@/shared/utils/api-error';
 import { ANALYSIS_LIMITS } from '@/shared/policies';
 
 const Input = z.object({
+  canonicalJobId: z.string().min(1).max(512).optional(),
+  jobSnapshotId: z.string().min(1).max(128).optional(),
+  sessionId: z.string().min(1).max(128).optional(),
   profileId: z.string().optional(),
   partialDescriptionAccepted: z.boolean().default(false),
   descriptionOverride: z.string().trim().min(50).max(ANALYSIS_LIMITS.maxJobDescriptionCharacters).optional(),
@@ -21,7 +26,18 @@ export async function POST(request: NextRequest, context: RouteContext<'/api/job
     if (!parsed.success) throw new APIError(parsed.error.message, 400);
     const profileId = await resolveProfileId(session.user.id, parsed.data.profileId);
     if (!profileId) throw new APIError('Choose a Career Track before matching a vacancy.', 400);
-    const { jobSnapshotId } = await context.params;
+    const { jobSnapshotId: jobReference } = await context.params;
+    const explicitSnapshotId = parsed.data.jobSnapshotId
+      ?? (!parsed.data.canonicalJobId && !parsed.data.sessionId ? jobReference : undefined);
+    const resolution = await resolveDurableJobReference(getCacheStore(), {
+      canonicalJobId: parsed.data.canonicalJobId ?? jobReference,
+      ...(explicitSnapshotId ? { jobSnapshotId: explicitSnapshotId } : {}),
+      ...(parsed.data.sessionId ? { sessionId: parsed.data.sessionId } : {}),
+      userId: session.user.id,
+    });
+    const jobSnapshotId = resolution.kind === 'persisted'
+      ? resolution.jobSnapshotId
+      : (await ensurePersistedJob(resolution.job)).snapshot.id;
     const [track, candidateFacts] = await Promise.all([
       loadProfileTarget(session.user.id, profileId),
       buildConfirmedCandidateFacts(session.user.id, profileId),

@@ -100,6 +100,7 @@ export async function searchReedJobs(
     url: job.jobUrl,
     postedDate: job.date,
     source: 'reed' as const,
+    identityStability: 'STABLE' as const,
     contractType: job.isPermanent ? 'Permanent' : job.isContract ? 'Contract' : job.isTemporary ? 'Temporary' : null,
     isRemote: job.locationName.toLowerCase().includes('remote'),
     hasSponsorship: false,

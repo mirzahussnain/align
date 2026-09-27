@@ -8,6 +8,12 @@ vi.mock('@/shared/services/saved-job', () => ({
 vi.mock('@/shared/services/job-intelligence-store', () => ({
   assessAndPersistJobIntelligence: vi.fn(),
 }));
+vi.mock('@/shared/services/job-reference', () => ({
+  resolveDurableJobReference: vi.fn(async () => ({
+    kind: 'persisted',
+    jobSnapshotId: 'snapshot-1',
+  })),
+}));
 vi.mock('@/shared/lib/prisma', () => ({
   prisma: { savedJob: { findMany: vi.fn(async () => []) } },
 }));

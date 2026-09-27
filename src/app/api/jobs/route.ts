@@ -46,10 +46,13 @@ import {
   deduplicateJobs,
   searchProvidersInteractive,
 } from "@/shared/services/job-search";
-import { getAtsSnapshotProviderResults } from "@/shared/services/job-discovery";
 import {
-  materialiseSearchJobCards,
-  projectPublicSearchJobCards,
+  filterAtsJobsForSearch,
+  getAtsSnapshotProviderResults,
+  jobSearchRelevance,
+} from "@/shared/services/job-discovery";
+import {
+  projectSearchJobCards,
 } from "@/shared/services/job-search-view";
 import {
   logJobBoardEvent,
@@ -119,13 +122,13 @@ function canServeMorePages(
 const selectedProviders = (source: string): SearchJobProvider[] =>
   source === "all"
     ? [...listSearchProviders()]
+    : source === "direct_employer"
+      ? []
     : [source.toUpperCase() as SearchJobProvider];
 
 function relevance(job: NormalisedJob, query: string) {
-  const tokens = query.toLowerCase().split(/\s+/).filter(Boolean);
   return (
-    tokens.filter((token) => job.title.toLowerCase().includes(token)).length *
-      100 +
+    jobSearchRelevance(job, query) +
     (job.descriptionAvailability === "FULL" ? 10 : 0)
   );
 }
@@ -279,25 +282,41 @@ async function runSearch(
 }> {
   const { store, timings } = input;
 
-  const fanOut = await searchProvidersInteractive(params, input.providers, {
-    store,
-    timings,
-    pageByProvider: input.pageByProvider,
-    targetJobs: data.perPage,
-    // A refresh has no user waiting on it, so it is given the providers' full
-    // background budget instead of the ~1.5 s interactive deadline.
-    ...(input.interactive
-      ? {}
-      : { interactiveDeadlineMs: Number.MAX_SAFE_INTEGER }),
-  });
+  const fanOut = input.providers.length
+    ? await searchProvidersInteractive(params, input.providers, {
+        store,
+        timings,
+        pageByProvider: input.pageByProvider,
+        targetJobs: data.perPage,
+        // A refresh has no user waiting on it, so it is given the providers' full
+        // background budget instead of the ~1.5 s interactive deadline.
+        ...(input.interactive
+          ? {}
+          : { interactiveDeadlineMs: Number.MAX_SAFE_INTEGER }),
+      })
+    : {
+        results: [],
+        pendingProviders: [],
+        settle: async () => {},
+        abandon: () => {},
+      };
 
   // ATS is deliberately a single durable-snapshot query. No Greenhouse, Lever
   // or Ashby board endpoint is ever called on this interactive search path.
   // The query is public and identical for every user, so it is served from the
   // shared cache; per-user card state is merged much later, in `respond`.
-  const atsResults = await timings.measure("atsSnapshotMs", () =>
-    getAtsSnapshotProviderResults(new Date(), { store }),
-  );
+  const atsResults =
+    data.source === "all" || data.source === "direct_employer"
+      ? (await timings.measure("atsSnapshotMs", () =>
+          getAtsSnapshotProviderResults(new Date(), { store }),
+        )).map((result) => ({
+          ...result,
+          jobs: filterAtsJobsForSearch(result.jobs, {
+            query: data.query,
+            location: data.location,
+          }),
+        }))
+      : [];
   const providerResults: ProviderSearchResult[] = [
     ...fanOut.results,
     ...atsResults,
@@ -952,9 +971,9 @@ async function respond(input: {
 
   const jobs = input.userId
     ? await input.timings.measure("snapshotMs", () =>
-        materialiseSearchJobCards(input.jobs, input.userId, input.careerTrack),
+        projectSearchJobCards(input.jobs, input.userId, input.careerTrack),
       )
-    : projectPublicSearchJobCards(input.jobs);
+    : await projectSearchJobCards(input.jobs, null);
 
   return NextResponse.json({
     jobs,

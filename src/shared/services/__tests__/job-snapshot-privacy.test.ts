@@ -36,6 +36,25 @@ const sharedSnapshot = {
 describe('JobSnapshot privacy boundaries', () => {
   beforeEach(() => vi.clearAllMocks());
 
+  it('reuses an active preparation for the same snapshot, profile, and description', async () => {
+    const existing = { id: 'request-existing' };
+    prisma.jobSnapshot.findUnique.mockResolvedValue({
+      ...sharedSnapshot,
+      providerDescription: 'Provider description retained for matching',
+      descriptionAvailability: 'PARTIAL',
+    });
+    prisma.jobMatchRequest.findFirst.mockResolvedValue(existing);
+
+    await expect(createMatchRequest({
+      userId: 'user-a',
+      profileId: 'profile-a',
+      jobSnapshotId: 'shared-1',
+      partialDescriptionAccepted: true,
+    })).resolves.toBe(existing);
+
+    expect(prisma.jobMatchRequest.create).not.toHaveBeenCalled();
+  });
+
   it('stores a shared-vacancy description override only on the private match request', async () => {
     prisma.jobSnapshot.findUnique.mockResolvedValue(sharedSnapshot);
     prisma.jobMatchRequest.findFirst.mockResolvedValue(null);

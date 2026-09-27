@@ -9,6 +9,7 @@ import type { JobCardViewModel } from "@/features/job-board/lib/job-board";
 
 const card = (id: string, company: string): JobCardViewModel => ({
   id,
+  canonicalJobId: id,
   title: "IT Analyst",
   company: { displayName: company },
   location: "Birmingham",

@@ -22,8 +22,24 @@ import { greenhouseAdapter } from './greenhouse-adapter';
 import { leverAdapter } from './lever-adapter';
 import { ashbyAdapter } from './ashby-adapter';
 
-/** Employer-ATS adapters, registered per provider as each integration lands. */
-const EMPLOYER_ATS_ADAPTERS: Partial<Record<EmployerAtsProvider, EmployerAtsProviderAdapter>> = { GREENHOUSE: greenhouseAdapter as unknown as EmployerAtsProviderAdapter, LEVER: leverAdapter as unknown as EmployerAtsProviderAdapter, ASHBY: ashbyAdapter as unknown as EmployerAtsProviderAdapter };
+type BuiltInEmployerAtsAdapter =
+  | typeof greenhouseAdapter
+  | typeof leverAdapter
+  | typeof ashbyAdapter;
+
+/** Built-ins retain their concrete result contracts, including NormalisedJob references. */
+const BUILT_IN_EMPLOYER_ATS_ADAPTERS: Partial<
+  Record<EmployerAtsProvider, BuiltInEmployerAtsAdapter>
+> = {
+  GREENHOUSE: greenhouseAdapter,
+  LEVER: leverAdapter,
+  ASHBY: ashbyAdapter,
+};
+
+/** Future adapters must satisfy the provider-neutral contract at registration. */
+const REGISTERED_EMPLOYER_ATS_ADAPTERS: Partial<
+  Record<EmployerAtsProvider, EmployerAtsProviderAdapter>
+> = {};
 
 export function getProviderKind(provider: JobProvider): JobProviderKind {
   return JOB_PROVIDER_CAPABILITIES[provider].kind;
@@ -34,13 +50,17 @@ export function getSearchAdapter(provider: SearchJobProvider): SearchJobProvider
 }
 
 /** The adapter for an employer-ATS provider, or null when not yet implemented. */
-export function getEmployerAtsAdapter(provider: EmployerAtsProvider): EmployerAtsProviderAdapter | null {
-  return EMPLOYER_ATS_ADAPTERS[provider] ?? null;
+export function getEmployerAtsAdapter(
+  provider: EmployerAtsProvider
+): BuiltInEmployerAtsAdapter | EmployerAtsProviderAdapter | null {
+  return REGISTERED_EMPLOYER_ATS_ADAPTERS[provider]
+    ?? BUILT_IN_EMPLOYER_ATS_ADAPTERS[provider]
+    ?? null;
 }
 
 /** Register an employer-ATS adapter. Called by each integration at module load. */
 export function registerEmployerAtsAdapter(adapter: EmployerAtsProviderAdapter): void {
-  EMPLOYER_ATS_ADAPTERS[adapter.provider] = adapter;
+  REGISTERED_EMPLOYER_ATS_ADAPTERS[adapter.provider] = adapter;
 }
 
 export function listSearchProviders(): readonly SearchJobProvider[] {
@@ -58,5 +78,8 @@ export function listConfiguredSearchProviders(): SearchJobProvider[] {
 
 /** Employer-ATS providers with an implemented adapter. */
 export function listImplementedEmployerAtsProviders(): EmployerAtsProvider[] {
-  return EMPLOYER_ATS_PROVIDERS.filter((provider) => EMPLOYER_ATS_ADAPTERS[provider] !== undefined);
+  return EMPLOYER_ATS_PROVIDERS.filter((provider) =>
+    REGISTERED_EMPLOYER_ATS_ADAPTERS[provider] !== undefined
+      || BUILT_IN_EMPLOYER_ATS_ADAPTERS[provider] !== undefined
+  );
 }

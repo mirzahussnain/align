@@ -10,7 +10,7 @@ describe('Lever employer adapter', () => {
     const adapter = createLeverAdapter({ fetch: async () => response(200, [posting]) });
     const result = await adapter.fetchBoard(source);
     expect(result).toMatchObject({ rawReceived: 1, invalidUrls: 0, jobs: [{ source: 'LEVER', sourceJobId: 'one', remoteType: 'HYBRID', departments: ['Platform', 'Engineering'], employerSourceId: 'source-1', companyRecordId: 'company-1' }] });
-    expect(result.jobs[0].providerReferences[0]).toMatchObject({ sourceUrl: posting.hostedUrl, applicationUrl: posting.applyUrl });
+    expect(result.jobs[0].providerReferences[0]).toMatchObject({ sourceUrl: posting.hostedUrl, applicationUrl: posting.applyUrl, identityStability: 'STABLE' });
     expect(result.jobs[0].description).toContain('• Own reliability');
     expect(result.jobs[0].description).not.toContain('alert');
   });

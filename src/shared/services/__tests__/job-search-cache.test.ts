@@ -50,6 +50,7 @@ function providerJob(source: ProviderJob['source'], overrides: Partial<ProviderJ
     url: `https://example.com/${id}`,
     postedDate: new Date().toISOString(),
     source,
+    identityStability: 'STABLE',
     contractType: null,
     isRemote: false,
     hasSponsorship: false,

@@ -17,6 +17,7 @@ export type SearchJobProvider = 'ADZUNA' | 'REED' | 'JOOBLE' | 'NHS_JOBS';
 export type EmployerAtsProvider = 'GREENHOUSE' | 'LEVER' | 'SMARTRECRUITERS' | 'ASHBY';
 
 export type JobProvider = SearchJobProvider | EmployerAtsProvider;
+export type ProviderIdentityStability = 'STABLE' | 'SESSION_ONLY';
 
 export const SEARCH_JOB_PROVIDERS = ['ADZUNA', 'REED', 'JOOBLE', 'NHS_JOBS'] as const satisfies readonly SearchJobProvider[];
 export const EMPLOYER_ATS_PROVIDERS = ['GREENHOUSE', 'LEVER', 'SMARTRECRUITERS', 'ASHBY'] as const satisfies readonly EmployerAtsProvider[];
@@ -53,6 +54,7 @@ export interface SponsorSignal {
 export interface ProviderReference {
   provider: JobProvider;
   sourceJobId: string;
+  identityStability: ProviderIdentityStability;
   /** The provider-hosted posting page, used for provenance and re-verification. */
   sourceUrl: string;
   /** A separately validated direct application URL, when the provider supplies one. */
@@ -90,6 +92,7 @@ export interface ProviderJob {
   id: string; title: string; company: string; location: string; salary: string | null;
   salaryMin: number | null; salaryMax: number | null; description: string; url: string; postedDate: string;
   source: Lowercase<JobProvider>; contractType: string | null; isRemote: boolean; hasSponsorship: boolean;
+  identityStability: ProviderIdentityStability;
   employerSourceId?: string; companyRecordId?: string; departments?: string[]; offices?: string[];
   /** Provider-hosted job detail page, when `url` is the direct application page. */
   hostedUrl?: string;

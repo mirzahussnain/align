@@ -1,9 +1,9 @@
 import { prisma } from '../lib/prisma.ts';
 import { greenhouseAdapter } from './job-providers/greenhouse-adapter.ts';
-import { persistTrustedProviderJob } from './job-snapshot.ts';
+import { ensurePersistedJob } from './job-snapshot.ts';
 import { ensureCompanySponsorEvidence } from './company-sponsor-evidence.ts';
 
-export type GreenhouseRefreshSummary = { attempted: number; successful: number; empty: number; failed: number; timedOut: number; jobsRetrieved: number; uniqueJobsPersisted: number; duplicateJobsMerged: number; invalidUrls: number; invalidJobRecords: number; invalidUrlReasons: Record<string, number>; malformedPayloads: number; durationMs: number; perSourceFailures: Record<string, number>; sources: Array<{ sourceId: string; identifier: string; status: 'SUCCESS' | 'EMPTY' | 'FAILED'; jobs: number; errorCode?: string; durationMs: number }> };
+export type GreenhouseRefreshSummary = { attempted: number; successful: number; empty: number; failed: number; timedOut: number; jobsRetrieved: number; uniqueJobsPersisted: number; duplicateJobsMerged: number; created: number; updated: number; reactivated: number; unchanged: number; invalidUrls: number; invalidJobRecords: number; invalidUrlReasons: Record<string, number>; malformedPayloads: number; durationMs: number; perSourceFailures: Record<string, number>; sources: Array<{ sourceId: string; identifier: string; status: 'SUCCESS' | 'EMPTY' | 'FAILED'; jobs: number; errorCode?: string; durationMs: number }> };
 const chunks = <T>(values: T[], size: number) => Array.from({ length: Math.ceil(values.length / size) }, (_, index) => values.slice(index * size, (index + 1) * size));
 const errorCodeOf = (error: unknown) => error instanceof Error ? error.message.slice(0, 120) : 'GREENHOUSE_UNAVAILABLE';
 
@@ -12,13 +12,13 @@ export async function refreshGreenhouseEmployerSources(input: { sourceIds?: stri
   const started = Date.now();
   const where = { provider: 'GREENHOUSE' as const, verificationStatus: 'VERIFIED' as const, enabled: true, ...(input.sourceIds?.length ? { id: { in: input.sourceIds } } : {}), ...(input.companyRecordId ? { companyRecordId: input.companyRecordId } : {}) };
   const sources = await prisma.employerJobSource.findMany({ where, include: { companyRecord: { select: { id: true, displayName: true, websiteUrl: true, careersUrl: true } } }, orderBy: input.limit ? [{ lastAttemptedAt: { sort: 'asc', nulls: 'first' } }, { providerIdentifier: 'asc' }] : { providerIdentifier: 'asc' }, ...(input.limit ? { take: Math.max(1, Math.min(input.limit, 50)) } : {}) });
-  const summary: GreenhouseRefreshSummary = { attempted: sources.length, successful: 0, empty: 0, failed: 0, timedOut: 0, jobsRetrieved: 0, uniqueJobsPersisted: 0, duplicateJobsMerged: 0, invalidUrls: 0, invalidJobRecords: 0, invalidUrlReasons: {}, malformedPayloads: 0, durationMs: 0, perSourceFailures: {}, sources: [] };
+  const summary: GreenhouseRefreshSummary = { attempted: sources.length, successful: 0, empty: 0, failed: 0, timedOut: 0, jobsRetrieved: 0, uniqueJobsPersisted: 0, duplicateJobsMerged: 0, created: 0, updated: 0, reactivated: 0, unchanged: 0, invalidUrls: 0, invalidJobRecords: 0, invalidUrlReasons: {}, malformedPayloads: 0, durationMs: 0, perSourceFailures: {}, sources: [] };
   const persisted = new Set<string>(); let cursor = 0; const workers = Math.max(1, Math.min(input.concurrency ?? 3, 5));
   async function worker() { while (cursor < sources.length) {
     const source = sources[cursor++]; const itemStarted = Date.now(); const attemptedAt = new Date();
     try {
       const result = await greenhouseAdapter.fetchBoard(source);
-      for (const batch of chunks(result.jobs, 20)) await Promise.all(batch.map(async (job) => { const existed = persisted.has(job.canonicalJobId); persisted.add(job.canonicalJobId); await persistTrustedProviderJob(job); if (existed) summary.duplicateJobsMerged += 1; else summary.uniqueJobsPersisted += 1; }));
+      for (const batch of chunks(result.jobs, 20)) await Promise.all(batch.map(async (job) => { const existed = persisted.has(job.canonicalJobId); persisted.add(job.canonicalJobId); const persistedJob = await ensurePersistedJob(job); summary[persistedJob.outcome.toLowerCase() as 'created' | 'updated' | 'reactivated' | 'unchanged'] += 1; if (existed) summary.duplicateJobsMerged += 1; else summary.uniqueJobsPersisted += 1; }));
       await prisma.employerJobSource.update({ where: { id: source.id }, data: { lastAttemptedAt: attemptedAt, lastSuccessfulSyncAt: new Date(), lastErrorCode: null, lastErrorAt: null } });
       // Employer-direct ingestion is the cheapest moment to keep register
       // evidence current: the company is already known and the check is a no-op

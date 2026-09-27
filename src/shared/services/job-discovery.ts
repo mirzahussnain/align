@@ -22,6 +22,58 @@ type SnapshotRow = {
   contractType: string | null; employmentType: string | null; providerDescription?: string | null; descriptionAvailability: 'FULL' | 'PARTIAL' | 'EXTERNAL_ONLY'; postedAt: Date | null; expiresAt: Date | null; lastSeenAt: Date; fetchedAt: Date; vacancySponsorshipSignal: unknown;
   employerSource: { provider: DiscoveryAtsProvider } | null; providerReferences: Array<{ provider: JobProvider; providerJobId: string; providerUrl: string; applicationUrl: string | null }>;
 };
+
+const SEARCH_STOP_WORDS = new Set([
+  'a', 'an', 'and', 'at', 'for', 'in', 'of', 'on', 'or', 'the', 'to', 'with',
+]);
+
+export function normaliseSearchTokens(value: string): string[] {
+  return [
+    ...new Set(
+      value
+        .normalize('NFKD')
+        .toLowerCase()
+        .match(/[\p{L}\p{N}]+/gu)
+        ?.filter((token) => token.length > 1 && !SEARCH_STOP_WORDS.has(token)) ?? [],
+    ),
+  ];
+}
+
+export function jobSearchRelevance(job: NormalisedJob, query: string): number {
+  const queryTokens = normaliseSearchTokens(query);
+  if (!queryTokens.length) return 0;
+  const titleTokens = new Set(normaliseSearchTokens(job.title));
+  const allTokens = new Set(normaliseSearchTokens([
+    job.title,
+    job.company,
+    ...(job.departments ?? []),
+    ...(job.offices ?? []),
+    job.description ?? '',
+  ].join(' ')));
+  return queryTokens.reduce(
+    (score, token) => score + (titleTokens.has(token) ? 100 : allTokens.has(token) ? 25 : 0),
+    0,
+  );
+}
+
+export function filterAtsJobsForSearch(
+  jobs: readonly NormalisedJob[],
+  input: { query: string; location: string },
+): NormalisedJob[] {
+  const locationTokens = normaliseSearchTokens(input.location);
+  return jobs.filter((job) => {
+    if (jobSearchRelevance(job, input.query) <= 0) return false;
+    if (!locationTokens.length || job.remoteType === 'REMOTE') return true;
+    const jobLocationTokens = new Set(normaliseSearchTokens([
+      job.locationText,
+      job.city ?? '',
+      job.region ?? '',
+      job.country ?? '',
+      ...(job.offices ?? []),
+    ].join(' ')));
+    return locationTokens.some((token) => jobLocationTokens.has(token));
+  });
+}
 const asNumber = (value: SnapshotRow['salaryMin']) => value === null ? undefined : typeof value === 'number' ? value : value.toNumber();
 const validUrl = (value: string | null | undefined) => { if (!value) return undefined; try { const url = new URL(value); return url.protocol === 'https:' || url.protocol === 'http:' ? url.toString() : undefined; } catch { return undefined; } };
 const remote = (value: string | null): NormalisedJob['remoteType'] => value === 'REMOTE' || value === 'HYBRID' || value === 'ONSITE' ? value : 'UNKNOWN';
@@ -31,7 +83,7 @@ function snapshotToJob(row: SnapshotRow): NormalisedJob | null {
   const provider = row.employerSource?.provider;
   const primary = row.providerReferences.find((reference) => reference.provider === provider && validUrl(reference.providerUrl)) ?? row.providerReferences.find((reference) => validUrl(reference.providerUrl));
   if (!provider || !primary) return null;
-  const refs: ProviderReference[] = row.providerReferences.flatMap((reference) => { const sourceUrl = validUrl(reference.providerUrl); if (!sourceUrl) return []; const applicationUrl = validUrl(reference.applicationUrl); return [{ provider: reference.provider, sourceJobId: reference.providerJobId, sourceUrl, ...(applicationUrl ? { applicationUrl } : {}) }]; });
+  const refs: ProviderReference[] = row.providerReferences.flatMap((reference) => { const sourceUrl = validUrl(reference.providerUrl); if (!sourceUrl) return []; const applicationUrl = validUrl(reference.applicationUrl); return [{ provider: reference.provider, sourceJobId: reference.providerJobId, identityStability: 'STABLE', sourceUrl, ...(applicationUrl ? { applicationUrl } : {}) }]; });
   if (!refs.length) return null;
   const description = row.providerDescription ?? undefined; const location = normaliseLocation(row.locationText ?? '');
   const sponsor = row.vacancySponsorshipSignal && typeof row.vacancySponsorshipSignal === 'object' ? { ...blankSponsorSignal(), ...(row.vacancySponsorshipSignal as Partial<NormalisedJob['sponsorSignal']>) } : blankSponsorSignal();
@@ -44,14 +96,9 @@ function snapshotToJob(row: SnapshotRow): NormalisedJob | null {
  *
  * THREE THINGS CHANGED HERE, ALL MEASURED AGAINST THE SAME QUERY.
  *
- * 1. NO DESCRIPTIONS. `include: { providerReferences: true }` pulled every
- *    column, and `providerDescription` holds whole job adverts. At catalogue
- *    scale that is megabytes of text transferred, parsed and discarded on every
- *    single search, because nothing on a result CARD renders a description. The
- *    select is now explicit and description-free. Persistence is unaffected: a
- *    NormalisedJob with no description makes `persistTrustedProviderJob`
- *    retain the stored text rather than overwrite it, and identity dedupe between
- *    two employer-direct requisitions never consults description similarity.
+ * 1. EXPLICIT PROJECTION. The query selects only discovery fields. Provider
+ *    description is included because ATS eligibility may use a meaningful token
+ *    that is absent from the title; user-pasted descriptions are never selected.
  *
  * 2. UK SCOPE. There was no geographic predicate whatsoever, so every foreign
  *    requisition on a verified board entered UK Discover. Scope is applied in two
@@ -106,7 +153,8 @@ export async function getAtsSnapshotProviderResults(
         canonicalJobId: true, title: true, employerName: true, normalisedEmployerName: true, companyRecordId: true, employerSourceId: true,
         locationText: true, city: true, region: true, country: true, workStyle: true,
         salaryMin: true, salaryMax: true, salaryCurrency: true, salaryPeriod: true, salaryText: true,
-        contractType: true, employmentType: true, descriptionAvailability: true,
+        contractType: true, employmentType: true, providerDescription: true,
+        descriptionAvailability: true,
         postedAt: true, expiresAt: true, lastSeenAt: true, fetchedAt: true, vacancySponsorshipSignal: true,
         employerSource: { select: { provider: true } },
         providerReferences: { select: { provider: true, providerJobId: true, providerUrl: true, applicationUrl: true } },

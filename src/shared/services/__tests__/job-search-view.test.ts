@@ -3,21 +3,24 @@ import type { NormalisedJob } from "@/shared/types/job";
 import { blankSponsorSignal } from "@/shared/services/job-normalisation";
 
 const findMany = vi.fn(async () => [] as Array<{ jobSnapshotId: string }>);
-// The search path now materialises a whole page in one batched call instead of
-// one round trip per card, so this is the boundary the view is mocked at.
-const materialiseTrustedProviderSnapshotIds = vi.fn(
+const findExistingJobSnapshots = vi.fn(
   async (jobs: readonly NormalisedJob[]) =>
-    new Map(jobs.map((job) => [job.canonicalJobId, `snapshot-${job.sourceJobId}`])),
+    new Map(
+      jobs.map((job) => [
+        job.canonicalJobId,
+        { id: `snapshot-${job.sourceJobId}`, canonicalJobId: job.dedupeFingerprint },
+      ]),
+    ),
 );
 
 vi.mock("@/shared/lib/prisma", () => ({
   prisma: { savedJob: { findMany } },
 }));
 vi.mock("@/shared/services/job-snapshot", () => ({
-  materialiseTrustedProviderSnapshotIds,
+  findExistingJobSnapshots,
 }));
 
-const { materialiseSearchJobCards, projectPublicSearchJobCards } = await import(
+const { projectSearchJobCards } = await import(
   "@/shared/services/job-search-view"
 );
 
@@ -33,6 +36,7 @@ function vacancy(
       {
         provider: "REED",
         sourceJobId,
+        identityStability: 'STABLE',
         sourceUrl: `https://example.test/${sourceJobId}`,
       },
     ],
@@ -53,38 +57,45 @@ function vacancy(
 beforeEach(() => {
   findMany.mockReset();
   findMany.mockResolvedValue([]);
-  materialiseTrustedProviderSnapshotIds.mockClear();
+  findExistingJobSnapshots.mockClear();
 });
 
-describe("search result materialisation", () => {
-  it("projects anonymous cards without creating durable snapshots", () => {
-    const [card] = projectPublicSearchJobCards([vacancy("public", "NHS Trust")]);
+describe("search result projection", () => {
+  it("projects anonymous cards with canonical identity", async () => {
+    findExistingJobSnapshots.mockResolvedValueOnce(new Map());
+    const [card] = await projectSearchJobCards(
+      [vacancy("public", "NHS Trust")],
+      null,
+    );
     expect(card.id).toBe("canonical-public");
+    expect(card.canonicalJobId).toBe("canonical-public");
+    expect(card).not.toHaveProperty("jobSnapshotId");
     expect(card.fullDescriptionExternalUrl).toBe("https://example.test/public");
     expect(card.saved).toBe(false);
     expect(card).not.toHaveProperty("careerTrackRelevance");
-    expect(materialiseTrustedProviderSnapshotIds).not.toHaveBeenCalled();
     expect(findMany).not.toHaveBeenCalled();
   });
 
-  it("gives equal-title jobs distinct durable snapshot ids", async () => {
-    const cards = await materialiseSearchJobCards(
+  it("keeps equal-title card identity canonical while exposing durable metadata", async () => {
+    const cards = await projectSearchJobCards(
       [vacancy("one", "Alpha Ltd"), vacancy("two", "Beta Ltd")],
       "user-1",
     );
 
     expect(cards.map((card) => card.id)).toEqual([
+      "canonical-one",
+      "canonical-two",
+    ]);
+    expect(cards.map((card) => card.jobSnapshotId)).toEqual([
       "snapshot-one",
       "snapshot-two",
     ]);
     expect(new Set(cards.map((card) => card.id)).size).toBe(2);
-    // ONE batched call for the page, not one per card. A fifteen-result page
-    // previously cost sixty-plus queries on the critical path of every search.
-    expect(materialiseTrustedProviderSnapshotIds).toHaveBeenCalledTimes(1);
+    expect(findExistingJobSnapshots).toHaveBeenCalledTimes(1);
   });
 
   it("returns API-provided relevance only when a Career Track is supplied", async () => {
-    const [withTrack] = await materialiseSearchJobCards(
+    const [withTrack] = await projectSearchJobCards(
       [vacancy("one", "Alpha Ltd")],
       "user-1",
       {
@@ -93,7 +104,7 @@ describe("search result materialisation", () => {
         workStyle: "HYBRID",
       },
     );
-    const [withoutTrack] = await materialiseSearchJobCards(
+    const [withoutTrack] = await projectSearchJobCards(
       [vacancy("two", "Beta Ltd")],
       "user-1",
     );
@@ -106,15 +117,15 @@ describe("search result materialisation", () => {
     // The badge must never be derived in React from `freshness` (snapshot age)
     // or from text length. The pipeline's own verdict is carried through
     // verbatim, whatever it is.
-    const [partial] = await materialiseSearchJobCards(
+    const [partial] = await projectSearchJobCards(
       [vacancy("one", "Alpha Ltd", "PARTIAL")],
       "user-1",
     );
-    const [external] = await materialiseSearchJobCards(
+    const [external] = await projectSearchJobCards(
       [vacancy("two", "Beta Ltd", "EXTERNAL_ONLY")],
       "user-1",
     );
-    const [full] = await materialiseSearchJobCards(
+    const [full] = await projectSearchJobCards(
       [vacancy("three", "Gamma Ltd", "FULL")],
       "user-1",
     );
@@ -129,7 +140,7 @@ describe("search result materialisation", () => {
 
   it("maps saved state by snapshot id rather than title", async () => {
     findMany.mockResolvedValue([{ jobSnapshotId: "snapshot-two" }]);
-    const cards = await materialiseSearchJobCards(
+    const cards = await projectSearchJobCards(
       [vacancy("one", "Alpha Ltd"), vacancy("two", "Beta Ltd")],
       "user-1",
     );

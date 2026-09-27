@@ -36,6 +36,7 @@ vi.mock("@/features/dashboard/components/DashboardTopBar", () => ({
 
 const card = (id: string, title = "IT Analyst"): JobCardViewModel => ({
   id,
+  canonicalJobId: id,
   title,
   company: { id: "company-1", displayName: "Example Ltd" },
   location: "Birmingham",
@@ -129,7 +130,7 @@ describe("authenticated Job Board API wiring", () => {
             profiles: [],
             defaultSearch: { query: "", location: "" },
           });
-        if (url === "/api/jobs/snapshot-42")
+        if (url === "/api/jobs/snapshot-42?jobSnapshotId=snapshot-42")
           return response({
             ...details("snapshot-42"),
             applicationUrl: "https://jobs.example.test/apply/42",
@@ -143,7 +144,7 @@ describe("authenticated Job Board API wiring", () => {
     expect(
       await screen.findByText("A durable description."),
     ).toBeInTheDocument();
-    expect(urls).toContain("/api/jobs/snapshot-42");
+    expect(urls).toContain("/api/jobs/snapshot-42?jobSnapshotId=snapshot-42");
     expect(
       screen.getByRole("link", { name: /Apply for IT Analyst/ }),
     ).toHaveAttribute("href", "https://jobs.example.test/apply/42");
@@ -385,6 +386,57 @@ describe("authenticated Job Board API wiring", () => {
       screen.getByText(/Select a vacancy to review its details/),
     ).toBeInTheDocument();
     replaceState.mockRestore();
+  });
+
+  it("saves an ephemeral card with its session reference then switches to the durable id", async () => {
+    navigation.search = "q=analyst";
+    const calls: Array<{ url: string; init?: RequestInit }> = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        calls.push({ url, init });
+        if (url === "/api/jobs/bootstrap") {
+          return response({ profiles: [], defaultSearch: { query: "", location: "" } });
+        }
+        if (url.startsWith("/api/jobs?") && !url.includes("/save")) {
+          return response({
+            jobs: [card("canonical-1", "Ephemeral result")],
+            sessionId: "session-1",
+            meta: { hasMore: false },
+          });
+        }
+        if (url === "/api/jobs/canonical-1/save" && init?.method === "POST") {
+          return response({ saved: true, jobSnapshotId: "snapshot-1" });
+        }
+        if (url === "/api/jobs/snapshot-1/save" && init?.method === "DELETE") {
+          return response({ saved: false, jobSnapshotId: "snapshot-1" });
+        }
+        throw new Error(`Unexpected URL: ${url}`);
+      }),
+    );
+    const user = userEvent.setup();
+
+    render(<DiscoverBoard />);
+    await screen.findByText("Ephemeral result");
+    await user.click(screen.getByRole("button", { name: "Save Ephemeral result" }));
+
+    await waitFor(() =>
+      expect(calls.some(({ url, init }) => {
+        const body = JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>;
+        return url === "/api/jobs/canonical-1/save" &&
+          init?.method === "POST" &&
+          body.sessionId === "session-1" &&
+          body.canonicalJobId === "canonical-1";
+      })).toBe(true),
+    );
+
+    await user.click(screen.getByRole("button", { name: "Unsave Ephemeral result" }));
+    await waitFor(() =>
+      expect(calls.some(({ url, init }) =>
+        url === "/api/jobs/snapshot-1/save" && init?.method === "DELETE",
+      )).toBe(true),
+    );
   });
 
   it("rolls a Saved-row unsave back when the shared mutation fails", async () => {

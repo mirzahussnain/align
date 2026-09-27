@@ -37,7 +37,6 @@ vi.mock('@/shared/policies', async (importOriginal) => ({
 }));
 
 import { UploadStep } from '../UploadStep';
-import JobMatchPreparation from '@/features/jobs/components/JobMatchPreparation';
 import PublicAtsDemo from '@/features/cv-analyzer/components/PublicAtsDemo';
 
 afterEach(cleanup);
@@ -68,22 +67,6 @@ describe('CV file-input format policy', () => {
     />);
 
     expect(container.querySelector<HTMLInputElement>('#onboarding-cv-file')?.accept)
-      .toBe(expectedAccept);
-  });
-
-  it('exposes every policy format from the Job Match CV input', () => {
-    const { container } = render(<JobMatchPreparation
-      jobSnapshotId="job-1"
-      title="Data Analyst"
-      employerName="Example Ltd"
-      providerDescription="A complete role description"
-      descriptionAvailability="FULL"
-      profiles={[{ profileId: 'profile-1', label: 'Data' }]}
-      usage={null}
-      onClose={vi.fn()}
-    />);
-
-    expect(container.querySelector<HTMLInputElement>('input[type="file"]')?.accept)
       .toBe(expectedAccept);
   });
 

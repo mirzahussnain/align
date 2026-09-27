@@ -5,7 +5,7 @@
  */
 import { NextResponse } from 'next/server';
 
-export type ApiErrorCode = 'UNAUTHENTICATED' | 'FORBIDDEN' | 'NOT_FOUND' | 'INVALID_REQUEST' | 'PROVIDER_UNAVAILABLE' | 'STALE_DESCRIPTION' | 'DESCRIPTION_INCOMPLETE' | 'RATE_LIMITED' | 'INTERNAL_ERROR';
+export type ApiErrorCode = 'UNAUTHENTICATED' | 'FORBIDDEN' | 'NOT_FOUND' | 'INVALID_REQUEST' | 'PROVIDER_UNAVAILABLE' | 'STALE_DESCRIPTION' | 'DESCRIPTION_INCOMPLETE' | 'EPHEMERAL_JOB_EXPIRED' | 'JOB_IDENTITY_UNSTABLE' | 'RATE_LIMITED' | 'INTERNAL_ERROR';
 export interface ApiErrorResponse { error: { code: ApiErrorCode | string; message: string; retryable: boolean; field?: string }; }
 export function apiErrorCodeForStatus(status: number): ApiErrorCode { if (status === 401) return 'UNAUTHENTICATED'; if (status === 403) return 'FORBIDDEN'; if (status === 404) return 'NOT_FOUND'; if (status === 429) return 'RATE_LIMITED'; if (status >= 400 && status < 500) return 'INVALID_REQUEST'; return 'INTERNAL_ERROR'; }
 
