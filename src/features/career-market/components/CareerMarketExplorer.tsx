@@ -162,58 +162,86 @@ export default function CareerMarketExplorer() {
       : 0,
   }));
   return (
-    <div className="space-y-7">
-      <form
-        onSubmit={submit}
-        className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5"
+    <>
+      <section
+        data-testid="career-market-search-chapter"
+        className="relative overflow-hidden border-b border-violet-100 pt-24 [background:radial-gradient(circle_at_16%_78%,rgba(186,230,253,0.95),transparent_31%),radial-gradient(circle_at_72%_105%,rgba(216,180,254,0.88),transparent_34%),linear-gradient(108deg,#f7f6ff_0%,#eef6ff_48%,#fff7fc_100%)]"
       >
-        <div className="grid gap-3 md:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)_auto]">
-          <label className="text-xs font-semibold text-slate-600">
-            Role or occupation
-            <input
-              value={role}
-              onChange={(event) => setRole(event.target.value)}
-              placeholder="Analyst, nurse, project manager"
-              className="mt-2 min-h-12 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 text-sm text-slate-950 outline-none focus:border-violet-500 focus:bg-white focus:ring-4 focus:ring-violet-100"
-            />
-          </label>
-          <label className="text-xs font-semibold text-slate-600">
-            Location
-            <input
-              value={location}
-              onChange={(event) => setLocation(event.target.value)}
-              placeholder="UK, Leeds, London"
-              className="mt-2 min-h-12 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 text-sm text-slate-950 outline-none focus:border-violet-500 focus:bg-white focus:ring-4 focus:ring-violet-100"
-            />
-          </label>
-          <button
-            disabled={loading || role.trim().length < 2}
-            className="mt-auto inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-slate-950 px-6 text-sm font-semibold text-white hover:bg-slate-800 focus:outline-none focus:ring-4 focus:ring-violet-100 disabled:opacity-50"
+        <div className="relative mx-auto max-w-7xl px-4 py-10 sm:px-6 sm:py-12 lg:px-8">
+          <div className="mx-auto max-w-3xl text-center">
+            <h1 className="text-balance text-3xl font-semibold tracking-[-0.035em] text-slate-950 sm:text-4xl">
+              UK Career Market
+            </h1>
+            <p className="mx-auto mt-3 max-w-2xl text-sm leading-6 text-slate-700 sm:text-base">
+              Explore current pay, vacancies, employers, regions, work styles
+              and opportunities for your role.
+            </p>
+          </div>
+          <form
+            onSubmit={submit}
+            className="mx-auto mt-7 max-w-4xl rounded-2xl bg-white p-2.5 shadow-[0_16px_40px_rgba(74,63,159,0.16)]"
           >
-            {loading ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <Search className="h-4 w-4" />
-            )}
-            Explore market
-          </button>
+            <div className="grid gap-2.5 md:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_auto]">
+              <label className="relative">
+                <span className="sr-only">Role or occupation</span>
+                <Search
+                  aria-hidden="true"
+                  className="pointer-events-none absolute left-4 top-1/2 h-4.5 w-4.5 -translate-y-1/2 text-violet-500"
+                />
+                <input
+                  value={role}
+                  onChange={(event) => setRole(event.target.value)}
+                  placeholder="Role or occupation"
+                  className="min-h-12 w-full rounded-xl border border-slate-200 bg-slate-50 !pl-12 !pr-4 text-sm text-slate-950 outline-none placeholder:text-slate-500 focus:border-violet-500 focus:bg-white focus:ring-4 focus:ring-violet-100"
+                />
+              </label>
+              <label className="relative">
+                <span className="sr-only">Location</span>
+                <MapPin
+                  aria-hidden="true"
+                  className="pointer-events-none absolute left-4 top-1/2 h-4.5 w-4.5 -translate-y-1/2 text-violet-500"
+                />
+                <input
+                  value={location}
+                  onChange={(event) => setLocation(event.target.value)}
+                  placeholder="UK, town or city"
+                  className="min-h-12 w-full rounded-xl border border-slate-200 bg-slate-50 !pl-12 !pr-4 text-sm text-slate-950 outline-none placeholder:text-slate-500 focus:border-violet-500 focus:bg-white focus:ring-4 focus:ring-violet-100"
+                />
+              </label>
+              <button
+                disabled={loading || role.trim().length < 2}
+                className="inline-flex min-h-12 items-center justify-center gap-2.5 rounded-xl bg-violet-600 px-6 text-sm font-semibold text-white shadow-[0_8px_24px_rgba(103,87,217,0.22)] transition-[background-color,transform] hover:bg-violet-700 active:scale-[0.98] focus:outline-none focus:ring-4 focus:ring-violet-200 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {loading ? (
+                  <Loader2 aria-hidden="true" className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Search aria-hidden="true" className="h-4 w-4" />
+                )}
+                Explore market
+              </button>
+            </div>
+          </form>
+          <div className="mx-auto mt-5 flex max-w-4xl flex-wrap items-center justify-center gap-2 text-center">
+            <span className="mr-1 text-xs font-semibold text-slate-600">
+              Popular roles
+            </span>
+            {POPULAR_ROLES.map((item) => (
+              <button
+                key={item}
+                type="button"
+                onClick={() => setRole(item)}
+                className={`min-h-9 rounded-xl border px-3 text-xs font-semibold transition-[background-color,border-color,color,transform] active:scale-[0.98] ${role === item ? "border-violet-300 bg-violet-50 text-violet-700" : "border-white/80 bg-white/70 text-violet-800 hover:border-violet-200 hover:bg-white"}`}
+              >
+                {item}
+              </button>
+            ))}
+          </div>
         </div>
-        <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-slate-100 pt-4">
-          <span className="mr-1 text-xs font-semibold text-slate-500">
-            Popular roles
-          </span>
-          {POPULAR_ROLES.map((item) => (
-            <button
-              key={item}
-              type="button"
-              onClick={() => setRole(item)}
-              className={`min-h-9 rounded-xl border px-3 text-xs font-semibold transition ${role === item ? "border-violet-300 bg-violet-50 text-violet-700" : "border-slate-200 bg-white text-violet-800 hover:border-violet-200"}`}
-            >
-              {item}
-            </button>
-          ))}
-        </div>
-      </form>
+      </section>
+      <section
+        data-testid="career-market-results"
+        className="relative mx-auto max-w-7xl space-y-7 px-4 pb-16 pt-8 sm:px-6 lg:px-8"
+      >
       {error && (
         <p
           role="alert"
@@ -480,6 +508,7 @@ export default function CareerMarketExplorer() {
           </details>
         </>
       )}
-    </div>
+      </section>
+    </>
   );
 }

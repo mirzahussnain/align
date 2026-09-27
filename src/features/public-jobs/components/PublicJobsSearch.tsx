@@ -142,24 +142,27 @@ export default function PublicJobsSearch({
     setSortBy("relevance");
   }
 
-  const filters = (
-    <div className="space-y-5">
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
-          <SlidersHorizontal
-            className="h-4 w-4 text-violet-600"
-            aria-hidden="true"
-          />
-          <h2 className="font-semibold text-slate-950">Filter results</h2>
-        </div>
-        <button
-          type="button"
-          onClick={resetFilters}
-          className="text-xs font-semibold text-violet-700 hover:text-violet-900"
-        >
-          Reset
-        </button>
+  const filterHeader = (
+    <div className="flex items-center justify-between gap-3">
+      <div className="flex items-center gap-2">
+        <SlidersHorizontal
+          className="h-4 w-4 text-violet-600"
+          aria-hidden="true"
+        />
+        <h2 className="font-semibold text-slate-950">Filter results</h2>
       </div>
+      <button
+        type="button"
+        onClick={resetFilters}
+        className="text-xs font-semibold text-violet-700 hover:text-violet-900"
+      >
+        Reset
+      </button>
+    </div>
+  );
+
+  const filterFields = (
+    <div className="space-y-5">
       <div className="space-y-4 border-t border-slate-100 pt-4">
         <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-400">
           Role and Pay
@@ -287,15 +290,18 @@ export default function PublicJobsSearch({
           </select>
         </label>
       </div>
-      <button
-        type="button"
-        onClick={() => void search(false)}
-        disabled={loading || !query.trim()}
-        className="min-h-11 w-full rounded-xl bg-slate-950 px-4 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
-      >
-        Apply filters
-      </button>
     </div>
+  );
+
+  const filterAction = (
+    <button
+      type="button"
+      onClick={() => void search(false)}
+      disabled={loading || !query.trim()}
+      className="min-h-11 w-full rounded-xl bg-slate-950 px-4 text-sm font-semibold text-white transition-[background-color,transform] hover:bg-slate-800 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
+    >
+      Apply filters
+    </button>
   );
 
   return (
@@ -419,20 +425,32 @@ export default function PublicJobsSearch({
 
           <div
             data-testid="jobs-results-shell"
-            className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_280px] lg:items-start lg:gap-0 lg:rounded-2xl lg:border lg:border-slate-200 lg:bg-white/70"
+            className="grid gap-5 lg:h-[min(48rem,calc(100dvh-7rem))] lg:grid-cols-[minmax(0,1fr)_280px] lg:gap-0 lg:overflow-hidden lg:rounded-2xl lg:border lg:border-slate-200 lg:bg-white/70"
           >
             <aside
               aria-label="Job filters"
-              className={`${filtersOpen ? "block" : "hidden"} rounded-2xl border border-slate-200 bg-white p-5 lg:col-start-2 lg:row-start-1 lg:block lg:self-stretch lg:rounded-none lg:rounded-r-2xl lg:border-0 lg:border-l lg:border-slate-200 lg:bg-slate-50/80 lg:p-0`}
+              className={`${filtersOpen ? "block" : "hidden"} rounded-2xl border border-slate-200 bg-white p-5 lg:col-start-2 lg:row-start-1 lg:flex lg:min-h-0 lg:flex-col lg:self-stretch lg:rounded-none lg:rounded-r-2xl lg:border-0 lg:border-l lg:border-slate-200 lg:bg-slate-50/80 lg:p-0`}
             >
+              <div className="lg:shrink-0 lg:p-6 lg:pb-4">
+                {filterHeader}
+              </div>
               <div
                 data-testid="jobs-filter-scroll"
-                className="lg:sticky lg:top-24 lg:max-h-[calc(100dvh-7rem)] lg:overflow-y-auto lg:overscroll-contain lg:p-6"
+                className="mt-5 lg:mt-0 lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:overscroll-contain lg:px-6 lg:py-4"
               >
-                {filters}
+                {filterFields}
+              </div>
+              <div
+                data-testid="jobs-filter-action"
+                className="mt-5 border-t border-slate-200 pt-4 lg:mt-0 lg:shrink-0 lg:bg-slate-50/95 lg:p-6 lg:pt-4"
+              >
+                {filterAction}
               </div>
             </aside>
-            <div className="min-w-0 space-y-3 lg:col-start-1 lg:row-start-1 lg:p-4">
+            <div
+              data-testid="jobs-results-scroll"
+              className="min-w-0 space-y-3 lg:col-start-1 lg:row-start-1 lg:min-h-0 lg:overflow-y-auto lg:overscroll-contain lg:p-4"
+            >
               {!searched && !loading && (
                 <div className="rounded-2xl border border-slate-200 bg-white px-5 py-12 text-center">
                   <BriefcaseBusiness

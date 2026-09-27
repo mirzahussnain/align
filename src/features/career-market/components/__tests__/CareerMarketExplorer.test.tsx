@@ -23,6 +23,16 @@ const snapshot = {
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
 describe('UK Career Market explorer', () => {
+  it('presents the market search in the same gradient chapter pattern as public jobs', () => {
+    render(<CareerMarketExplorer />);
+
+    const chapter = screen.getByTestId('career-market-search-chapter');
+    expect(chapter.className).toContain('linear-gradient');
+    expect(within(chapter).getByRole('heading', { level: 1 })).toHaveTextContent('UK Career Market');
+    expect(within(chapter).getByRole('button', { name: /explore market/i })).toBeInTheDocument();
+    expect(screen.getByTestId('career-market-results')).not.toContainElement(chapter);
+  });
+
   it('presents user-facing controls and truthful snapshot metadata', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ freshness: 'GENERATED', snapshot, methodology: { statement: 'Current sample, not the whole market.', salaryMethod: 'Disclosed salaries only.', sponsorshipMethod: 'Register context only.' } }), { status: 200 })));
     const user = userEvent.setup();

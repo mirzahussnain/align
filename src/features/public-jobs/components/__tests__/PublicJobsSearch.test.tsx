@@ -56,17 +56,23 @@ describe('public job discovery', () => {
     expect(screen.getByLabelText(/job title/i)).toHaveValue('North NHS Trust');
   });
 
-  it('bounds independent filter scrolling to the desktop sidebar breakpoint', () => {
+  it('keeps desktop results and filter fields independently scrollable with a fixed filter action', () => {
     const fetchMock = vi.fn();
     vi.stubGlobal('fetch', fetchMock);
     render(<PublicJobsSearch initialQuery="Engineer" />);
 
     const filterRail = screen.getByRole('complementary', { name: /job filters/i });
     const filterScroller = within(filterRail).getByTestId('jobs-filter-scroll');
+    const filterAction = within(filterRail).getByTestId('jobs-filter-action');
+    const resultsScroller = screen.getByTestId('jobs-results-scroll');
     const resultsShell = screen.getByTestId('jobs-results-shell');
     expect(resultsShell).toContainElement(filterRail);
-    expect(filterRail).toHaveClass('lg:rounded-none', 'lg:border-l');
-    expect(filterScroller).toHaveClass('lg:sticky', 'lg:overflow-y-auto');
+    expect(resultsShell).toHaveClass('lg:h-[min(48rem,calc(100dvh-7rem))]', 'lg:overflow-hidden');
+    expect(filterRail).toHaveClass('lg:flex', 'lg:min-h-0', 'lg:flex-col', 'lg:rounded-none', 'lg:border-l');
+    expect(filterScroller).toHaveClass('lg:min-h-0', 'lg:flex-1', 'lg:overflow-y-auto');
+    expect(filterAction).toHaveClass('lg:shrink-0');
+    expect(resultsScroller).toHaveClass('lg:min-h-0', 'lg:overflow-y-auto');
+    expect(filterScroller).not.toContainElement(filterAction);
     expect(filterRail.className).not.toMatch(/(?:^|\s)overflow-y-auto(?:\s|$)/);
 
     fireEvent.scroll(filterScroller, { target: { scrollTop: 120 } });
