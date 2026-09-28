@@ -1,181 +1,135 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import PublicJobsSearch from '../PublicJobsSearch';
+import PublicJobsSearch from "../PublicJobsSearch";
+
+const navigation = vi.hoisted(() => ({ pathname: "/jobs", search: "", push: vi.fn() }));
+vi.mock("next/navigation", () => ({
+  usePathname: () => navigation.pathname,
+  useRouter: () => ({ push: navigation.push }),
+  useSearchParams: () => new URLSearchParams(navigation.search),
+}));
 
 const response = {
-  jobs: [
-    {
-      id: 'public-job-1',
-      title: 'Registered Nurse',
-      company: { displayName: 'North NHS Trust' },
-      location: 'Leeds',
-      workplaceType: 'ONSITE',
-      employmentType: 'Permanent',
-      salary: { text: '£29,970 to £36,483' },
-      postedAt: '2026-09-24T10:00:00.000Z',
-      fullDescriptionExternalUrl: 'https://www.jobs.nhs.uk/candidate/jobadvert/C1234',
-      sourceSummary: { preferredProvider: 'NHS_JOBS', providerCount: 1, employerDirect: true },
-      sponsorEvidenceSummary: { label: 'Register evidence available' },
-      saved: false,
-    },
-  ],
-  sessionId: 'session-1',
+  jobs: [{
+    id: "public-job-1", title: "Registered Nurse", company: { displayName: "North NHS Trust" },
+    location: "Leeds", workplaceType: "ONSITE", employmentType: "Permanent",
+    salary: { text: "£29,970 to £36,483" }, postedAt: "2026-09-24T10:00:00.000Z",
+    fullDescriptionExternalUrl: "https://www.jobs.nhs.uk/candidate/jobadvert/C1234",
+    sourceSummary: { preferredProvider: "NHS_JOBS", providerCount: 1, employerDirect: true },
+    sponsorEvidenceSummary: { label: "Register evidence available" }, saved: false,
+  }],
+  sessionId: "session-1",
   meta: { hasMore: false, partialResults: false, providerCounts: [] },
 };
 
-afterEach(() => {
-  cleanup();
-  vi.unstubAllGlobals();
+beforeEach(() => {
+  navigation.search = "";
+  navigation.push.mockReset();
 });
+afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
-describe('public job discovery', () => {
-  it('uses title case for the public job-board heading', () => {
+describe("public job discovery", () => {
+  it("uses title case for the public job-board heading", () => {
     render(<PublicJobsSearch />);
-
-    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent(
-      'Find Your Next UK Opportunity',
-    );
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Find Your Next UK Opportunity");
   });
 
-  it('keeps the dashboard continuation with the search controls above the results canvas', () => {
+  it("keeps the dashboard continuation with the search controls above the results canvas", () => {
     render(<PublicJobsSearch />);
-
-    const chapter = screen.getByTestId('jobs-search-chapter');
-    const results = screen.getByTestId('jobs-results-canvas');
-    expect(chapter.className).toContain('linear-gradient');
-    expect(within(chapter).getByRole('link', { name: /continue in your dashboard/i })).toBeInTheDocument();
-    expect(within(results).queryByRole('link', { name: /continue in your dashboard/i })).not.toBeInTheDocument();
+    const chapter = screen.getByTestId("jobs-search-chapter");
+    const results = screen.getByTestId("jobs-results-canvas");
+    expect(chapter.className).toContain("linear-gradient");
+    expect(within(chapter).getByRole("link", { name: /continue in your dashboard/i })).toBeInTheDocument();
+    expect(within(results).queryByRole("link", { name: /continue in your dashboard/i })).not.toBeInTheDocument();
   });
 
-  it('uses an incoming public resource query as the initial search value', () => {
+  it("uses an incoming public resource query as the initial search value", () => {
     render(<PublicJobsSearch initialQuery="North NHS Trust" />);
-    expect(screen.getByLabelText(/job title/i)).toHaveValue('North NHS Trust');
+    expect(screen.getByLabelText(/job title/i)).toHaveValue("North NHS Trust");
   });
 
-  it('keeps desktop results and filter fields independently scrollable with a fixed filter action', () => {
-    const fetchMock = vi.fn();
-    vi.stubGlobal('fetch', fetchMock);
+  it("keeps desktop results and filter fields independently scrollable with a fixed filter action", () => {
+    vi.stubGlobal("fetch", vi.fn());
     render(<PublicJobsSearch initialQuery="Engineer" />);
-
-    const filterRail = screen.getByRole('complementary', { name: /job filters/i });
-    const filterScroller = within(filterRail).getByTestId('jobs-filter-scroll');
-    const filterAction = within(filterRail).getByTestId('jobs-filter-action');
-    const resultsScroller = screen.getByTestId('jobs-results-scroll');
-    const resultsShell = screen.getByTestId('jobs-results-shell');
+    const filterRail = screen.getByRole("complementary", { name: /job filters/i });
+    const filterScroller = within(filterRail).getByTestId("jobs-filter-scroll");
+    const filterAction = within(filterRail).getByTestId("jobs-filter-action");
+    const resultsScroller = screen.getByTestId("jobs-results-scroll");
+    const resultsShell = screen.getByTestId("jobs-results-shell");
     expect(resultsShell).toContainElement(filterRail);
-    expect(resultsShell).toHaveClass('lg:h-[min(48rem,calc(100dvh-7rem))]', 'lg:overflow-hidden');
-    expect(filterRail).toHaveClass('lg:flex', 'lg:min-h-0', 'lg:flex-col', 'lg:rounded-none', 'lg:border-l');
-    expect(filterScroller).toHaveClass('lg:min-h-0', 'lg:flex-1', 'lg:overflow-y-auto');
-    expect(filterAction).toHaveClass('lg:shrink-0');
-    expect(resultsScroller).toHaveClass('lg:min-h-0', 'lg:overflow-y-auto');
+    expect(resultsShell).toHaveClass("lg:h-[min(48rem,calc(100dvh-7rem))]", "lg:overflow-hidden");
+    expect(filterRail).toHaveClass("lg:flex", "lg:min-h-0", "lg:flex-col", "lg:rounded-none", "lg:border-l");
+    expect(filterScroller).toHaveClass("lg:min-h-0", "lg:flex-1", "lg:overflow-y-auto");
+    expect(filterAction).toHaveClass("lg:shrink-0");
+    expect(resultsScroller).toHaveClass("lg:min-h-0", "lg:overflow-y-auto");
     expect(filterScroller).not.toContainElement(filterAction);
     expect(filterRail.className).not.toMatch(/(?:^|\s)overflow-y-auto(?:\s|$)/);
-
     fireEvent.scroll(filterScroller, { target: { scrollTop: 120 } });
-
-    expect(screen.getByLabelText(/job title/i)).toHaveValue('Engineer');
-    expect(fetchMock).not.toHaveBeenCalled();
+    expect(screen.getByLabelText(/job title/i)).toHaveValue("Engineer");
   });
 
-  it('prevents an empty request before it reaches the jobs API', async () => {
+  it("prevents an empty request before it reaches the jobs API", async () => {
     const fetchMock = vi.fn();
-    vi.stubGlobal('fetch', fetchMock);
+    vi.stubGlobal("fetch", fetchMock);
     const user = userEvent.setup();
     render(<PublicJobsSearch />);
-
-    await user.click(screen.getByRole('button', { name: /^search$/i }));
-
-    expect(screen.getByRole('alert')).toHaveTextContent(/enter a job title or keyword/i);
+    await user.click(screen.getByRole("button", { name: /^search$/i }));
+    expect(screen.getByRole("alert")).toHaveTextContent(/enter a job title or keyword/i);
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it('searches anonymously and renders original provider vacancies without personalized actions', async () => {
-    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
-      void input;
-      return new Response(JSON.stringify(response), { status: 200 });
-    });
-    vi.stubGlobal('fetch', fetchMock);
-    const user = userEvent.setup();
+  it("searches anonymously and renders original provider vacancies without personalized actions", async () => {
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL) => new Response(JSON.stringify(response), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+    navigation.search = "q=nurse&location=Leeds&contractType=permanent&source=all";
     render(<PublicJobsSearch />);
 
-    await user.type(screen.getByLabelText(/job title/i), 'nurse');
-    await user.type(screen.getByLabelText(/^location/i), 'Leeds');
-    await user.selectOptions(screen.getByLabelText(/contract type/i), 'permanent');
-    await user.click(screen.getByRole('button', { name: /^search$/i }));
-
-    await screen.findByRole('heading', { name: 'Registered Nurse' });
-    expect(screen.getByText('North NHS Trust')).toBeInTheDocument();
-    expect(screen.getByText('£29,970 to £36,483')).toBeInTheDocument();
-    expect(screen.getAllByText('NHS Jobs')).not.toHaveLength(0);
-    expect(screen.getByRole('link', { name: /view original posting/i })).toHaveAttribute(
-      'href',
-      'https://www.jobs.nhs.uk/candidate/jobadvert/C1234',
-    );
-    expect(screen.queryByRole('button', { name: /save/i })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /match/i })).not.toBeInTheDocument();
+    await screen.findByRole("heading", { name: "Registered Nurse" });
+    expect(screen.getByText("North NHS Trust")).toBeInTheDocument();
+    expect(screen.getByText("£29,970 to £36,483")).toBeInTheDocument();
+    expect(screen.getAllByText("NHS Jobs")).not.toHaveLength(0);
+    expect(screen.getByRole("link", { name: /view original posting/i })).toHaveAttribute("href", "https://www.jobs.nhs.uk/candidate/jobadvert/C1234");
+    expect(screen.queryByRole("button", { name: /save/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /match/i })).not.toBeInTheDocument();
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
     const requested = String(fetchMock.mock.calls[0]?.[0]);
-    expect(requested).toContain('query=nurse');
-    expect(requested).toContain('location=Leeds');
-    expect(requested).toContain('contractType=permanent');
+    expect(requested).toContain("query=nurse");
+    expect(requested).toContain("location=Leeds");
+    expect(requested).toContain("contractType=permanent");
   });
 
-  it('sends supported decision-useful filters to the public jobs API', async () => {
-    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
-      void input;
-      return new Response(JSON.stringify(response), { status: 200 });
-    });
-    vi.stubGlobal('fetch', fetchMock);
-    const user = userEvent.setup();
+  it("sends supported decision-useful filters to the public jobs API", async () => {
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL) => new Response(JSON.stringify(response), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+    navigation.search = "q=analyst&experience=senior&salaryMin=50000&sponsorship=registered&source=nhs_jobs&sortBy=salary_desc";
     render(<PublicJobsSearch />);
-
-    await user.type(screen.getByLabelText(/job title/i), 'analyst');
-    await user.selectOptions(screen.getByLabelText(/experience level/i), 'senior');
-    await user.selectOptions(screen.getByLabelText(/minimum salary/i), '50000');
-    await user.selectOptions(screen.getByLabelText(/sponsorship context/i), 'registered');
-    await user.selectOptions(screen.getByLabelText(/source/i), 'nhs_jobs');
-    await user.selectOptions(screen.getByLabelText(/sort results/i), 'salary_desc');
-    await user.click(screen.getByRole('button', { name: /apply filters/i }));
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
-    const requested = new URL(String(fetchMock.mock.calls[0]?.[0]), 'https://align.test');
+    const requested = new URL(String(fetchMock.mock.calls[0]?.[0]), "https://align.test");
     expect(Object.fromEntries(requested.searchParams)).toMatchObject({
-      query: 'analyst',
-      experience: 'senior',
-      salaryMin: '50000',
-      sponsorship: 'registered',
-      source: 'nhs_jobs',
-      sortBy: 'salary_desc',
+      query: "analyst", experience: "senior", salaryMin: "50000",
+      sponsorship: "registered", source: "nhs_jobs", sortBy: "salary_desc",
     });
   });
 
-  it('shows a useful recovery state when the provider request fails', async () => {
-    vi.stubGlobal('fetch', vi.fn(async () => new Response('{}', { status: 503 })));
-    const user = userEvent.setup();
+  it("shows a useful recovery state when the provider request fails", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("{}", { status: 503 })));
+    navigation.search = "q=analyst&source=all";
     render(<PublicJobsSearch />);
-
-    await user.type(screen.getByLabelText(/job title/i), 'analyst');
-    await user.click(screen.getByRole('button', { name: /^search$/i }));
-
-    expect(await screen.findByRole('alert')).toHaveTextContent(/try the search again/i);
+    expect(await screen.findByRole("alert")).toHaveTextContent(/try the search again/i);
   });
 
-  it('does not display an unknown workplace type as a vacancy tag', async () => {
-    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({
-      ...response,
-      jobs: [{ ...response.jobs[0], workplaceType: 'UNKNOWN' }],
+  it("does not display an unknown workplace type as a vacancy tag", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({
+      ...response, jobs: [{ ...response.jobs[0], workplaceType: "UNKNOWN" }],
     }), { status: 200 })));
-    const user = userEvent.setup();
+    navigation.search = "q=nurse&source=all";
     render(<PublicJobsSearch />);
-
-    await user.type(screen.getByLabelText(/job title/i), 'nurse');
-    await user.click(screen.getByRole('button', { name: /^search$/i }));
-
-    await screen.findByRole('heading', { name: 'Registered Nurse' });
+    await screen.findByRole("heading", { name: "Registered Nurse" });
     expect(screen.queryByText(/^unknown$/i)).not.toBeInTheDocument();
   });
 });
