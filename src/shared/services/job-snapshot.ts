@@ -247,7 +247,9 @@ async function resolveExistingSnapshot(
 ): Promise<ExistingSnapshot | null> {
   for (const reference of stableReferences) {
     const lockKey = providerReferenceKey(reference);
-    await client.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${lockKey}, 0))`;
+    // The lock function returns PostgreSQL `void`; use the execute path so
+    // Prisma does not attempt to deserialize that unsupported result type.
+    await client.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${lockKey}, 0))`;
   }
 
   if (stableReferences.length) {

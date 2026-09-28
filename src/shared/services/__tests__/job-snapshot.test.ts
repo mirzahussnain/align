@@ -42,7 +42,7 @@ describe('JobSnapshot service', () => {
     prisma.companyRecord.findMany.mockResolvedValue([]);
   });
 
-  it('resolves provider references before equivalence and merges every stable reference', async () => {
+  it('acquires every void-returning advisory lock through the execute path before dedupe', async () => {
     prisma.jobProviderReference.findMany.mockResolvedValue([{ jobSnapshotId: 'snapshot-ref' }]);
     prisma.jobSnapshot.findUnique.mockResolvedValue({
       id: 'snapshot-ref',
@@ -64,7 +64,8 @@ describe('JobSnapshot service', () => {
     const result = await ensurePersistedJob(job as never);
 
     expect(result).toMatchObject({ snapshot: { id: 'snapshot-ref' }, outcome: 'UPDATED' });
-    expect(prisma.$queryRaw).toHaveBeenCalledTimes(2);
+    expect(prisma.$executeRaw).toHaveBeenCalledTimes(2);
+    expect(prisma.$queryRaw).not.toHaveBeenCalled();
     expect(prisma.jobSnapshot.findFirst).not.toHaveBeenCalled();
     expect(prisma.jobProviderReference.upsert).toHaveBeenCalledTimes(2);
   });
