@@ -1,6 +1,7 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
   ArrowUpRight,
   BriefcaseBusiness,
@@ -113,34 +114,86 @@ function RankedList({
 }
 
 export default function CareerMarketExplorer() {
-  const [role, setRole] = useState("");
-  const [location, setLocation] = useState("UK");
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const serialized = searchParams.toString();
+  const committedQuery = useMemo(() => {
+    const params = new URLSearchParams(serialized);
+    return {
+      role: (params.get("role") ?? "").slice(0, 200),
+      location: (params.get("location") ?? "UK").slice(0, 100) || "UK",
+    };
+  }, [serialized]);
+  const [role, setRole] = useState(committedQuery.role);
+  const [location, setLocation] = useState(committedQuery.location);
   const [data, setData] = useState<ApiResponse>();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string>();
+  const requestRef = useRef(0);
+  const controllerRef = useRef<AbortController | undefined>(undefined);
 
-  async function submit(event: FormEvent) {
+  useEffect(() => {
+    let active = true;
+    controllerRef.current?.abort();
+    const requestId = ++requestRef.current;
+    queueMicrotask(() => {
+      if (!active) return;
+      setRole(committedQuery.role);
+      setLocation(committedQuery.location);
+      if (committedQuery.role.trim().length < 2) {
+        setData(undefined);
+        setError(undefined);
+        setLoading(false);
+        return;
+      }
+      const controller = new AbortController();
+      controllerRef.current = controller;
+      setLoading(true);
+      setError(undefined);
+      const load = async () => {
+        try {
+          const params = new URLSearchParams({
+            role: committedQuery.role.trim(),
+            location: committedQuery.location.trim() || "UK",
+          });
+          const response = await fetch(`/api/trends?${params}`, {
+            signal: controller.signal,
+          });
+          const body = (await response.json()) as ApiResponse;
+          if (!response.ok && response.status !== 202)
+            throw new Error("unavailable");
+          if (requestId !== requestRef.current) return;
+          setData(body);
+        } catch (caught) {
+          if (
+            (caught as Error).name === "AbortError" ||
+            requestId !== requestRef.current
+          ) return;
+          setError(
+            "Current market data could not be prepared just now. Please try again.",
+          );
+        } finally {
+          if (requestId !== requestRef.current) return;
+          setLoading(false);
+        }
+      };
+      void load();
+    });
+    return () => {
+      active = false;
+      controllerRef.current?.abort();
+    };
+  }, [committedQuery]);
+
+  function submit(event: FormEvent) {
     event.preventDefault();
     if (role.trim().length < 2) return;
-    setLoading(true);
-    setError(undefined);
-    try {
-      const params = new URLSearchParams({
-        role: role.trim(),
-        location: location.trim() || "UK",
-      });
-      const response = await fetch(`/api/trends?${params}`);
-      const body = (await response.json()) as ApiResponse;
-      if (!response.ok && response.status !== 202)
-        throw new Error("unavailable");
-      setData(body);
-    } catch {
-      setError(
-        "Current market data could not be prepared just now. Please try again.",
-      );
-    } finally {
-      setLoading(false);
-    }
+    const params = new URLSearchParams({
+      role: role.trim(),
+      location: location.trim() || "UK",
+    });
+    router.push(`${pathname}?${params}`, { scroll: false });
   }
 
   const snapshot = data?.snapshot;
