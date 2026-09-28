@@ -1,7 +1,15 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import {
+  DEFAULT_PUBLIC_JOB_FILTERS,
+  parsePublicJobFilters,
+  publicJobFiltersToApi,
+  publicJobFiltersToUrl,
+  type PublicJobFilters,
+} from "@/features/public-jobs/lib/public-job-search";
 import {
   ArrowUpRight,
   BriefcaseBusiness,
@@ -64,16 +72,27 @@ export default function PublicJobsSearch({
   initialQuery?: string;
   initialLocation?: string;
 }) {
-  const [query, setQuery] = useState(initialQuery);
-  const [location, setLocation] = useState(initialLocation);
-  const [contractType, setContractType] = useState("all");
-  const [remoteType, setRemoteType] = useState("all");
-  const [postedWithinDays, setPostedWithinDays] = useState("30");
-  const [experience, setExperience] = useState("all");
-  const [salaryMin, setSalaryMin] = useState("all");
-  const [sponsorship, setSponsorship] = useState("all");
-  const [source, setSource] = useState("all");
-  const [sortBy, setSortBy] = useState("relevance");
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const serialized = searchParams.toString();
+  const committedFilters = useMemo(
+    () => parsePublicJobFilters(new URLSearchParams(serialized)),
+    [serialized],
+  );
+  const initialFilters = committedFilters.query
+    ? committedFilters
+    : { ...committedFilters, query: initialQuery, location: initialLocation };
+  const [query, setQuery] = useState(initialFilters.query);
+  const [location, setLocation] = useState(initialFilters.location);
+  const [contractType, setContractType] = useState<PublicJobFilters["contractType"]>(initialFilters.contractType);
+  const [remoteType, setRemoteType] = useState<PublicJobFilters["remoteType"]>(initialFilters.remoteType);
+  const [postedWithinDays, setPostedWithinDays] = useState<PublicJobFilters["postedWithinDays"]>(initialFilters.postedWithinDays);
+  const [experience, setExperience] = useState<PublicJobFilters["experience"]>(initialFilters.experience);
+  const [salaryMin, setSalaryMin] = useState<PublicJobFilters["salaryMin"]>(initialFilters.salaryMin);
+  const [sponsorship, setSponsorship] = useState<PublicJobFilters["sponsorship"]>(initialFilters.sponsorship);
+  const [source, setSource] = useState<PublicJobFilters["source"]>(initialFilters.source);
+  const [sortBy, setSortBy] = useState<PublicJobFilters["sortBy"]>(initialFilters.sortBy);
   const [jobs, setJobs] = useState<PublicJobCard[]>([]);
   const [sessionId, setSessionId] = useState<string>();
   const [hasMore, setHasMore] = useState(false);
@@ -82,34 +101,50 @@ export default function PublicJobsSearch({
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string>();
+  const requestRef = useRef(0);
+  const controllerRef = useRef<AbortController | undefined>(undefined);
 
-  async function search(append = false) {
-    if (!query.trim()) {
-      setError("Enter a job title or keyword to search current vacancies.");
-      return;
-    }
+  const runSearch = useCallback(async (
+    filters: PublicJobFilters,
+    append: boolean,
+    activeSession?: string,
+  ) => {
+    const requestId = ++requestRef.current;
+    controllerRef.current?.abort();
+    const controller = new AbortController();
+    controllerRef.current = controller;
     setLoading(true);
     setError(undefined);
-    try {
-      const params = new URLSearchParams({
-        query: query.trim(),
-        location: location.trim(),
-        perPage: "12",
+    const requestPage = async (
+      shouldAppend: boolean,
+      requestSession?: string,
+    ): Promise<void> => {
+      const params = publicJobFiltersToApi(filters, requestSession);
+      const response = await fetch(`/api/jobs?${params}`, {
+        signal: controller.signal,
       });
-      if (contractType !== "all") params.set("contractType", contractType);
-      if (remoteType !== "all") params.set("remoteType", remoteType);
-      if (postedWithinDays !== "all")
-        params.set("postedWithinDays", postedWithinDays);
-      if (experience !== "all") params.set("experience", experience);
-      if (salaryMin !== "all") params.set("salaryMin", salaryMin);
-      if (sponsorship !== "all") params.set("sponsorship", sponsorship);
-      if (source !== "all") params.set("source", source);
-      if (sortBy !== "relevance") params.set("sortBy", sortBy);
-      if (append && sessionId) params.set("sessionId", sessionId);
-      const response = await fetch(`/api/jobs?${params.toString()}`);
-      if (!response.ok) throw new Error("search_failed");
-      const data = (await response.json()) as SearchResponse;
-      setJobs((current) => (append ? [...current, ...data.jobs] : data.jobs));
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        const code =
+          typeof body === "object" && body !== null
+            ? ((body as { code?: string; error?: { code?: string } }).code ??
+              (body as { error?: { code?: string } }).error?.code)
+            : undefined;
+        if (
+          shouldAppend &&
+          code === "SEARCH_SESSION_EXPIRED" &&
+          requestId === requestRef.current
+        ) {
+          setJobs([]);
+          setSessionId(undefined);
+          setHasMore(false);
+          return requestPage(false);
+        }
+        throw new Error("search_failed");
+      }
+      if (requestId !== requestRef.current) return;
+      const data = body as SearchResponse;
+      setJobs((current) => shouldAppend ? [...current, ...data.jobs] : data.jobs);
       setSessionId(data.sessionId);
       setHasMore(data.meta.hasMore);
       setPartialMessage(
@@ -118,28 +153,93 @@ export default function PublicJobsSearch({
           : undefined,
       );
       setSearched(true);
-    } catch {
+    };
+    try {
+      await requestPage(append, append ? activeSession : undefined);
+    } catch (caught) {
+      if (
+        (caught as Error).name === "AbortError" ||
+        requestId !== requestRef.current
+      ) return;
       setError(
         "Vacancies could not be loaded. Check your connection and try the search again.",
       );
     } finally {
+      if (requestId !== requestRef.current) return;
       setLoading(false);
     }
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    controllerRef.current?.abort();
+    requestRef.current += 1;
+    queueMicrotask(() => {
+      if (!active) return;
+      setQuery(committedFilters.query || (!serialized ? initialQuery : ""));
+      setLocation(committedFilters.location || (!serialized ? initialLocation : ""));
+      setContractType(committedFilters.contractType);
+      setRemoteType(committedFilters.remoteType);
+      setPostedWithinDays(committedFilters.postedWithinDays);
+      setExperience(committedFilters.experience);
+      setSalaryMin(committedFilters.salaryMin);
+      setSponsorship(committedFilters.sponsorship);
+      setSource(committedFilters.source);
+      setSortBy(committedFilters.sortBy);
+      setSessionId(undefined);
+      setJobs([]);
+      setHasMore(false);
+      setPartialMessage(undefined);
+      setSearched(false);
+      if (!committedFilters.query.trim()) {
+        setLoading(false);
+        setError(undefined);
+        return;
+      }
+      void runSearch(committedFilters, false);
+    });
+    return () => {
+      active = false;
+      controllerRef.current?.abort();
+    };
+  }, [committedFilters, initialLocation, initialQuery, runSearch, serialized]);
+
+  const draftFilters = (): PublicJobFilters => ({
+    query,
+    location,
+    contractType,
+    remoteType,
+    postedWithinDays,
+    experience,
+    salaryMin,
+    sponsorship,
+    source,
+    sortBy,
+  });
+
+  function commitSearch() {
+    if (!query.trim()) {
+      setError("Enter a job title or keyword to search current vacancies.");
+      return;
+    }
+    router.push(`${pathname}?${publicJobFiltersToUrl(draftFilters())}`, {
+      scroll: false,
+    });
   }
 
   function submit(event: FormEvent) {
     event.preventDefault();
-    void search(false);
+    commitSearch();
   }
   function resetFilters() {
-    setContractType("all");
-    setRemoteType("all");
-    setPostedWithinDays("30");
-    setExperience("all");
-    setSalaryMin("all");
-    setSponsorship("all");
-    setSource("all");
-    setSortBy("relevance");
+    setContractType(DEFAULT_PUBLIC_JOB_FILTERS.contractType);
+    setRemoteType(DEFAULT_PUBLIC_JOB_FILTERS.remoteType);
+    setPostedWithinDays(DEFAULT_PUBLIC_JOB_FILTERS.postedWithinDays);
+    setExperience(DEFAULT_PUBLIC_JOB_FILTERS.experience);
+    setSalaryMin(DEFAULT_PUBLIC_JOB_FILTERS.salaryMin);
+    setSponsorship(DEFAULT_PUBLIC_JOB_FILTERS.sponsorship);
+    setSource(DEFAULT_PUBLIC_JOB_FILTERS.source);
+    setSortBy(DEFAULT_PUBLIC_JOB_FILTERS.sortBy);
   }
 
   const filterHeader = (
@@ -171,7 +271,7 @@ export default function PublicJobsSearch({
           Experience level
           <select
             value={experience}
-            onChange={(event) => setExperience(event.target.value)}
+            onChange={(event) => setExperience(event.target.value as PublicJobFilters["experience"])}
             className="mt-2 min-h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm font-normal text-slate-800 focus:border-violet-500 focus:bg-white focus:outline-none focus:ring-4 focus:ring-violet-100"
           >
             <option value="all">Any experience</option>
@@ -184,7 +284,7 @@ export default function PublicJobsSearch({
           Minimum salary
           <select
             value={salaryMin}
-            onChange={(event) => setSalaryMin(event.target.value)}
+            onChange={(event) => setSalaryMin(event.target.value as PublicJobFilters["salaryMin"])}
             className="mt-2 min-h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm font-normal text-slate-800 focus:border-violet-500 focus:bg-white focus:outline-none focus:ring-4 focus:ring-violet-100"
           >
             <option value="all">Any advertised salary</option>
@@ -204,7 +304,7 @@ export default function PublicJobsSearch({
           Contract type
           <select
             value={contractType}
-            onChange={(event) => setContractType(event.target.value)}
+            onChange={(event) => setContractType(event.target.value as PublicJobFilters["contractType"])}
             className="mt-2 min-h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm font-normal text-slate-800 focus:border-violet-500 focus:bg-white focus:outline-none focus:ring-4 focus:ring-violet-100"
           >
             <option value="all">Any contract</option>
@@ -217,7 +317,7 @@ export default function PublicJobsSearch({
           Work style
           <select
             value={remoteType}
-            onChange={(event) => setRemoteType(event.target.value)}
+            onChange={(event) => setRemoteType(event.target.value as PublicJobFilters["remoteType"])}
             className="mt-2 min-h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm font-normal text-slate-800 focus:border-violet-500 focus:bg-white focus:outline-none focus:ring-4 focus:ring-violet-100"
           >
             <option value="all">Any stated work style</option>
@@ -230,7 +330,7 @@ export default function PublicJobsSearch({
           Posted
           <select
             value={postedWithinDays}
-            onChange={(event) => setPostedWithinDays(event.target.value)}
+            onChange={(event) => setPostedWithinDays(event.target.value as PublicJobFilters["postedWithinDays"])}
             className="mt-2 min-h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm font-normal text-slate-800 focus:border-violet-500 focus:bg-white focus:outline-none focus:ring-4 focus:ring-violet-100"
           >
             <option value="7">Past week</option>
@@ -248,7 +348,7 @@ export default function PublicJobsSearch({
           Sponsorship context
           <select
             value={sponsorship}
-            onChange={(event) => setSponsorship(event.target.value)}
+            onChange={(event) => setSponsorship(event.target.value as PublicJobFilters["sponsorship"])}
             className="mt-2 min-h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm font-normal text-slate-800 focus:border-violet-500 focus:bg-white focus:outline-none focus:ring-4 focus:ring-violet-100"
           >
             <option value="all">Any sponsorship context</option>
@@ -266,7 +366,7 @@ export default function PublicJobsSearch({
           Source
           <select
             value={source}
-            onChange={(event) => setSource(event.target.value)}
+            onChange={(event) => setSource(event.target.value as PublicJobFilters["source"])}
             className="mt-2 min-h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm font-normal text-slate-800 focus:border-violet-500 focus:bg-white focus:outline-none focus:ring-4 focus:ring-violet-100"
           >
             <option value="all">All integrated sources</option>
@@ -280,7 +380,7 @@ export default function PublicJobsSearch({
           Sort results
           <select
             value={sortBy}
-            onChange={(event) => setSortBy(event.target.value)}
+            onChange={(event) => setSortBy(event.target.value as PublicJobFilters["sortBy"])}
             className="mt-2 min-h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm font-normal text-slate-800 focus:border-violet-500 focus:bg-white focus:outline-none focus:ring-4 focus:ring-violet-100"
           >
             <option value="relevance">Best match</option>
@@ -296,7 +396,7 @@ export default function PublicJobsSearch({
   const filterAction = (
     <button
       type="button"
-      onClick={() => void search(false)}
+      onClick={commitSearch}
       disabled={loading || !query.trim()}
       className="min-h-11 w-full rounded-xl bg-slate-950 px-4 text-sm font-semibold text-white transition-[background-color,transform] hover:bg-slate-800 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
     >
@@ -562,7 +662,7 @@ export default function PublicJobsSearch({
                   <button
                     type="button"
                     disabled={loading}
-                    onClick={() => void search(true)}
+                    onClick={() => void runSearch(committedFilters, true, sessionId)}
                     className="min-h-11 rounded-xl border border-slate-300 bg-white px-5 text-sm font-semibold text-slate-800 hover:border-violet-400 hover:bg-violet-50 hover:text-violet-900 disabled:opacity-60"
                   >
                     Load more vacancies

@@ -1,3 +1,4 @@
+import { Suspense } from 'react';
 import Navbar from '@/shared/components/layout/Navbar';
 import PublicJobsSearch from '@/features/public-jobs/components/PublicJobsSearch';
 import ResourcePageBackdrop from '@/shared/components/ui/ResourcePageBackdrop';
@@ -15,7 +16,9 @@ export default async function JobsLandingPage({ searchParams }: JobsPageProps) {
       <Navbar />
       <ResourcePageBackdrop variant="jobs" />
       <div className="relative">
-        <PublicJobsSearch initialQuery={first(params.query)} initialLocation={first(params.location)} />
+        <Suspense fallback={null}>
+          <PublicJobsSearch initialQuery={first(params.query)} initialLocation={first(params.location)} />
+        </Suspense>
       </div>
     </main>
   );
