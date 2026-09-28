@@ -57,7 +57,9 @@ interface CompletedAnalysis {
 export interface CheckMatchModalProps {
   open: boolean;
   onClose: () => void;
-  jobId: string;
+  canonicalJobId: string;
+  jobSnapshotId?: string;
+  sessionId?: string;
   jobTitle: string;
   companyName: string;
   descriptionCompleteness?: "FULL" | "PARTIAL" | "EXTERNAL_ONLY" | string;
@@ -72,7 +74,9 @@ export interface CheckMatchModalProps {
 export function CheckMatchModal({
   open,
   onClose,
-  jobId,
+  canonicalJobId,
+  jobSnapshotId,
+  sessionId,
   jobTitle,
   companyName,
   descriptionCompleteness = "FULL",
@@ -208,7 +212,9 @@ export function CheckMatchModal({
 
   const operationId = (): string => {
     const key = JSON.stringify({
-      jobId,
+      canonicalJobId,
+      jobSnapshotId,
+      sessionId,
       track: selectedTrack,
       source:
         cvOption === "UPLOAD"
@@ -237,11 +243,14 @@ export function CheckMatchModal({
     setError(null);
     try {
       const prepared = await readJson<{ matchRequestId: string }>(
-        `/api/jobs/${encodeURIComponent(jobId)}/match-preparation`,
+        `/api/jobs/${encodeURIComponent(canonicalJobId)}/match-preparation`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
+            canonicalJobId,
+            ...(jobSnapshotId ? { jobSnapshotId } : {}),
+            ...(sessionId ? { sessionId } : {}),
             profileId: selectedTrack || undefined,
             descriptionOverride: savedDescription ? trimmedPaste : undefined,
             // The user's ACTUAL answer. This used to be `!isFullDescription`,
@@ -684,7 +693,7 @@ export function CheckMatchModal({
                     onChange={handleFileUpload}
                     // PDF only: the analyse route reads uploads with the PDF
                     // parser, so offering .docx here would fail after the fact.
-                    accept="application/pdf,.pdf"
+                    accept={UPLOAD_POLICY.cv.fileInputAccept}
                     className="hidden"
                   />
                   <button

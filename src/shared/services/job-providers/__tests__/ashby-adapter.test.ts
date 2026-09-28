@@ -10,7 +10,7 @@ describe('Ashby employer adapter', () => {
     const adapter = createAshbyAdapter({ fetch: async () => response(200, { name: 'Acme Holdings', jobs: [posting] }) });
     const result = await adapter.fetchBoard(source);
     expect(result).toMatchObject({ rawReceived: 1, invalidUrls: 0, jobs: [{ source: 'ASHBY', sourceJobId: 'one', remoteType: 'HYBRID', salaryMin: 80000, salaryMax: 100000, salaryPeriod: 'YEAR', departments: ['Engineering', 'Platform'], offices: ['Manchester, United Kingdom'] }] });
-    expect(result.jobs[0].providerReferences[0]).toMatchObject({ sourceUrl: posting.jobUrl, applicationUrl: posting.applyUrl });
+    expect(result.jobs[0].providerReferences[0]).toMatchObject({ sourceUrl: posting.jobUrl, applicationUrl: posting.applyUrl, identityStability: 'STABLE' });
     expect(result.jobs[0].description).toContain('Own reliability');
     expect(result.jobs[0].description).not.toContain('alert');
   });

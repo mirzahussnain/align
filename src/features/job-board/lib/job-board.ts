@@ -57,6 +57,8 @@ export type DescriptionSource =
 
 export interface JobCardViewModel {
   id: string;
+  canonicalJobId: string;
+  jobSnapshotId?: string;
   title: string;
   company: { id?: string; displayName: string };
   location?: string;
@@ -245,6 +247,7 @@ export interface CompanySponsorHistoryViewModel {
 export interface DiscoverFilters {
   query: string;
   location: string;
+  source: "all" | "adzuna" | "reed" | "jooble" | "nhs_jobs" | "direct_employer";
   workplace: "all" | "REMOTE" | "HYBRID" | "ONSITE";
   employmentType: "all" | "permanent" | "contract" | "temporary";
   salaryMin: string;
@@ -257,6 +260,7 @@ export interface DiscoverFilters {
 export const DEFAULT_FILTERS: DiscoverFilters = {
   query: "",
   location: "",
+  source: "all",
   workplace: "all",
   employmentType: "all",
   salaryMin: "",
@@ -279,6 +283,11 @@ export function parseDiscoverFilters(
   return {
     query: (params.get("q") ?? "").slice(0, 200),
     location: (params.get("location") ?? "").slice(0, 100),
+    source: oneOf(
+      params.get("source"),
+      ["all", "adzuna", "reed", "jooble", "nhs_jobs", "direct_employer"],
+      "all",
+    ),
     workplace: oneOf(
       params.get("workplace"),
       ["all", "REMOTE", "HYBRID", "ONSITE"],
@@ -309,6 +318,7 @@ export function filtersToUrl(filters: DiscoverFilters): URLSearchParams {
   const params = new URLSearchParams();
   if (filters.query.trim()) params.set("q", filters.query.trim());
   if (filters.location.trim()) params.set("location", filters.location.trim());
+  if (filters.source !== "all") params.set("source", filters.source);
   if (filters.workplace !== "all") params.set("workplace", filters.workplace);
   if (filters.employmentType !== "all")
     params.set("employmentType", filters.employmentType);
@@ -327,6 +337,7 @@ export function filtersToApi(
 ): URLSearchParams {
   const params = new URLSearchParams({
     query: filters.query.trim(),
+    source: filters.source,
     remoteType: filters.workplace,
     contractType: filters.employmentType,
     sponsorship: filters.sponsorStatus,

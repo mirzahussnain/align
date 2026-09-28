@@ -82,7 +82,7 @@ describe('NHS Jobs XML adapter', () => {
       source: 'NHS_JOBS', sourceJobId: 'C1234', canonicalUrl: 'https://www.jobs.nhs.uk/candidate/jobadvert/C1234',
       expiresAt: '2026-10-10T00:00:00.000Z', descriptionAvailability: 'PARTIAL',
     });
-    expect(normalized.providerReferences[0]).toMatchObject({ provider: 'NHS_JOBS', sourceUrl: normalized.canonicalUrl });
+    expect(normalized.providerReferences[0]).toMatchObject({ provider: 'NHS_JOBS', sourceUrl: normalized.canonicalUrl, identityStability: 'STABLE' });
   });
 
   it('classifies provider failures and caches a successful provider page', async () => {

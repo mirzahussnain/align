@@ -5,7 +5,7 @@ import { resolveCompaniesForEmployers } from '@/shared/services/company-resoluti
 import { assessDescriptionCompleteness, classifyDescriptionAvailability } from '@/shared/services/job-description-completeness';
 import { logJobBoardEvent } from '@/shared/services/job-board-observability';
 import { normaliseCompanyName, normaliseLocation, normaliseTitle } from '@/shared/services/job-normalisation';
-import type { NormalisedJob } from '@/shared/types/job';
+import type { NormalisedJob, ProviderReference } from '@/shared/types/job';
 import type { CompanyResolutionResult } from '@/shared/types/sponsor-evidence';
 import { ANALYSIS_LIMITS, RETENTION_POLICY } from '@/shared/policies';
 
@@ -30,7 +30,15 @@ export type SelectedDescription = {
  */
 type ExistingSnapshot = {
   id: string;
+  canonicalJobId: string;
+  importedByUserId: string | null;
+  status: string;
+  title: string;
+  normalisedTitle: string;
+  employerName: string;
+  normalisedEmployerName: string;
   providerDescription: string | null;
+  descriptionAvailability: string;
   salaryMin: unknown;
   salaryMax: unknown;
   salaryCurrency: string | null;
@@ -39,13 +47,72 @@ type ExistingSnapshot = {
   vacancySponsorshipSignal: unknown;
   companyRecordId: string | null;
   companyLinkStatus: string;
+  employerSourceId: string | null;
+  locationText: string | null;
+  city: string | null;
+  region: string | null;
+  country: string | null;
+  workStyle: string | null;
+  contractType: string | null;
+  employmentType: string | null;
+  dedupeFingerprint: string;
+  postedAt: Date | null;
+  expiresAt: Date | null;
 };
 
 const EXISTING_SNAPSHOT_SELECT = {
-  id: true, providerDescription: true, salaryMin: true, salaryMax: true,
+  id: true, canonicalJobId: true, importedByUserId: true, status: true,
+  title: true, normalisedTitle: true, employerName: true, normalisedEmployerName: true,
+  providerDescription: true, descriptionAvailability: true, salaryMin: true, salaryMax: true,
   salaryCurrency: true, salaryPeriod: true, salaryText: true,
   vacancySponsorshipSignal: true, companyRecordId: true, companyLinkStatus: true,
+  employerSourceId: true, locationText: true, city: true, region: true, country: true,
+  workStyle: true, contractType: true, employmentType: true, dedupeFingerprint: true,
+  postedAt: true, expiresAt: true,
 } as const;
+
+export type JobMaterialisationOutcome = 'CREATED' | 'UPDATED' | 'REACTIVATED' | 'UNCHANGED';
+
+export class JobPersistenceError extends Error {
+  constructor(readonly code: 'JOB_IDENTITY_UNSTABLE' | 'JOB_PROVIDER_REFERENCE_CONFLICT') {
+    super(code === 'JOB_IDENTITY_UNSTABLE'
+      ? 'This result does not have a stable provider identity.'
+      : 'Provider references resolve to different durable jobs.');
+    this.name = 'JobPersistenceError';
+  }
+}
+
+type SnapshotClient = Prisma.TransactionClient | typeof prisma;
+
+const providerReferenceKey = (reference: Pick<ProviderReference, 'provider' | 'sourceJobId'>) =>
+  `${reference.provider}:${reference.sourceJobId}`;
+
+function stableProviderReferences(job: NormalisedJob): ProviderReference[] {
+  const stable = job.providerReferences
+    .filter((reference) => reference.identityStability === 'STABLE')
+    .sort((left, right) => providerReferenceKey(left).localeCompare(providerReferenceKey(right)));
+  return [...new Map(stable.map((reference) => [providerReferenceKey(reference), reference])).values()];
+}
+
+const comparable = (value: unknown) => {
+  if (value instanceof Date) return value.toISOString();
+  if (value && typeof value === 'object' && 'toString' in value && value.constructor?.name === 'Decimal') {
+    return value.toString();
+  }
+  return value ?? null;
+};
+
+function materialContentChanged(existing: ExistingSnapshot, data: Record<string, unknown>): boolean {
+  const keys = [
+    'title', 'normalisedTitle', 'employerName', 'normalisedEmployerName',
+    'companyRecordId', 'employerSourceId', 'locationText', 'city', 'region', 'country',
+    'workStyle', 'salaryMin', 'salaryMax', 'salaryCurrency', 'salaryPeriod', 'salaryText',
+    'contractType', 'employmentType', 'providerDescription', 'descriptionAvailability',
+    'vacancySponsorshipSignal', 'dedupeFingerprint', 'postedAt', 'expiresAt',
+  ] as const;
+  return keys.some((key) => JSON.stringify(comparable(existing[key as keyof ExistingSnapshot]))
+    !== JSON.stringify(comparable(data[key])));
+}
 
 /**
  * Whether this snapshot still needs a company-identity attempt.
@@ -90,6 +157,7 @@ function companyLinkFields(resolution: CompanyResolutionResult | undefined) {
 
 /** The single write path. Shared by the per-job and batch entry points. */
 async function persistSnapshot(
+  client: SnapshotClient,
   job: NormalisedJob,
   existing: ExistingSnapshot | null,
   resolution?: CompanyResolutionResult,
@@ -146,48 +214,163 @@ async function persistSnapshot(
     dedupeFingerprint: job.dedupeFingerprint,
     postedAt: asDate(job.postedAt),
     expiresAt: asDate(job.expiresAt),
+    status: 'ACTIVE' as const,
     lastSeenAt: now,
     fetchedAt: asDate(job.fetchedAt) ?? now,
   };
+  const outcome: JobMaterialisationOutcome = !existing
+    ? 'CREATED'
+    : existing.status === 'ARCHIVED'
+      ? 'REACTIVATED'
+      : materialContentChanged(existing, data)
+        ? 'UPDATED'
+        : 'UNCHANGED';
   let snapshot;
   if (existing) {
-    snapshot = await prisma.jobSnapshot.update({ where: { id: existing.id }, data });
+    snapshot = await client.jobSnapshot.update({ where: { id: existing.id }, data });
   } else {
-    try {
-      snapshot = await prisma.jobSnapshot.create({ data: { canonicalJobId, ...data, firstSeenAt: now } });
-    } catch (error) {
-      // Concurrent board batches can discover the same vacancy simultaneously.
-      // The unique canonical key remains authoritative; reload then update it.
-      if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== 'P2002') throw error;
-      const concurrent = await prisma.jobSnapshot.findUnique({ where: { canonicalJobId }, select: { id: true } });
-      if (!concurrent) throw error;
-      snapshot = await prisma.jobSnapshot.update({ where: { id: concurrent.id }, data });
-    }
+    snapshot = await client.jobSnapshot.create({ data: { canonicalJobId, ...data, firstSeenAt: now } });
   }
 
-  await Promise.all(job.providerReferences.map((reference) => prisma.jobProviderReference.upsert({
+  await Promise.all(stableProviderReferences(job).map((reference) => client.jobProviderReference.upsert({
     where: { provider_providerJobId: { provider: reference.provider, providerJobId: reference.sourceJobId } },
     create: { jobSnapshotId: snapshot.id, provider: reference.provider, providerJobId: reference.sourceJobId, providerUrl: reference.sourceUrl, applicationUrl: reference.applicationUrl ?? null, firstSeenAt: now, lastSeenAt: now },
     update: { jobSnapshotId: snapshot.id, providerUrl: reference.sourceUrl, applicationUrl: reference.applicationUrl ?? null, lastSeenAt: now },
   })));
-  return snapshot;
+  return { snapshot, outcome };
 }
 
-/** Durable Job Board boundary. Routes never write JobSnapshot rows directly. */
-export async function persistTrustedProviderJob(job: NormalisedJob) {
-  const existing = await prisma.jobSnapshot.findUnique({
-    where: { canonicalJobId: job.dedupeFingerprint },
+async function resolveExistingSnapshot(
+  client: SnapshotClient,
+  job: NormalisedJob,
+  stableReferences: readonly ProviderReference[],
+): Promise<ExistingSnapshot | null> {
+  for (const reference of stableReferences) {
+    const lockKey = providerReferenceKey(reference);
+    await client.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${lockKey}, 0))`;
+  }
+
+  if (stableReferences.length) {
+    const references = await client.jobProviderReference.findMany({
+      where: {
+        OR: stableReferences.map((reference) => ({
+          provider: reference.provider,
+          providerJobId: reference.sourceJobId,
+        })),
+      },
+      select: { jobSnapshotId: true },
+    });
+    const snapshotIds = [...new Set(references.map((reference) => reference.jobSnapshotId))];
+    if (snapshotIds.length > 1) throw new JobPersistenceError('JOB_PROVIDER_REFERENCE_CONFLICT');
+    if (snapshotIds[0]) {
+      const matched = await client.jobSnapshot.findUnique({
+        where: { id: snapshotIds[0] },
+        select: EXISTING_SNAPSHOT_SELECT,
+      });
+      if (matched?.importedByUserId) throw new JobPersistenceError('JOB_PROVIDER_REFERENCE_CONFLICT');
+      if (matched) return matched;
+    }
+  }
+
+  return client.jobSnapshot.findFirst({
+    where: { canonicalJobId: job.dedupeFingerprint, importedByUserId: null },
     select: EXISTING_SNAPSHOT_SELECT,
   });
-  const resolution = needsCompanyLink(job, existing)
-    // No provider adapter currently returns an employer website, so name
-    // identity is the only signal available at ingestion. The domain signal
-    // stays implemented for the directory and backfill paths, which do have URLs.
-    ? (await resolveCompaniesForEmployers([{ employerName: job.company }])).get(job.company)
-    : undefined;
-  const snapshot = await persistSnapshot(job, existing, resolution);
-  if (resolution) logJobBoardEvent('company_link_resolved', { reason: resolution.outcome, count: 1 });
+}
+
+const isUniqueConflict = (error: unknown) =>
+  (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002')
+  || (typeof error === 'object' && error !== null && 'code' in error && error.code === 'P2002');
+
+/** The sole provider-neutral boundary that may materialise a shared provider job. */
+export async function ensurePersistedJob(job: NormalisedJob): Promise<{
+  snapshot: Awaited<ReturnType<typeof prisma.jobSnapshot.create>>;
+  outcome: JobMaterialisationOutcome;
+}> {
+  const stableReferences = stableProviderReferences(job);
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      const result = await prisma.$transaction(async (client) => {
+        const existing = await resolveExistingSnapshot(client, job, stableReferences);
+        if (!existing && !stableReferences.length) {
+          throw new JobPersistenceError('JOB_IDENTITY_UNSTABLE');
+        }
+        const resolution = needsCompanyLink(job, existing)
+          ? (await resolveCompaniesForEmployers([{ employerName: job.company }])).get(job.company)
+          : undefined;
+        const persisted = await persistSnapshot(client, job, existing, resolution);
+        return { ...persisted, resolutionOutcome: resolution?.outcome };
+      });
+      if (result.resolutionOutcome) {
+        logJobBoardEvent('company_link_resolved', { reason: result.resolutionOutcome, count: 1 });
+      }
+      return { snapshot: result.snapshot, outcome: result.outcome };
+    } catch (error) {
+      if (attempt === 0 && isUniqueConflict(error)) continue;
+      throw error;
+    }
+  }
+  throw new Error('Unreachable materialisation retry state.');
+}
+
+/** Compatibility delegate while callers move to the outcome-aware boundary. */
+export async function persistTrustedProviderJob(job: NormalisedJob) {
+  const { snapshot } = await ensurePersistedJob(job);
   return getSnapshotDetails(snapshot.id);
+}
+
+export type ExistingJobSnapshotMatch = {
+  id: string;
+  canonicalJobId: string;
+};
+
+/** Resolve durable snapshots for cards without creating or updating anything. */
+export async function findExistingJobSnapshots(
+  jobs: readonly NormalisedJob[],
+): Promise<Map<string, ExistingJobSnapshotMatch>> {
+  if (!jobs.length) return new Map();
+  const stableReferences = [...new Map(
+    jobs.flatMap(stableProviderReferences).map((reference) => [providerReferenceKey(reference), reference]),
+  ).values()];
+  const referenceRows = stableReferences.length
+    ? await prisma.jobProviderReference.findMany({
+        where: {
+          OR: stableReferences.map((reference) => ({
+            provider: reference.provider,
+            providerJobId: reference.sourceJobId,
+          })),
+        },
+        select: {
+          provider: true,
+          providerJobId: true,
+          jobSnapshot: { select: { id: true, canonicalJobId: true, importedByUserId: true } },
+        },
+      })
+    : [];
+  const byReference = new Map(referenceRows
+    .filter((row) => row.jobSnapshot.importedByUserId === null)
+    .map((row) => [`${row.provider}:${row.providerJobId}`, row.jobSnapshot]));
+  const matches = new Map<string, ExistingJobSnapshotMatch>();
+  const unresolved: NormalisedJob[] = [];
+  for (const job of jobs) {
+    const match = stableProviderReferences(job)
+      .map((reference) => byReference.get(providerReferenceKey(reference)))
+      .find(Boolean);
+    if (match) matches.set(job.canonicalJobId, { id: match.id, canonicalJobId: match.canonicalJobId });
+    else unresolved.push(job);
+  }
+  if (!unresolved.length) return matches;
+  const fingerprints = [...new Set(unresolved.map((job) => job.dedupeFingerprint))];
+  const equivalentRows = await prisma.jobSnapshot.findMany({
+    where: { canonicalJobId: { in: fingerprints }, importedByUserId: null },
+    select: { id: true, canonicalJobId: true },
+  });
+  const byFingerprint = new Map(equivalentRows.map((row) => [row.canonicalJobId, row]));
+  for (const job of unresolved) {
+    const match = byFingerprint.get(job.dedupeFingerprint);
+    if (match) matches.set(job.canonicalJobId, match);
+  }
+  return matches;
 }
 
 export interface ImportedVacancyInput {
@@ -291,43 +474,10 @@ export async function createImportedJobSnapshot(input: ImportedVacancyInput) {
  * discovery P2002 recovery, which is why that path is shared rather than copied.
  */
 export async function materialiseTrustedProviderSnapshotIds(jobs: readonly NormalisedJob[]): Promise<Map<string, string>> {
-  if (!jobs.length) return new Map();
-  const fingerprints = [...new Set(jobs.map((job) => job.dedupeFingerprint))];
-  const existing = new Map(
-    (await prisma.jobSnapshot.findMany({
-      where: { canonicalJobId: { in: fingerprints } },
-      select: { canonicalJobId: true, ...EXISTING_SNAPSHOT_SELECT },
-    })).map((row) => [row.canonicalJobId, row]),
-  );
-
-  /**
-   * Company identity for the whole page, in ONE deduplicated pass.
-   *
-   * This is a cheap indexed lookup per distinct employer name, not sponsor
-   * matching — search cards read persisted register evidence only and are never
-   * blocked on the matcher. Linking here is what makes the evidence exist to be
-   * read later, for the aggregator vacancies that dominate the board.
-   */
-  const unlinked = jobs.filter((job) => needsCompanyLink(job, existing.get(job.dedupeFingerprint) ?? null));
-  const resolutions = unlinked.length
-    ? await resolveCompaniesForEmployers(unlinked.map((job) => ({ employerName: job.company })))
-    : new Map<string, CompanyResolutionResult>();
-  if (resolutions.size) {
-    logJobBoardEvent('company_link_resolved', {
-      count: [...resolutions.values()].filter((item) => item.outcome === 'MATCHED_COMPANY').length,
-      reason: 'INGESTION_BATCH',
-    });
-  }
-
   const ids = new Map<string, string>();
   await Promise.all(jobs.map(async (job) => {
-    const previous = existing.get(job.dedupeFingerprint) ?? null;
-    const snapshot = await persistSnapshot(
-      job,
-      previous,
-      needsCompanyLink(job, previous) ? resolutions.get(job.company) : undefined,
-    );
-    if (snapshot) ids.set(job.canonicalJobId, snapshot.id);
+    const { snapshot } = await ensurePersistedJob(job);
+    ids.set(job.canonicalJobId, snapshot.id);
   }));
   return ids;
 }

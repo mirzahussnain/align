@@ -821,22 +821,27 @@ function SourceTab({ data }: { data: JobDetailsViewModel }) {
 }
 
 export function JobDetailsPanel({
+  canonicalJobId,
   jobSnapshotId,
+  sessionId,
   saved,
   onSaved,
   onBack,
   onSave,
   saving,
 }: {
+  canonicalJobId?: string;
   jobSnapshotId?: string;
+  sessionId?: string;
   saved?: boolean;
   onSaved: (id: string, saved: boolean) => void;
   onBack?: () => void;
   onSave: (id: string, saved: boolean) => void;
   saving: boolean;
 }) {
+  const jobReference = canonicalJobId ?? jobSnapshotId;
   const [data, setData] = useState<JobDetailsViewModel | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<{ message: string; code?: string } | null>(null);
   const [retry, setRetry] = useState(0);
   // What the user last ASKED for. The tab actually in force is derived from it
   // below, because the set of available tabs changes with the description.
@@ -847,11 +852,15 @@ export function JobDetailsPanel({
   const jobMatchDecision = decisionFor('job_match_analysis');
 
   useEffect(() => {
-    if (!jobSnapshotId) return;
+    if (!jobReference) return;
     let active = true;
     const controller = new AbortController();
+    const params = new URLSearchParams();
+    if (jobSnapshotId) params.set("jobSnapshotId", jobSnapshotId);
+    if (sessionId) params.set("sessionId", sessionId);
+    const query = params.size ? `?${params}` : "";
     readJson<JobDetailsViewModel>(
-      `/api/jobs/${encodeURIComponent(jobSnapshotId)}`,
+      `/api/jobs/${encodeURIComponent(jobReference)}${query}`,
       { signal: controller.signal },
     )
       .then((result) => {
@@ -862,17 +871,21 @@ export function JobDetailsPanel({
       })
       .catch((caught) => {
         if (active && (caught as Error).name !== "AbortError")
-          setError(
-            caught instanceof Error
-              ? caught.message
-              : "Unable to load this vacancy.",
-          );
+          setError({
+            message:
+              caught instanceof Error
+                ? caught.message
+                : "Unable to load this vacancy.",
+            ...((caught as { code?: string }).code
+              ? { code: (caught as { code: string }).code }
+              : {}),
+          });
       });
     return () => {
       active = false;
       controller.abort();
     };
-  }, [jobSnapshotId, onSaved, retry]);
+  }, [jobReference, jobSnapshotId, onSaved, retry, sessionId]);
 
   /**
    * Description tab rules, from the brief:
@@ -925,7 +938,7 @@ export function JobDetailsPanel({
     </button>
   );
 
-  if (!jobSnapshotId)
+  if (!jobReference)
     return (
       <div className="hidden min-h-[30rem] items-center justify-center rounded-2xl border border-dashed border-neutral-300 bg-white p-8 text-center text-sm text-neutral-500 lg:flex dark:border-border-subtle dark:bg-bg-secondary">
         Select a vacancy to review its details without leaving the results.
@@ -935,14 +948,24 @@ export function JobDetailsPanel({
     return (
       <div className="rounded-2xl border border-neutral-200 bg-white p-5 dark:border-border-subtle dark:bg-bg-secondary">
         {backButton}
-        <Notice tone="error">{error}</Notice>
-        <button
-          type="button"
-          onClick={() => setRetry((value) => value + 1)}
-          className="mt-4 min-h-11 rounded-lg border px-4 text-sm font-semibold"
-        >
-          Retry details
-        </button>
+        <Notice tone="error">{error.message}</Notice>
+        {error.code === "EPHEMERAL_JOB_EXPIRED" && onBack ? (
+          <button
+            type="button"
+            onClick={onBack}
+            className="mt-4 min-h-11 rounded-lg border px-4 text-sm font-semibold"
+          >
+            Search again
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setRetry((value) => value + 1)}
+            className="mt-4 min-h-11 rounded-lg border px-4 text-sm font-semibold"
+          >
+            Retry details
+          </button>
+        )}
       </div>
     );
   if (!data)
@@ -1134,7 +1157,9 @@ export function JobDetailsPanel({
         <CheckMatchModal
           open={matchModalOpen}
           onClose={() => setMatchModalOpen(false)}
-          jobId={data.job.id}
+          canonicalJobId={data.job.canonicalJobId}
+          jobSnapshotId={data.job.jobSnapshotId}
+          sessionId={sessionId}
           jobTitle={data.job.title}
           companyName={data.job.company.displayName}
           descriptionCompleteness={data.description.completeness}

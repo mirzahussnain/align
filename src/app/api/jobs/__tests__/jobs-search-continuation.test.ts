@@ -33,15 +33,19 @@ vi.mock("@/shared/services/sponsor-registry", () => ({
   getSponsorRegisterVersion: vi.fn(async () => "test-register"),
   standardizeCompanyName: (name: string) => name.toLowerCase().trim(),
 }));
-const materialiseSearchJobCards = vi.fn(async (jobs: NormalisedJob[]) =>
-  jobs.map((item) => ({ ...item, id: `snapshot-${item.canonicalJobId}` })),
-);
-const projectPublicSearchJobCards = vi.fn((jobs: readonly NormalisedJob[]) =>
-  jobs.map((item) => ({ ...item, id: item.canonicalJobId })),
+const projectSearchJobCards = vi.fn(
+  async (
+    jobs: readonly NormalisedJob[],
+    _userId: string | null,
+    _careerTrack?: unknown,
+  ) => jobs.map((item) => ({
+      ...item,
+      id: item.canonicalJobId,
+      canonicalJobId: item.canonicalJobId,
+    })),
 );
 vi.mock("@/shared/services/job-search-view", () => ({
-  materialiseSearchJobCards: (jobs: NormalisedJob[]) => materialiseSearchJobCards(jobs),
-  projectPublicSearchJobCards: (jobs: readonly NormalisedJob[]) => projectPublicSearchJobCards(jobs),
+  projectSearchJobCards,
 }));
 
 const atsSnapshots = vi.fn(async () => [] as unknown[]);
@@ -83,6 +87,7 @@ function job(title: string): NormalisedJob {
       {
         provider: "REED",
         sourceJobId: id,
+        identityStability: 'STABLE',
         sourceUrl: `https://example.com/${id}`,
       },
     ],
@@ -159,8 +164,7 @@ beforeEach(() => {
   atsSnapshots.mockResolvedValue([]);
   getSession.mockReset();
   getSession.mockResolvedValue(null);
-  materialiseSearchJobCards.mockClear();
-  projectPublicSearchJobCards.mockClear();
+  projectSearchJobCards.mockClear();
   cache = new MemoryCacheStore();
   restoreCache = __setCacheStore(cache);
 });
@@ -202,8 +206,10 @@ describe("page two is served from the session buffer", () => {
     expect(searchProvidersInteractive).toHaveBeenCalledTimes(1);
     // And no employer-ATS catalogue query either.
     expect(atsSnapshots).toHaveBeenCalledTimes(1);
-    expect(materialiseSearchJobCards).not.toHaveBeenCalled();
-    expect(projectPublicSearchJobCards).toHaveBeenCalledTimes(2);
+    expect(projectSearchJobCards).toHaveBeenCalledTimes(2);
+    expect(
+      projectSearchJobCards.mock.calls.every(([, userId]) => userId === null),
+    ).toBe(true);
   });
 
   it("returns no duplicate jobs across the two pages", async () => {
@@ -238,6 +244,109 @@ describe("page two is served from the session buffer", () => {
       `query=pages&location=Leeds&perPage=2&sessionId=${first.body.sessionId}`,
     );
     expect(second.body.meta.currentPage).toBe(2);
+  });
+});
+
+describe("source composition", () => {
+  const atsJob = (suffix = "1"): NormalisedJob => ({
+    ...job(`Employer ATS Engineer role ${suffix}`),
+    source: "GREENHOUSE",
+    sourceJobId: `ats-${suffix}`,
+    providerReferences: [{
+      provider: "GREENHOUSE",
+      sourceJobId: `ats-${suffix}`,
+      identityStability: "STABLE",
+      sourceUrl: "https://boards.greenhouse.io/acme/jobs/ats-1",
+    }],
+    canonicalJobId: `canonical-ats-${suffix}`,
+  });
+
+  it("includes ATS snapshots in an all-sources search", async () => {
+    searchProvidersInteractive.mockResolvedValue(exhaustedFanOut([]));
+    atsSnapshots.mockResolvedValue([{
+      provider: "GREENHOUSE",
+      status: "SUCCESS",
+      jobs: [atsJob()],
+      rawReceived: 1,
+      validNormalised: 1,
+      durationMs: 1,
+    }]);
+
+    const { body } = await call("query=engineer&source=all");
+
+    expect(body.jobs.map((entry: NormalisedJob) => entry.title)).toContain(
+      "Employer ATS Engineer role 1",
+    );
+  });
+
+  it.each(["adzuna", "reed", "jooble", "nhs_jobs"])(
+    "excludes ATS snapshots from a %s-only search",
+    async (source) => {
+    searchProvidersInteractive.mockResolvedValue(
+      fanOut([providerResult([job("Reed role")], {
+        provider: "REED",
+        nextCursor: undefined,
+      })]),
+    );
+    atsSnapshots.mockResolvedValue([{
+      provider: "GREENHOUSE",
+      status: "SUCCESS",
+      jobs: [atsJob()],
+      rawReceived: 1,
+      validNormalised: 1,
+      durationMs: 1,
+    }]);
+
+    const { body } = await call(`query=engineer&source=${source}`);
+
+    expect(body.jobs.map((entry: NormalisedJob) => entry.title)).toEqual([
+      "Reed role",
+    ]);
+    expect(atsSnapshots).not.toHaveBeenCalled();
+    },
+  );
+
+  it("uses only ATS snapshots for a direct-employer search", async () => {
+    atsSnapshots.mockResolvedValue([{
+      provider: "GREENHOUSE",
+      status: "SUCCESS",
+      jobs: [atsJob()],
+      rawReceived: 1,
+      validNormalised: 1,
+      durationMs: 1,
+    }]);
+
+    const result = await call("query=engineer&source=direct_employer");
+
+    expect(result.status).toBe(200);
+    expect(result.body.jobs).toHaveLength(1);
+    expect(searchProvidersInteractive).not.toHaveBeenCalled();
+    expect(atsSnapshots).toHaveBeenCalledTimes(1);
+  });
+
+  it("pages an ATS-only result buffer without advertising an unavailable third page", async () => {
+    atsSnapshots.mockResolvedValue([{
+      provider: "GREENHOUSE",
+      status: "SUCCESS",
+      jobs: [atsJob("1"), atsJob("2"), atsJob("3")],
+      rawReceived: 3,
+      validNormalised: 3,
+      durationMs: 1,
+    }]);
+
+    const first = await call(
+      "query=engineer&source=direct_employer&perPage=2",
+    );
+    const second = await call(
+      `query=engineer&source=direct_employer&perPage=2&sessionId=${first.body.sessionId}`,
+    );
+
+    expect(first.body.jobs).toHaveLength(2);
+    expect(first.body.meta.hasMore).toBe(true);
+    expect(second.body.jobs).toHaveLength(1);
+    expect(second.body.meta.hasMore).toBe(false);
+    expect(searchProvidersInteractive).not.toHaveBeenCalled();
+    expect(atsSnapshots).toHaveBeenCalledTimes(1);
   });
 });
 

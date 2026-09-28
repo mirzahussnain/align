@@ -62,6 +62,7 @@ describe('retention policy', () => {
     expect(RETENTION_POLICY).toEqual({
       anonymousDemoHours: 24,
       staleJobDays: 45,
+      archivedJobPurgeDays: 180,
       abandonedRequestMinutes: 30,
       uploadIntent: {
         pendingMinutes: 5,

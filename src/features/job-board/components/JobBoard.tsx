@@ -72,38 +72,59 @@ function useIsMobile() {
   return isMobile;
 }
 
-function useSaveMutation(onChange: (id: string, saved: boolean) => void) {
+type SaveReference = {
+  canonicalJobId: string;
+  jobSnapshotId?: string;
+  sessionId?: string;
+};
+
+function useSaveMutation(
+  onChange: (canonicalJobId: string, saved: boolean, jobSnapshotId?: string) => void,
+) {
   const pendingRef = useRef(new Set<string>());
   const [pending, setPending] = useState<Set<string>>(new Set());
   const [error, setError] = useState<string | null>(null);
 
   const mutate = useCallback(
-    async (id: string, saved: boolean, profileId?: string) => {
-      if (pendingRef.current.has(id)) return;
-      pendingRef.current.add(id);
+    async (reference: SaveReference, saved: boolean, profileId?: string) => {
+      const pendingId = reference.canonicalJobId;
+      if (pendingRef.current.has(pendingId)) return;
+      pendingRef.current.add(pendingId);
       setPending(new Set(pendingRef.current));
       setError(null);
-      onChange(id, !saved);
+      onChange(reference.canonicalJobId, !saved, reference.jobSnapshotId);
       try {
-        await readJson(
-          `/api/jobs/${encodeURIComponent(id)}/save`,
+        const result = await readJson<{ saved: boolean; jobSnapshotId: string }>(
+          `/api/jobs/${encodeURIComponent(
+            saved
+              ? reference.jobSnapshotId ?? reference.canonicalJobId
+              : reference.canonicalJobId,
+          )}/save`,
           saved
             ? { method: "DELETE" }
             : {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(profileId ? { profileId } : {}),
+                body: JSON.stringify({
+                  canonicalJobId: reference.canonicalJobId,
+                  ...(reference.jobSnapshotId
+                    ? { jobSnapshotId: reference.jobSnapshotId }
+                    : {}),
+                  ...(reference.sessionId ? { sessionId: reference.sessionId } : {}),
+                  ...(profileId ? { profileId } : {}),
+                }),
               },
         );
+        onChange(reference.canonicalJobId, result.saved, result.jobSnapshotId);
       } catch (caught) {
-        onChange(id, saved);
+        onChange(reference.canonicalJobId, saved, reference.jobSnapshotId);
         setError(
           caught instanceof Error
             ? caught.message
             : "Unable to update saved jobs.",
         );
       } finally {
-        pendingRef.current.delete(id);
+        pendingRef.current.delete(pendingId);
         setPending(new Set(pendingRef.current));
       }
     },
@@ -203,6 +224,23 @@ function FilterDialog({
         </div>
         <div className="mt-4 grid gap-3 sm:grid-cols-2">
           <label className="text-xs font-semibold text-neutral-700 dark:text-text-secondary">
+            Job source
+            <select
+              value={filters.source}
+              onChange={(event) =>
+                update("source", event.target.value as DiscoverFilters["source"])
+              }
+              className="mt-1 w-full h-9 rounded-lg border border-neutral-200 bg-neutral-50 px-2.5 text-xs font-medium text-neutral-900 focus:outline-none focus:ring-2 focus:ring-accent-cyan dark:border-border-subtle dark:bg-bg-tertiary dark:text-text-primary"
+            >
+              <option value="all">All sources</option>
+              <option value="direct_employer">Direct employers</option>
+              <option value="adzuna">Adzuna</option>
+              <option value="reed">Reed</option>
+              <option value="jooble">Jooble</option>
+              <option value="nhs_jobs">NHS Jobs</option>
+            </select>
+          </label>
+          <label className="text-xs font-semibold text-neutral-700 dark:text-text-secondary">
             Workplace
             <select
               value={filters.workplace}
@@ -294,6 +332,7 @@ function FilterDialog({
             onClick={() =>
               onChange({
                 ...filters,
+                source: "all",
                 workplace: "all",
                 employmentType: "all",
                 salaryMin: "",
@@ -342,6 +381,16 @@ function FilterChips({
   onClearAll: () => void;
 }) {
   const chips: Array<[keyof DiscoverFilters, string, string, boolean]> = [
+    [
+      "source",
+      "Source",
+      filters.source === "all"
+        ? "All"
+        : filters.source === "direct_employer"
+          ? "Direct employers"
+          : (humanise(filters.source) ?? ""),
+      filters.source !== "all",
+    ],
     [
       "salaryMin",
       "Salary",
@@ -582,7 +631,10 @@ export function DiscoverBoard({
   const initialFiltersRef = useRef(filters);
   const initialDetailsRef = useRef(Boolean(initialJobSnapshotId));
   const defaultSearchQueryRef = useRef<string>("");
-  const sessionRef = useRef<string | undefined>(undefined);
+  const sessionRef = useRef<string | undefined>(getCache()?.sessionId);
+  const [activeSessionId, setActiveSessionId] = useState<string | undefined>(
+    getCache()?.sessionId,
+  );
   const requestRef = useRef(0);
   const controllerRef = useRef<AbortController | undefined>(undefined);
   const prefetchRef = useRef<
@@ -679,7 +731,7 @@ export function DiscoverBoard({
         ? filters
         : { ...filters, query: activeQuery, location: filters.location || draft.location };
 
-      const filterKey = `${effectiveFilters.query}_${effectiveFilters.location}_${effectiveFilters.workplace}_${effectiveFilters.employmentType}_${effectiveFilters.sponsorStatus}_${effectiveFilters.sort}_${effectiveFilters.careerTrackId}_${effectiveFilters.salaryMin}_${effectiveFilters.freshness}`;
+      const filterKey = `${effectiveFilters.query}_${effectiveFilters.location}_${effectiveFilters.source}_${effectiveFilters.workplace}_${effectiveFilters.employmentType}_${effectiveFilters.sponsorStatus}_${effectiveFilters.sort}_${effectiveFilters.careerTrackId}_${effectiveFilters.salaryMin}_${effectiveFilters.freshness}`;
 
       // Prevent job list from re-fetching or flickering into loading state when simply selecting a job card
       if (!more && !force && pagesRef.current.length > 0 && lastLoadedFiltersKey.current === filterKey) {
@@ -728,6 +780,7 @@ export function DiscoverBoard({
         const page = result.jobs.filter((job) => !seen.has(job.id));
         setMeta(result.meta);
         sessionRef.current = result.sessionId;
+        setActiveSessionId(result.sessionId);
         // A continuation that yields nothing new is the end of the results, not
         // a blank page to navigate onto.
         if (more && !page.length) {
@@ -762,6 +815,7 @@ export function DiscoverBoard({
           // a "Next" button. Restarting the search is the documented recovery.
           if ((caught as { code?: string }).code === "SEARCH_SESSION_EXPIRED") {
             sessionRef.current = undefined;
+            setActiveSessionId(undefined);
             setCache(null);
             setSessionRestarted(true);
             setReloadToken((token) => token + 1);
@@ -857,7 +911,10 @@ export function DiscoverBoard({
     pagesRef.current = [];
     cancelPrefetch();
     queueMicrotask(() => {
-      if (active) load();
+      if (active) {
+        setActiveSessionId(undefined);
+        load();
+      }
     });
     return () => {
       active = false;
@@ -865,9 +922,13 @@ export function DiscoverBoard({
     };
   }, [cancelPrefetch, load, reloadToken]);
 
-  const onSaved = useCallback((id: string, saved: boolean) => {
+  const onSaved = useCallback((id: string, saved: boolean, jobSnapshotId?: string) => {
     pagesRef.current = pagesRef.current.map((page) =>
-      page.map((job) => (job.id === id ? { ...job, saved } : job)),
+      page.map((job) =>
+        job.canonicalJobId === id
+          ? { ...job, saved, ...(jobSnapshotId ? { jobSnapshotId } : {}) }
+          : job,
+      ),
     );
     setPages(pagesRef.current);
     const cache = getCache();
@@ -892,6 +953,7 @@ export function DiscoverBoard({
   const applyFilters = (next: DiscoverFilters) => {
     setFilterOpen(false);
     sessionRef.current = undefined;
+    setActiveSessionId(undefined);
     setCache(null);
     cancelPrefetch();
     resetContinuationNotices();
@@ -1137,7 +1199,11 @@ export function DiscoverBoard({
                     onSelect={() => select(job.id)}
                     onSave={() =>
                       save.mutate(
-                        job.id,
+                        {
+                          canonicalJobId: job.canonicalJobId,
+                          ...(job.jobSnapshotId ? { jobSnapshotId: job.jobSnapshotId } : {}),
+                          ...(sessionRef.current ? { sessionId: sessionRef.current } : {}),
+                        },
                         job.saved,
                         filters.careerTrackId || undefined,
                       )
@@ -1189,12 +1255,22 @@ export function DiscoverBoard({
           >
             <JobDetailsPanel
               key={selectedJobSnapshotId ?? "no-selection"}
-              jobSnapshotId={selectedJobSnapshotId}
+              canonicalJobId={selected?.canonicalJobId ?? selectedJobSnapshotId}
+              jobSnapshotId={selected?.jobSnapshotId ?? (!selected ? selectedJobSnapshotId : undefined)}
+              sessionId={selected ? activeSessionId : undefined}
               saved={selected?.saved}
               onSaved={onSaved}
               onBack={closeDetails}
               onSave={(id, isSaved) =>
-                save.mutate(id, isSaved, filters.careerTrackId || undefined)
+                save.mutate(
+                  {
+                    canonicalJobId: selected?.canonicalJobId ?? id,
+                    ...(selected?.jobSnapshotId ? { jobSnapshotId: selected.jobSnapshotId } : {}),
+                    ...(sessionRef.current ? { sessionId: sessionRef.current } : {}),
+                  },
+                  isSaved,
+                  filters.careerTrackId || undefined,
+                )
               }
               saving={
                 selectedJobSnapshotId
@@ -1216,12 +1292,22 @@ export function DiscoverBoard({
           >
             <JobDetailsPanel
               key={`mobile-${selectedJobSnapshotId}`}
-              jobSnapshotId={selectedJobSnapshotId}
+              canonicalJobId={selected?.canonicalJobId ?? selectedJobSnapshotId}
+              jobSnapshotId={selected?.jobSnapshotId ?? (!selected ? selectedJobSnapshotId : undefined)}
+              sessionId={selected ? activeSessionId : undefined}
               saved={selected?.saved}
               onSaved={onSaved}
               onBack={closeDetails}
               onSave={(id, isSaved) =>
-                save.mutate(id, isSaved, filters.careerTrackId || undefined)
+                save.mutate(
+                  {
+                    canonicalJobId: selected?.canonicalJobId ?? id,
+                    ...(selected?.jobSnapshotId ? { jobSnapshotId: selected.jobSnapshotId } : {}),
+                    ...(sessionRef.current ? { sessionId: sessionRef.current } : {}),
+                  },
+                  isSaved,
+                  filters.careerTrackId || undefined,
+                )
               }
               saving={
                 selectedJobSnapshotId
@@ -1329,7 +1415,15 @@ export function SavedBoard() {
                   job={row.job}
                   availability={row.availability}
                   onSelect={() => router.push(JOB_BOARD_ROUTES.details(row.job.id))}
-                  onSave={() => save.mutate(row.job.id, true)}
+                  onSave={() =>
+                    save.mutate(
+                      {
+                        canonicalJobId: row.job.canonicalJobId || row.job.id,
+                        jobSnapshotId: row.job.jobSnapshotId ?? row.job.id,
+                      },
+                      true,
+                    )
+                  }
                   saving={save.pending.has(row.job.id)}
                 />
                 <p className="px-1 pt-1 text-xs text-neutral-400 dark:text-text-tertiary">
@@ -1723,7 +1817,15 @@ export function CompanyDetailsBoard({
                     key={job.id}
                     job={job}
                     onSelect={() => router.push(JOB_BOARD_ROUTES.details(job.id))}
-                    onSave={() => save.mutate(job.id, job.saved)}
+                    onSave={() =>
+                      save.mutate(
+                        {
+                          canonicalJobId: job.canonicalJobId || job.id,
+                          jobSnapshotId: job.jobSnapshotId ?? job.id,
+                        },
+                        job.saved,
+                      )
+                    }
                     saving={save.pending.has(job.id)}
                   />
                 ))}

@@ -27,6 +27,7 @@ const card = (
   overrides: Partial<JobCardViewModel> = {},
 ): JobCardViewModel => ({
   id: "snapshot-1",
+  canonicalJobId: "canonical-1",
   title: "IT Analyst",
   company: { displayName: "Alpha Ltd" },
   location: "Birmingham",

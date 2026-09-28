@@ -64,6 +64,7 @@ export function parseNhsJobsXml(xml: string): { jobs: ProviderJob[]; total: numb
       postedDate: tagText(block, 'postDate'),
       closingDate: tagText(block, 'closeDate') || undefined,
       source: 'nhs_jobs',
+      identityStability: 'STABLE',
       contractType: tagText(block, 'type') || null,
       isRemote: /\b(remote|home[- ]based)\b/i.test(`${location} ${description}`),
       hasSponsorship: false,

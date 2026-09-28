@@ -80,6 +80,7 @@ export interface JobSearchSession {
  * are the least likely to reappear in a later page.
  */
 const MAX_SEEN_IDS = 500;
+const MAX_BUFFERED_REFERENCE_JOBS = 500;
 
 export type SessionResolution =
   | { outcome: 'CREATED'; session: JobSearchSession }
@@ -142,6 +143,30 @@ export async function saveSessionBuffer(
 export async function loadSessionBuffer<T>(store: CacheStore, sessionId: string): Promise<T[] | null> {
   const stored = await store.get<T[]>(cacheKeys.searchBuffer(sessionId));
   return Array.isArray(stored) ? stored : null;
+}
+
+export type BufferedJobResolution<T> =
+  | { outcome: 'FOUND'; job: T }
+  | { outcome: 'MISSING' }
+  | { outcome: 'REJECTED'; reason: 'owner_mismatch' };
+
+/** Resolve one displayed result from a bounded, owner-validated session buffer. */
+export async function resolveBufferedJob<T extends { canonicalJobId: string }>(
+  store: CacheStore,
+  input: { sessionId: string; canonicalJobId: string; userId: string | null },
+): Promise<BufferedJobResolution<T>> {
+  const session = await loadSession(store, input.sessionId);
+  if (!session) return { outcome: 'MISSING' };
+  const requesterHash = input.userId ? hashToken(input.userId) : null;
+  if ((session.ownerHash ?? null) !== requesterHash) {
+    return { outcome: 'REJECTED', reason: 'owner_mismatch' };
+  }
+  const jobs = await loadSessionBuffer<T>(store, input.sessionId);
+  if (!jobs) return { outcome: 'MISSING' };
+  const job = jobs
+    .slice(0, MAX_BUFFERED_REFERENCE_JOBS)
+    .find((candidate) => candidate.canonicalJobId === input.canonicalJobId);
+  return job ? { outcome: 'FOUND', job } : { outcome: 'MISSING' };
 }
 
 export async function saveSession(store: CacheStore, session: JobSearchSession): Promise<void> {

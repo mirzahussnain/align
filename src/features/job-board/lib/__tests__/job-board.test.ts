@@ -21,6 +21,20 @@ describe("Job Board URL and API query contracts", () => {
     expect(params.get("location")).toBe("Birmingham");
   });
 
+  it("round-trips the direct-employer source into the search API", () => {
+    const filters = {
+      ...DEFAULT_FILTERS,
+      query: "Platform Engineer",
+      source: "direct_employer" as const,
+    };
+
+    const url = filtersToUrl(filters);
+
+    expect(url.get("source")).toBe("direct_employer");
+    expect(parseDiscoverFilters(url)).toEqual(filters);
+    expect(filtersToApi(filters).get("source")).toBe("direct_employer");
+  });
+
   it("omits empty strings and round-trips supported URL state", () => {
     const filters = {
       ...DEFAULT_FILTERS,

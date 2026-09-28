@@ -208,6 +208,7 @@ describe('classification through full provider normalisation', () => {
     contractType: null,
     isRemote: false,
     hasSponsorship: false,
+    identityStability: 'STABLE',
   } as const;
 
   it('applies the same classification a direct call would', () => {

@@ -8,7 +8,7 @@ describe('Greenhouse employer adapter', () => {
   it('normalises a complete board, sanitises HTML, and retains direct provenance', async () => {
     const adapter = createGreenhouseAdapter({ fetch: async () => response(200, { jobs: [{ id: 12, title: 'Platform Engineer', updated_at: '2026-07-28T10:00:00Z', absolute_url: 'https://boards.greenhouse.io/acme/jobs/12', location: { name: 'Hybrid - London, UK' }, content: '<p>Build systems.</p><ul><li>Own reliability</li></ul><script>alert(1)</script>', departments: [{ name: 'Engineering' }], offices: [{ name: 'London' }] }] }) });
     const result = await adapter.fetchBoard(source);
-    expect(result).toMatchObject({ rawReceived: 1, invalidUrls: 0, jobs: [{ source: 'GREENHOUSE', sourceJobId: '12', employerSourceId: 'source-1', companyRecordId: 'company-1', departments: ['Engineering'], offices: ['London'] }] });
+    expect(result).toMatchObject({ rawReceived: 1, invalidUrls: 0, jobs: [{ source: 'GREENHOUSE', sourceJobId: '12', employerSourceId: 'source-1', companyRecordId: 'company-1', departments: ['Engineering'], offices: ['London'], providerReferences: [{ identityStability: 'STABLE' }] }] });
     expect(result.jobs[0].description).toContain('• Own reliability');
     expect(result.jobs[0].description).not.toContain('alert');
   });

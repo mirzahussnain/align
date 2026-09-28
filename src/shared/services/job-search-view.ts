@@ -2,7 +2,7 @@ import { prisma } from "@/shared/lib/prisma";
 import { sponsorSummary } from "@/shared/services/job-board-api";
 import { assessDescriptionCompleteness } from "@/shared/services/job-description-completeness";
 import { calculateDiscoveryRelevance } from "@/shared/services/job-intelligence";
-import { materialiseTrustedProviderSnapshotIds } from "@/shared/services/job-snapshot";
+import { findExistingJobSnapshots } from "@/shared/services/job-snapshot";
 import type { NormalisedJob } from "@/shared/types/job";
 import type { CareerTrackDiscoveryInput } from "@/shared/types/job-intelligence";
 
@@ -73,49 +73,34 @@ function projectSearchJobCard(
   };
 }
 
-/** Public discovery projection. IDs are cache identities, never JobSnapshot IDs. */
-export function projectPublicSearchJobCards(jobs: readonly NormalisedJob[]) {
-  return jobs.map((job) => projectSearchJobCard(job, job.canonicalJobId, false));
-}
-
-/**
- * Materialise a provider-neutral search page into durable JobSnapshot cards.
- * Selection, details, save state and React identity all share this id.
- *
- * SHARED FIRST, PRIVATE SECOND. Everything above the per-card mapping is
- * user-independent; saved state and Career Track relevance are the only
- * user-specific fields and are merged in here, after the shared work. That
- * ordering is what allows the search and employer-ATS layers underneath to be
- * cached publicly at all.
- */
-export async function materialiseSearchJobCards(
-  jobs: NormalisedJob[],
+/** Shared read-only projection for anonymous and authenticated discovery. */
+export async function projectSearchJobCards(
+  jobs: readonly NormalisedJob[],
   userId: string | null,
   careerTrack?: CareerTrackDiscoveryInput,
 ) {
-  // One batched existence check for the whole page instead of one round trip per
-  // card, and no re-read of what was just written.
-  const snapshotIds = await materialiseTrustedProviderSnapshotIds(jobs);
-  const materialised = jobs.map((job) => {
-    const id = snapshotIds.get(job.canonicalJobId);
-    if (!id) throw new Error("Unable to materialise a durable job snapshot.");
-    return { job, id };
+  const snapshots = await findExistingJobSnapshots(jobs);
+  const snapshotIds = [...new Set(
+    [...snapshots.values()].map((snapshot) => snapshot.id),
+  )];
+  const savedIds = userId && snapshotIds.length
+    ? new Set((await prisma.savedJob.findMany({
+        where: { userId, jobSnapshotId: { in: snapshotIds } },
+        select: { jobSnapshotId: true },
+      })).map((item) => item.jobSnapshotId))
+    : new Set<string>();
+
+  return jobs.map((job) => {
+    const snapshot = snapshots.get(job.canonicalJobId);
+    return {
+      ...projectSearchJobCard(
+        job,
+        job.canonicalJobId,
+        snapshot ? savedIds.has(snapshot.id) : false,
+        careerTrack,
+      ),
+      canonicalJobId: job.canonicalJobId,
+      ...(snapshot ? { jobSnapshotId: snapshot.id } : {}),
+    };
   });
-
-  const ids = materialised.map(({ id }) => id);
-  const savedIds =
-    userId && ids.length
-      ? new Set(
-          (
-            await prisma.savedJob.findMany({
-              where: { userId, jobSnapshotId: { in: ids } },
-              select: { jobSnapshotId: true },
-            })
-          ).map((item) => item.jobSnapshotId),
-        )
-      : new Set<string>();
-
-  return materialised.map(({ job, id }) =>
-    projectSearchJobCard(job, id, savedIds.has(id), careerTrack),
-  );
 }

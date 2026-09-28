@@ -16,6 +16,7 @@ import {
 import { comparePracticalCompatibility } from "@/shared/services/practical-compatibility";
 import { buildConfirmedCandidateFacts } from "@/shared/services/practical-compatibility-store";
 import { getSponsorRegisterVersion } from "@/shared/services/sponsor-registry";
+import type { NormalisedJob } from "@/shared/types/job";
 import type { VacancyRequirementEvidence } from "@/shared/types/job-intelligence";
 import type { PracticalCompatibilityViewModel } from "@/shared/types/practical-compatibility";
 import {
@@ -296,6 +297,113 @@ async function enrichOnDetailsOpen(
     cacheLayer: "job-details",
   });
   return currentRegisterVersion;
+}
+
+/** Pure details projection for a normalized job held in a search-session buffer. */
+export function getNormalisedJobDetailsView(job: NormalisedJob) {
+  const assessed = assessDescriptionCompleteness({
+    provider: job.source,
+    description: job.description ?? null,
+  });
+  const source = job.description
+    ? job.descriptionAvailability === "FULL"
+      ? ("PROVIDER_FULL" as const)
+      : ("PROVIDER_PARTIAL" as const)
+    : ("NONE" as const);
+  const hostedUrl = safeUrl(
+    job.providerReferences.find((reference) => reference.sourceUrl)?.sourceUrl ??
+      job.canonicalUrl,
+  );
+  const applicationUrl = safeUrl(
+    job.providerReferences.find((reference) => reference.applicationUrl)
+      ?.applicationUrl,
+  );
+  const salary =
+    job.salaryText || job.salaryMin != null || job.salaryMax != null
+      ? {
+          ...(job.salaryText ? { text: job.salaryText } : {}),
+          ...(job.salaryMin != null ? { min: job.salaryMin } : {}),
+          ...(job.salaryMax != null ? { max: job.salaryMax } : {}),
+          ...(job.salaryPeriod ? { period: job.salaryPeriod } : {}),
+          ...(job.currency ? { currency: job.currency } : {}),
+        }
+      : undefined;
+  const sponsorStatus = sponsorSummary(job.sponsorSignal.registerMatchStatus);
+
+  return {
+    job: {
+      id: job.canonicalJobId,
+      canonicalJobId: job.canonicalJobId,
+      title: job.title,
+      company: {
+        ...(job.companyRecordId ? { id: job.companyRecordId } : {}),
+        displayName: job.company,
+      },
+      ...(job.locationText ? { location: job.locationText } : {}),
+      ...(job.countryCode ? { countryCode: job.countryCode } : {}),
+      descriptionAvailability: job.descriptionAvailability,
+      hasReadableDescription: assessed.hasReadableText,
+      ...(hostedUrl ? { fullDescriptionExternalUrl: hostedUrl } : {}),
+      ...(job.remoteType !== "UNKNOWN" ? { workplaceType: job.remoteType } : {}),
+      ...((job.employmentType ?? job.contractType)
+        ? { employmentType: job.employmentType ?? job.contractType }
+        : {}),
+      ...(salary ? { salary } : {}),
+      ...(job.postedAt ? { postedAt: job.postedAt } : {}),
+      freshness: "FRESH" as const,
+      sourceSummary: {
+        preferredProvider: job.source,
+        providerCount: job.providerReferences.length,
+        employerDirect: Boolean(job.employerSourceId),
+      },
+      sponsorEvidenceSummary: sponsorStatus,
+      saved: false,
+    },
+    description: {
+      ...(job.description ? { text: job.description } : {}),
+      source,
+      completeness: job.descriptionAvailability,
+      hasReadableText: assessed.hasReadableText,
+      intelligenceCurrent: false,
+    },
+    ...(job.description ? { providerDescription: job.description } : {}),
+    providerDescriptionAvailability: job.descriptionAvailability,
+    ...(source !== "NONE" ? { activeDescriptionSource: source } : {}),
+    sponsorEvidence: {
+      status: sponsorStatus.status,
+      summary: sponsorStatus,
+      disclaimer: SPONSOR_REGISTER_DISCLAIMER,
+      ...(job.sponsorSignal.matchedOrganisationName
+        ? { matchedOrganisationName: job.sponsorSignal.matchedOrganisationName }
+        : {}),
+      reasons: [job.sponsorSignal.explanation],
+    },
+    sourceProvenance: job.providerReferences.map((reference) => ({
+      provider: reference.provider,
+      providerJobId: reference.sourceJobId,
+      ...(safeUrl(reference.sourceUrl)
+        ? { hostedUrl: safeUrl(reference.sourceUrl) }
+        : {}),
+      ...(safeUrl(reference.applicationUrl)
+        ? { applicationUrl: safeUrl(reference.applicationUrl) }
+        : {}),
+    })),
+    ...(applicationUrl ? { applicationUrl } : {}),
+    ...(hostedUrl ? { hostedUrl } : {}),
+    availability: "DISCOVERABLE" as const,
+    matchPreparation: {
+      eligible: job.descriptionAvailability === "FULL",
+      requiresPastedDescription: job.descriptionAvailability !== "FULL",
+      ...(job.descriptionAvailability === "FULL"
+        ? {}
+        : {
+            reason:
+              job.descriptionAvailability === "EXTERNAL_ONLY"
+                ? "DESCRIPTION_EXTERNAL_ONLY"
+                : "DESCRIPTION_PARTIAL",
+          }),
+    },
+  };
 }
 
 export async function getJobDetailsView(

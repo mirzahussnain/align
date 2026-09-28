@@ -63,7 +63,7 @@ export function createLeverAdapter(dependencies: { fetch?: FetchLike; timeoutMs?
           if (seen.has(id)) { duplicateProviderJobIds += 1; return []; } seen.add(id);
           const place = [category(job.workplaceType), category(job.categories?.location)].filter(Boolean).join(' - ');
           const providerJob: ProviderJob = {
-            id: `lever-${id}`, source: 'lever', title, company: source.companyRecord.displayName, location: place,
+            id: `lever-${id}`, source: 'lever', identityStability: 'STABLE', title, company: source.companyRecord.displayName, location: place,
             salary: null, salaryMin: null, salaryMax: null, description: job.descriptionPlain?.trim() || htmlToReadableText(job.description),
             url: application.valid && application.url ? application.url : hosted.url, hostedUrl: hosted.url,
             ...(application.valid && application.url ? { applicationUrl: application.url } : {}),

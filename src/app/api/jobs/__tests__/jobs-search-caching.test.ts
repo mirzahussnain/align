@@ -25,15 +25,19 @@ vi.mock("@/shared/services/sponsor-registry", () => ({
   standardizeCompanyName: (name: string) => name.toLowerCase().trim(),
 }));
 
-const materialiseSearchJobCards = vi.fn(async (jobs: NormalisedJob[]) =>
-  jobs.map((item) => ({ ...item, id: `snapshot-${item.canonicalJobId}` })),
-);
-const projectPublicSearchJobCards = vi.fn((jobs: readonly NormalisedJob[]) =>
-  jobs.map((item) => ({ ...item, id: item.canonicalJobId })),
+const projectSearchJobCards = vi.fn(
+  async (
+    jobs: readonly NormalisedJob[],
+    _userId: string | null,
+    _careerTrack?: unknown,
+  ) => jobs.map((item) => ({
+      ...item,
+      id: item.canonicalJobId,
+      canonicalJobId: item.canonicalJobId,
+    })),
 );
 vi.mock("@/shared/services/job-search-view", () => ({
-  materialiseSearchJobCards: (jobs: NormalisedJob[]) => materialiseSearchJobCards(jobs),
-  projectPublicSearchJobCards: (jobs: readonly NormalisedJob[]) => projectPublicSearchJobCards(jobs),
+  projectSearchJobCards,
 }));
 
 const searchProvidersInteractive = vi.fn();
@@ -67,6 +71,7 @@ function job(title = "Support Engineer"): NormalisedJob {
       {
         provider: "REED",
         sourceJobId: id,
+        identityStability: 'STABLE',
         sourceUrl: `https://example.com/${id}`,
       },
     ],
@@ -122,8 +127,7 @@ beforeEach(() => {
   searchProvidersInteractive.mockReset();
   getSession.mockReset();
   getSession.mockResolvedValue(null);
-  materialiseSearchJobCards.mockClear();
-  projectPublicSearchJobCards.mockClear();
+  projectSearchJobCards.mockClear();
   cache = new MemoryCacheStore();
   restoreCache = __setCacheStore(cache);
 });
@@ -140,19 +144,26 @@ describe("merged search-response cache", () => {
     await call("query=publicboundary&location=Leeds");
     await call("query=publicboundary&location=Leeds");
 
-    expect(materialiseSearchJobCards).not.toHaveBeenCalled();
-    expect(projectPublicSearchJobCards).toHaveBeenCalledTimes(2);
+    expect(projectSearchJobCards).toHaveBeenCalledTimes(2);
+    expect(
+      projectSearchJobCards.mock.calls.every(([, userId]) => userId === null),
+    ).toBe(true);
   });
 
-  it("preserves durable materialisation for authenticated dashboard searches", async () => {
+  it("keeps authenticated dashboard searches on the read-only projection", async () => {
     getSession.mockResolvedValue({ user: { id: "user-1" } });
     searchProvidersInteractive.mockResolvedValue(fanOut([providerResult([job("Dashboard role")])]));
 
     const response = await call("query=dashboardboundary&location=Leeds");
 
-    expect(materialiseSearchJobCards).toHaveBeenCalledTimes(1);
-    expect(projectPublicSearchJobCards).not.toHaveBeenCalled();
-    expect(response.body.jobs[0].id).toMatch(/^snapshot-/);
+    expect(projectSearchJobCards).toHaveBeenCalledTimes(1);
+    expect(projectSearchJobCards).toHaveBeenCalledWith(
+      expect.any(Array),
+      "user-1",
+      undefined,
+    );
+    expect(response.body.jobs[0].id).toBe(response.body.jobs[0].canonicalJobId);
+    expect(response.body.jobs[0]).not.toHaveProperty("jobSnapshotId");
   });
 
   it("serves a second identical search from the cache without calling providers", async () => {

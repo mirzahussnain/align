@@ -117,7 +117,7 @@ export function normaliseProviderJob(raw: ProviderJob): NormalisedJob {
     ? raw.id.slice(providerPrefix.length)
     : raw.id.replace(/^[a-z]+-/, '');
   return {
-    source, sourceJobId, providerReferences: [{ provider: source, sourceJobId, sourceUrl: raw.hostedUrl ?? raw.url, ...(raw.applicationUrl ? { applicationUrl: raw.applicationUrl } : {}) }],
+    source, sourceJobId, providerReferences: [{ provider: source, sourceJobId, identityStability: raw.identityStability, sourceUrl: raw.hostedUrl ?? raw.url, ...(raw.applicationUrl ? { applicationUrl: raw.applicationUrl } : {}) }],
     canonicalUrl: raw.url, title: clean(raw.title), company: clean(raw.company), companyNormalised: companyNormalised || undefined,
     ...location, description: description || undefined,
     descriptionAvailability: classifyDescriptionAvailability(source, description),

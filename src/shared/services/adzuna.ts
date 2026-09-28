@@ -94,6 +94,7 @@ export async function searchAdzunaJobs(
     url: job.redirect_url,
     postedDate: job.created,
     source: 'adzuna' as const,
+    identityStability: 'STABLE' as const,
     contractType: job.contract_type || job.contract_time || null,
     isRemote: job.location.display_name.toLowerCase().includes('remote'),
     hasSponsorship: false,

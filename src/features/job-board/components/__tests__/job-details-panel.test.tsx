@@ -4,6 +4,7 @@ import { cleanup, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { JobDetailsBoard } from "@/features/job-board/components/JobBoard";
+import { JobDetailsPanel } from "@/features/job-board/components/JobDetailsPanel";
 
 const navigation = vi.hoisted(() => ({
   pathname: "/dashboard/jobs/snapshot-42",
@@ -23,6 +24,8 @@ vi.mock("@/features/dashboard/components/DashboardTopBar", () => ({
 const details = {
   job: {
     id: "snapshot-42",
+    canonicalJobId: "canonical-42",
+    jobSnapshotId: "snapshot-42",
     title: "IT Support Apprentice",
     company: { id: "company-1", displayName: "QA" },
     location: "Birmingham, UK",
@@ -108,13 +111,84 @@ beforeEach(() => {
           profiles: [],
           defaultSearch: { query: "", location: "" },
         });
-      if (url === "/api/jobs/snapshot-42") return response(details);
+      if (url === "/api/jobs/snapshot-42?jobSnapshotId=snapshot-42") return response(details);
       throw new Error(`Unexpected URL: ${url}`);
     }),
   );
 });
 
 describe("redesigned vacancy details", () => {
+  it("forwards the search session when opening ephemeral details", async () => {
+    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === "/api/jobs/canonical-42?sessionId=session-42") {
+        return response({
+          ...details,
+          job: {
+            ...details.job,
+            id: "canonical-42",
+            jobSnapshotId: undefined,
+          },
+        });
+      }
+      throw new Error(`Unexpected URL: ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(
+      <JobDetailsPanel
+        canonicalJobId="canonical-42"
+        sessionId="session-42"
+        onSaved={() => {}}
+        onSave={() => {}}
+        saving={false}
+      />,
+    );
+
+    expect(
+      await screen.findByRole("heading", { name: "IT Support Apprentice" }),
+    ).toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/jobs/canonical-42?sessionId=session-42",
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    );
+  });
+
+  it("offers a fresh-search recovery when an ephemeral result has expired", async () => {
+    const onBack = vi.fn();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        new Response(
+          JSON.stringify({
+            error: {
+              code: "EPHEMERAL_JOB_EXPIRED",
+              message: "This search result has expired.",
+              retryable: true,
+            },
+          }),
+          { status: 410, headers: { "Content-Type": "application/json" } },
+        ),
+      ),
+    );
+    const user = userEvent.setup();
+
+    render(
+      <JobDetailsPanel
+        canonicalJobId="canonical-42"
+        sessionId="expired-session"
+        onSaved={() => {}}
+        onBack={onBack}
+        onSave={() => {}}
+        saving={false}
+      />,
+    );
+
+    expect(await screen.findByText(/search result has expired/i)).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Search again" }));
+    expect(onBack).toHaveBeenCalledTimes(1);
+  });
+
   it("opens on Overview with stored description, assessment and provenance", async () => {
     render(<JobDetailsBoard jobSnapshotId="snapshot-42" />);
 
