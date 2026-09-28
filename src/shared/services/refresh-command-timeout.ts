@@ -17,3 +17,31 @@ export async function withCommandTimeout<T>(
     if (timeoutHandle) clearTimeout(timeoutHandle);
   }
 }
+
+type ExitRefreshCommandOptions = {
+  disconnect: () => Promise<void>;
+  exitCode: number;
+  flush?: () => Promise<void>;
+  exit?: (code: number) => never;
+};
+
+const flushStdout = () => new Promise<void>((resolve) => {
+  process.stdout.write('', () => resolve());
+});
+
+/**
+ * One-shot administrative commands must not inherit long-lived application
+ * handles (for example a memoised cache connection). All command work is
+ * already awaited before this boundary; flush its report, close Prisma, then
+ * terminate with the code selected by the command.
+ */
+export async function exitRefreshCommand({
+  disconnect,
+  exitCode,
+  flush = flushStdout,
+  exit = process.exit,
+}: ExitRefreshCommandOptions): Promise<never> {
+  await disconnect();
+  await flush();
+  return exit(exitCode);
+}

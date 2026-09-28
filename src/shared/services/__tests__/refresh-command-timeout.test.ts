@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { withCommandTimeout } from '@/shared/services/refresh-command-timeout';
+import { exitRefreshCommand, withCommandTimeout } from '@/shared/services/refresh-command-timeout';
 
 afterEach(() => {
   vi.useRealTimers();
@@ -27,5 +27,24 @@ describe('withCommandTimeout', () => {
     await vi.advanceTimersByTimeAsync(1_000);
     await assertion;
     expect(vi.getTimerCount()).toBe(0);
+  });
+});
+
+describe('exitRefreshCommand', () => {
+  it('disconnects and flushes output before exiting with the established code', async () => {
+    const order: string[] = [];
+    const exit = vi.fn((code: number) => {
+      order.push(`exit:${code}`);
+      throw new Error('PROCESS_EXIT');
+    });
+
+    await expect(exitRefreshCommand({
+      disconnect: async () => { order.push('disconnect'); },
+      flush: async () => { order.push('flush'); },
+      exit,
+      exitCode: 1,
+    })).rejects.toThrow('PROCESS_EXIT');
+
+    expect(order).toEqual(['disconnect', 'flush', 'exit:1']);
   });
 });

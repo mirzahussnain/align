@@ -1,6 +1,6 @@
 import { prisma } from '../src/shared/lib/prisma.ts';
 import { refreshGreenhouseEmployerSources } from '../src/shared/services/greenhouse-refresh.ts';
-import { withCommandTimeout } from '../src/shared/services/refresh-command-timeout.ts';
+import { exitRefreshCommand, withCommandTimeout } from '../src/shared/services/refresh-command-timeout.ts';
 
 type TerminalStatus = 'SUCCESS' | 'PARTIAL_SUCCESS' | 'FAILED';
 const source = process.argv.find((value) => value.startsWith('--source='))?.slice('--source='.length);
@@ -16,4 +16,4 @@ try {
   console.log(JSON.stringify({ status, ...summary }, null, 2));
   if (status === 'FAILED') process.exitCode = 1;
 } catch (error) { console.log(JSON.stringify(failed(error), null, 2)); process.exitCode = 1; }
-finally { await prisma.$disconnect(); }
+finally { await exitRefreshCommand({ disconnect: () => prisma.$disconnect(), exitCode: typeof process.exitCode === 'number' ? process.exitCode : 0 }); }
