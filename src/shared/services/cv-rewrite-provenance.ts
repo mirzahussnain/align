@@ -363,6 +363,31 @@ function pruneRefs(refs: RewriteSourceRef[], input: LedgerNativeRewriteInput): R
   return refs.filter((ref) => validateRef(ref, input) === null);
 }
 
+function sanitizeGenerationNotes(
+  output: StructuredCvRewriteOutput,
+  input: LedgerNativeRewriteInput
+): { generationNotes: StructuredCvRewriteOutput['generationNotes']; changed: boolean } {
+  if (!output.generationNotes) return { generationNotes: undefined, changed: false };
+  const unsupportedRequirementIds = new Set(
+    input.rewriteContext.requirements
+      .filter((requirement) =>
+        requirement.status === 'not_met' ||
+        requirement.status === 'contradicted' ||
+        requirement.status === 'unclear'
+      )
+      .map((requirement) => requirement.id)
+  );
+  const unsupportedRequirementsNotAdded = output.generationNotes.unsupportedRequirementsNotAdded
+    .filter((id) => unsupportedRequirementIds.has(id));
+  return {
+    generationNotes: {
+      ...output.generationNotes,
+      unsupportedRequirementsNotAdded,
+    },
+    changed: unsupportedRequirementsNotAdded.length !== output.generationNotes.unsupportedRequirementsNotAdded.length,
+  };
+}
+
 /**
  * Deterministically salvage a draft whose only provenance problems are
  * repairable. Never called for a shape-invalid or terminally-defective draft
@@ -386,7 +411,19 @@ export function salvageStructuredDraft(
   }
 
   const result = classifyRewriteProvenance(output, input);
-  if (result.valid) return { status: 'unchanged', result };
+  const sanitizedNotes = sanitizeGenerationNotes(output, input);
+  if (result.valid) {
+    if (!sanitizedNotes.changed) return { status: 'unchanged', result };
+    const repaired = { ...output, generationNotes: sanitizedNotes.generationNotes };
+    if (!validateStructuredRewriteProvenance(repaired, input).ok) {
+      return { status: 'rejected', reason: 'unrepairable_output', result };
+    }
+    return {
+      status: 'repaired',
+      output: repaired,
+      report: { removedClaims: [], repairedReferences: [], mergedClaims: [], remainingDefects: 0 },
+    };
+  }
 
   if (!policy.deterministicRepairEnabled) return { status: 'rejected', reason: 'unrepairable_output', result };
 
@@ -434,6 +471,7 @@ export function salvageStructuredDraft(
 
   const repaired: StructuredCvRewriteOutput = {
     ...output,
+    generationNotes: sanitizedNotes.generationNotes,
     summary: (() => {
       const defect = defectByPath.get('summary');
       if (!output.summary || !defect) return output.summary;

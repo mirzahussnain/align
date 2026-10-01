@@ -188,6 +188,37 @@ describe('salvageStructuredDraft — deterministic repair', () => {
     expect(outcome.report.removedClaims).toContain('experience[0].achievements[2]');
   });
 
+  it('repairs an optional bad reference and incorrect not-added notes with ATS optimisation enabled', () => {
+    const draft = makeFullDraft();
+    draft.experience[0].achievements.push({
+      text: 'Cut cloud spend by 40%.',
+      sourceRefs: [sourceCvRef('cut cloud spend by 40%')],
+    });
+    draft.generationNotes = {
+      unsupportedRequirementsNotAdded: Array(5).fill('requirement-python'),
+    };
+    const atsInput: LedgerNativeRewriteInput = {
+      ...input,
+      atsOptimizationData: {
+        presentKeywords: ['Python'],
+        recommendations: ['Surface supported keywords'],
+        aiClichesToAvoid: ['results-driven'],
+      },
+    };
+
+    expect(validateStructuredRewriteProvenance(draft, atsInput).reasons).toEqual([
+      'experience[0].achievements[2]: Source CV reference does not point to supplied evidence.',
+      ...Array(5).fill('Supported requirement was incorrectly reported as not added.'),
+    ]);
+
+    const outcome = salvageStructuredDraft(draft, atsInput);
+    expect(outcome.status).toBe('repaired');
+    if (outcome.status !== 'repaired') return;
+    expect(outcome.output.experience[0].achievements).toHaveLength(2);
+    expect(outcome.output.generationNotes?.unsupportedRequirementsNotAdded).toEqual([]);
+    expect(validateStructuredRewriteProvenance(outcome.output, atsInput)).toEqual({ ok: true, reasons: [] });
+  });
+
   it('re-grounds skills provided with per-item provenance', () => {
     const draft = makeFullDraft();
     draft.skills = [
