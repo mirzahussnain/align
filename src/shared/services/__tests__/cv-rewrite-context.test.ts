@@ -129,7 +129,7 @@ describe('buildRewriteInput token budget', () => {
     expect(bloated.debug.estimatedPromptTokens).toBe(lean.debug.estimatedPromptTokens);
   });
 
-  it('never truncates truth rules or essential/contradicted requirements under an aggressive budget', () => {
+  it('never drops canonical requirements or constraints under an aggressive legacy budget', () => {
     const { input, debug } = buildRewriteInput({
       ...BUILD_PARAMS,
       jobMatch: jobMatch([
@@ -145,12 +145,13 @@ describe('buildRewriteInput token budget', () => {
     expect(ids).toContain('m1'); // essential — never dropped
     expect(ids).toContain('c1'); // contradicted — never dropped
     expect(ids).toContain('e1'); // essential — never dropped
-    expect(ids).not.toContain('d1'); // desirable & met — droppable
+    expect(ids).toContain('d1'); // desirable requirements remain canonical
 
-    expect(debug.droppedSections).toContain('desirable_requirements');
-    expect(debug.droppedSections).toContain('domain_context');
-    expect(input.rewriteContext.domainFit).toBeUndefined();
-    expect(input.rewriteContext.eligibilityConstraints).toEqual([]);
+    expect(debug.droppedSections).toEqual([]);
+    expect(input.rewriteContext.domainFit).toBeDefined();
+    expect(input.rewriteContext.eligibilityConstraints).toEqual([
+      { requirementId: 'e1', text: 'Eligible to work', status: 'not_met' },
+    ]);
 
     // Truth rules are always present in the composed prompt.
     expect(composeRewritePrompt(input)).toContain('NON-NEGOTIABLE TRUTHFULNESS RULES');

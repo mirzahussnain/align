@@ -1,13 +1,13 @@
 /**
- * Compact, generation-specific projection of JobMatchDataV2 plus a deterministic
- * prompt-budget layer. This replaces the temporary mandatory/desirable adapter:
+ * Provider-neutral, generation-specific projection of JobMatchDataV2. This
+ * replaces the temporary mandatory/desirable adapter:
  * the rewriter now receives only what generation needs, and unrelated ledger
  * metadata (confidence, deduction points/reasons, UI fields) never reaches the
  * prompt or costs a token.
  *
- * The budget layer trims the LOW-priority end only. Truthfulness rules, essential
- * requirements, contradicted/unclear requirements, and approved profile evidence
- * are never dropped or truncated.
+ * No candidate fact, requirement, or evidence is dropped here. Model-specific
+ * serializers remove redundancy, then request preflight rejects anything that
+ * still cannot fit safely.
  */
 import type { JobMatchDataV2 } from '@/shared/types/ai';
 import type { ApprovedProfileEvidenceOverlay } from '@/shared/types/profile-reasoning';
@@ -15,12 +15,14 @@ import type { TemplateId } from '@/shared/constants/templates';
 import {
   REWRITE_PROMPT_CONTEXT_VERSION,
   type AtsOptimizationData,
+  type CanonicalEvidenceRecord,
   type CompactRewriteContext,
   type LedgerNativeRewriteInput,
   type PromptBudgetLimits,
   type RewriteRequirement,
   type RewritePromptDebug,
   type UserProvidedContext,
+  type RewriteApplicationEvidence,
 } from '@/shared/types/cv-rewrite';
 import { composeRewritePrompt, estimatePromptTokens } from './cv-rewrite-prompt';
 import { buildEvidenceCorpus, collectGenerationEvidenceSources } from './cv-evidence';
@@ -43,11 +45,6 @@ function collapseWhitespace(text: string): string {
     .replace(/ *\n/g, '\n')
     .replace(/\n{3,}/g, '\n\n')
     .trim();
-}
-
-function truncateChars(text: string, max: number): string {
-  if (text.length <= max) return text;
-  return `${text.slice(0, max).trimEnd()}\n…[truncated]`;
 }
 
 /** PDF/extraction running headers, footers, and page markers. */
@@ -132,12 +129,12 @@ const ELIGIBILITY_CATEGORIES = new Set(['eligibility', 'availability']);
 export function projectRequirements(
   jobMatch: JobMatchDataV2,
   approvedProfileEvidence: ApprovedProfileEvidenceOverlay[],
-  maxEvidenceChars: number
+  _maxEvidenceChars: number
 ): RewriteRequirement[] {
   const approvedByRequirement = new Map<string, string[]>();
   for (const item of approvedProfileEvidence) {
     const list = approvedByRequirement.get(item.requirementId) ?? [];
-    list.push(truncateChars(item.resolvedEvidenceText, maxEvidenceChars));
+    list.push(item.resolvedEvidenceText);
     approvedByRequirement.set(item.requirementId, list);
   }
 
@@ -149,9 +146,98 @@ export function projectRequirements(
     category: requirement.category,
     cvEvidence: requirement.evidence
       .filter((evidence) => evidence.source === 'cv')
-      .map((evidence) => truncateChars(evidence.text, maxEvidenceChars)),
+      .map((evidence) => evidence.text),
     approvedProfileEvidence: approvedByRequirement.get(requirement.id) ?? [],
   }));
+}
+
+function evidenceKey(source: CanonicalEvidenceRecord['source'], text: string): string {
+  return `${source}:${text.trim().replace(/\s+/g, ' ').toLocaleLowerCase('en-GB')}`;
+}
+
+/** Build one authoritative, stable registry and point requirements at ids. */
+export function buildCanonicalEvidenceRegistry(
+  requirements: RewriteRequirement[],
+  approved: ApprovedProfileEvidenceOverlay[],
+  application: RewriteApplicationEvidence[] = []
+): CanonicalEvidenceRecord[] {
+  const records: CanonicalEvidenceRecord[] = [];
+  const byKey = new Map<string, CanonicalEvidenceRecord>();
+  let cvSequence = 0;
+
+  const register = (record: CanonicalEvidenceRecord, key: string) => {
+    const existing = byKey.get(key);
+    if (!existing) {
+      records.push(record);
+      byKey.set(key, record);
+      return record;
+    }
+    for (const requirementId of record.requirementIds) {
+      if (!existing.requirementIds.includes(requirementId)) existing.requirementIds.push(requirementId);
+    }
+    for (const ref of record.ledgerRefs ?? []) {
+      if (!existing.ledgerRefs?.some((item) => item.requirementId === ref.requirementId && item.evidenceIndex === ref.evidenceIndex)) {
+        (existing.ledgerRefs ??= []).push(ref);
+      }
+    }
+    return existing;
+  };
+
+  for (const requirement of requirements) {
+    const ids: string[] = [];
+    requirement.cvEvidence.forEach((text, evidenceIndex) => {
+      const key = evidenceKey('source_cv', text);
+      let existing = byKey.get(key);
+      if (!existing) cvSequence += 1;
+      existing = register({
+        id: existing?.id ?? `E-CV-${cvSequence}`,
+        source: 'source_cv',
+        text,
+        requirementIds: [requirement.id],
+        ledgerRefs: [{ requirementId: requirement.id, evidenceIndex }],
+      }, key);
+      ids.push(existing.id);
+    });
+
+    requirement.approvedProfileEvidence.forEach((text, offset) => {
+      const match = approved.find((item) =>
+        item.requirementId === requirement.id && item.resolvedEvidenceText === text
+      );
+      const key = match
+        ? `approved_profile:${match.evidenceRef.type}:${match.evidenceRef.id}`
+        : evidenceKey('approved_profile', text);
+      const existing = register({
+        id: match ? `E-P-${match.evidenceRef.type}-${match.evidenceRef.id}` : `E-P-${records.length + 1}`,
+        source: 'approved_profile',
+        text,
+        requirementIds: [requirement.id],
+        ledgerRefs: [{
+          requirementId: requirement.id,
+          evidenceIndex: requirement.cvEvidence.length + offset,
+        }],
+        evidenceRef: match?.evidenceRef,
+      }, key);
+      ids.push(existing.id);
+    });
+    requirement.evidenceIds = [...new Set(ids)];
+  }
+
+  for (const item of application) {
+    const record = register({
+      id: `E-A-${item.id}`,
+      source: 'application_context',
+      text: item.context.text,
+      requirementIds: [item.requirementId],
+      contextId: item.id,
+      label: item.context.label,
+    }, `application_context:${item.id}`);
+    const requirement = requirements.find((entry) => entry.id === item.requirementId);
+    if (requirement && !requirement.evidenceIds?.includes(record.id)) {
+      (requirement.evidenceIds ??= []).push(record.id);
+    }
+  }
+
+  return records;
 }
 
 function eligibilityConstraints(jobMatch: JobMatchDataV2) {
@@ -169,83 +255,32 @@ function eligibilityConstraints(jobMatch: JobMatchDataV2) {
 
 // ── Budgeting ────────────────────────────────────────────────────────────────
 
-/**
- * Ordered low-to-high priority reducers. Each is applied at most once, cheapest
- * (lowest-value) content first, until the estimate fits the budget. None of them
- * can touch truth rules, essential requirements, contradicted/unclear
- * requirements, or approved evidence.
- */
-const BUDGET_REDUCERS: {
-  name: string;
-  apply: (context: CompactRewriteContext) => boolean;
-}[] = [
-  {
-    name: 'employer_background',
-    apply: (context) => {
-      if (context.domainFit && context.domainFit.detail) {
-        context.domainFit = { status: context.domainFit.status, detail: '' };
-        return true;
-      }
-      return false;
-    },
-  },
-  {
-    name: 'domain_context',
-    apply: (context) => {
-      if (context.domainFit) {
-        context.domainFit = undefined;
-        return true;
-      }
-      return false;
-    },
-  },
-  {
-    name: 'desirable_requirements',
-    apply: (context) => {
-      const before = context.requirements.length;
-      context.requirements = context.requirements.filter(
-        (requirement) =>
-          requirement.importance !== 'desirable' ||
-          requirement.status === 'contradicted' ||
-          requirement.status === 'unclear'
-      );
-      return context.requirements.length !== before;
-    },
-  },
-  {
-    name: 'eligibility_constraints',
-    apply: (context) => {
-      if (context.eligibilityConstraints.length > 0) {
-        context.eligibilityConstraints = [];
-        return true;
-      }
-      return false;
-    },
-  },
-];
-
 export interface BuildRewriteInputParams {
   jobMatch: JobMatchDataV2;
   approvedProfileEvidence: ApprovedProfileEvidenceOverlay[];
   userContext: UserProvidedContext[];
   cvText: string;
   jobDescription: string;
+  targetJob?: { title: string; employer: string; location?: string };
   template: TemplateId;
   atsOptimizationData?: AtsOptimizationData;
+  applicationEvidence?: RewriteApplicationEvidence[];
   limits?: PromptBudgetLimits;
 }
 
 /**
- * Assemble the ledger-native rewrite input: clean and cap the CV and vacancy,
- * project the compact ledger, then trim the low-priority end until the prompt
- * fits the token budget. Returns the input plus non-user-facing diagnostics.
+ * Assemble the provider-neutral canonical input without discarding facts.
+ * Provider/model preflight owns request limits; this layer never silently drops
+ * requirements, evidence, candidate history, or vacancy context to make a fit.
  */
 export function buildRewriteInput(
   params: BuildRewriteInputParams
 ): { input: LedgerNativeRewriteInput; debug: RewritePromptDebug } {
   const limits = params.limits ?? DEFAULT_PROMPT_BUDGET;
 
-  const cvText = truncateChars(cleanCvText(params.cvText), limits.maxCvChars);
+  // Tier 0 candidate history is never character-sliced. If the full canonical
+  // record cannot fit a model, per-attempt preflight rejects that provider.
+  const cvText = cleanCvText(params.cvText);
   const requirements = projectRequirements(
     params.jobMatch,
     params.approvedProfileEvidence,
@@ -283,26 +318,24 @@ export function buildRewriteInput(
 
   const input: LedgerNativeRewriteInput = {
     cvText,
-    jobDescription: truncateChars(
-      cleanJobDescription(params.jobDescription),
-      limits.maxJobDescriptionChars
-    ),
+    // Preserve the full cleaned vacancy in canonical memory. The serializer is
+    // responsible for eliminating wording already represented by requirements.
+    jobDescription: cleanJobDescription(params.jobDescription),
+    targetJob: params.targetJob,
     rewriteContext: context,
     approvedProfileEvidence: params.approvedProfileEvidence,
     userContext: params.userContext.length > 0 ? params.userContext : undefined,
     template: params.template,
     atsOptimizationData: params.atsOptimizationData,
+    applicationEvidence: params.applicationEvidence,
   };
+  input.evidenceRegistry = buildCanonicalEvidenceRegistry(
+    requirements,
+    params.approvedProfileEvidence,
+    params.applicationEvidence
+  );
 
-  const droppedSections: string[] = [];
-  let estimate = estimatePromptTokens(composeRewritePrompt(input));
-  for (const reducer of BUDGET_REDUCERS) {
-    if (estimate <= limits.maxPromptTokens) break;
-    if (reducer.apply(context)) {
-      droppedSections.push(reducer.name);
-      estimate = estimatePromptTokens(composeRewritePrompt(input));
-    }
-  }
+  const estimate = estimatePromptTokens(composeRewritePrompt(input));
 
   return {
     input,
@@ -310,7 +343,7 @@ export function buildRewriteInput(
       promptContextVersion: REWRITE_PROMPT_CONTEXT_VERSION,
       estimatedPromptTokens: estimate,
       requirementCount: context.requirements.length,
-      droppedSections,
+      droppedSections: [],
     },
   };
 }

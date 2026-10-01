@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
+  structuredRewriteShapeIssue,
   structuredRewriteToRewrittenData,
   validateStructuredRewriteProvenance,
 } from '@/shared/services/cv-rewrite-structured';
+import { STRUCTURED_CV_REWRITE_JSON_SCHEMA } from '@/shared/schemas/cv-rewrite-output';
 import type { LedgerNativeRewriteInput } from '@/shared/types/cv-rewrite';
 import {
   applicationContextRef,
@@ -75,6 +77,26 @@ const input: LedgerNativeRewriteInput = {
 };
 
 describe('structured rewrite provenance', () => {
+  it('constrains source-CV references to the validator-supported section', () => {
+    const output = makeStructuredRewriteOutput();
+    const invalidOutput: unknown = {
+      ...output,
+      identity: {
+        ...output.identity,
+        sourceRefs: [{
+          source: 'source_cv',
+          section: 'identity',
+          evidenceText: 'A. Candidate',
+        }],
+      },
+    };
+
+    expect(structuredRewriteShapeIssue(invalidOutput)).toContain('identity.sourceRefs.0.section');
+    expect(JSON.stringify(STRUCTURED_CV_REWRITE_JSON_SCHEMA)).toContain(
+      '"section":{"type":"string","const":"source_cv"}'
+    );
+  });
+
   it('rejects legacy RewrittenCVData from the provider', () => {
     const legacy = {
       fullName: 'A. Candidate',

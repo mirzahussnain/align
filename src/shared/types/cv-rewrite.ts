@@ -23,7 +23,7 @@ import type { ExperienceDuration } from '@/shared/services/derived-facts';
  * stored GeneratedCV can be traced back to the exact prompt contract that made
  * it. Not the AI model version — the prompt-context version.
  */
-export const REWRITE_PROMPT_CONTEXT_VERSION = 1;
+export const REWRITE_PROMPT_CONTEXT_VERSION = 2;
 
 /**
  * The model-output and source-reference contract for Stage 3 tailored rewrites.
@@ -65,6 +65,20 @@ export interface RewriteRequirement {
   cvEvidence: string[];
   /** User-approved profile wording tied to this requirement, if any. */
   approvedProfileEvidence: string[];
+  /** Stable ids into the canonical evidence registry. Prose is serialized once. */
+  evidenceIds?: string[];
+}
+
+export interface CanonicalEvidenceRecord {
+  id: string;
+  source: 'source_cv' | 'approved_profile' | 'application_context';
+  text: string;
+  requirementIds: string[];
+  /** Ledger coordinates retained for the existing output provenance contract. */
+  ledgerRefs?: { requirementId: string; evidenceIndex: number }[];
+  evidenceRef?: { type: string; id: string };
+  contextId?: string;
+  label?: string;
 }
 
 export interface RewriteDomainFit {
@@ -105,32 +119,12 @@ export interface UserProvidedContext {
 
 /** A server-resolved application-only evidence record. Client text is never a source. */
 export interface RewriteApplicationEvidence { id: string; requirementId: string; context: UserProvidedContext; }
-/** A claim reference the model may use only when it appeared in this generation input. */
-export type RewriteSourceRef =
-  | { source: 'source_cv'; section: string; entryId?: string; evidenceText?: string }
-  | { source: 'ledger_evidence'; requirementId: string; evidenceIndex?: number }
-  | { source: 'approved_profile'; requirementId: string; evidenceRef: { type: string; id: string } }
-  | { source: 'application_context'; requirementId: string; contextId: string };
-export interface ProvenancedTextBlock { text: string; sourceRefs: RewriteSourceRef[]; }
-export interface ProvenancedBullet extends ProvenancedTextBlock { label?: string; }
-export interface ProvenancedExperienceEntry { jobTitle: string; company: string; location?: string; type?: string; startDate?: string; endDate?: string; achievements: ProvenancedBullet[]; sourceRefs: RewriteSourceRef[]; }
-export interface ProvenancedProjectEntry { name: string; skills?: string; startDate?: string; endDate?: string; achievements: ProvenancedBullet[]; sourceRefs: RewriteSourceRef[]; }
-export interface ProvenancedEducationEntry { degree: string; university: string; startDate?: string; endDate?: string; grade?: string; description?: string; sourceRefs: RewriteSourceRef[]; }
-/**
- * One skill inside a grouped skills block, carrying its own provenance. Optional
- * and additive (contract v2): when present it lets salvage validate and keep
- * skills individually; when absent the group falls back to group-level refs.
- */
-export interface ProvenancedSkillItem { skill: string; sourceRefs: RewriteSourceRef[]; }
-export interface ProvenancedSkillGroup extends ProvenancedTextBlock { category: string; items?: ProvenancedSkillItem[]; }
-export interface ProvenancedCertificationEntry { name: string; issuer?: string; year?: string; sourceRefs: RewriteSourceRef[]; }
-/** Raw model response. It contains content plus evidence references, never layout instructions. */
-export interface StructuredCvRewriteOutput {
-  identity: { name?: string; professionalTitle?: string; location?: string; contact?: { email?: string; phone?: string; website?: string; linkedin?: string; github?: string; visaStatus?: string; }; contactRefs?: string[]; sourceRefs: RewriteSourceRef[]; };
-  summary?: ProvenancedTextBlock; experience: ProvenancedExperienceEntry[]; projects: ProvenancedProjectEntry[];
-  education: ProvenancedEducationEntry[]; skills: ProvenancedSkillGroup[]; certifications: ProvenancedCertificationEntry[];
-  generationNotes?: { unsupportedRequirementsNotAdded: string[]; omittedLowPriorityContent?: string[]; };
-}
+/** Model-output types are inferred from the one runtime/native-schema contract. */
+export type {
+  RewriteSourceRef, ProvenancedTextBlock, ProvenancedBullet, ProvenancedExperienceEntry,
+  ProvenancedProjectEntry, ProvenancedEducationEntry, ProvenancedSkillItem,
+  ProvenancedSkillGroup, ProvenancedCertificationEntry, StructuredCvRewriteOutput,
+} from '@/shared/schemas/cv-rewrite-output';
 /**
  * Truth-preserving ATS emphasis inputs. Nothing here authorises fabrication:
  * present keywords may be surfaced (the CV already has them), clichés avoided.
@@ -146,14 +140,17 @@ export interface AtsOptimizationData {
 }
 
 /** The entire input the ledger-native rewriter consumes. */
-export interface LedgerNativeRewriteInput {
+export interface CanonicalRewriteContext {
   cvText: string;
   jobDescription: string;
+  targetJob?: { title: string; employer: string; location?: string };
   rewriteContext: CompactRewriteContext;
   approvedProfileEvidence: ApprovedProfileEvidenceOverlay[];
   userContext?: UserProvidedContext[];
   /** Approved/current application-only evidence, retained with ids for provenance validation. */
   applicationEvidence?: RewriteApplicationEvidence[];
+  /** De-duplicated evidence records referenced by requirement.evidenceIds. */
+  evidenceRegistry?: CanonicalEvidenceRecord[];
   template: TemplateId;
   atsOptimizationData?: AtsOptimizationData;
   /**
@@ -174,7 +171,10 @@ export interface LedgerNativeRewriteInput {
   correctionNotes?: string[];
 }
 
-/** Deterministic prompt-budget knobs. */
+/** Backward-compatible name while callers migrate to the canonical contract. */
+export type LedgerNativeRewriteInput = CanonicalRewriteContext;
+
+/** Legacy caller knobs retained for compatibility; canonical facts are not sliced. */
 export interface PromptBudgetLimits {
   maxPromptTokens: number;
   maxRequirementEvidenceChars: number;
@@ -187,6 +187,6 @@ export interface RewritePromptDebug {
   promptContextVersion: number;
   estimatedPromptTokens: number;
   requirementCount: number;
-  /** Low-priority sections dropped to fit the budget, in the order dropped. */
+  /** Retained for provenance compatibility; canonical assembly always leaves this empty. */
   droppedSections: string[];
 }

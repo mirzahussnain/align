@@ -17,6 +17,7 @@ vi.mock('@/shared/lib/prisma', () => ({
     user: { findUnique: vi.fn(async () => ({ subscriptionTier: null })) },
     jobMatch: { findFirst: vi.fn() },
     profileEvidenceApproval: { findMany: vi.fn() },
+    applicationEvidenceContext: { findMany: vi.fn() },
     generatedCV: { findUnique: vi.fn() },
   },
 }));
@@ -59,7 +60,18 @@ vi.mock('@/shared/services/cv-rewriter', () => {
     rewriteCVWithProvenance: vi.fn(async (input: unknown) => {
       const output = await rewriteCV(input);
       return output
-        ? { output, provenance: { provider: 'gemini', model: 'gemini-3.5-flash', attempt: 1, fallbackUsed: false } }
+        ? {
+            output,
+            provenance: { provider: 'gemini', model: 'gemini-3.5-flash', attempt: 1, fallbackUsed: false },
+            requestDiagnostics: {
+              estimatedInputTokens: 2_500,
+              maxCompletionTokens: 8_192,
+              estimatedRequestTokens: 10_692,
+              safeRequestTokens: 32_768,
+              safetyMarginTokens: 512,
+              allowed: true,
+            },
+          }
         : null;
     }),
   };
@@ -220,6 +232,7 @@ beforeEach(() => {
   vi.mocked(prisma.user.findUnique).mockResolvedValue({ subscriptionTier: null } as never);
   vi.mocked(prisma.jobMatch.findFirst).mockResolvedValue(storedJobMatchAnalysis() as never);
   vi.mocked(prisma.profileEvidenceApproval.findMany).mockResolvedValue([] as never);
+  vi.mocked(prisma.applicationEvidenceContext.findMany).mockResolvedValue([] as never);
   vi.mocked(assertCapability).mockResolvedValue({ allowed: true, capability: 'cv_regeneration', plan: 'FREE', mode: 'quota' } as never);
   vi.mocked(reserveCapability).mockResolvedValue({ status: 'reserved', reservation: { operationStatus: 'PENDING', resultRef: null } } as never);
   vi.mocked(commitCapability).mockResolvedValue({ status: 'committed', reservation: { resultRef: 'cv-1' } } as never);
@@ -408,6 +421,42 @@ describe('POST /api/cv/regenerate', () => {
         userContext: [{ label: 'Kafka', text: 'I ran a Kafka cluster in a side project.' }],
       })
     );
+  });
+
+  it('keeps ID-bearing application evidence out of duplicate user context', async () => {
+    vi.mocked(prisma.applicationEvidenceContext.findMany).mockResolvedValue([{
+      id: 'application-context-1',
+      requirementId: 'requirement-001',
+      kind: 'skill_tool',
+      details: {
+        name: 'Kafka',
+        level: 'project',
+        contextType: 'side_project',
+        linkedEvidenceId: '',
+        activity: 'Operated Kafka consumers for event processing.',
+        period: '',
+        outcome: '',
+      },
+    }] as never);
+
+    await POST(regenRequest({
+      analysisId: 'an-1',
+      hitlContext: { Clarification: 'I supported event-driven integrations.' },
+      applicationEvidenceContextIds: ['application-context-1'],
+    }));
+
+    const input = vi.mocked(rewriteCV).mock.calls[0][0];
+    expect(input.userContext).toEqual([
+      { label: 'Clarification', text: 'I supported event-driven integrations.' },
+    ]);
+    expect(input.applicationEvidence).toEqual([{
+      id: 'application-context-1',
+      requirementId: 'requirement-001',
+      context: {
+        label: 'Kafka experience',
+        text: 'Kafka — project: Operated Kafka consumers for event processing.',
+      },
+    }]);
   });
 
   it('rejects a stale or invalid approved evidence reference before rewriting', async () => {

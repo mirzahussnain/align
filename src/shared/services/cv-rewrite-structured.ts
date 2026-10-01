@@ -1,4 +1,5 @@
 import type { RewrittenCVData } from '@/shared/templates/types';
+import { StructuredCvRewriteOutputSchema } from '@/shared/schemas/cv-rewrite-output';
 import { normalizeText } from './cv-evidence';
 import type {
   LedgerNativeRewriteInput,
@@ -69,7 +70,7 @@ function bulletIssue(value: unknown, path: string): string | null {
  * the shape is valid. Kept granular so a rejection is diagnosable rather than an
  * opaque "does not match the contract".
  */
-export function structuredRewriteShapeIssue(value: unknown): string | null {
+function legacyStructuredRewriteShapeIssue(value: unknown): string | null {
   if (!value || typeof value !== 'object') return 'Response is not a JSON object.';
   const output = value as Record<string, unknown>;
 
@@ -176,8 +177,19 @@ export function structuredRewriteShapeIssue(value: unknown): string | null {
 }
 
 /** Strict runtime shape gate for the untrusted provider response. */
+export function structuredRewriteShapeIssue(value: unknown): string | null {
+  const result = StructuredCvRewriteOutputSchema.safeParse(value);
+  if (result.success) return null;
+  const issue = result.error.issues[0];
+  if (!issue) return legacyStructuredRewriteShapeIssue(value);
+  const path = issue.path.map(String).join('.');
+  if (path === 'identity' && issue.code === 'invalid_type') return 'identity is missing.';
+  return `${path || 'response'}: ${issue.message}`;
+}
+
+/** Strict runtime shape gate for the untrusted provider response. */
 export function isStructuredCvRewriteOutput(value: unknown): value is StructuredCvRewriteOutput {
-  return structuredRewriteShapeIssue(value) === null;
+  return StructuredCvRewriteOutputSchema.safeParse(value).success;
 }
 function evidenceRefKey(ref: { type: string; id: string }) { return `${ref.type}:${ref.id}`; }
 

@@ -4,6 +4,7 @@ import { applyRateLimit, rewriteLimiter } from '@/shared/lib/rate-limit';
 import { auth } from '@/shared/lib/auth';
 import { prisma } from '@/shared/lib/prisma';
 import { rewriteCVWithProvenance, type ProviderProvenance } from '@/shared/services/cv-rewriter';
+import type { AiRequestPreflight } from '@/shared/services/ai-request-budget';
 import { buildRewriteInput } from '@/shared/services/cv-rewrite-context';
 import { loadCanonicalAnalysis } from '@/shared/services/canonical-analysis';
 import { logReservationEvent } from '@/shared/services/reservation-observability';
@@ -99,6 +100,8 @@ interface MaterializedRewriteDraft {
   claimSourceRefs: ReturnType<typeof structuredRewriteToRewrittenData>['claimSourceRefs'];
   /** Coarse provider/model that actually produced THIS draft (audit provenance). */
   providerProvenance: ProviderProvenance;
+  /** Numeric-only request sizing for the attempt that produced this draft. */
+  requestDiagnostics: AiRequestPreflight;
 }
 
 interface SafetyOutcome {
@@ -384,7 +387,10 @@ export async function POST(request: Request) {
       if (error instanceof StructuredEvidenceValidationError) throw new APIError(error.message, 400);
       throw error;
     }
-    const userContext = [...toUserContext(hitlContext), ...applicationContext.map((item) => item.context)];
+    // Application evidence is already supplied below as structured, ID-bearing
+    // evidence. Keep HITL notes separate so the same facts are not serialized a
+    // second time as anonymous prose.
+    const userContext = toUserContext(hitlContext);
 
     // The single trusted-context assembly point for this path: canonical profile
     // snapshot + frozen approval snapshots + deterministic derived facts. The
@@ -409,8 +415,14 @@ export async function POST(request: Request) {
       userContext,
       cvText,
       jobDescription,
+      targetJob: {
+        title: canonical.analysis.jobTitle,
+        employer: canonical.analysis.jobEmployer,
+        ...(canonical.analysis.jobLocation ? { location: canonical.analysis.jobLocation } : {}),
+      },
       template: templateId,
       atsOptimizationData,
+      applicationEvidence: applicationContext,
     });
 
     // The model is handed the ONE deterministic duration (never told to compute
@@ -422,8 +434,6 @@ export async function POST(request: Request) {
       field: `${conflict.entityType}.${conflict.field}`,
       reason: conflict.reason,
     }));
-
-    input.applicationEvidence = applicationContext;
 
     // ── Atomic reservation (canonical ordering) ─────────────────────────────
     // Everything above is cheap, deterministic ownership/validation/quarantine
@@ -636,6 +646,7 @@ export async function POST(request: Request) {
       firstDraft: {
         structured: workingRewrite,
         providerProvenance: firstRewrite.provenance,
+        requestDiagnostics: firstRewrite.requestDiagnostics,
         ...firstAdapter,
       },
       durationFact,
@@ -656,6 +667,7 @@ export async function POST(request: Request) {
         return {
           structured: retryOutput,
           providerProvenance: retry.provenance,
+          requestDiagnostics: retry.requestDiagnostics,
           ...structuredRewriteToRewrittenData(
             retryOutput,
             CV_TEMPLATE_CAPABILITIES[templateId].summaryMaxChars
@@ -755,7 +767,13 @@ export async function POST(request: Request) {
           providerAttempt: validatedDraft.providerProvenance.attempt,
           providerFallbackUsed: validatedDraft.providerProvenance.fallbackUsed,
           promptContextVersion: debug.promptContextVersion,
-          estimatedPromptTokens: debug.estimatedPromptTokens,
+          // Persist the estimate from the winning attempt, not an earlier debug
+          // projection that may differ after provider-specific serialization.
+          estimatedPromptTokens: validatedDraft.requestDiagnostics.estimatedInputTokens,
+          maxOutputTokens: validatedDraft.requestDiagnostics.maxCompletionTokens,
+          estimatedRequestTokens: validatedDraft.requestDiagnostics.estimatedRequestTokens,
+          requestBudgetTokens: validatedDraft.requestDiagnostics.safeRequestTokens,
+          requestSafetyMarginTokens: validatedDraft.requestDiagnostics.safetyMarginTokens,
           truthfulnessValidationVersion: TRUTHFULNESS_VALIDATION_VERSION,
           truthfulnessValidationResult: 'passed',
           // Stage 1 trusted-generation safety provenance.

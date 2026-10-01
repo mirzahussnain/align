@@ -16,6 +16,9 @@ export interface CanonicalAnalysis {
   result: CVAnalysisResult;
   cvText: string;
   jobDescription: string;
+  jobTitle: string;
+  jobEmployer: string;
+  jobLocation: string | null;
   jobMatchData: JobMatchDataV2;
   cvRevisionId: string;
   jobRevisionId: string;
@@ -47,6 +50,9 @@ export async function loadCanonicalAnalysis(args: LoadCanonicalAnalysisArgs): Pr
       result,
       cvText: row.cvRevision.extractedText,
       jobDescription: row.jobRevision.description,
+      jobTitle: row.jobRevision.title,
+      jobEmployer: row.jobRevision.company,
+      jobLocation: row.jobRevision.location,
       jobMatchData,
       cvRevisionId: row.cvRevisionId,
       jobRevisionId: row.jobRevisionId,

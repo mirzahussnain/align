@@ -103,12 +103,13 @@ export function makeStructuredGoldenOutput(
   refOverrides: Record<string, RewriteSourceRef[]> = {},
   unsupportedRequirementsNotAdded: string[] = []
 ): StructuredCvRewriteOutput {
+  const { location: _duplicateLocation, ...contact } = data.contact;
   return {
     identity: {
       name: data.fullName,
       professionalTitle: data.tagline,
       location: data.contact.location,
-      contact: { ...data.contact },
+      contact,
       sourceRefs: sourceRefsFor('identity', refOverrides),
     },
     summary: data.professionalSummary
