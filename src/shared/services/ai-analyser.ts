@@ -126,7 +126,11 @@ export async function getJobMatchFeedbackWithProvenance(
   });
 
   return result
-    ? { data: normalizeJobMatchDataV2(result.data, cvText), provenance: result.provenance }
+    ? {
+        data: normalizeJobMatchDataV2(result.data, cvText),
+        provenance: result.provenance,
+        requestDiagnostics: result.requestDiagnostics,
+      }
     : null;
 }
 

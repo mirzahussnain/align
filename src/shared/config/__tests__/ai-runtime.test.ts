@@ -4,21 +4,44 @@ import {
   AI_PROVIDER_DEFINITIONS,
   aiProviderEnvironmentErrors,
   estimateAiCostUsd,
+  requestBudgetFor,
 } from '@/shared/config/ai-runtime';
 
 describe('AI runtime provider configuration', () => {
   it('keeps one ordered Gemini attempt before Groq', () => {
     expect(AI_PROVIDER_DEFINITIONS.map(({ provider, label, model }) => ({ provider, label, model }))).toEqual([
-      { provider: 'gemini', label: 'Gemini', model: 'gemini-3.5-flash' },
+      { provider: 'gemini', label: 'Gemini', model: 'gemini-3.8-flash' },
       { provider: 'groq', label: 'Groq', model: 'openai/gpt-oss-120b' },
     ]);
   });
 
   it('calculates cost only when model pricing and both token counts are available', () => {
-    expect(estimateAiCostUsd('gemini', 'gemini-3.5-flash', 100, 50)).toBeCloseTo(0.0006, 10);
-    expect(estimateAiCostUsd('gemini', 'gemini-3.5-flash', null, 50)).toBeNull();
+    expect(estimateAiCostUsd('gemini', 'gemini-3.8-flash', 100, 50)).toBeCloseTo(0.0006, 10);
+    expect(estimateAiCostUsd('gemini', 'gemini-3.8-flash', null, 50)).toBeNull();
     expect(estimateAiCostUsd('groq', 'openai/gpt-oss-120b', 100, 50)).toBeCloseTo(0.000045, 10);
     expect(estimateAiCostUsd('gemini', 'unknown-model', 100, 50)).toBeNull();
+  });
+
+  it('uses model-specific request budgets instead of one shared output reservation', () => {
+    expect(requestBudgetFor('gemini', 'gemini-3.8-flash')).toEqual({
+      maxCompletionTokens: 8_192,
+      safeRequestTokens: 32_768,
+      safetyMarginTokens: 512,
+    });
+    expect(requestBudgetFor('groq', 'openai/gpt-oss-120b')).toEqual({
+      maxCompletionTokens: 3_500,
+      safeRequestTokens: 8_000,
+      safetyMarginTokens: 512,
+    });
+  });
+
+  it('defines a positive usable input allowance for every configured model', () => {
+    for (const definition of AI_PROVIDER_DEFINITIONS) {
+      const budget = requestBudgetFor(definition.provider, definition.model);
+      expect(budget.safeRequestTokens).toBeGreaterThan(
+        budget.maxCompletionTokens + budget.safetyMarginTokens
+      );
+    }
   });
 });
 

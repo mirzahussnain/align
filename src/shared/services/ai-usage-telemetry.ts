@@ -8,6 +8,10 @@ import {
 export type AiAttemptErrorCode =
   | 'TIMEOUT'
   | 'PROVIDER_ERROR'
+  | 'PROVIDER_UNAVAILABLE'
+  | 'PROVIDER_RATE_LIMITED'
+  | 'PROVIDER_PAYLOAD_TOO_LARGE'
+  | 'PAYLOAD_BUDGET_EXCEEDED'
   | 'INVALID_JSON'
   | 'SCHEMA_VALIDATION_FAILED';
 
@@ -24,6 +28,11 @@ export interface AiUsageAttemptEvent {
   errorCode: AiAttemptErrorCode | null;
   fallbackUsed: boolean;
   attemptNumber: number;
+  estimatedInputTokens?: number;
+  maxOutputTokens?: number;
+  estimatedRequestTokens?: number;
+  requestBudgetTokens?: number;
+  safetyMarginTokens?: number;
 }
 
 /** Persist safe operational metadata only. Telemetry must never affect AI work. */
@@ -43,6 +52,11 @@ export async function recordAiUsageAttempt(event: AiUsageAttemptEvent): Promise<
         errorCode: event.errorCode,
         fallbackUsed: event.fallbackUsed,
         attemptNumber: event.attemptNumber,
+        estimatedInputTokens: event.estimatedInputTokens ?? null,
+        maxOutputTokens: event.maxOutputTokens ?? null,
+        estimatedRequestTokens: event.estimatedRequestTokens ?? null,
+        requestBudgetTokens: event.requestBudgetTokens ?? null,
+        safetyMarginTokens: event.safetyMarginTokens ?? null,
         estimatedCostUsd: estimateAiCostUsd(
           event.provider,
           event.model,

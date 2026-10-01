@@ -3,6 +3,7 @@ import Groq from 'groq-sdk';
 import type { ZodType } from 'zod';
 import {
   AI_RUNTIME_CONFIG,
+  type AiModelRequestBudget,
   type AiUsageCapability,
   type SupportedAiProvider,
 } from '@/shared/config/ai-runtime';
@@ -10,6 +11,11 @@ import {
   recordAiUsageAttempt,
   type AiAttemptErrorCode,
 } from './ai-usage-telemetry';
+import {
+  estimateSerializedInputTokens,
+  preflightAiRequest,
+  type AiRequestPreflight,
+} from './ai-request-budget';
 
 const geminiConfig = AI_RUNTIME_CONFIG.providers.find(({ provider }) => provider === 'gemini');
 const groqConfig = AI_RUNTIME_CONFIG.providers.find(({ provider }) => provider === 'groq');
@@ -20,7 +26,8 @@ interface AIOrchestratorOptions {
   capability: AiUsageCapability;
   userId?: string;
   operationId?: string;
-  prompt: string;
+  prompt?: string;
+  serializePrompt?: (attempt: AiAttemptDescriptor) => string;
   temperature?: number;
   /**
    * Gemini thinking budget in tokens. These are billed reasoning tokens that
@@ -37,7 +44,23 @@ interface AIOrchestratorOptions {
    */
   thinkingBudget?: number;
   timeoutMs?: number;
-  maxOutputTokens?: number;
+}
+
+/** One provider-neutral output contract, translated only at provider boundaries. */
+export interface AiStructuredOutputContract<T> {
+  name: string;
+  runtimeSchema: ZodType<T>;
+  jsonSchema: Record<string, unknown>;
+}
+
+export interface AiAttemptDescriptor {
+  provider: SupportedAiProvider;
+  model: string;
+  attempt: number;
+  fallbackUsed: boolean;
+  requestBudget: AiModelRequestBudget;
+  /** Request tokens consumed outside the prompt, such as a native JSON Schema. */
+  requestOverheadTokens?: number;
 }
 
 interface AIOrchestratorOptionsWithSchema<T> extends AIOrchestratorOptions {
@@ -49,6 +72,8 @@ interface AIOrchestratorOptionsWithSchema<T> extends AIOrchestratorOptions {
    * results.
    */
   schema?: ZodType<T>;
+  /** Native provider schema plus the application-side validator for the same contract. */
+  structuredOutput?: AiStructuredOutputContract<T>;
 }
 
 /**
@@ -73,6 +98,7 @@ export interface ProviderProvenance {
 export interface AIResultWithProvenance<T> {
   data: T;
   provenance: ProviderProvenance;
+  requestDiagnostics: AiRequestPreflight;
 }
 
 /**
@@ -101,15 +127,17 @@ export async function generateJSONFromAIWithProvenance<T>(
 ): Promise<AIResultWithProvenance<T> | null> {
   const {
     prompt,
+    serializePrompt,
     temperature = 0.1,
     thinkingBudget,
     schema,
+    structuredOutput,
     capability,
     userId,
     operationId,
     timeoutMs = AI_RUNTIME_CONFIG.timeoutMs,
-    maxOutputTokens = AI_RUNTIME_CONFIG.maxOutputTokens,
   } = options;
+  const runtimeSchema = structuredOutput?.runtimeSchema ?? schema;
 
   interface AttemptResponse {
     text: string;
@@ -120,7 +148,12 @@ export async function generateJSONFromAIWithProvenance<T>(
     label: string;
     provider: SupportedAiProvider;
     model: string;
-    run: (signal: AbortSignal) => Promise<AttemptResponse>;
+    requestBudget: AiModelRequestBudget;
+    run: (
+      signal: AbortSignal,
+      serializedPrompt: string,
+      maxCompletionTokens: number
+    ) => Promise<AttemptResponse>;
   }[] = [];
 
   for (const providerConfig of AI_RUNTIME_CONFIG.providers) {
@@ -130,14 +163,16 @@ export async function generateJSONFromAIWithProvenance<T>(
         label: `Gemini ${model}`,
         provider: 'gemini',
         model,
-        run: async (signal) => {
+        requestBudget: providerConfig.requestBudget,
+        run: async (signal, serializedPrompt, maxCompletionTokens) => {
           const response = await geminiClient.models.generateContent({
             model,
-            contents: prompt,
+            contents: serializedPrompt,
             config: {
               responseMimeType: 'application/json',
+              ...(structuredOutput ? { responseJsonSchema: structuredOutput.jsonSchema } : {}),
               temperature,
-              maxOutputTokens,
+              maxOutputTokens: maxCompletionTokens,
               abortSignal: signal,
               ...(thinkingBudget !== undefined ? { thinkingConfig: { thinkingBudget } } : {}),
             },
@@ -163,13 +198,26 @@ export async function generateJSONFromAIWithProvenance<T>(
         label: `Groq ${model}`,
         provider: 'groq',
         model,
-        run: async (signal) => {
+        requestBudget: providerConfig.requestBudget,
+        run: async (signal, serializedPrompt, maxCompletionTokens) => {
           const chatCompletion = await groqClient.chat.completions.create({
-            messages: [{ role: 'user', content: prompt }],
+            messages: [{ role: 'user', content: serializedPrompt }],
             model,
-            response_format: { type: 'json_object' },
+            response_format: structuredOutput
+              ? {
+                  type: 'json_schema',
+                  json_schema: {
+                    name: structuredOutput.name,
+                    strict: true,
+                    schema: structuredOutput.jsonSchema,
+                  },
+                }
+              : { type: 'json_object' },
+            ...(providerConfig.reasoningEffortByCapability?.[capability]
+              ? { reasoning_effort: providerConfig.reasoningEffortByCapability[capability] }
+              : {}),
             temperature,
-            max_tokens: maxOutputTokens,
+            max_tokens: maxCompletionTokens,
           }, { signal });
           return {
             text: chatCompletion.choices[0]?.message?.content || '',
@@ -194,6 +242,25 @@ export async function generateJSONFromAIWithProvenance<T>(
       attempt: index + 1,
       fallbackUsed: index > 0,
     };
+    const descriptor: AiAttemptDescriptor = {
+      ...provenance,
+      provider: attempt.provider,
+      model: attempt.model,
+      requestBudget: attempt.requestBudget,
+      requestOverheadTokens: structuredOutput
+        ? estimateSerializedInputTokens(JSON.stringify(structuredOutput.jsonSchema))
+        : 0,
+    };
+    const serializedPrompt = serializePrompt ? serializePrompt(descriptor) : prompt;
+    if (serializedPrompt === undefined) {
+      console.error('[ai-orchestrator] No prompt or prompt serializer was supplied.');
+      return null;
+    }
+    const requestDiagnostics = preflightAiRequest(
+      serializedPrompt,
+      attempt.requestBudget,
+      structuredOutput?.jsonSchema
+    );
     const startedAt = Date.now();
     let timedOut = false;
     const record = (
@@ -214,8 +281,21 @@ export async function generateJSONFromAIWithProvenance<T>(
         errorCode,
         fallbackUsed: provenance.fallbackUsed,
         attemptNumber: provenance.attempt,
+        estimatedInputTokens: requestDiagnostics.estimatedInputTokens,
+        maxOutputTokens: requestDiagnostics.maxCompletionTokens,
+        estimatedRequestTokens: requestDiagnostics.estimatedRequestTokens,
+        requestBudgetTokens: requestDiagnostics.safeRequestTokens,
+        safetyMarginTokens: requestDiagnostics.safetyMarginTokens,
       });
     };
+
+    if (!requestDiagnostics.allowed) {
+      record(false, 'PAYLOAD_BUDGET_EXCEEDED', { inputTokens: null, outputTokens: null });
+      console.warn(
+        `[ai-orchestrator] ${attempt.label} skipped because its estimated request exceeds the configured safe budget.${isLast ? ' All providers exhausted.' : ' Trying next provider…'}`
+      );
+      continue;
+    }
 
     try {
       console.info(`[ai-orchestrator] Querying ${attempt.label} (attempt ${index + 1}/${attempts.length}).`);
@@ -226,21 +306,25 @@ export async function generateJSONFromAIWithProvenance<T>(
       }, timeoutMs);
       let response: AttemptResponse;
       try {
-        response = await attempt.run(controller.signal);
+        response = await attempt.run(
+          controller.signal,
+          serializedPrompt,
+          requestDiagnostics.maxCompletionTokens
+        );
       } finally {
         clearTimeout(timeout);
       }
       const parsed = parseJSONContent<T>(response.text);
       if (parsed !== null) {
-        if (!schema) {
+        if (!runtimeSchema) {
           record(true, null, response);
-          return { data: parsed, provenance };
+          return { data: parsed, provenance, requestDiagnostics };
         }
 
-        const validated = schema.safeParse(parsed);
+        const validated = runtimeSchema.safeParse(parsed);
         if (validated.success) {
           record(true, null, response);
-          return { data: validated.data, provenance };
+          return { data: validated.data, provenance, requestDiagnostics };
         }
 
         record(false, 'SCHEMA_VALIDATION_FAILED', response);
@@ -258,18 +342,32 @@ export async function generateJSONFromAIWithProvenance<T>(
         `[ai-orchestrator] ${attempt.label} returned no usable JSON.${isLast ? ' All providers exhausted.' : ' Trying next provider…'}`
       );
     } catch (err) {
-      record(false, timedOut ? 'TIMEOUT' : 'PROVIDER_ERROR', {
+      const errorCode = timedOut ? 'TIMEOUT' : classifyProviderError(err);
+      record(false, errorCode, {
         inputTokens: null,
         outputTokens: null,
       });
-      const message = err instanceof Error ? err.message : String(err);
       console.warn(
-        `[ai-orchestrator] ${attempt.label} failed: ${message}.${isLast ? ' All providers exhausted.' : ' Trying next provider…'}`
+        `[ai-orchestrator] ${attempt.label} failed (${errorCode}).${isLast ? ' All providers exhausted.' : ' Trying next provider…'}`
       );
     }
   }
 
   return null;
+}
+
+function classifyProviderError(error: unknown): AiAttemptErrorCode {
+  if (!error || typeof error !== 'object') return 'PROVIDER_ERROR';
+  const candidate = error as { status?: unknown; statusCode?: unknown };
+  const status = typeof candidate.status === 'number'
+    ? candidate.status
+    : typeof candidate.statusCode === 'number'
+      ? candidate.statusCode
+      : null;
+  if (status === 413) return 'PROVIDER_PAYLOAD_TOO_LARGE';
+  if (status === 429) return 'PROVIDER_RATE_LIMITED';
+  if (status !== null && status >= 500) return 'PROVIDER_UNAVAILABLE';
+  return 'PROVIDER_ERROR';
 }
 
 /**

@@ -1435,6 +1435,11 @@ model AiUsageEvent {
   errorCode        String?
   fallbackUsed     Boolean
   attemptNumber    Int
+  estimatedInputTokens   Int?
+  maxOutputTokens        Int?
+  estimatedRequestTokens Int?
+  requestBudgetTokens    Int?
+  safetyMarginTokens     Int?
   estimatedCostUsd Decimal? @db.Decimal(12, 8)
   createdAt        DateTime @default(now())
 

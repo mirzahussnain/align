@@ -63,13 +63,21 @@ describe('AI orchestrator attempt telemetry', () => {
 
     expect(result).toEqual({
       data: { ok: true },
-      provenance: { provider: 'gemini', model: 'gemini-3.5-flash', attempt: 1, fallbackUsed: false },
+      provenance: { provider: 'gemini', model: 'gemini-3.8-flash', attempt: 1, fallbackUsed: false },
+      requestDiagnostics: {
+        estimatedInputTokens: 3,
+        maxCompletionTokens: 8_192,
+        estimatedRequestTokens: 8_195,
+        safeRequestTokens: 32_768,
+        safetyMarginTokens: 512,
+        allowed: true,
+      },
     });
     expect(mocks.telemetryCreate).toHaveBeenCalledWith({
       data: expect.objectContaining({
         capability: 'job_match_analysis',
         provider: 'gemini',
-        model: 'gemini-3.5-flash',
+        model: 'gemini-3.8-flash',
         inputTokens: 100,
         outputTokens: 60,
         latencyMs: 25,
@@ -129,6 +137,135 @@ describe('AI orchestrator attempt telemetry', () => {
     ]);
   });
 
+  it('translates one structured-output contract for Gemini and strict Groq fallback', async () => {
+    vi.stubEnv('GROQ_API_KEY', 'groq-key');
+    mocks.geminiGenerate.mockRejectedValue(Object.assign(new Error('busy'), { status: 503 }));
+    mocks.groqCreate.mockResolvedValue({
+      choices: [{ message: { content: JSON.stringify({ certifications: [] }) } }],
+      usage: { prompt_tokens: 8, completion_tokens: 4, total_tokens: 12 },
+    });
+    const { generateJSONFromAIWithProvenance } = await loadOrchestrator();
+    const jsonSchema = {
+      type: 'object',
+      properties: { certifications: { type: 'array', items: { type: 'string' } } },
+      required: ['certifications'],
+      additionalProperties: false,
+    };
+
+    const result = await generateJSONFromAIWithProvenance({
+      capability: 'cv_regeneration',
+      prompt: 'return json',
+      structuredOutput: {
+        name: 'structured_cv_rewrite',
+        runtimeSchema: z.object({ certifications: z.array(z.string()) }),
+        jsonSchema,
+      },
+    });
+
+    expect(result?.data).toEqual({ certifications: [] });
+    expect(mocks.geminiGenerate).toHaveBeenCalledWith(expect.objectContaining({
+      config: expect.objectContaining({
+        responseMimeType: 'application/json',
+        responseJsonSchema: jsonSchema,
+      }),
+    }));
+    expect(mocks.groqCreate).toHaveBeenCalledWith(expect.objectContaining({
+      reasoning_effort: 'low',
+      response_format: {
+        type: 'json_schema',
+        json_schema: {
+          name: 'structured_cv_rewrite',
+          strict: true,
+          schema: jsonSchema,
+        },
+      },
+    }), expect.anything());
+  });
+
+  it('serializes and preflights each attempt with its model-specific completion cap', async () => {
+    vi.stubEnv('GROQ_API_KEY', 'groq-key');
+    mocks.geminiGenerate.mockRejectedValue(Object.assign(new Error('busy'), { status: 503 }));
+    mocks.groqCreate.mockResolvedValue({
+      choices: [{ message: { content: JSON.stringify({ ok: true }) } }],
+      usage: { prompt_tokens: 25, completion_tokens: 10, total_tokens: 35 },
+    });
+    const serializePrompt = vi.fn(({ provider }: { provider: string }) => `${provider} prompt`);
+    const { generateJSONFromAIWithProvenance } = await loadOrchestrator();
+
+    const result = await generateJSONFromAIWithProvenance<{ ok: boolean }>({
+      capability: 'cv_regeneration',
+      serializePrompt,
+    });
+
+    expect(serializePrompt.mock.calls.map(([attempt]) => attempt.provider)).toEqual([
+      'gemini',
+      'groq',
+    ]);
+    expect(mocks.geminiGenerate).toHaveBeenCalledWith(
+      expect.objectContaining({ contents: 'gemini prompt' })
+    );
+    expect(mocks.groqCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        messages: [{ role: 'user', content: 'groq prompt' }],
+        max_tokens: 3_500,
+      }),
+      expect.anything()
+    );
+    expect(result?.requestDiagnostics).toEqual({
+      estimatedInputTokens: 3,
+      maxCompletionTokens: 3_500,
+      estimatedRequestTokens: 3_503,
+      safeRequestTokens: 8_000,
+      safetyMarginTokens: 512,
+      allowed: true,
+    });
+  });
+
+  it('skips a known-over-budget attempt before invoking the provider SDK', async () => {
+    vi.stubEnv('GEMINI_API_KEY', '');
+    vi.stubEnv('GROQ_API_KEY', 'groq-key');
+    const { generateJSONFromAIWithProvenance } = await loadOrchestrator();
+
+    await expect(generateJSONFromAIWithProvenance({
+      capability: 'cv_regeneration',
+      serializePrompt: () => 'x'.repeat(15_953),
+    })).resolves.toBeNull();
+
+    expect(mocks.groqCreate).not.toHaveBeenCalled();
+    expect(mocks.telemetryCreate).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        errorCode: 'PAYLOAD_BUDGET_EXCEEDED',
+        estimatedInputTokens: 3_989,
+        maxOutputTokens: 3_500,
+        estimatedRequestTokens: 7_489,
+        requestBudgetTokens: 8_000,
+        safetyMarginTokens: 512,
+      }),
+    });
+  });
+
+  it.each([
+    [413, 'PROVIDER_PAYLOAD_TOO_LARGE'],
+    [429, 'PROVIDER_RATE_LIMITED'],
+    [503, 'PROVIDER_UNAVAILABLE'],
+    [undefined, 'PROVIDER_ERROR'],
+  ] as const)('classifies provider status %s as %s', async (status, expectedCode) => {
+    const error = Object.assign(new Error('sensitive provider detail'),
+      status === undefined ? {} : { status }
+    );
+    mocks.geminiGenerate.mockRejectedValue(error);
+    const { generateJSONFromAI } = await loadOrchestrator();
+
+    await expect(generateJSONFromAI({
+      capability: 'cv_regeneration',
+      prompt: 'return json',
+    })).resolves.toBeNull();
+
+    const data = mocks.telemetryCreate.mock.calls[0][0].data;
+    expect(data.errorCode).toBe(expectedCode);
+    expect(JSON.stringify(data)).not.toContain('sensitive provider detail');
+  });
+
   it.each([
     'ai_enhanced_ats_analysis',
     'job_match_analysis',
@@ -149,6 +286,9 @@ describe('AI orchestrator attempt telemetry', () => {
 
     expect(result?.data).toEqual({ ok: true });
     expect(result?.provenance).toMatchObject({ provider: 'groq', attempt: 2, fallbackUsed: true });
+    expect(mocks.groqCreate.mock.calls[0][0].reasoning_effort).toBe(
+      capability === 'cv_regeneration' ? 'low' : undefined
+    );
     expect(mocks.telemetryCreate).toHaveBeenCalledTimes(2);
   });
 

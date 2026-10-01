@@ -13,11 +13,20 @@ interface ModelPricing {
   outputUsdPerMillionTokens: number;
 }
 
+export interface AiModelRequestBudget {
+  maxCompletionTokens: number;
+  safeRequestTokens: number;
+  safetyMarginTokens: number;
+}
+
 export interface AiProviderDefinition {
   provider: SupportedAiProvider;
   label: string;
   model: string;
   apiKeyEnv: 'GEMINI_API_KEY' | 'GROQ_API_KEY';
+  maxCompletionTokensEnv: 'GEMINI_MAX_OUTPUT_TOKENS' | 'GROQ_MAX_OUTPUT_TOKENS';
+  requestBudget: AiModelRequestBudget;
+  reasoningEffortByCapability?: Partial<Record<AiUsageCapability, 'low' | 'medium' | 'high'>>;
   pricing: ModelPricing | null;
 }
 
@@ -30,8 +39,14 @@ export const AI_PROVIDER_DEFINITIONS: readonly AiProviderDefinition[] = [
   {
     provider: 'gemini',
     label: 'Gemini',
-    model: 'gemini-3.5-flash',
+    model: 'gemini-3.8-flash',
     apiKeyEnv: 'GEMINI_API_KEY',
+    maxCompletionTokensEnv: 'GEMINI_MAX_OUTPUT_TOKENS',
+    requestBudget: {
+      maxCompletionTokens: 8_192,
+      safeRequestTokens: 32_768,
+      safetyMarginTokens: 512,
+    },
     pricing: { inputUsdPerMillionTokens: 1.5, outputUsdPerMillionTokens: 9 },
   },
   {
@@ -39,6 +54,13 @@ export const AI_PROVIDER_DEFINITIONS: readonly AiProviderDefinition[] = [
     label: 'Groq',
     model: 'openai/gpt-oss-120b',
     apiKeyEnv: 'GROQ_API_KEY',
+    maxCompletionTokensEnv: 'GROQ_MAX_OUTPUT_TOKENS',
+    requestBudget: {
+      maxCompletionTokens: 3_500,
+      safeRequestTokens: 8_000,
+      safetyMarginTokens: 512,
+    },
+    reasoningEffortByCapability: { cv_regeneration: 'low' },
     pricing: { inputUsdPerMillionTokens: 0.15, outputUsdPerMillionTokens: 0.6 },
   },
 ] as const;
@@ -52,10 +74,29 @@ export const AI_RUNTIME_CONFIG = {
   providers: AI_PROVIDER_DEFINITIONS.map((definition) => ({
     ...definition,
     apiKey: process.env[definition.apiKeyEnv]?.trim() ?? '',
+    requestBudget: {
+      ...definition.requestBudget,
+      maxCompletionTokens: envInt(
+        definition.maxCompletionTokensEnv,
+        definition.requestBudget.maxCompletionTokens
+      ),
+    },
   })),
   timeoutMs: envInt('AI_PROVIDER_TIMEOUT_MS', 45_000),
-  maxOutputTokens: envInt('AI_MAX_OUTPUT_TOKENS', 8_192),
 } as const;
+
+export function requestBudgetFor(
+  provider: SupportedAiProvider,
+  model: string
+): AiModelRequestBudget {
+  const definition = AI_RUNTIME_CONFIG.providers.find(
+    (candidate) => candidate.provider === provider && candidate.model === model
+  );
+  if (!definition) {
+    throw new Error(`No AI request budget configured for ${provider}/${model}.`);
+  }
+  return definition.requestBudget;
+}
 
 export function aiProviderEnvironmentErrors(
   env: Readonly<Record<string, string | undefined>>
