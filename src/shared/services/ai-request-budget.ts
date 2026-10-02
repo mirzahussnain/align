@@ -3,6 +3,8 @@ import type { AiModelRequestBudget } from '@/shared/config/ai-runtime';
 export interface AiRequestPreflight extends AiModelRequestBudget {
   estimatedInputTokens: number;
   estimatedRequestTokens: number;
+  headroomTokens: number;
+  overflowTokens: number;
   allowed: boolean;
 }
 
@@ -27,13 +29,16 @@ export function preflightAiRequest(
     : serialized;
   const estimatedInputTokens = estimateSerializedInputTokens(requestInput);
   const estimatedRequestTokens = estimatedInputTokens + budget.maxCompletionTokens;
+  const budgetDelta =
+    budget.safeRequestTokens - estimatedRequestTokens - budget.safetyMarginTokens;
   return {
     estimatedInputTokens,
     maxCompletionTokens: budget.maxCompletionTokens,
     estimatedRequestTokens,
     safeRequestTokens: budget.safeRequestTokens,
     safetyMarginTokens: budget.safetyMarginTokens,
-    allowed:
-      estimatedRequestTokens + budget.safetyMarginTokens <= budget.safeRequestTokens,
+    headroomTokens: Math.max(0, budgetDelta),
+    overflowTokens: Math.max(0, -budgetDelta),
+    allowed: budgetDelta >= 0,
   };
 }

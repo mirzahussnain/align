@@ -15,6 +15,8 @@ describe('AI request budget preflight', () => {
       estimatedRequestTokens: 4_500,
       safeRequestTokens: 8_000,
       safetyMarginTokens: 512,
+      headroomTokens: 2_988,
+      overflowTokens: 0,
       allowed: true,
     });
   });
@@ -23,6 +25,8 @@ describe('AI request budget preflight', () => {
     const result = preflightAiRequest('x'.repeat(15_952), budget);
     expect(result.estimatedInputTokens).toBe(3_988);
     expect(result.estimatedRequestTokens + result.safetyMarginTokens).toBe(8_000);
+    expect(result.headroomTokens).toBe(0);
+    expect(result.overflowTokens).toBe(0);
     expect(result.allowed).toBe(true);
   });
 
@@ -30,6 +34,8 @@ describe('AI request budget preflight', () => {
     const result = preflightAiRequest('x'.repeat(15_953), budget);
     expect(result.estimatedInputTokens).toBe(3_989);
     expect(result.estimatedRequestTokens + result.safetyMarginTokens).toBe(8_001);
+    expect(result.headroomTokens).toBe(0);
+    expect(result.overflowTokens).toBe(1);
     expect(result.allowed).toBe(false);
   });
 

@@ -5,6 +5,7 @@ import { fallbackContext, analyzeCV } from '@/shared/utils/scoring-engine';
 import { classifyCV } from '@/shared/services/classifier';
 import { loadFixtureCV, type FixtureCV } from '@/__fixtures__/load-cv';
 import type { Classification } from '@/shared/types/classification';
+import { preflightAiRequest } from '@/shared/services/ai-request-budget';
 
 async function compose(fixture: FixtureCV) {
   const text = loadFixtureCV(fixture);
@@ -66,6 +67,38 @@ describe('semantic prompt composition', () => {
 });
 
 describe('job-match prompt composition', () => {
+  it('expresses structural rules once while preserving complete semantic inputs', async () => {
+    const cvText = loadFixtureCV('junior-dev-with-projects');
+    const classification = await classifyCV({ cvText, aiAllowed: false });
+    const profile = getOccupationProfile(classification.occupation);
+    const jobDescription = [
+      'Senior Full Stack Engineer',
+      'Build React and TypeScript services, production LLM workflows, RAG, evaluation, and observability.',
+      'Essential: system design, Node.js, Python, PostgreSQL, Kubernetes, Terraform, GCP, testing, and incident response.',
+      'You must have full UK right to work and be available for a fixed twelve-month contract from January 2027.',
+      'Desirable: FHIR, HL7, clinical AI, event-driven systems, mentoring, and regulated product delivery.',
+    ].join('\n');
+    const prompt = composeJobMatchPrompt(cvText, jobDescription, profile, classification);
+
+    expect(prompt).toContain(cvText);
+    expect(prompt).toContain(jobDescription);
+    expect(prompt.match(/absence alone is not_met or unclear/g)).toHaveLength(1);
+    expect(prompt).toContain('COMPLETE JD INVENTORY');
+    expect(prompt).toContain('DATE ARITHMETIC');
+    expect(prompt).toContain('DEDUCTION LEDGER');
+    expect(prompt).toContain('exact verbatim CV evidence');
+    expect(prompt).toContain('Do NOT calculate or return matchScore');
+
+    const preflight = preflightAiRequest(prompt, {
+      maxCompletionTokens: 3_500,
+      safeRequestTokens: 8_000,
+      safetyMarginTokens: 512,
+    });
+    expect(preflight.allowed).toBe(true);
+    expect(preflight.headroomTokens).toBeGreaterThan(0);
+    expect(preflight.estimatedInputTokens).toBeLessThanOrEqual(2_600);
+  });
+
   it('asks for one complete canonical inventory and server-owned scoring', async () => {
     const { jobMatch } = await compose('admin-office');
     expect(jobMatch).toContain('COMPLETE JD INVENTORY');
@@ -74,6 +107,14 @@ describe('job-match prompt composition', () => {
     expect(jobMatch).toContain('shift or work-pattern requirement');
     expect(jobMatch).toContain('Do NOT calculate or return matchScore');
     expect(jobMatch).toContain('Do NOT generate requirement ids');
+  });
+
+  it('requires every AI-authored top-level assessment field without null or omission', async () => {
+    const { jobMatch } = await compose('admin-office');
+
+    expect(jobMatch).toContain(
+      'REQUIRED TOP-LEVEL FIELDS: domainFit, matchFeedback, and experienceGap must all be present and non-null. Never omit any of them.'
+    );
   });
 
   it('uses the v2 requirement ledger instead of parallel legacy arrays', async () => {

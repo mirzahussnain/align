@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  AI_ACCOUNT_EXECUTION_LIMITS,
+  AI_MODEL_CAPABILITIES,
   AI_PROVIDER_DEFINITIONS,
+  DEFAULT_AI_EXECUTION_POLICY,
   aiProviderEnvironmentErrors,
   estimateAiCostUsd,
   requestBudgetFor,
@@ -32,6 +35,40 @@ describe('AI runtime provider configuration', () => {
       maxCompletionTokens: 3_500,
       safeRequestTokens: 8_000,
       safetyMarginTokens: 512,
+    });
+  });
+
+  it('keeps model capabilities separate from account request envelopes', () => {
+    const model = AI_MODEL_CAPABILITIES.find(({ provider }) => provider === 'groq');
+    const account = AI_ACCOUNT_EXECUTION_LIMITS.find(({ provider }) => provider === 'groq');
+
+    expect(model).toMatchObject({
+      model: 'openai/gpt-oss-120b',
+      contextWindowTokens: 131_072,
+      maxCompletionTokens: 3_500,
+      structuredOutputSupport: 'json_schema',
+    });
+    expect(account).toEqual({
+      provider: 'groq',
+      model: 'openai/gpt-oss-120b',
+      requestBudgetTokens: 8_000,
+      safetyMarginTokens: 512,
+    });
+    expect(model).not.toHaveProperty('requestBudgetTokens');
+    expect(account).not.toHaveProperty('contextWindowTokens');
+  });
+
+  it('centralizes bounded transient retry policy', () => {
+    expect(DEFAULT_AI_EXECUTION_POLICY).toMatchObject({
+      maxAttempts: 3,
+      retryableReasons: ['SERVICE_UNAVAILABLE', 'RATE_LIMITED', 'NETWORK'],
+      totalDeadlineMs: 45_000,
+      minimumAttemptWindowMs: 250,
+      backoff: {
+        kind: 'equal_jitter_exponential',
+        initialMs: 250,
+        maximumMs: 1_000,
+      },
     });
   });
 

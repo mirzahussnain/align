@@ -40,8 +40,8 @@ export function storedJobMatchResult(row: StoredJobMatchRow): CVAnalysisResult {
     })),
     domainFit: advisory.domainFit,
     matchScore: row.matchScore,
-    matchFeedback: advisory.matchFeedback ?? '',
-    experienceGap: advisory.experienceGap ?? '',
+    matchFeedback: advisory.matchFeedback,
+    experienceGap: advisory.experienceGap,
     tailoredRewrites: advisory.tailoredRewrites ?? [],
   });
   const result = analyzeCV(row.cvRevision.extractedText, row.cvRevision.pageCount ?? 1);

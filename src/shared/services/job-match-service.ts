@@ -15,6 +15,8 @@ import { resolveAnalysisContext } from './analysis-context';
 import { getOccupationProfile } from '@/shared/occupations/registry';
 import { analyzeCV } from '@/shared/utils/scoring-engine';
 import { getJobMatchFeedbackWithProvenance } from './ai-analyser';
+import { AiOrchestrationError } from './ai-orchestrator';
+import { AiOperationError } from './ai-failure';
 import { applyStructuredCandidateEvidence } from './job-match-structured-evidence';
 import { storedJobMatchResult } from './stored-job-match';
 
@@ -138,7 +140,23 @@ export async function runJobMatch(input: JobMatchInput): Promise<CVAnalysisResul
     result.analysisId = row.id;
     return result;
   } catch (error) {
-    await releaseCapability({ userId: input.userId, capability: 'job_match_analysis', operationId: input.operationId, reason: error instanceof APIError ? 'operation_failed' : 'provider_unavailable' });
-    throw error;
+    const failure = error instanceof AiOrchestrationError
+      ? new AiOperationError({
+          capability: 'job_match_analysis',
+          operationId: input.operationId,
+          reason: 'provider_unavailable',
+        })
+      : error;
+    await releaseCapability({
+      userId: input.userId,
+      capability: 'job_match_analysis',
+      operationId: input.operationId,
+      reason: failure instanceof AiOperationError && failure.reason === 'provider_unavailable'
+        ? 'provider_unavailable'
+        : failure instanceof APIError
+          ? 'operation_failed'
+          : 'provider_unavailable',
+    });
+    throw failure;
   }
 }

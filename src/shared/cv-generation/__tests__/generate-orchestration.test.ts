@@ -20,7 +20,10 @@ vi.mock('@/shared/lib/prisma', () => ({ prisma: {
   $transaction: mocks.transaction,
 } }));
 vi.mock('@/shared/lib/storage', () => ({ storage: { upload: mocks.upload, download: mocks.download } }));
-vi.mock('@/shared/services/ai-orchestrator', () => ({ generateJSONFromAIWithProvenance: mocks.generateAi }));
+vi.mock('@/shared/services/ai-orchestrator', () => ({
+  executeAiTask: mocks.generateAi,
+  AiOrchestrationError: class AiOrchestrationError extends Error {},
+}));
 vi.mock('@/shared/services/capability-reservation', () => ({
   reserveCapability: mocks.reserve, commitCapability: mocks.commit, createResultForReservation: mocks.createResult,
   releaseCapability: mocks.release, reservationFingerprint: () => 'fingerprint',

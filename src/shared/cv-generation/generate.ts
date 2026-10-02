@@ -3,9 +3,9 @@ import { createHash } from 'node:crypto';
 import type { Prisma } from '@/generated/prisma/client';
 import { prisma } from '@/shared/lib/prisma';
 import { storage } from '@/shared/lib/storage';
-import { generateJSONFromAIWithProvenance } from '@/shared/services/ai-orchestrator';
+import { AiOrchestrationError, executeAiTask } from '@/shared/services/ai-orchestrator';
 import { reserveCapability, commitCapability, createResultForReservation, releaseCapability, reservationFingerprint } from '@/shared/services/capability-reservation';
-import { markOperationRunning, reservationIsRunning, OperationConflictError, OperationInProgressError } from '@/shared/services/ai-failure';
+import { AiOperationError, markOperationRunning, reservationIsRunning, OperationConflictError, OperationInProgressError } from '@/shared/services/ai-failure';
 import { EntitlementRequiredError } from '@/shared/entitlements/server';
 import { TemplateIdSchema, type TemplateId } from '@/shared/constants/templates';
 import { ApprovedCvPlanSchema, UnifiedCandidateEvidenceSchema } from './schemas';
@@ -95,8 +95,8 @@ export async function generateApprovedCv(userId: string, generationId: string) {
         reservationHeld = true;
         await markOperationRunning(userId, 'cv_regeneration', generation.operationId);
       }
-      const result = await generateJSONFromAIWithProvenance({
-        capability: 'cv_regeneration', userId, operationId: generation.operationId, temperature: 0.1, thinkingBudget: 0,
+      const result = await executeAiTask({
+        task: 'cv_regeneration', userId, operationId: generation.operationId, temperature: 0.1, thinkingBudget: 0,
         structuredOutput: CV_REWRITE_PATCH_CONTRACT,
         prompt: [
           'Rewrite only the approved evidence below for the stated target. Return only the strict patch schema. Each patch must target one approved evidenceId and include that same id in sourceEvidenceIds. Never invent, infer, merge, remove, or upgrade a fact. Preserve every metric, date, employer, qualification, credential and eligibility fact exactly. Omit a patch when wording should remain unchanged.',
@@ -123,8 +123,15 @@ export async function generateApprovedCv(userId: string, generationId: string) {
     }
     return { generatedCvId, bytes, recovered: false };
   } catch (error) {
-    if (reservationHeld && !persisted) await releaseCapability({ userId, capability: 'cv_regeneration', operationId: generation.operationId, reason: error instanceof CvGenerationValidationError ? 'truthfulness_failure' : 'generation_failure' });
-    await prisma.cvGeneration.updateMany({ where: { id: generation.id, userId, status: { not: 'COMPLETED' } }, data: { status: 'GENERATION_FAILED', failureCode: createHash('sha256').update(error instanceof Error ? error.name : 'unknown').digest('hex').slice(0, 12) } });
-    throw error;
+    const failure = error instanceof AiOrchestrationError
+      ? new AiOperationError({
+          capability: 'cv_regeneration',
+          operationId: generation.operationId,
+          reason: 'provider_unavailable',
+        })
+      : error;
+    if (reservationHeld && !persisted) await releaseCapability({ userId, capability: 'cv_regeneration', operationId: generation.operationId, reason: failure instanceof CvGenerationValidationError ? 'truthfulness_failure' : 'generation_failure' });
+    await prisma.cvGeneration.updateMany({ where: { id: generation.id, userId, status: { not: 'COMPLETED' } }, data: { status: 'GENERATION_FAILED', failureCode: createHash('sha256').update(failure instanceof Error ? failure.name : 'unknown').digest('hex').slice(0, 12) } });
+    throw failure;
   }
 }

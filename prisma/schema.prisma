@@ -1574,16 +1574,27 @@ model AiUsageEvent {
   model                  String
   inputTokens            Int?
   outputTokens           Int?
+  actualTotalTokens      Int?
   latencyMs              Int
   success                Boolean
   errorCode              String?
+  providerFailureReason  String?
+  upstreamStatusCode     Int?
   fallbackUsed           Boolean
   attemptNumber          Int
+  providerCandidateNumber Int?
+  providerAttemptNumber  Int?
+  retryNumber            Int?
+  backoffMs              Int?
+  outcome                String?
+  preflightOutcome       String?
   estimatedInputTokens   Int?
   maxOutputTokens        Int?
   estimatedRequestTokens Int?
   requestBudgetTokens    Int?
   safetyMarginTokens     Int?
+  requestHeadroomTokens  Int?
+  requestOverflowTokens  Int?
   estimatedCostUsd       Decimal? @db.Decimal(12, 8)
   createdAt              DateTime @default(now())
 

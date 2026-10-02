@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   AISemanticOutputSchema,
   AIClassificationSchema,
+  AIJobMatchV2RawSchema,
   JobMatchDataV2Schema,
   parseStoredJobMatchData,
 } from '../ai-output';
@@ -96,6 +97,29 @@ describe('stored JobMatchDataV2', () => {
     delete versionless.schemaVersion;
     expect(parseStoredJobMatchData(versionless)).toBeNull();
   });
+});
+
+describe('raw JobMatchDataV2 provider contract', () => {
+  const { matchScore: _serverOwnedScore, ...goodRawJobMatch } = goodStoredJobMatch;
+
+  it.each(['domainFit', 'matchFeedback', 'experienceGap'] as const)(
+    'rejects provider output missing required field %s',
+    (field) => {
+      const incomplete: Record<string, unknown> = { ...goodRawJobMatch };
+      delete incomplete[field];
+
+      expect(AIJobMatchV2RawSchema.safeParse(incomplete).success).toBe(false);
+    }
+  );
+
+  it.each(['domainFit', 'matchFeedback', 'experienceGap'] as const)(
+    'rejects provider output with null required field %s',
+    (field) => {
+      expect(
+        AIJobMatchV2RawSchema.safeParse({ ...goodRawJobMatch, [field]: null }).success
+      ).toBe(false);
+    }
+  );
 });
 
 describe('AIClassificationSchema', () => {
