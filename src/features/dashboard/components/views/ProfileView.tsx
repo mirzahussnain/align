@@ -59,11 +59,11 @@ export default function ProfileView({ initial, name, email, image }: { initial: 
         {section === 'education' && <EducationForm key={`${initial.profileId}:education`} initial={initial.education} profileId={initial.profileId} />}
         {section === 'skills' && <SkillsForm key={`${initial.profileId}:skills`} initial={initial.skills} profileId={initial.profileId} />}
         {section === 'certifications' && <StructuredEvidenceManager key={`${initial.profileId}:certification`} kind="certification" initial={initial.certifications.map((item) => ({ id: item.id, officialName: item.name, issuingBody: item.issuer, credentialNumber: item.credentialNumber ?? '', issueDate: item.issueDate || item.year, expiryDate: item.expiryDate ?? '', status: item.status ?? '', verificationUrl: item.verificationUrl ?? '', verificationStatus: item.verificationStatus || 'user_confirmed_unverified' }))} profileId={initial.profileId} />}
-        {section === 'training' && <StructuredEvidenceManager key={`${initial.profileId}:training`} kind="training" initial={initial.trainings} profileId={initial.profileId} />}
+        {section === 'training' && <StructuredEvidenceManager key={`${initial.profileId}:training`} kind="training" initial={initial.trainings.map(({ evidenceMetadata: _metadata, ...item }) => item)} profileId={initial.profileId} />}
         {section === 'licences' && <StructuredEvidenceManager key={`${initial.profileId}:licence`} kind="licence" initial={initial.licences} profileId={initial.profileId} />}
         {section === 'registrations' && <StructuredEvidenceManager key={`${initial.profileId}:registration`} kind="registration" initial={initial.professionalRegistrations.map((item) => ({ ...item, credentialNumber: item.registrationNumber }))} profileId={initial.profileId} />}
         {section === 'languages' && <StructuredEvidenceManager key={`${initial.profileId}:language`} kind="language" initial={initial.languages} profileId={initial.profileId} />}
-        {section === 'volunteering' && <StructuredEvidenceManager key={`${initial.profileId}:volunteering`} kind="volunteering" initial={initial.volunteering} profileId={initial.profileId} />}
-        {section === 'other' && <><StructuredEvidenceManager key={`${initial.profileId}:other`} kind="other" initial={initial.otherEvidence} profileId={initial.profileId} /><ReusableEvidenceUsage /></>}
+        {section === 'volunteering' && <StructuredEvidenceManager key={`${initial.profileId}:volunteering`} kind="volunteering" initial={initial.volunteering.map(({ evidenceMetadata: _metadata, ...item }) => item)} profileId={initial.profileId} />}
+        {section === 'other' && <><StructuredEvidenceManager key={`${initial.profileId}:other`} kind="other" initial={initial.otherEvidence.map(({ evidenceMetadata: _metadata, ...item }) => item)} profileId={initial.profileId} /><ReusableEvidenceUsage /></>}
       </div></section></div></div></>;
 }

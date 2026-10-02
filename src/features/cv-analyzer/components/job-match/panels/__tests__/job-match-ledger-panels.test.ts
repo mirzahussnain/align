@@ -19,19 +19,6 @@ const FULL_ACCESS: ReportViewAccess = {
   eligibility: true,
 };
 
-const cvBuildSpec = {
-  recommended_template: 'sharp_minimal',
-  template_rationale: '',
-  section_order: [],
-  lead_project: '',
-  summary_angle: '',
-  skills_to_surface: [],
-  skills_to_deprioritise: [],
-  bullets_to_rewrite: [],
-  visa_note_required: false,
-  cover_letter_angle: '',
-};
-
 function v2(status: 'aligned' | 'partial' | 'mismatch'): JobMatchDataV2 {
   return {
     schemaVersion: 2,
@@ -62,7 +49,6 @@ function v2(status: 'aligned' | 'partial' | 'mismatch'): JobMatchDataV2 {
     matchFeedback: '',
     experienceGap: '',
     tailoredRewrites: [],
-    cv_build_spec: cvBuildSpec,
   };
 }
 

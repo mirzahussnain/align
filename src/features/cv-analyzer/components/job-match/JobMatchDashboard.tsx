@@ -16,7 +16,7 @@ import DomainFitPanel from './panels/DomainFitPanel';
 import ScoringBreakdownPanel from './panels/ScoringBreakdownPanel';
 import TailoredRewritesPanel from './panels/TailoredRewritesPanel';
 import RewriteStrategyPanel from './panels/RewriteStrategyPanel';
-import RewriteWizardModal from '@/features/cv-rewrite/components/RewriteWizardModal';
+import CvGenerationWizard from '@/features/cv-generation/components/CvGenerationWizard';
 import { Sparkles, LayoutList } from 'lucide-react';
 
 interface JobMatchDashboardProps {
@@ -248,11 +248,10 @@ export default function JobMatchDashboard({ result }: JobMatchDashboardProps) {
       </div>
 
       {/* --- AI REWRITE WIZARD MODAL --- */}
-      <RewriteWizardModal
+      <CvGenerationWizard
         isOpen={isWizardOpen}
         onClose={() => setIsWizardOpen(false)}
-        analysisId={result.analysisId}
-        missingSkills={view.mandatoryGaps.missing}
+        initialJobMatchId={result.analysisId}
       />
     </div>
   );

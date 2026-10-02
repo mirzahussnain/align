@@ -5,8 +5,8 @@ import { useRouter } from 'next/navigation';
 import { FileText, FileStack, Plus, Download, Target, FileUp, UserRound } from 'lucide-react';
 import { cn } from '@/shared/utils/cn';
 import DashboardTopBar from '../DashboardTopBar';
-import GenerateCvWizardModal from '@/features/cv-rewrite/components/GenerateCvWizardModal';
-import { cvProvenance } from '@/features/cv-rewrite/utils/provenance';
+import CvGenerationWizard from '@/features/cv-generation/components/CvGenerationWizard';
+import { cvProvenance } from '@/features/cv-generation/utils/provenance';
 import type { CvRow, AnalysisRow } from '../DashboardShell';
 
 /** Provenance chip on a CV card. Truncates so a long filename can't break the grid. */
@@ -109,7 +109,7 @@ export default function CvsView({
                 <div className="mt-3 flex flex-wrap gap-1.5">
                   <Pill className="bg-slate-100 text-slate-600 capitalize">{cv.template}</Pill>
 
-                  {cvProvenance(cv) === 'analysis' ? (
+                  {cvProvenance(cv) === 'job_match' ? (
                     <>
                       {cv.jobTitle && (
                         <Pill className="bg-sky-50 text-accent-cyan">
@@ -156,15 +156,12 @@ export default function CvsView({
       </div>
 
       {wizardOpen && (
-        <GenerateCvWizardModal
+        <CvGenerationWizard
           isOpen={wizardOpen}
           onClose={() => setWizardOpen(false)}
           analyses={analyses}
           profileComplete={profileComplete}
-          profileReasoning={profileReasoning}
           activeProfileId={activeProfileId}
-          activeProfileLabel={activeProfileLabel}
-          reasoningRemaining={reasoningRemaining}
           onGenerated={() => router.refresh()}
         />
       )}

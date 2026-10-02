@@ -66,24 +66,6 @@ describe('semantic prompt composition', () => {
 });
 
 describe('job-match prompt composition', () => {
-  it('preserves the cv_build_spec contract byte-for-byte fields', async () => {
-    const { jobMatch } = await compose('junior-dev-with-projects');
-    for (const key of [
-      '"recommended_template"',
-      '"template_rationale"',
-      '"section_order"',
-      '"lead_project"',
-      '"summary_angle"',
-      '"skills_to_surface"',
-      '"skills_to_deprioritise"',
-      '"bullets_to_rewrite"',
-      '"visa_note_required"',
-      '"cover_letter_angle"',
-    ]) {
-      expect(jobMatch).toContain(key);
-    }
-  });
-
   it('asks for one complete canonical inventory and server-owned scoring', async () => {
     const { jobMatch } = await compose('admin-office');
     expect(jobMatch).toContain('COMPLETE JD INVENTORY');

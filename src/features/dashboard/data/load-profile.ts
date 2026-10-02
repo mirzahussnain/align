@@ -11,6 +11,15 @@ export interface ProfileSummary {
   completeness: number;
 }
 
+export interface ProfileEvidenceMetadata {
+  evidenceId: string;
+  generationId: string;
+  fieldKind: string;
+  text: string;
+  requirementIds: string[];
+  provenance: 'HITL';
+}
+
 export interface ProfileData {
   /** Which profile this content came from; empty when the user has none yet. */
   profileId: string;
@@ -62,6 +71,7 @@ export interface ProfileData {
     endDate: string;
     current: boolean;
     achievements: string[];
+    evidenceMetadata?: ProfileEvidenceMetadata[];
   }[];
   projects: {
     id: string;
@@ -73,6 +83,7 @@ export interface ProfileData {
     startDate: string;
     endDate: string;
     achievements: string[];
+    evidenceMetadata?: ProfileEvidenceMetadata[];
   }[];
   education: {
     id: string;
@@ -83,6 +94,7 @@ export interface ProfileData {
     current: boolean;
     grade: string;
     description: string;
+    evidenceMetadata?: ProfileEvidenceMetadata[];
   }[];
   skills: {
     id: string;
@@ -113,13 +125,15 @@ export interface ProfileData {
     status?: string;
     verificationUrl?: string;
     verificationStatus?: string;
+    evidenceMetadata?: ProfileEvidenceMetadata[];
   }[];
-  trainings: { id: string; course: string; provider: string; field: string; status: string; startDate: string; endDate: string; result: string }[];
+  trainings: { id: string; course: string; provider: string; field: string; status: string; startDate: string; endDate: string; result: string; evidenceMetadata?: ProfileEvidenceMetadata[] }[];
   licences: { id: string; officialName: string; issuingBody: string; issueDate: string; expiryDate: string; credentialNumber: string; status: string; verificationUrl: string; verificationStatus: string }[];
   professionalRegistrations: { id: string; officialName: string; issuingBody: string; issueDate: string; expiryDate: string; registrationNumber: string; status: string; verificationUrl: string; verificationStatus: string }[];
   languages: { id: string; language: string; speaking: string; reading: string; writing: string; professionalUseContext: string; formalTest: string }[];
-  volunteering: { id: string; organisation: string; role: string; startDate: string; endDate: string; contribution: string; skillsTools: string[]; outcome: string }[];
-  otherEvidence: { id: string; title: string; context: string; description: string; period: string; outcome: string }[];
+  volunteering: { id: string; organisation: string; role: string; startDate: string; endDate: string; contribution: string; skillsTools: string[]; outcome: string; evidenceMetadata?: ProfileEvidenceMetadata[] }[];
+  openSource?: { id: string; projectName: string; role: string; repositoryUrl: string; projectUrl: string; startDate: string; endDate: string; description: string; contributions: string[]; technologies: string[]; evidenceMetadata?: ProfileEvidenceMetadata[] }[];
+  otherEvidence: { id: string; title: string; context: string; description: string; period: string; outcome: string; evidenceMetadata?: ProfileEvidenceMetadata[] }[];
 }
 
 // Completeness helpers live in a Prisma-free module so client components can
@@ -149,6 +163,7 @@ async function resolveProfile(userId: string, profileId?: string) {
     professionalRegistrations: { orderBy: { officialName: 'asc' } },
     languages: { orderBy: { language: 'asc' } },
     volunteering: { orderBy: { organisation: 'asc' } },
+    openSourceContributions: { orderBy: { sortOrder: 'asc' } },
     otherEvidence: { orderBy: { title: 'asc' } },
   } as const;
 
@@ -208,6 +223,20 @@ export async function loadProfileData(userId: string, profileId?: string): Promi
 
   const toStrings = (value: unknown): string[] =>
     Array.isArray(value) ? value.map((v) => String(v)) : [];
+  const toEvidenceMetadata = (value: unknown): ProfileEvidenceMetadata[] =>
+    Array.isArray(value) ? value.flatMap((item) => {
+      if (!item || typeof item !== 'object' || Array.isArray(item)) return [];
+      const record = item as Record<string, unknown>;
+      if (typeof record.evidenceId !== 'string' || typeof record.generationId !== 'string' || typeof record.fieldKind !== 'string' || typeof record.text !== 'string') return [];
+      return [{
+        evidenceId: record.evidenceId,
+        generationId: record.generationId,
+        fieldKind: record.fieldKind,
+        text: record.text,
+        requirementIds: toStrings(record.requirementIds),
+        provenance: 'HITL' as const,
+      }];
+    }) : [];
 
   const phone = repairStoredPhone({
     phoneDialCode: identity?.phoneDialCode,
@@ -256,6 +285,7 @@ export async function loadProfileData(userId: string, profileId?: string): Promi
         endDate: e.endDate ?? '',
         current: e.current,
         achievements: toStrings(e.achievements),
+        evidenceMetadata: toEvidenceMetadata(e.evidenceMetadata),
       })) ?? [],
     projects:
       profile?.projects.map((p) => ({
@@ -268,6 +298,7 @@ export async function loadProfileData(userId: string, profileId?: string): Promi
         startDate: p.startDate ?? '',
         endDate: p.endDate ?? '',
         achievements: toStrings(p.achievements),
+        evidenceMetadata: toEvidenceMetadata(p.evidenceMetadata),
       })) ?? [],
     education:
       profile?.education.map((ed) => ({
@@ -279,6 +310,7 @@ export async function loadProfileData(userId: string, profileId?: string): Promi
         current: ed.current,
         grade: ed.grade ?? '',
         description: ed.description ?? '',
+        evidenceMetadata: toEvidenceMetadata(ed.evidenceMetadata),
       })) ?? [],
     skills: [
       ...(profile?.skillGroups.map((group) => ({
@@ -324,13 +356,15 @@ export async function loadProfileData(userId: string, profileId?: string): Promi
         status: certification.status ?? '',
         verificationUrl: certification.verificationUrl ?? '',
         verificationStatus: certification.verificationStatus ?? '',
+        evidenceMetadata: toEvidenceMetadata(certification.evidenceMetadata),
       })) ?? [],
-    trainings: profile?.trainings?.map((item) => ({ id: item.id, course: item.course, provider: item.provider ?? '', field: item.field ?? '', status: item.status ?? '', startDate: item.startDate ?? '', endDate: item.endDate ?? '', result: item.result ?? '' })) ?? [],
+    trainings: profile?.trainings?.map((item) => ({ id: item.id, course: item.course, provider: item.provider ?? '', field: item.field ?? '', status: item.status ?? '', startDate: item.startDate ?? '', endDate: item.endDate ?? '', result: item.result ?? '', evidenceMetadata: toEvidenceMetadata(item.evidenceMetadata) })) ?? [],
     licences: profile?.licences?.map((item) => ({ id: item.id, officialName: item.officialName, issuingBody: item.issuingBody ?? '', issueDate: item.issueDate ?? '', expiryDate: item.expiryDate ?? '', credentialNumber: item.credentialNumber ?? '', status: item.status ?? '', verificationUrl: item.verificationUrl ?? '', verificationStatus: item.verificationStatus ?? '' })) ?? [],
     professionalRegistrations: profile?.professionalRegistrations?.map((item) => ({ id: item.id, officialName: item.officialName, issuingBody: item.issuingBody, issueDate: item.issueDate ?? '', expiryDate: item.expiryDate ?? '', registrationNumber: item.registrationNumber ?? '', status: item.status ?? '', verificationUrl: item.verificationUrl ?? '', verificationStatus: item.verificationStatus ?? '' })) ?? [],
     languages: profile?.languages?.map((item) => ({ id: item.id, language: item.language, speaking: item.speaking ?? '', reading: item.reading ?? '', writing: item.writing ?? '', professionalUseContext: item.professionalUseContext ?? '', formalTest: item.formalTest ?? '' })) ?? [],
-    volunteering: profile?.volunteering?.map((item) => ({ id: item.id, organisation: item.organisation, role: item.role, startDate: item.startDate ?? '', endDate: item.endDate ?? '', contribution: item.contribution ?? '', skillsTools: item.skillsTools, outcome: item.outcome ?? '' })) ?? [],
-    otherEvidence: profile?.otherEvidence?.map((item) => ({ id: item.id, title: item.title, context: item.context ?? '', description: item.description, period: item.period ?? '', outcome: item.outcome ?? '' })) ?? [],
+    volunteering: profile?.volunteering?.map((item) => ({ id: item.id, organisation: item.organisation, role: item.role, startDate: item.startDate ?? '', endDate: item.endDate ?? '', contribution: item.contribution ?? '', skillsTools: item.skillsTools, outcome: item.outcome ?? '', evidenceMetadata: toEvidenceMetadata(item.evidenceMetadata) })) ?? [],
+    openSource: profile?.openSourceContributions?.map((item) => ({ id: item.id, projectName: item.projectName, role: item.role ?? '', repositoryUrl: item.repositoryUrl ?? '', projectUrl: item.projectUrl ?? '', startDate: item.startDate ?? '', endDate: item.endDate ?? '', description: item.description ?? '', contributions: toStrings(item.contributions), technologies: item.technologies, evidenceMetadata: toEvidenceMetadata(item.evidenceMetadata) })) ?? [],
+    otherEvidence: profile?.otherEvidence?.map((item) => ({ id: item.id, title: item.title, context: item.context ?? '', description: item.description, period: item.period ?? '', outcome: item.outcome ?? '', evidenceMetadata: toEvidenceMetadata(item.evidenceMetadata) })) ?? [],
   };
 }
 

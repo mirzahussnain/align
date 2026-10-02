@@ -489,28 +489,6 @@ describe.skipIf(!isLocalDb)('CV import pipeline — real Postgres', () => {
     });
   });
 
-  describe('application-scoped evidence', () => {
-    it('creates no application evidence or approvals during import', async () => {
-      await seedExtraction({
-        experience: [EXPERIENCE],
-        otherEvidence: [{ title: 'Award', description: 'Employee of the year.', ...provenance }],
-      });
-      const session = await open();
-      await applyCandidateDecisions({
-        userId,
-        sessionId: session.id,
-        decisions: session.candidates
-          .filter((c) => c.entityType !== CvImportEntityType.IDENTITY_UPDATE)
-          .map((c) => ({ candidateId: c.id, action: 'confirm' as const })),
-      });
-
-      // CV import populates the Career Profile. An approval is a claim about a
-      // specific vacancy and is never made on the user's behalf.
-      expect(await prisma.applicationEvidenceContext.count({ where: { userId } })).toBe(0);
-      expect(await prisma.profileEvidenceApproval.count({ where: { userId } })).toBe(0);
-    });
-  });
-
   describe('stored source CV limit', () => {
     beforeEach(async () => {
       await prisma.storedCv.deleteMany({ where: { userId } });

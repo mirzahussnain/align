@@ -381,11 +381,10 @@ export function groundJobMatchForDisplay(
   data: JobMatchDataV2,
   cvText?: string
 ): JobMatchDataV2 {
-  const spec = data.cv_build_spec;
   const grounded = groundUserFacingRecommendations({
     tailoredRewrites: data.tailoredRewrites,
-    summaryAngle: spec?.summary_angle ?? '',
-    leadProject: spec?.lead_project ?? '',
+    summaryAngle: '',
+    leadProject: '',
     matchFeedback: data.matchFeedback,
     experienceGap: data.experienceGap,
     evidenceSources: collectDisplayEvidenceSources(data, cvText),
@@ -403,14 +402,5 @@ export function groundJobMatchForDisplay(
     matchFeedback: grounded.matchFeedback,
     experienceGap: grounded.experienceGap,
     tailoredRewrites: grounded.tailoredRewrites,
-    ...(spec
-      ? {
-          cv_build_spec: {
-            ...spec,
-            summary_angle: grounded.summaryAngle,
-            lead_project: grounded.leadProject,
-          },
-        }
-      : {}),
   };
 }

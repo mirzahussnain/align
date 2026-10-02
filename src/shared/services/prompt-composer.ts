@@ -282,21 +282,7 @@ Produce the following JSON:
       "rationale": "string — which JD requirement this targets and why",
       "caveat": "string — explicitly state if underlying experience is not fully equivalent to what the JD requires"
     }
-  ],
-  "cv_build_spec": {
-    "recommended_template": "sharp_minimal | editorial_refined | technical_precision",
-    "template_rationale": "string — why this template fits this role/employer",
-    "section_order": ["Education", "Projects", "Experience", "Skills", "Certs"],
-    "lead_project": "string — which project should appear first and why",
-    "summary_angle": "string — 1-2 sentence guidance on what the summary should emphasise",
-    "skills_to_surface": ["string — specific skills to make prominent for this JD"],
-    "skills_to_deprioritise": ["string — skills less relevant that can be shortened"],
-    "bullets_to_rewrite": [
-      { "project_or_role": "string", "original_label": "string", "new_label": "string", "new_body": "string" }
-    ],
-    "visa_note_required": true,
-    "cover_letter_angle": "string — the core argument the cover letter should make"
-  }
+  ]
 }
 
 Return ONLY valid JSON. No markdown. No preamble. No trailing text.`;

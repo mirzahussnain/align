@@ -4,8 +4,6 @@ import type {
   JobMatchDataV2Draft,
   JobRequirementLedgerEntry,
 } from '@/shared/types/ai';
-import { buildEvidenceCorpus } from './cv-evidence';
-import { groundBuildSpec } from './cv-build-spec-grounding';
 
 /**
  * Turn validated model output into the canonical stored ledger.
@@ -14,7 +12,6 @@ import { groundBuildSpec } from './cv-build-spec-grounding';
  * the validated inventory order and the score is derived from non-negative,
  * integer deductions enforced by the Zod boundary.
  *
- * The AI-authored `cv_build_spec` is grounded before persistence: any suggested
  * bullet body whose impact metric is not backed by the source CV or ledger CV
  * evidence is demoted to a neutral rewrite directive, so the stored spec (and
  * every UI surface that renders it) can never present an unsupported metric as
@@ -61,14 +58,6 @@ export function normalizeJobMatchDataV2(
   // evidence the ledger already recorded. Approved profile evidence and user
   // context do not exist yet — those are supplied at generation time, where the
   // spec is grounded a second time against the richer corpus.
-  const corpus = buildEvidenceCorpus([
-    cvText,
-    ...requirements.flatMap((requirement) =>
-      requirement.evidence.filter((evidence) => evidence.source === 'cv').map((evidence) => evidence.text)
-    ),
-  ]);
-  const groundedSpec = groundBuildSpec(draft.cv_build_spec, corpus).spec;
-
   return JobMatchDataV2Schema.parse({
     schemaVersion: 2,
     jobTitle: draft.jobTitle,
@@ -79,6 +68,5 @@ export function normalizeJobMatchDataV2(
     matchFeedback: draft.matchFeedback,
     experienceGap: draft.experienceGap,
     tailoredRewrites: draft.tailoredRewrites,
-    cv_build_spec: groundedSpec,
   });
 }

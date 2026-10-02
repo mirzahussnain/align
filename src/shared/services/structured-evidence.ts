@@ -1,8 +1,6 @@
 import { z } from 'zod';
 import { prisma } from '@/shared/lib/prisma';
 import type { Prisma } from '../../generated/prisma/client';
-import type { JobRequirementLedgerEntry } from '@/shared/types/ai';
-import type { UserProvidedContext } from '@/shared/types/cv-rewrite';
 import type { ProfileEvidenceRef } from '@/shared/types/profile-reasoning';
 import { normaliseSkillName } from '@/shared/utils/skill-normalization';
 import { CERTIFICATION_STATUS_OPTIONS, LANGUAGE_PROFICIENCY_OPTIONS, LICENCE_STATUS_OPTIONS, REGISTRATION_STATUS_OPTIONS, TRAINING_STATUS_OPTIONS, VERIFICATION_STATUS_OPTIONS, languageProficiencyLabel } from '@/shared/constants/profile-field-options';
@@ -193,29 +191,4 @@ export function describeStructuredEvidence(kind: string, raw: unknown) {
         : '';
   const extras = [list('skillsTools'), value('outcome'), value('outcomeOrLink'), value('professionalUseContext'), dateText].filter(Boolean);
   return { label: labels[parsedKind], text: [text, ...extras].join('. ') };
-}
-
-
-/** Revalidate application-only context at generation time; client text is never trusted. */
-export async function resolveApprovedApplicationEvidence(
-  userId: string,
-  analysisId: string,
-  profileId: string | null,
-  ids: string[],
-  requirements: JobRequirementLedgerEntry[]
-): Promise<{ id: string; requirementId: string; context: UserProvidedContext }[]> {
-  if (ids.length === 0) return [];
-  if (new Set(ids).size !== ids.length) throw new StructuredEvidenceValidationError('Duplicate application evidence context.');
-  const rows = await prisma.applicationEvidenceContext.findMany({
-    where: { id: { in: ids }, userId, jobMatchId: analysisId, ...(profileId ? { profileId } : {}) },
-    select: { id: true, requirementId: true, kind: true, details: true },
-  });
-  if (rows.length !== ids.length) throw new StructuredEvidenceValidationError('Application evidence is stale, deleted, or not owned by this profile.');
-  const requirementsById = new Map(requirements.map((requirement) => [requirement.id, requirement]));
-  return rows.map((row) => {
-    const requirement = requirementsById.get(row.requirementId);
-    if (!requirement || !['partial', 'not_met', 'contradicted', 'unclear'].includes(requirement.status)) throw new StructuredEvidenceValidationError('Application evidence no longer targets an eligible requirement.');
-    const description = describeStructuredEvidence(row.kind, row.details);
-    return { id: row.id, requirementId: row.requirementId, context: { label: requirement.text, text: description.text } };
-  });
 }

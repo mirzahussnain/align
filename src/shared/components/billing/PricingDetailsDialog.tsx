@@ -18,7 +18,6 @@ export const UPGRADE_HEADLINES: Partial<Record<ProductCapability, string>> = {
   job_match_analysis: 'Unlock Job Match',
   cv_regeneration: 'Generate a truthful tailored CV',
   human_evidence_capture: 'Add and reuse verified Career Profile evidence',
-  approve_evidence_for_application: 'Approve more evidence for this application',
   reuse_evidence_across_applications: 'Add and reuse verified Career Profile evidence',
   additional_career_profiles: 'Create another Career Profile',
   profile_evidence_storage: 'Store more reusable Career Profile evidence',

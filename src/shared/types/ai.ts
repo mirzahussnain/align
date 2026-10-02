@@ -34,30 +34,11 @@ export interface TailoredRewrite {
 
 /**
  * AI-authored advisory guidance on how to build a tailored CV, produced by the
- * job-match analysis and persisted (grounded) as the `cv_build_spec` field of
  * {@link JobMatchDataV2}. It is a NON-authoritative hint to the rewriter about
  * structure, emphasis and phrasing — never a source of fact. Distinct from the
  * deterministic renderer contract `CvBuildSpec` in
  * `services/cv-build-spec/types.ts`, which every renderer consumes.
  */
-export interface AiCvBuildGuidance {
-  recommended_template: string;
-  template_rationale: string;
-  section_order: string[];
-  lead_project: string;
-  summary_angle: string;
-  skills_to_surface: string[];
-  skills_to_deprioritise: string[];
-  bullets_to_rewrite: {
-    project_or_role: string;
-    original_label: string;
-    new_label: string;
-    new_body: string;
-  }[];
-  visa_note_required: boolean;
-  cover_letter_angle: string;
-}
-
 export type RequirementImportance = 'mandatory' | 'desirable';
 
 export type RequirementStatus =
@@ -148,7 +129,6 @@ export interface JobMatchDataV2 {
   matchFeedback: string;
   experienceGap: string;
   tailoredRewrites: TailoredRewrite[];
-  cv_build_spec: AiCvBuildGuidance;
 }
 
 export type JobMatchDataV2Draft = Omit<JobMatchDataV2, 'requirements' | 'matchScore'> & {

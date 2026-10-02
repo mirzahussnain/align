@@ -5,6 +5,7 @@ import { APIError, withErrorHandler } from '@/shared/utils/api-error';
 import { checkCapability } from '@/shared/entitlements/server';
 import { projectAnalysisReport } from '@/shared/entitlements/report-projection';
 import type { CVAnalysisResult } from '@/shared/types/cv';
+import { storedJobMatchResult } from '@/shared/services/stored-job-match';
 
 export async function GET(request: NextRequest, context: RouteContext<'/api/job-matches/[id]'>) {
   return withErrorHandler(async () => {
@@ -17,11 +18,11 @@ export async function GET(request: NextRequest, context: RouteContext<'/api/job-
       checkCapability(session.user.id, 'view_full_job_match_report'), checkCapability(session.user.id, 'view_requirement_ledger'), checkCapability(session.user.id, 'view_rewrite_strategy'), checkCapability(session.user.id, 'view_eligibility_analysis'),
     ]);
     return NextResponse.json({
-      match: projectAnalysisReport({ ...(row.resultJson as unknown as CVAnalysisResult), analysisId: row.id }, { report, requirementLedger, rewriteStrategy, eligibility }),
+      match: projectAnalysisReport(storedJobMatchResult(row), { report, requirementLedger, rewriteStrategy, eligibility }),
       cvUsed: { id: row.cvRevision.id, filename: row.cvRevision.filename, checksum: row.cvRevision.checksum, createdAt: row.cvRevision.createdAt, available: Boolean(row.cvRevision.sourceObjectKey && !row.cvRevision.sourceObjectDeletedAt) },
       profileUsed: { label: row.profileSnapshot.profileLabel, targetRole: row.profileSnapshot.targetRole, snapshotDate: row.profileSnapshot.createdAt },
       jobUsed: { id: row.jobRevision.id, title: row.jobRevision.title, company: row.jobRevision.company, location: row.jobRevision.location, description: row.jobRevision.description, source: row.jobRevision.descriptionSource, snapshotId: row.jobRevision.jobSnapshotId },
-      provenance: { algorithmVersion: row.algorithmVersion, promptVersion: row.promptVersion, aiProvider: row.aiProvider, aiModel: row.aiModel },
+      provenance: { analysisVersion: row.analysisVersion, promptVersion: row.promptVersion, aiProvider: row.aiProvider, aiModel: row.aiModel },
       generatedCvs: row.generatedCVs.map((cv) => ({ ...cv, available: Boolean(cv.fileKey), fileKey: undefined })),
     });
   });

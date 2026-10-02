@@ -16,6 +16,7 @@ import { getOccupationProfile } from '@/shared/occupations/registry';
 import { analyzeCV } from '@/shared/utils/scoring-engine';
 import { getJobMatchFeedbackWithProvenance } from './ai-analyser';
 import { applyStructuredCandidateEvidence } from './job-match-structured-evidence';
+import { storedJobMatchResult } from './stored-job-match';
 
 export interface JobMatchInput {
   userId: string;
@@ -46,8 +47,8 @@ export async function runJobMatch(input: JobMatchInput): Promise<CVAnalysisResul
   if (reservation.status === 'exhausted') throw new EntitlementRequiredError(reservation.decision);
   if (reservation.status === 'conflict') throw new APIError('This operation ID was already used for different input.', 409);
   if (reservation.status === 'recovered' && reservation.reservation.resultRef) {
-    const recovered = await prisma.jobMatch.findFirst({ where: { id: reservation.reservation.resultRef, userId: input.userId } });
-    if (recovered) return { ...(recovered.resultJson as unknown as CVAnalysisResult), analysisId: recovered.id };
+    const recovered = await prisma.jobMatch.findFirst({ where: { id: reservation.reservation.resultRef, userId: input.userId }, include: { cvRevision: true, jobRevision: true } });
+    if (recovered) return storedJobMatchResult(recovered);
     throw new APIError('The previously completed Job Match is no longer available.', 410);
   }
   if (reservation.status !== 'reserved') throw new APIError('Job Match access could not be reserved.', 403);
@@ -95,8 +96,37 @@ export async function runJobMatch(input: JobMatchInput): Promise<CVAnalysisResul
         profileSnapshotId: profileSnapshot.id,
         requestId: prepared.request.id,
         matchScore: match.matchScore,
-        resultJson: JSON.parse(JSON.stringify(result)) as Prisma.InputJsonValue,
-        algorithmVersion: ANALYSIS_VERSIONS.jobMatchAlgorithm,
+        requirementLedgerJson: JSON.parse(JSON.stringify({
+          schemaVersion: 1,
+          analysisVersion: ANALYSIS_VERSIONS.jobMatchAlgorithm,
+          requirements: match.requirements.map((requirement) => ({
+            id: requirement.id,
+            text: requirement.text,
+            importance: requirement.importance.toUpperCase(),
+            category: requirement.category.toUpperCase(),
+            evidenceRequired: requirement.evidenceRequired,
+            sourceSection: requirement.sourceSection.toUpperCase(),
+            analysis: {
+              status: requirement.status.toUpperCase(),
+              evidence: requirement.evidence.map((item) => ({ ...item, source: item.source.toUpperCase() })),
+              confidence: requirement.confidence,
+              deduction: { ...requirement.deduction, rubric: requirement.deduction.rubric.toUpperCase() },
+            },
+          })),
+        })) as Prisma.InputJsonValue,
+        requirementLedgerVersion: 1,
+        advisoryJson: JSON.parse(JSON.stringify({
+          schemaVersion: 1,
+          jobTitle: match.jobTitle,
+          jobCompany: match.jobCompany,
+          domainFit: match.domainFit,
+          matchScore: match.matchScore,
+          matchFeedback: match.matchFeedback,
+          experienceGap: match.experienceGap,
+          tailoredRewrites: match.tailoredRewrites,
+        })) as Prisma.InputJsonValue,
+        advisoryVersion: 1,
+        analysisVersion: ANALYSIS_VERSIONS.jobMatchAlgorithm,
         promptVersion: ANALYSIS_VERSIONS.jobMatchPrompt,
         aiProvider: generated.provenance.provider,
         aiModel: generated.provenance.model,

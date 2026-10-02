@@ -19,7 +19,6 @@ function projectJobMatch(data: JobMatchDataV2, decisions: ReportProjectionDecisi
   const requirements = isFull(decisions.requirementLedger)
     ? data.requirements
     : data.requirements.slice(0, REPORT_ACCESS_LIMITS.previewRequirements);
-  const exposeStrategy = isFull(decisions.rewriteStrategy);
   const exposeEligibility = isFull(decisions.eligibility);
   return {
     ...data,
@@ -29,20 +28,7 @@ function projectJobMatch(data: JobMatchDataV2, decisions: ReportProjectionDecisi
         ...requirement,
         evidence: requirement.evidence.slice(0, REPORT_ACCESS_LIMITS.previewEvidencePerRequirement),
       })),
-    tailoredRewrites: exposeStrategy ? data.tailoredRewrites : [],
-    cv_build_spec: exposeStrategy
-      ? data.cv_build_spec
-      : {
-          ...data.cv_build_spec,
-          template_rationale: '',
-          section_order: [],
-          lead_project: '',
-          summary_angle: '',
-          skills_to_surface: [],
-          skills_to_deprioritise: [],
-          bullets_to_rewrite: [],
-          cover_letter_angle: '',
-        },
+    tailoredRewrites: isFull(decisions.rewriteStrategy) ? data.tailoredRewrites : [],
   };
 }
 

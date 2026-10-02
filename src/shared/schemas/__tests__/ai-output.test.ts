@@ -83,18 +83,6 @@ const goodStoredJobMatch = {
   matchFeedback: 'Strong fit',
   experienceGap: '',
   tailoredRewrites: [],
-  cv_build_spec: {
-    recommended_template: 'sharp_minimal',
-    template_rationale: '',
-    section_order: ['Experience', 'Skills'],
-    lead_project: '',
-    summary_angle: '',
-    skills_to_surface: ['SQL'],
-    skills_to_deprioritise: [],
-    bullets_to_rewrite: [],
-    visa_note_required: false,
-    cover_letter_angle: '',
-  },
 } as const;
 
 describe('stored JobMatchDataV2', () => {

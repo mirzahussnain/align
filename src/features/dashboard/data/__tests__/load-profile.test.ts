@@ -55,7 +55,7 @@ describe('profile evidence loading', () => {
       },
     ]);
     expect(loaded.certifications).toEqual([
-      { id: 'cert-1', name: 'Care Certificate', issuer: 'Skills for Care', year: '2025', issueDate: '2025', expiryDate: '', credentialNumber: '', status: 'active', verificationUrl: '', verificationStatus: 'user_confirmed_unverified' },
+      { id: 'cert-1', name: 'Care Certificate', issuer: 'Skills for Care', year: '2025', issueDate: '2025', expiryDate: '', credentialNumber: '', status: 'active', verificationUrl: '', verificationStatus: 'user_confirmed_unverified', evidenceMetadata: [] },
     ]);
     expect(prisma.profile.findFirst).toHaveBeenCalledWith(
       expect.objectContaining({
