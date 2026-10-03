@@ -20,7 +20,8 @@ function strongestMatch(requirement: GenerationRequirement, evidence: CandidateE
 export function reconcileRequirements(
   requirements: GenerationRequirement[],
   evidence: UnifiedCandidateEvidence,
-  confirmedMissing = new Set<string>()
+  confirmedMissing = new Set<string>(),
+  confirmedSupported = new Set<string>()
 ): RequirementReconciliationSnapshot {
   const allEvidence = Object.values(evidence.evidenceById);
   const conflictedIds = new Set(evidence.conflicts.flatMap((conflict) => conflict.evidenceIds));
@@ -29,6 +30,9 @@ export function reconcileRequirements(
     items: requirements.map((requirement) => {
       if (!requirement.evidenceRequired) {
         return { requirementId: requirement.id, status: 'NOT_APPLICABLE' as const, evidenceIds: [], confidence: 1, reason: 'This requirement does not require candidate evidence.' };
+      }
+      if (confirmedSupported.has(requirement.id)) {
+        return { requirementId: requirement.id, status: 'CONFIRMED' as const, evidenceIds: [], confidence: 1, reason: 'The candidate confirmed they can meet this eligibility or availability requirement.' };
       }
       if (confirmedMissing.has(requirement.id)) {
         return { requirementId: requirement.id, status: 'CONFIRMED_MISSING' as const, evidenceIds: [], confidence: 1, reason: 'The candidate confirmed this evidence is not available for this generation.' };

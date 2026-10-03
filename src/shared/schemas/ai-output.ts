@@ -103,6 +103,8 @@ const requirementDraft = z.looseObject({
   ]),
   sourceSection: z.enum(['job_description', 'person_specification']),
   evidenceRequired: z.boolean(),
+  clusterKey: z.string().trim().min(1).max(80).optional(),
+  clusterLabel: z.string().trim().min(1).max(120).optional(),
   status: z.enum(['met', 'partial', 'not_met', 'contradicted', 'unclear']),
   evidence: z.array(requirementEvidence),
   confidence: z.coerce.number().min(0).max(1),

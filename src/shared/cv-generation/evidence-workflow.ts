@@ -9,7 +9,7 @@ import { persistApplicationOnlyEvidence } from './application-evidence';
 import { reconcileRequirements, unresolvedRequirements } from './reconcile';
 import { clusterMaterialGaps } from './gap-clustering';
 import { suggestRelatedRequirements } from './evidence-capture';
-import type { EvidenceCaptureInput, GenerationRequirement, RequirementReconciliationSnapshot, UnifiedCandidateEvidence } from './types';
+import type { EvidenceCaptureInput, GenerationRequirement, RequirementReconciliationSnapshot } from './types';
 
 const json = (value: unknown): Prisma.InputJsonValue => JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
 const hash = (value: string) => createHash('sha256').update(value).digest('hex');
@@ -23,6 +23,10 @@ function requirementsFor(generation: { jobMatch: { requirementLedgerJson: Prisma
 
 function priorConfirmedMissing(snapshot: RequirementReconciliationSnapshot | null) {
   return new Set(snapshot?.items.filter((item) => item.status === 'CONFIRMED_MISSING').map((item) => item.requirementId) ?? []);
+}
+
+function priorConfirmedSupported(snapshot: RequirementReconciliationSnapshot | null) {
+  return new Set(snapshot?.items.filter((item) => item.status === 'CONFIRMED').map((item) => item.requirementId) ?? []);
 }
 
 async function loadGenerationForEvidence(userId: string, generationId: string) {
@@ -56,7 +60,23 @@ export async function saveAndReconcileEvidenceCapture(args: {
     if (capture.persistenceScope === 'CAREER_PROFILE_AND_APPLICATION') {
       if (!generation.profileId) throw new Error('Reusable evidence requires a Career Profile.');
       const entityId = await persistReusableProfileEvidence(tx, generation.profileId, generation.id, capture);
-      canonicalCapture = { ...capture, entity: { mode: 'EXISTING', entityId, label: capture.entity.mode === 'EXISTING' ? capture.entity.label : String(capture.entity.data.name ?? capture.entity.data.projectName ?? capture.entity.data.title ?? capture.entity.data.company ?? capture.entity.data.institution ?? capture.entity.data.course ?? capture.entity.data.organisation ?? 'Added evidence') } };
+      if (capture.entity.mode === 'EXISTING') {
+        canonicalCapture = capture;
+      } else {
+        const label = capture.entity.mode === 'SOURCE_CV'
+          ? capture.entity.label
+          : String(capture.entity.data.name ?? capture.entity.data.projectName ?? capture.entity.data.title ?? capture.entity.data.company ?? capture.entity.data.institution ?? capture.entity.data.course ?? capture.entity.data.organisation ?? 'Added evidence');
+        canonicalCapture = {
+          ...capture,
+          entity: {
+            mode: 'SOURCE_CV',
+            entityId,
+            sourceEntityId: capture.entity.mode === 'SOURCE_CV' ? capture.entity.sourceEntityId : entityId,
+            label,
+            data: capture.entity.data,
+          },
+        };
+      }
     } else {
       if (capture.entity.mode === 'EXISTING') {
         if (!generation.profileId) throw new Error('Existing profile evidence requires a Career Profile.');
@@ -66,7 +86,7 @@ export async function saveAndReconcileEvidenceCapture(args: {
     }
 
     const evidence = materializeCapturedEvidence(previousEvidence, generation.id, canonicalCapture);
-    const reconciliation = reconcileRequirements(requirements, evidence, priorConfirmedMissing(previousReconciliation));
+    const reconciliation = reconcileRequirements(requirements, evidence, priorConfirmedMissing(previousReconciliation), priorConfirmedSupported(previousReconciliation));
     const updated = await tx.cvGeneration.update({
       where: { id: generation.id },
       data: { status: 'EVIDENCE_REVIEW', currentSnapshotVersion: { increment: 1 }, currentReconciliationVersion: { increment: 1 } },
@@ -105,19 +125,47 @@ export async function suggestGenerationRelatedGaps(args: { userId: string; gener
   return suggestRelatedRequirements(args.text, candidates, new Set(args.excludeRequirementIds ?? []));
 }
 
-export async function confirmRequirementsMissing(args: { userId: string; generationId: string; requirementIds: string[] }) {
+export async function confirmRequirements(args: {
+  userId: string;
+  generationId: string;
+  requirementIds: string[];
+  decision: 'MEETS' | 'DOES_NOT_MEET';
+}) {
   const generation = await loadGenerationForEvidence(args.userId, args.generationId);
   const evidence = UnifiedCandidateEvidenceSchema.parse(generation.evidenceSnapshots[0].snapshotJson);
   const previous = generation.reconciliations[0]
     ? RequirementReconciliationSnapshotSchema.parse(generation.reconciliations[0].reconciliationJson)
     : null;
-  const confirmed = priorConfirmedMissing(previous);
-  args.requirementIds.forEach((id) => confirmed.add(id));
-  const reconciliation = reconcileRequirements(requirementsFor(generation), evidence, confirmed);
+  const requirements = requirementsFor(generation);
+  const selected = new Set(args.requirementIds);
+  if (args.decision === 'MEETS' && requirements.some((requirement) => selected.has(requirement.id) && requirement.category !== 'ELIGIBILITY' && requirement.category !== 'AVAILABILITY')) {
+    throw new Error('Only eligibility or availability requirements can be confirmed without evidence.');
+  }
+  const confirmedMissing = priorConfirmedMissing(previous);
+  const confirmedSupported = priorConfirmedSupported(previous);
+  for (const id of selected) {
+    if (args.decision === 'MEETS') {
+      confirmedSupported.add(id);
+      confirmedMissing.delete(id);
+    } else {
+      confirmedMissing.add(id);
+      confirmedSupported.delete(id);
+    }
+  }
+  const reconciliation = reconcileRequirements(requirements, evidence, confirmedMissing, confirmedSupported);
   const serialized = JSON.stringify(reconciliation);
   return prisma.$transaction(async (tx) => {
     const updated = await tx.cvGeneration.update({ where: { id: generation.id }, data: { status: 'EVIDENCE_REVIEW', currentReconciliationVersion: { increment: 1 } }, select: { currentReconciliationVersion: true, currentSnapshotVersion: true } });
     await tx.cvRequirementReconciliation.create({ data: { generationId: generation.id, version: updated.currentReconciliationVersion, snapshotVersion: updated.currentSnapshotVersion, reconciliationJson: json(reconciliation), schemaVersion: 1, contentHash: hash(serialized) } });
-    return reconciliation;
+    return {
+      reconciliation,
+      remaining: unresolvedRequirements(reconciliation).length,
+      gaps: clusterMaterialGaps(requirements, reconciliation),
+    };
   });
+}
+
+export async function confirmRequirementsMissing(args: { userId: string; generationId: string; requirementIds: string[] }) {
+  const result = await confirmRequirements({ ...args, decision: 'DOES_NOT_MEET' });
+  return result.reconciliation;
 }

@@ -7,7 +7,7 @@ function draft(): JobMatchDataV2Draft {
   return {
     schemaVersion: 2, jobTitle: 'Data Engineer', jobCompany: 'Acme',
     requirements: [
-      { text: 'Strong SQL experience', importance: 'mandatory', category: 'skill', sourceSection: 'job_description', evidenceRequired: true, status: 'met', evidence: [{ source: 'cv', text: 'Built SQL data pipelines' }], confidence: 0.95, deduction: { points: 0, reason: 'Direct evidence', rubric: 'met' } },
+      { text: 'Strong SQL experience', importance: 'mandatory', category: 'skill', sourceSection: 'job_description', evidenceRequired: true, clusterKey: 'database-development', clusterLabel: 'Database development', status: 'met', evidence: [{ source: 'cv', text: 'Built SQL data pipelines' }], confidence: 0.95, deduction: { points: 0, reason: 'Direct evidence', rubric: 'met' } },
       { text: 'Kafka experience', importance: 'desirable', category: 'tool', sourceSection: 'person_specification', evidenceRequired: true, status: 'not_met', evidence: [], confidence: 0.9, deduction: { points: 2, reason: 'Not evidenced', rubric: 'desirable_missing' } },
     ],
     domainFit: { roleDomain: 'Data engineering', candidateDomain: 'Analytics engineering', status: 'partial', overlapAreas: ['SQL'], detail: 'Partial', confidence: 0.8, deduction: { points: 5, reason: 'partial' } },
@@ -22,7 +22,11 @@ describe('V2 requirement ledger normalization', () => {
     expect(normalized.matchScore).toBe(93);
     expect(normalized).not.toHaveProperty('cv_build_spec');
   });
-  it('rejects negative deductions and duplicate persisted ids', () => {
+  it('preserves optional provider-neutral semantic grouping metadata', () => {
+    const normalized = normalizeJobMatchDataV2(draft());
+    expect(normalized.requirements[0]).toMatchObject({ clusterKey: 'database-development', clusterLabel: 'Database development' });
+    expect(normalized.requirements[1].clusterKey).toBeUndefined();
+  });  it('rejects negative deductions and duplicate persisted ids', () => {
     const invalid = draft(); invalid.requirements[0].deduction.points = -1;
     expect(AIJobMatchV2RawSchema.safeParse(invalid).success).toBe(false);
     const normalized = normalizeJobMatchDataV2(draft());

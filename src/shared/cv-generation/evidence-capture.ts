@@ -20,7 +20,7 @@ const evidenceKindByEntity = {
 } as const;
 
 function labelFor(input: EvidenceCaptureInput): string {
-  if (input.entity.mode === 'EXISTING') return input.entity.label;
+  if (input.entity.mode === 'EXISTING' || input.entity.mode === 'SOURCE_CV') return input.entity.label;
   const data = input.entity.data;
   return String(data.name ?? data.projectName ?? data.title ?? data.company ?? data.institution ?? data.course ?? data.organisation ?? 'Added evidence');
 }
@@ -32,15 +32,20 @@ export function materializeCapturedEvidence(
 ): UnifiedCandidateEvidence {
   const input = EvidenceCaptureInputSchema.parse(rawInput) as EvidenceCaptureInput;
   const result = structuredClone(snapshot);
-  const entityId = input.entity.mode === 'EXISTING'
+  const entityId = input.entity.mode === 'EXISTING' || input.entity.mode === 'SOURCE_CV'
     ? input.entity.entityId
     : stableEvidenceId('hitl-entity', generationId, input.entityKind, labelFor(input));
+  const lookupId = input.entity.mode === 'SOURCE_CV' ? input.entity.sourceEntityId : entityId;
   const collectionName = collectionByKind[input.entityKind];
   const collection = result[collectionName] as UnifiedEvidenceEntity[];
-  let entity = collection.find((item) => item.sourceEntityId === entityId || item.id === entityId);
-  if (!entity && input.entity.mode === 'NEW') {
+  let entity = collection.find((item) => item.sourceEntityId === lookupId || item.id === lookupId);
+  if (!entity && (input.entity.mode === 'NEW' || input.entity.mode === 'SOURCE_CV')) {
     entity = { id: entityId, sourceEntityId: entityId, label: labelFor(input), details: input.entity.data, evidenceIds: [] };
     collection.push(entity);
+  } else if (entity && input.entity.mode === 'SOURCE_CV' && input.persistenceScope === 'CAREER_PROFILE_AND_APPLICATION') {
+    entity.sourceEntityId = entityId;
+    entity.label = input.entity.label;
+    entity.details = { ...entity.details, ...input.entity.data };
   }
 
   input.evidenceItems.forEach((captured, index) => {

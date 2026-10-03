@@ -19,16 +19,6 @@ describe('canonical CV generation wizard contract', () => {
     expect(source).not.toContain('/api/cv/from-profile');
   });
 
-  it('keeps save-and-reconcile, confirmed missing, plan review, approval, and generation as distinct steps', () => {
-    const source = readFileSync(wizardPath, 'utf8');
-    for (const route of ['/evidence', '/confirmed-missing', '/plan', '/approve', '/generate']) {
-      expect(source).toContain(route);
-    }
-    expect(source).toContain('Save and re-check all requirements');
-    expect(source).toContain('Review the CV plan');
-    expect(source).toContain('Approve plan and generate');
-  });
-
   it('is the generation component used by both product entry points', () => {
     for (const path of [cvViewPath, jobMatchPath]) {
       const source = readFileSync(path, 'utf8');

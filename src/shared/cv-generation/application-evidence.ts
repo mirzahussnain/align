@@ -11,7 +11,7 @@ export async function persistApplicationOnlyEvidence(
   input: EvidenceCaptureInput
 ) {
   if (input.persistenceScope !== 'APPLICATION_ONLY') throw new Error('Reusable profile evidence is persisted on its canonical entity, not duplicated as application-only evidence.');
-  const entityId = input.entity.mode === 'EXISTING'
+  const entityId = input.entity.mode === 'EXISTING' || input.entity.mode === 'SOURCE_CV'
     ? input.entity.entityId
     : stableEvidenceId('application-entity', generationId, input.entityKind, JSON.stringify(input.entity.data));
   return Promise.all(input.evidenceItems.map((item, index) => {

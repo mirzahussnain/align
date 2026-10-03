@@ -145,6 +145,8 @@ Complete these steps before output:
 STEP 1 — COMPLETE JD INVENTORY
 Create ONE canonical requirements array; Each requirement must appear exactly once. Include every named skill, tool, experience, duty, methodology, qualification, certification, licence, eligibility/availability condition, location constraint, shift or work-pattern requirement, and explicit soft skill. Classify each as mandatory/desirable from JD wording. A stated duty implies required experience to check against the CV.
 
+Related requirements may share clusterKey and clusterLabel. Omit otherwise; IDs stay distinct.
+
 STEP 1b — SOURCE SECTION
 sourceSection=person_specification only for an explicit person specification or Essential/Desirable criteria list; otherwise job_description. Never create a second criteria list.
 
@@ -192,6 +194,8 @@ Produce the following JSON:
       "category": "qualification | experience | skill | tool | methodology | duty | knowledge | value | credential | eligibility | availability | other",
       "sourceSection": "job_description | person_specification",
       "evidenceRequired": boolean,
+      "clusterKey": "string",
+      "clusterLabel": "string",
       "status": "met | partial | not_met | contradicted | unclear",
       "evidence": [
         {

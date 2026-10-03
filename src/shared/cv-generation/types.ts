@@ -145,6 +145,8 @@ export interface GenerationRequirement {
   importance: RequirementImportance;
   category: RequirementCategory;
   evidenceRequired: boolean;
+  clusterKey?: string;
+  clusterLabel?: string;
   sourceSection: 'JOB_DESCRIPTION' | 'PERSON_SPECIFICATION';
   analysis?: {
     status: 'MET' | 'PARTIAL' | 'NOT_MET' | 'CONTRADICTED' | 'UNCLEAR';
@@ -161,7 +163,7 @@ export interface RequirementLedgerSnapshot {
 }
 
 export type RequirementReconciliationStatus =
-  | 'SUPPORTED' | 'PARTIAL' | 'MISSING' | 'CONFLICTED' | 'NOT_APPLICABLE' | 'CONFIRMED_MISSING';
+  | 'SUPPORTED' | 'PARTIAL' | 'MISSING' | 'CONFLICTED' | 'NOT_APPLICABLE' | 'CONFIRMED' | 'CONFIRMED_MISSING';
 
 export interface RequirementReconciliationItem {
   requirementId: string;
@@ -176,11 +178,15 @@ export interface RequirementReconciliationSnapshot {
   items: RequirementReconciliationItem[];
 }
 
+export type RequirementPresentationGroup = 'CORE_EVIDENCE' | 'SUPPORTING_EVIDENCE' | 'CONFIRMATION' | 'DESIRABLE_EXTRAS';
+
 export interface SemanticGapGroup {
   id: string;
   label: string;
   requirementIds: string[];
   importance: RequirementImportance;
+  category: RequirementCategory;
+  presentationGroup: RequirementPresentationGroup;
 }
 
 export type HitlEvidenceEntityKind = 'EXPERIENCE' | 'PROJECT' | 'EDUCATION' | 'CERTIFICATION' | 'TRAINING' | 'VOLUNTEERING' | 'OPEN_SOURCE' | 'OTHER';
@@ -195,7 +201,10 @@ export interface CapturedEvidenceItemInput {
 
 export interface EvidenceCaptureInput {
   entityKind: HitlEvidenceEntityKind;
-  entity: { mode: 'EXISTING'; entityId: string; label: string } | { mode: 'NEW'; data: Record<string, unknown> };
+  entity:
+    | { mode: 'EXISTING'; entityId: string; label: string }
+    | { mode: 'SOURCE_CV'; entityId: string; sourceEntityId: string; label: string; data: Record<string, unknown> }
+    | { mode: 'NEW'; data: Record<string, unknown> };
   evidenceItems: CapturedEvidenceItemInput[];
   persistenceScope: EvidencePersistenceScope;
 }

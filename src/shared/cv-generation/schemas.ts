@@ -85,7 +85,7 @@ export const RequirementLedgerSnapshotSchema = z.strictObject({
   requirements: z.array(z.strictObject({
     id: z.string().min(1), text: z.string().trim().min(1), importance: z.enum(['MANDATORY', 'DESIRABLE']),
     category: z.enum(['QUALIFICATION', 'EXPERIENCE', 'SKILL', 'TOOL', 'METHODOLOGY', 'DUTY', 'KNOWLEDGE', 'VALUE', 'CREDENTIAL', 'ELIGIBILITY', 'AVAILABILITY', 'OTHER']),
-    evidenceRequired: z.boolean(), sourceSection: z.enum(['JOB_DESCRIPTION', 'PERSON_SPECIFICATION']),
+    evidenceRequired: z.boolean(), clusterKey: z.string().trim().min(1).max(80).optional(), clusterLabel: z.string().trim().min(1).max(120).optional(), sourceSection: z.enum(['JOB_DESCRIPTION', 'PERSON_SPECIFICATION']),
     analysis: z.strictObject({
       status: z.enum(['MET', 'PARTIAL', 'NOT_MET', 'CONTRADICTED', 'UNCLEAR']),
       evidence: z.array(z.strictObject({ source: z.enum(['CV', 'PROFILE', 'PRACTICAL_FACT', 'USER_CONTEXT']), sourceRef: z.string().optional(), text: z.string().min(1), location: z.string().optional(), approved: z.boolean().optional() })),
@@ -105,7 +105,7 @@ export const RequirementReconciliationSnapshotSchema = z.strictObject({
   schemaVersion: z.literal(1),
   items: z.array(z.strictObject({
     requirementId: z.string().min(1),
-    status: z.enum(['SUPPORTED', 'PARTIAL', 'MISSING', 'CONFLICTED', 'NOT_APPLICABLE', 'CONFIRMED_MISSING']),
+    status: z.enum(['SUPPORTED', 'PARTIAL', 'MISSING', 'CONFLICTED', 'NOT_APPLICABLE', 'CONFIRMED', 'CONFIRMED_MISSING']),
     evidenceIds: z.array(z.string().min(1)),
     confidence: z.number().min(0).max(1),
     reason: z.string().min(1),
@@ -120,7 +120,7 @@ const evidenceItem = z.strictObject({
 });
 const newEntitySchemas = {
   EXPERIENCE: z.strictObject({ company: z.string().trim().min(1), title: z.string().trim().min(1), employmentType: z.enum(['FULL_TIME', 'PART_TIME', 'FIXED_TERM', 'TEMPORARY_AGENCY', 'INTERNSHIP', 'PLACEMENT', 'APPRENTICESHIP', 'FREELANCE', 'VOLUNTEER']).optional(), startDate: profileDateValue, endDate: profileDate, current: z.boolean().default(false), location: z.string().optional() }),
-  PROJECT: z.strictObject({ name: z.string().trim().min(1), role: z.string().optional(), startDate: profileDate, endDate: profileDate, technologies: z.array(z.string()).default([]), description: z.string().optional(), liveUrl: z.string().url().optional(), repositoryUrl: z.string().url().optional() }),
+  PROJECT: z.strictObject({ name: z.string().trim().min(1), startDate: profileDate, endDate: profileDate, liveUrl: z.string().url().optional(), repositoryUrl: z.string().url().optional() }),
   EDUCATION: z.strictObject({ institution: z.string().trim().min(1), qualification: z.string().trim().min(1), startDate: profileDate, endDate: profileDate, current: z.boolean().default(false), grade: z.string().optional() }),
   CERTIFICATION: z.strictObject({ name: z.string().trim().min(1), issuer: z.string().optional(), issueDate: profileDate, expiryDate: profileDate, credentialId: z.string().optional(), credentialUrl: z.string().url().optional() }),
   TRAINING: z.strictObject({ course: z.string().trim().min(1), provider: z.string().optional(), field: z.string().optional(), status: z.string().optional(), startDate: profileDate, endDate: profileDate, result: z.string().optional() }),
@@ -133,12 +133,13 @@ export const EvidenceCaptureInputSchema = z.strictObject({
   entityKind: z.enum(['EXPERIENCE', 'PROJECT', 'EDUCATION', 'CERTIFICATION', 'TRAINING', 'VOLUNTEERING', 'OPEN_SOURCE', 'OTHER']),
   entity: z.union([
     z.strictObject({ mode: z.literal('EXISTING'), entityId: z.string().min(1), label: z.string().min(1) }),
+    z.strictObject({ mode: z.literal('SOURCE_CV'), entityId: z.string().min(1), sourceEntityId: z.string().min(1), label: z.string().min(1), data: z.record(z.string(), z.unknown()) }),
     z.strictObject({ mode: z.literal('NEW'), data: z.record(z.string(), z.unknown()) }),
   ]),
   evidenceItems: z.array(evidenceItem).min(1),
   persistenceScope: z.enum(['CAREER_PROFILE_AND_APPLICATION', 'APPLICATION_ONLY']),
 }).superRefine((value, ctx) => {
-  if (value.entity.mode !== 'NEW') return;
+  if (value.entity.mode === 'EXISTING') return;
   const parsed = newEntitySchemas[value.entityKind].safeParse(value.entity.data);
   if (!parsed.success) for (const issue of parsed.error.issues) ctx.addIssue({ code: 'custom', path: ['entity', 'data', ...issue.path], message: issue.message });
 });

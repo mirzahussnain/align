@@ -37,7 +37,7 @@ export async function persistReusableProfileEvidence(
   if (input.persistenceScope !== 'CAREER_PROFILE_AND_APPLICATION') throw new Error('Application-only evidence must not mutate the Career Profile.');
   const text = combinedText(input);
 
-  if (input.entity.mode === 'NEW') {
+  if (input.entity.mode !== 'EXISTING') {
     const data = input.entity.data;
     switch (input.entityKind) {
       case 'EXPERIENCE': {

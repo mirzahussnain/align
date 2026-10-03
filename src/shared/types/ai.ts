@@ -96,6 +96,8 @@ export interface JobRequirementLedgerEntry {
   category: RequirementCategory;
   sourceSection: 'job_description' | 'person_specification';
   evidenceRequired: boolean;
+  clusterKey?: string;
+  clusterLabel?: string;
   status: RequirementStatus;
   evidence: RequirementEvidence[];
   confidence: number;

@@ -107,6 +107,8 @@ export async function runJobMatch(input: JobMatchInput): Promise<CVAnalysisResul
             importance: requirement.importance.toUpperCase(),
             category: requirement.category.toUpperCase(),
             evidenceRequired: requirement.evidenceRequired,
+            ...(requirement.clusterKey ? { clusterKey: requirement.clusterKey } : {}),
+            ...(requirement.clusterLabel ? { clusterLabel: requirement.clusterLabel } : {}),
             sourceSection: requirement.sourceSection.toUpperCase(),
             analysis: {
               status: requirement.status.toUpperCase(),

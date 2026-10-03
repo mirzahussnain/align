@@ -29,6 +29,8 @@ export function normalizeJobMatchDataV2(
     category: requirement.category,
     sourceSection: requirement.sourceSection,
     evidenceRequired: requirement.evidenceRequired,
+    ...(requirement.clusterKey ? { clusterKey: requirement.clusterKey } : {}),
+    ...(requirement.clusterLabel ? { clusterLabel: requirement.clusterLabel } : {}),
     status: requirement.status,
     evidence: requirement.evidence.map((evidence) => ({
       source: evidence.source,

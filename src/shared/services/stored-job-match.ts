@@ -33,6 +33,8 @@ export function storedJobMatchResult(row: StoredJobMatchRow): CVAnalysisResult {
       category: lower(requirement.category),
       sourceSection: lower(requirement.sourceSection),
       evidenceRequired: requirement.evidenceRequired,
+      ...(requirement.clusterKey ? { clusterKey: requirement.clusterKey } : {}),
+      ...(requirement.clusterLabel ? { clusterLabel: requirement.clusterLabel } : {}),
       status: lower(requirement.analysis?.status ?? 'UNCLEAR'),
       evidence: (requirement.analysis?.evidence ?? []).map((item) => ({ ...item, source: lower(item.source) })),
       confidence: requirement.analysis?.confidence ?? 0,

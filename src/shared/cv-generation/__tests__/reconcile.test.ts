@@ -9,6 +9,17 @@ const requirements: GenerationRequirement[] = [
   { id: 'r-cloud', text: 'AWS cloud deployment', importance: 'DESIRABLE', category: 'TOOL', evidenceRequired: true, sourceSection: 'JOB_DESCRIPTION' },
 ];
 
+describe('eligibility confirmations', () => {
+  it('keeps a positive confirmation resolved during later full reconciliation', () => {
+    const eligibility = [{
+      id: 'r-location', text: 'Work in person in Haverfordwest', importance: 'MANDATORY' as const,
+      category: 'AVAILABILITY' as const, evidenceRequired: true, sourceSection: 'JOB_DESCRIPTION' as const,
+    }];
+    const result = reconcileRequirements(eligibility, emptyCandidateEvidence(), new Set(), new Set(['r-location']));
+    expect(result.items[0]).toMatchObject({ requirementId: 'r-location', status: 'CONFIRMED', evidenceIds: [] });
+    expect(unresolvedRequirements(result)).toHaveLength(0);
+  });
+});
 describe('reconcileRequirements', () => {
   it('uses explicit many-requirement mappings and suppresses resolved questions', () => {
     const evidence = emptyCandidateEvidence();
