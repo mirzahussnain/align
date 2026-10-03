@@ -22,7 +22,11 @@ vi.mock('@/shared/lib/prisma', () => ({ prisma: {
 vi.mock('@/shared/lib/storage', () => ({ storage: { upload: mocks.upload, download: mocks.download } }));
 vi.mock('@/shared/services/ai-orchestrator', () => ({
   executeAiTask: mocks.generateAi,
-  AiOrchestrationError: class AiOrchestrationError extends Error {},
+  AiOrchestrationError: class AiOrchestrationError extends Error {
+    constructor(readonly task: string, readonly candidateFailures: Array<{ reason: string }>) {
+      super('All eligible AI provider candidates were exhausted.');
+    }
+  },
 }));
 vi.mock('@/shared/services/capability-reservation', () => ({
   reserveCapability: mocks.reserve, commitCapability: mocks.commit, createResultForReservation: mocks.createResult,
@@ -34,7 +38,8 @@ vi.mock('@/shared/services/ai-failure', async (importOriginal) => ({
 }));
 vi.mock('@/shared/templates/v2', () => ({ generateV2Template: mocks.render }));
 
-import { generateApprovedCv } from '../generate';
+import { AiOrchestrationError } from '@/shared/services/ai-orchestrator';
+import { CvGenerationValidationError, generateApprovedCv } from '../generate';
 
 const evidence = emptyCandidateEvidence();
 const plan = (sourceMode: ApprovedCvPlan['sourceMode'], targetStrategy: ApprovedCvPlan['targetStrategy']): ApprovedCvPlan => ({
@@ -99,5 +104,72 @@ describe('generateApprovedCv orchestration', () => {
     expect(mocks.reserve).not.toHaveBeenCalled();
     expect(mocks.generateAi).not.toHaveBeenCalled();
     expect(mocks.download).toHaveBeenCalledWith('rewrites', 'existing.docx');
+  });
+
+  it('persists and charges once after rejecting one patch and retaining its original evidence', async () => {
+    const row = generation('JOB_MATCH', 'EXPERIENCE_FORWARD');
+    const candidateEvidence = emptyCandidateEvidence();
+    candidateEvidence.evidenceById.metric = {
+      id: 'metric', kind: 'ACHIEVEMENT', field: 'experience.achievement', canonicalText: 'Reduced latency by 25%',
+      provenance: 'CAREER_PROFILE', preservationTier: 0, requirementIds: [],
+      sourceRefs: [{ sourceType: 'CAREER_PROFILE', entityType: 'Experience', entityId: 'role-1', fieldPath: 'achievements[0]' }],
+    };
+    candidateEvidence.evidenceById.delivery = {
+      id: 'delivery', kind: 'ACHIEVEMENT', field: 'experience.achievement', canonicalText: 'Built reliable internal services',
+      provenance: 'CAREER_PROFILE', preservationTier: 0, requirementIds: [],
+      sourceRefs: [{ sourceType: 'CAREER_PROFILE', entityType: 'Experience', entityId: 'role-1', fieldPath: 'achievements[1]' }],
+    };
+    candidateEvidence.employment.push({ id: 'role-1', label: 'Engineer', details: {}, evidenceIds: ['metric', 'delivery'] });
+    row.evidenceSnapshots[0].snapshotJson = candidateEvidence;
+    row.planRevisions[0].planJson = {
+      ...plan('JOB_MATCH', 'EXPERIENCE_FORWARD'),
+      sectionOrder: ['EXPERIENCE'],
+      includedEvidenceIds: ['metric', 'delivery'],
+    };
+    mocks.findGeneration.mockResolvedValue(row);
+    mocks.reserve.mockResolvedValue({ status: 'reserved', reservation: { status: 'RESERVED' } });
+    mocks.commit.mockResolvedValue({ status: 'committed' });
+    mocks.generateAi.mockImplementation(async ({ structuredOutput }) => {
+      const parsed = structuredOutput.runtimeSchema.safeParse({ schemaVersion: 1, patches: [
+        { evidenceId: 'metric', text: 'Reduced latency by 90%', sourceEvidenceIds: ['metric'] },
+        { evidenceId: 'delivery', text: 'Built dependable internal services', sourceEvidenceIds: ['delivery'] },
+      ] });
+      if (!parsed.success) throw parsed.error;
+      return { data: parsed.data, provenance: { provider: 'groq', model: 'test', attempt: 2, fallbackUsed: true } };
+    });
+
+    await expect(generateApprovedCv('user-1', 'generation-1')).resolves.toMatchObject({ generatedCvId: 'generated-1' });
+    expect(mocks.render).toHaveBeenCalledWith(expect.objectContaining({
+      presentation: expect.objectContaining({ templateId: 'architect' }),
+      sections: [expect.objectContaining({ entries: [expect.objectContaining({ lines: [
+        { evidenceId: 'metric', text: 'Reduced latency by 25%' },
+        { evidenceId: 'delivery', text: 'Built dependable internal services' },
+      ] })] })],
+    }));
+    expect(mocks.createGenerated).toHaveBeenCalledOnce();
+    expect(mocks.commit).toHaveBeenCalledOnce();
+    expect(mocks.release).not.toHaveBeenCalled();
+    expect(mocks.createGenerated.mock.calls[0][0].data.provenance.provider).toMatchObject({
+      provider: 'groq',
+      rewriteDiagnostics: {
+        patchCount: { returned: 2, accepted: 1, rejected: 1 },
+        rejected: [expect.objectContaining({ evidenceId: 'metric', reason: 'unsupported_metric' })],
+      },
+    });
+  });
+
+  it('normalizes all-provider semantic exhaustion and releases without charging', async () => {
+    mocks.findGeneration.mockResolvedValue(generation('JOB_MATCH', 'EXPERIENCE_FORWARD'));
+    mocks.reserve.mockResolvedValue({ status: 'reserved', reservation: { status: 'RESERVED' } });
+    mocks.generateAi.mockRejectedValue(new AiOrchestrationError('cv_regeneration', [
+      { reason: 'SCHEMA_VALIDATION_FAILED' },
+      { reason: 'SCHEMA_VALIDATION_FAILED' },
+    ] as never));
+
+    await expect(generateApprovedCv('user-1', 'generation-1')).rejects.toBeInstanceOf(CvGenerationValidationError);
+    expect(mocks.generateAi).toHaveBeenCalledOnce();
+    expect(mocks.release).toHaveBeenCalledWith(expect.objectContaining({ reason: 'truthfulness_failure' }));
+    expect(mocks.createGenerated).not.toHaveBeenCalled();
+    expect(mocks.commit).not.toHaveBeenCalled();
   });
 });

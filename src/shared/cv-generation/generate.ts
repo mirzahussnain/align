@@ -9,10 +9,9 @@ import { AiOperationError, markOperationRunning, reservationIsRunning, Operation
 import { EntitlementRequiredError } from '@/shared/entitlements/server';
 import { TemplateIdSchema, type TemplateId } from '@/shared/constants/templates';
 import { ApprovedCvPlanSchema, UnifiedCandidateEvidenceSchema } from './schemas';
-import { CV_REWRITE_PATCH_CONTRACT } from './rewrite-contract';
 import { serializeApprovedEvidenceForRewrite } from './rewrite-serializer';
-import { validateRewritePatches } from './rewrite-validator';
-import { assembleCvBuildSpec, validateBuildSpecPreservation, type CvBuildSpecV2 } from './build-spec';
+import { createCvRewriteCandidateContract } from './rewrite-candidate';
+import { assembleCvBuildSpec, validateBuildSpec, type CvBuildSpecV2 } from './build-spec';
 import { generateV2Template } from '@/shared/templates/v2';
 import { DOCX_CONTENT_TYPE } from '@/shared/services/cv-generation';
 
@@ -82,7 +81,7 @@ export async function generateApprovedCv(userId: string, generationId: string) {
   let reservationHeld = false;
   let persisted = false;
   let provider: unknown;
-  let patches = new Map<string, string>();
+  let spec: CvBuildSpecV2;
   await prisma.cvGeneration.update({ where: { id: generation.id }, data: { status: 'GENERATING', failureCode: null } });
   try {
     if (!deterministicOnly) {
@@ -97,7 +96,7 @@ export async function generateApprovedCv(userId: string, generationId: string) {
       }
       const result = await executeAiTask({
         task: 'cv_regeneration', userId, operationId: generation.operationId, temperature: 0.1, thinkingBudget: 0,
-        structuredOutput: CV_REWRITE_PATCH_CONTRACT,
+        structuredOutput: createCvRewriteCandidateContract({ generationId: generation.id, evidence, plan, templateId: template }),
         prompt: [
           'Rewrite only the approved evidence below for the stated target. Return only the strict patch schema. Each patch must target one approved evidenceId and include that same id in sourceEvidenceIds. Never invent, infer, merge, remove, or upgrade a fact. Preserve every metric, date, employer, qualification, credential and eligibility fact exactly. Omit a patch when wording should remain unchanged.',
           `TARGET CONTEXT:\n${JSON.stringify(generation.targetContextJson ?? {})}`,
@@ -105,14 +104,29 @@ export async function generateApprovedCv(userId: string, generationId: string) {
         ].join('\n\n'),
       });
       if (!result) throw new Error('No rewrite provider was available.');
-      provider = result.provenance;
-      const validated = validateRewritePatches(result.data, evidence, plan);
-      if (!validated.ok) throw new CvGenerationValidationError(validated.reasons);
-      patches = validated.patches;
+      spec = result.data.spec;
+      const rewriteDiagnostics = {
+        patchCount: result.data.patchCount,
+        rejected: result.data.rejected,
+        summaryValidation: result.data.summaryValidation,
+        finalValidation: result.data.finalValidation,
+      };
+      provider = { ...result.provenance, rewriteDiagnostics };
+      console.info('[cv-generation] Rewrite candidate accepted.', {
+        provider: result.provenance.provider,
+        model: result.provenance.model,
+        fallbackUsed: result.provenance.fallbackUsed,
+        ...rewriteDiagnostics,
+      });
+    } else {
+      spec = assembleCvBuildSpec({ generationId: generation.id, evidence, plan, templateId: template });
+      const finalValidation = validateBuildSpec(spec, evidence, plan);
+      if (!finalValidation.ok) {
+        throw new CvGenerationValidationError(
+          [...finalValidation.truth, ...finalValidation.provenance, ...finalValidation.preservation].map((issue) => `${issue.code}:${issue.evidenceId}`)
+        );
+      }
     }
-    const spec = assembleCvBuildSpec({ generationId: generation.id, evidence, plan, templateId: template, patches });
-    const missing = validateBuildSpecPreservation(spec, evidence);
-    if (missing.length) throw new CvGenerationValidationError(missing.map((id) => `Approved required evidence was not assembled: ${id}.`));
     const bytes = await generateV2Template(spec);
     const generatedCvId = await persistRow({ userId, generation, spec, bytes, provider, reservationHeld });
     persisted = true;
@@ -123,8 +137,10 @@ export async function generateApprovedCv(userId: string, generationId: string) {
     }
     return { generatedCvId, bytes, recovered: false };
   } catch (error) {
-    const failure = error instanceof AiOrchestrationError
-      ? new AiOperationError({
+    const failure = error instanceof AiOrchestrationError && error.candidateFailures.length > 0 && error.candidateFailures.every((candidate) => candidate.reason === 'SCHEMA_VALIDATION_FAILED')
+      ? new CvGenerationValidationError(['All provider candidates failed semantic validation.'])
+      : error instanceof AiOrchestrationError
+        ? new AiOperationError({
           capability: 'cv_regeneration',
           operationId: generation.operationId,
           reason: 'provider_unavailable',

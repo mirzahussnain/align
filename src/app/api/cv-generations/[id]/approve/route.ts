@@ -4,10 +4,12 @@ import { auth } from '@/shared/lib/auth';
 import { approveGenerationPlan } from '@/shared/cv-generation/plan-workflow';
 import { APIError, withErrorHandler } from '@/shared/utils/api-error';
 import { TemplateIdSchema } from '@/shared/constants/templates';
+import { CvPlanSectionSchema } from '@/shared/cv-generation/schemas';
 
 const ApprovalSchema = z.strictObject({
   template: TemplateIdSchema,
   excludedOptionalEvidenceIds: z.array(z.string().min(1)).default([]),
+  sectionOrder: z.array(CvPlanSectionSchema).min(1),
 });
 
 export async function POST(request: Request, context: { params: Promise<{ id: string }> }) {

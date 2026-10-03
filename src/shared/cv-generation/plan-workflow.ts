@@ -4,7 +4,7 @@ import type { Prisma } from '@/generated/prisma/client';
 import { prisma } from '@/shared/lib/prisma';
 import { ApprovedCvPlanSchema, ProposedCvPlanSchema, RequirementReconciliationSnapshotSchema, UnifiedCandidateEvidenceSchema } from './schemas';
 import { proposeCvPlan } from './planner';
-import type { ApprovedCvPlan, ProposedCvPlan } from './types';
+import type { ApprovedCvPlan, CvPlanSection, ProposedCvPlan } from './types';
 
 const json = (value: unknown): Prisma.InputJsonValue => JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
 const hash = (value: string) => createHash('sha256').update(value).digest('hex');
@@ -33,7 +33,7 @@ export async function proposeGenerationPlan(userId: string, generationId: string
   return plan;
 }
 
-export async function approveGenerationPlan(args: { userId: string; generationId: string; excludedOptionalEvidenceIds?: string[]; template: string }): Promise<ApprovedCvPlan> {
+export async function approveGenerationPlan(args: { userId: string; generationId: string; excludedOptionalEvidenceIds?: string[]; sectionOrder: CvPlanSection[]; template: string }): Promise<ApprovedCvPlan> {
   const generation = await prisma.cvGeneration.findFirst({
     where: { id: args.generationId, userId: args.userId },
     include: { planRevisions: { where: { kind: 'PROPOSED' }, orderBy: { version: 'desc' }, take: 1 } },
@@ -42,11 +42,17 @@ export async function approveGenerationPlan(args: { userId: string; generationId
   const existingApproval = await prisma.cvPlanRevision.findFirst({ where: { generationId: generation.id, kind: 'APPROVED' }, select: { id: true } });
   if (existingApproval) throw new Error('The CV plan has already been approved and cannot be changed.');
   const proposed = ProposedCvPlanSchema.parse(generation.planRevisions[0].planJson);
+  const proposedSections = new Set(proposed.sectionOrder);
+  const requestedSections = new Set(args.sectionOrder);
+  if (args.sectionOrder.length !== proposed.sectionOrder.length || requestedSections.size !== proposedSections.size || args.sectionOrder.some((section) => !proposedSections.has(section))) {
+    throw new Error('Section order must contain every included section exactly once.');
+  }
   const excluded = new Set(args.excludedOptionalEvidenceIds ?? []);
   const optional = new Set(proposed.optionalEvidenceIds);
   for (const id of excluded) if (!optional.has(id)) throw new Error('Only optional evidence can be removed during plan review.');
   const approved = ApprovedCvPlanSchema.parse({
     ...proposed,
+    sectionOrder: args.sectionOrder,
     optionalEvidenceIds: proposed.optionalEvidenceIds.filter((id) => !excluded.has(id)),
     omittedEvidence: [...proposed.omittedEvidence, ...[...excluded].map((evidenceId) => ({ evidenceId, reasonCode: 'USER_EXCLUDED' as const, rationale: 'Removed by the candidate during plan review.' }))],
     approvedAt: new Date().toISOString(),

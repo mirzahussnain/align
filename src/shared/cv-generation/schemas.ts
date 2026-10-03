@@ -144,12 +144,14 @@ export const EvidenceCaptureInputSchema = z.strictObject({
   if (!parsed.success) for (const issue of parsed.error.issues) ctx.addIssue({ code: 'custom', path: ['entity', 'data', ...issue.path], message: issue.message });
 });
 
+export const CvPlanSectionSchema = z.enum(['PROFILE', 'EXECUTIVE_SUMMARY', 'CORE_EXPERTISE', 'EXPERIENCE', 'SELECTED_IMPACT', 'SKILLS', 'PROJECTS', 'EDUCATION', 'CERTIFICATIONS', 'TRAINING', 'VOLUNTEERING', 'OPEN_SOURCE', 'OTHER']);
+
 const cvPlanBase = {
   schemaVersion: z.literal(1),
   sourceMode: CvGenerationSourceModeSchema,
   atsStrategy: CvAtsStrategySchema,
   targetStrategy: z.enum(['PROFILE_ONLY', 'JUNIOR_PROJECT_HEAVY', 'EXPERIENCE_FORWARD', 'SENIOR_LEAD', 'CAREER_CHANGER', 'ACADEMIC_RESEARCH', 'CREDENTIAL_HEAVY']),
-  sectionOrder: z.array(z.enum(['PROFILE', 'EXECUTIVE_SUMMARY', 'CORE_EXPERTISE', 'EXPERIENCE', 'SELECTED_IMPACT', 'SKILLS', 'PROJECTS', 'EDUCATION', 'CERTIFICATIONS', 'TRAINING', 'VOLUNTEERING', 'OPEN_SOURCE', 'OTHER'])),
+  sectionOrder: z.array(CvPlanSectionSchema),
   density: z.enum(['COMPACT', 'BALANCED', 'SPACIOUS']),
   targetLength: z.enum(['ONE_PAGE', 'ONE_TO_TWO_PAGES', 'TWO_PAGES']),
   includedEvidenceIds: z.array(z.string().min(1)),

@@ -38,9 +38,12 @@ export function chooseSectionStrategy(evidence: UnifiedCandidateEvidence, target
     order = ['EXECUTIVE_SUMMARY', 'CORE_EXPERTISE', 'EXPERIENCE', 'SELECTED_IMPACT', 'PROJECTS', 'EDUCATION', 'CERTIFICATIONS', 'OPEN_SOURCE'];
   } else if (target.seniority === 'entry' || evidence.projects.length > evidence.employment.length) {
     strategy = 'JUNIOR_PROJECT_HEAVY';
-    order = ['PROFILE', 'SKILLS', 'PROJECTS', 'EXPERIENCE', 'EDUCATION', 'CERTIFICATIONS', 'TRAINING', 'VOLUNTEERING', 'OPEN_SOURCE'];
+    order = ['PROFILE', 'SKILLS', 'PROJECTS', 'EDUCATION', 'EXPERIENCE', 'CERTIFICATIONS', 'TRAINING', 'VOLUNTEERING', 'OPEN_SOURCE'];
+  } else if (profileOnly) {
+    strategy = 'PROFILE_ONLY';
+    order = ['PROFILE', 'SKILLS', 'EXPERIENCE', 'PROJECTS', 'EDUCATION', 'CERTIFICATIONS', 'TRAINING', 'VOLUNTEERING', 'OPEN_SOURCE', 'OTHER'];
   } else {
-    strategy = profileOnly ? 'PROFILE_ONLY' : 'EXPERIENCE_FORWARD';
+    strategy = 'EXPERIENCE_FORWARD';
     order = ['PROFILE', 'EXPERIENCE', 'SKILLS', 'PROJECTS', 'EDUCATION', 'CERTIFICATIONS', 'TRAINING', 'VOLUNTEERING', 'OPEN_SOURCE', 'OTHER'];
   }
   return { strategy, order: order.filter((section) => present(evidence, section)) };

@@ -25,6 +25,21 @@ describe('proposeCvPlan', () => {
     expect(regulated.sectionOrder.indexOf('CERTIFICATIONS')).toBeLessThan(regulated.sectionOrder.indexOf('EXPERIENCE'));
   });
 
+  it.each([
+    [{}, 'CAREER_PROFILE' as const, ['PROFILE', 'SKILLS', 'EXPERIENCE', 'PROJECTS', 'EDUCATION']],
+    [{ seniority: 'entry' }, 'JOB_MATCH' as const, ['PROFILE', 'SKILLS', 'PROJECTS', 'EDUCATION', 'EXPERIENCE']],
+    [{ seniority: 'mid' }, 'JOB_MATCH' as const, ['PROFILE', 'EXPERIENCE', 'SKILLS', 'PROJECTS', 'EDUCATION']],
+  ])('preserves a dynamic recommendation for target %j', (target, sourceMode, expected) => {
+    const source = evidence({
+      employment: [entity('e1')], projects: [entity('p1')], education: [entity('ed1')],
+      skills: [{ ...entity('s1'), category: 'Technical Skills', name: 'TypeScript' }],
+    });
+
+    const plan = proposeCvPlan({ evidence: source, reconciliation, sourceMode, atsStrategy: 'STANDARD', target });
+
+    expect(plan.sectionOrder).toEqual(expected);
+  });
+
   it('creates a deterministic profile-only plan without inventing evidence ids', () => {
     const source = evidence({ employment: [entity('e1')] });
     source.evidenceById.fact = { id: 'fact', kind: 'EMPLOYMENT', field: 'employment', canonicalText: 'Engineer at Acme', provenance: 'CAREER_PROFILE', preservationTier: 0, requirementIds: [], sourceRefs: [{ sourceType: 'CAREER_PROFILE', entityType: 'Experience', entityId: 'e1', fieldPath: 'record' }] };
