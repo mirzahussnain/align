@@ -132,6 +132,7 @@ export interface CvBuildSpecV2 {
   links: CvPresentationLink[];
   sections: CvBuildSectionV2[];
   evidenceBindings: CvEvidenceBinding[];
+  normalizationIssues: Array<{ code: 'AMBIGUOUS_EVIDENCE_ENTITY'; evidenceId: string }>;
   presentation: { templateId: TemplateId; density: ApprovedCvPlan['density']; targetLength: ApprovedCvPlan['targetLength'] };
   provenance: { approvedEvidenceIds: string[]; omittedEvidenceIds: string[]; sourceMode: ApprovedCvPlan['sourceMode']; atsStrategy: ApprovedCvPlan['atsStrategy'] };
 }

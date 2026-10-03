@@ -52,7 +52,7 @@ function generation(sourceMode: ApprovedCvPlan['sourceMode'], targetStrategy: Ap
   return {
     id: 'generation-1', userId: 'user-1', operationId: 'operation-1', jobMatchId: sourceMode === 'JOB_MATCH' ? 'match-1' : null,
     sourceCvRevisionId: sourceMode === 'JOB_MATCH' ? 'revision-1' : null, generationProfileSnapshotId: 'profile-snapshot-1',
-    matchProfileSnapshotId: null, jobRevisionId: sourceMode === 'JOB_MATCH' ? 'job-revision-1' : null, profileId: 'profile-1',
+    matchProfileSnapshotId: 'profile-match-1', jobRevisionId: sourceMode === 'JOB_MATCH' ? 'job-revision-1' : null, profileId: 'profile-1',
     template: 'architect', targetContextJson: {}, generatedCv,
     evidenceSnapshots: [{ snapshotJson: evidence, contentHash: 'evidence-hash' }],
     planRevisions: [{ planJson: plan(sourceMode, targetStrategy), contentHash: 'plan-hash' }],
@@ -79,6 +79,27 @@ describe('generateApprovedCv orchestration', () => {
     expect(mocks.commit).not.toHaveBeenCalled();
     expect(mocks.release).not.toHaveBeenCalled();
     expect(mocks.upload).toHaveBeenCalledOnce();
+  });
+
+  it('uses generation and match snapshot ids for deterministic structural authority', async () => {
+    const row = generation('CAREER_PROFILE', 'PROFILE_ONLY');
+    const authorityEvidence = emptyCandidateEvidence();
+    for (const [id, degree, snapshotId] of [
+      ['education-match', 'BSc Data', 'profile-match-1'],
+      ['education-current', 'BSc Data Engineering', 'profile-snapshot-1'],
+    ] as const) {
+      authorityEvidence.evidenceById[id] = {
+        id, kind: 'EDUCATION', field: 'record', canonicalText: degree, canonicalData: { degree, institution: 'Westbridge Institute' },
+        provenance: 'CAREER_PROFILE', preservationTier: 1, requirementIds: [], sourceRefs: [{ sourceType: 'CAREER_PROFILE', entityType: 'Education', entityId: 'education-1', fieldPath: 'record', snapshotId }],
+      };
+      authorityEvidence.education.push({ id, sourceEntityId: 'education-1', label: degree, details: { degree, institution: 'Westbridge Institute' }, evidenceIds: [id] });
+    }
+    row.evidenceSnapshots[0].snapshotJson = authorityEvidence;
+    row.planRevisions[0].planJson = { ...plan('CAREER_PROFILE', 'PROFILE_ONLY'), sectionOrder: ['EDUCATION'], includedEvidenceIds: ['education-match', 'education-current'] };
+    mocks.findGeneration.mockResolvedValue(row);
+
+    await generateApprovedCv('user-1', 'generation-1');
+    expect(mocks.render).toHaveBeenCalledWith(expect.objectContaining({ sections: [expect.objectContaining({ items: [expect.objectContaining({ degree: 'BSc Data Engineering' })] })] }));
   });
 
   it('reserves immediately before the provider and releases on provider failure', async () => {
@@ -119,7 +140,7 @@ describe('generateApprovedCv orchestration', () => {
       provenance: 'CAREER_PROFILE', preservationTier: 0, requirementIds: [],
       sourceRefs: [{ sourceType: 'CAREER_PROFILE', entityType: 'Experience', entityId: 'role-1', fieldPath: 'achievements[1]' }],
     };
-    candidateEvidence.employment.push({ id: 'role-1', label: 'Engineer', details: {}, evidenceIds: ['metric', 'delivery'] });
+    candidateEvidence.employment.push({ id: 'role-1', sourceEntityId: 'role-1', label: 'Engineer', details: { title: 'Engineer', employer: 'Northwind Robotics' }, evidenceIds: ['metric', 'delivery'] });
     row.evidenceSnapshots[0].snapshotJson = candidateEvidence;
     row.planRevisions[0].planJson = {
       ...plan('JOB_MATCH', 'EXPERIENCE_FORWARD'),
@@ -141,9 +162,9 @@ describe('generateApprovedCv orchestration', () => {
     await expect(generateApprovedCv('user-1', 'generation-1')).resolves.toMatchObject({ generatedCvId: 'generated-1' });
     expect(mocks.render).toHaveBeenCalledWith(expect.objectContaining({
       presentation: expect.objectContaining({ templateId: 'architect' }),
-      sections: [expect.objectContaining({ entries: [expect.objectContaining({ lines: [
-        { evidenceId: 'metric', text: 'Reduced latency by 25%' },
-        { evidenceId: 'delivery', text: 'Built dependable internal services' },
+      sections: [expect.objectContaining({ items: [expect.objectContaining({ lines: [
+        { id: 'delivery', text: 'Built dependable internal services' },
+        { id: 'metric', text: 'Reduced latency by 25%' },
       ] })] })],
     }));
     expect(mocks.createGenerated).toHaveBeenCalledOnce();

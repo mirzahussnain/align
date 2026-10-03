@@ -1,6 +1,6 @@
 import { BorderStyle, Paragraph, TextRun } from 'docx';
-import type { CvBuildSpecV2 } from '@/shared/cv-generation/build-spec';
-import { entryParagraphs, linkRuns, packV2Document, type V2TemplateTheme } from './v2-shared';
+import type { CvBuildSpecV2 } from '@/shared/cv-generation/build-spec-types';
+import { linkRuns, packV2Document, sectionParagraphs, type V2TemplateTheme } from './v2-shared';
 
 const THEME: V2TemplateTheme = { accent: '8B4513', heading: '302A27', body: '403A36', font: 'Calibri', dateStyle: 'long_month_year' };
 
@@ -15,7 +15,7 @@ export async function generateEditorialTemplate(spec: CvBuildSpecV2): Promise<Bu
   ];
   for (const section of spec.sections) {
     children.push(new Paragraph({ keepNext: true, border: { bottom: { style: BorderStyle.SINGLE, size: 4, color: 'D4B896', space: 3 } }, spacing: { before: 180, after: 65 }, children: [new TextRun({ text: '▪  ', size: 22, font: THEME.font, color: THEME.accent }), new TextRun({ text: section.heading.toUpperCase(), bold: true, size: 22, font: THEME.font, color: THEME.heading })] }));
-    children.push(...section.entries.flatMap((entry) => entryParagraphs(entry, THEME, { titleSize: 22 })));
+    children.push(...sectionParagraphs(section, THEME, { titleSize: 22 }));
   }
   return packV2Document(spec, THEME.font, children, { top: 800, right: 900, bottom: 800, left: 900 });
 }

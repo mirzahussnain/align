@@ -1,6 +1,6 @@
 import { AlignmentType, BorderStyle, Paragraph, TextRun } from 'docx';
-import type { CvBuildSpecV2 } from '@/shared/cv-generation/build-spec';
-import { entryParagraphs, linkRuns, packV2Document, type V2TemplateTheme } from './v2-shared';
+import type { CvBuildSpecV2 } from '@/shared/cv-generation/build-spec-types';
+import { linkRuns, packV2Document, sectionParagraphs, type V2TemplateTheme } from './v2-shared';
 
 const THEME: V2TemplateTheme = { accent: '1B5EA6', heading: '0D2240', body: '2E3A47', font: 'Calibri', dateStyle: 'short_month_year' };
 
@@ -14,7 +14,7 @@ export async function generateArchitectTemplate(spec: CvBuildSpecV2): Promise<Bu
   ];
   for (const section of spec.sections) {
     children.push(new Paragraph({ keepNext: true, border: { bottom: { style: BorderStyle.SINGLE, size: 8, color: THEME.accent, space: 3 } }, spacing: { before: 160, after: 55 }, children: [new TextRun({ text: section.heading.toUpperCase(), bold: true, size: 21, font: THEME.font, color: THEME.accent })] }));
-    children.push(...section.entries.flatMap((entry) => entryParagraphs(entry, THEME, { dateTabStopPosition: 9026 })));
+    children.push(...sectionParagraphs(section, THEME, { dateTabStopPosition: 9026 }));
   }
   return packV2Document(spec, THEME.font, children, { top: 720, right: 820, bottom: 720, left: 820 });
 }

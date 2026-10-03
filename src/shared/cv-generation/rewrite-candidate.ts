@@ -5,6 +5,7 @@ import { assembleCvBuildSpec, validateBuildSpec, type CvBuildSpecV2, type CvBuil
 import { CV_REWRITE_PATCH_CONTRACT, CvRewritePatchSetSchema } from './rewrite-contract';
 import { validateRewritePatches, type RejectedRewritePatch } from './rewrite-validator';
 import type { ApprovedCvPlan, UnifiedCandidateEvidence } from './types';
+import type { NormalizationAuthorityContext } from './presentation-authority';
 
 export interface ValidatedRewriteCandidate {
   spec: CvBuildSpecV2;
@@ -19,6 +20,7 @@ export function createCvRewriteCandidateContract(args: {
   evidence: UnifiedCandidateEvidence;
   plan: ApprovedCvPlan;
   templateId: TemplateId;
+  authorityContext?: NormalizationAuthorityContext;
 }): AiStructuredOutputContract<ValidatedRewriteCandidate> {
   const runtimeSchema = CvRewritePatchSetSchema.transform((raw, context): ValidatedRewriteCandidate => {
     const validated = validateRewritePatches(raw, args.evidence, args.plan);
@@ -28,6 +30,7 @@ export function createCvRewriteCandidateContract(args: {
       plan: args.plan,
       templateId: args.templateId,
       patches: validated.patches,
+      authorityContext: args.authorityContext,
     });
     const finalValidation = validateBuildSpec(spec, args.evidence, args.plan);
     if (!finalValidation.ok) {

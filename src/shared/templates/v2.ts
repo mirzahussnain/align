@@ -1,4 +1,4 @@
-import type { CvBuildSpecV2 } from '@/shared/cv-generation/build-spec';
+import type { CvBuildSpecV2 } from '@/shared/cv-generation/build-spec-types';
 import type { TemplateId } from '@/shared/constants/templates';
 import { generateArchitectTemplate } from './template1_architect';
 import { generateEditorialTemplate } from './template2_editorial';

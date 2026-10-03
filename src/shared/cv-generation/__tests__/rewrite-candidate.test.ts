@@ -15,7 +15,7 @@ function fixture(sectionOrder: ApprovedCvPlan['sectionOrder'] = ['EXPERIENCE']) 
     provenance: 'CAREER_PROFILE', preservationTier: 0, requirementIds: [],
     sourceRefs: [{ sourceType: 'CAREER_PROFILE', entityType: 'Experience', entityId: 'role-1', fieldPath: 'achievements[1]' }],
   };
-  evidence.employment.push({ id: 'role-1', label: 'Engineer', details: {}, evidenceIds: ['metric', 'delivery'] });
+  evidence.employment.push({ id: 'role-1', sourceEntityId: 'role-1', label: 'Engineer', details: { title: 'Engineer', employer: 'Northwind Robotics' }, evidenceIds: ['metric', 'delivery'] });
   const plan: ApprovedCvPlan = {
     schemaVersion: 1, sourceMode: 'JOB_MATCH', atsStrategy: 'STANDARD', targetStrategy: 'EXPERIENCE_FORWARD',
     sectionOrder, density: 'BALANCED', targetLength: 'ONE_PAGE', includedEvidenceIds: ['metric', 'delivery'],
@@ -38,10 +38,35 @@ describe('provider rewrite candidate validation', () => {
     if (!result.success) return;
     expect(result.data.patchCount).toEqual({ returned: 2, accepted: 1, rejected: 1 });
     expect(result.data.rejected).toEqual([expect.objectContaining({ evidenceId: 'metric', reason: 'unsupported_metric' })]);
-    expect(result.data.spec.sections[0].entries[0].lines).toEqual([
-      { evidenceId: 'metric', text: 'Reduced latency by 25%' },
-      { evidenceId: 'delivery', text: 'Built dependable internal services' },
+    const section = result.data.spec.sections.find((item) => item.type === 'EXPERIENCE');
+    expect(section?.items[0].lines).toEqual([
+      { id: 'delivery', text: 'Built dependable internal services' },
+      { id: 'metric', text: 'Reduced latency by 25%' },
     ]);
+  });
+
+  it('passes snapshot authority context into provider candidate assembly', () => {
+    const { evidence, plan } = fixture(['EDUCATION']);
+    evidence.evidenceById.matchEducation = {
+      id: 'matchEducation', kind: 'EDUCATION', field: 'record', canonicalText: 'Historical degree', canonicalData: { degree: 'BSc Data', institution: 'Westbridge Institute' },
+      provenance: 'CAREER_PROFILE', preservationTier: 1, requirementIds: [], sourceRefs: [{ sourceType: 'CAREER_PROFILE', entityType: 'Education', entityId: 'education-1', fieldPath: 'record', snapshotId: 'profile-match' }],
+    };
+    evidence.evidenceById.currentEducation = {
+      id: 'currentEducation', kind: 'EDUCATION', field: 'record', canonicalText: 'Current degree', canonicalData: { degree: 'BSc Data Engineering', institution: 'Westbridge Institute' },
+      provenance: 'CAREER_PROFILE', preservationTier: 1, requirementIds: [], sourceRefs: [{ sourceType: 'CAREER_PROFILE', entityType: 'Education', entityId: 'education-1', fieldPath: 'record', snapshotId: 'profile-current' }],
+    };
+    evidence.education.push(
+      { id: 'education-match', sourceEntityId: 'education-1', label: 'BSc Data', details: { degree: 'BSc Data', institution: 'Westbridge Institute' }, evidenceIds: ['matchEducation'] },
+      { id: 'education-current', sourceEntityId: 'education-1', label: 'BSc Data Engineering', details: { degree: 'BSc Data Engineering', institution: 'Westbridge Institute' }, evidenceIds: ['currentEducation'] },
+    );
+    plan.includedEvidenceIds = ['matchEducation', 'currentEducation'];
+    const contract = createCvRewriteCandidateContract({ generationId: 'g1', evidence, plan, templateId: 'architect', authorityContext: { currentProfileSnapshotId: 'profile-current', matchProfileSnapshotId: 'profile-match' } });
+    const result = contract.runtimeSchema.safeParse({ schemaVersion: 1, patches: [] });
+
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    const section = result.data.spec.sections.find((item) => item.type === 'EDUCATION');
+    expect(section?.items[0].degree).toBe('BSc Data Engineering');
   });
 
   it('rejects a provider candidate when the final assembled spec fails preservation', () => {

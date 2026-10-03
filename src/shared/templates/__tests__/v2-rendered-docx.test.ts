@@ -5,30 +5,34 @@ import { generateArchitectTemplate } from '../template1_architect';
 import { generateEditorialTemplate } from '../template2_editorial';
 import { generateTechnicalTemplate } from '../template3_technical';
 import { generateAcademicTemplate } from '../template4_academic';
-import type { CvBuildSpecV2 } from '@/shared/cv-generation/build-spec';
+import type { CvBuildSpecV2 } from '@/shared/cv-generation/build-spec-types';
 import type { TemplateId } from '@/shared/constants/templates';
 
-const sectionTypes = ['PROFILE', 'CORE_EXPERTISE', 'EXPERIENCE', 'PROJECTS', 'EDUCATION', 'CERTIFICATIONS', 'TRAINING', 'VOLUNTEERING', 'OPEN_SOURCE', 'OTHER'] as const;
+const sectionOrder = ['PROJECTS', 'EXPERIENCE', 'SKILLS', 'EDUCATION'] as const;
 
 describe('V2 rendered DOCX', () => {
   const spec = (templateId: TemplateId): CvBuildSpecV2 => ({
-      version: 3, generationId: 'g1',
-      identity: { fullName: 'Alex Candidate', headline: 'Evidence Engineer', email: 'alex@example.com', location: 'London', evidenceIds: ['identity'] },
-      links: [{ id: 'linkedin', label: 'LinkedIn', url: 'https://linkedin.com/in/alex', type: 'LINKEDIN', evidenceId: 'link-linkedin' }],
-      sections: sectionTypes.map((type, index) => ({
-        type, heading: type.replaceAll('_', ' '), entries: [{ id: `entry-${index}`, title: `${type} record`, startDate: '2022-01', endDate: '2024-12', evidenceIds: [`e-${index}`], metadata: [{ label: 'Employment Type', value: 'Part-time' }, { label: 'Skills', value: 'TypeScript, PostgreSQL' }], lines: [{ evidenceId: `e-${index}`, text: `${type} verified evidence` }], links: type === 'PROJECTS' ? [{ id: 'project-link', label: 'Live demo', url: 'https://example.com/demo', type: 'PROJECT_LIVE', evidenceId: 'project-url', projectId: `entry-${index}` }, { id: 'repo-link', label: 'Repository', url: 'https://github.com/alex/project', type: 'PROJECT_REPOSITORY', evidenceId: 'project-repo', projectId: `entry-${index}` }] : [] }],
-      })),
-      presentation: { templateId, density: 'BALANCED', targetLength: 'TWO_PAGES' },
-      provenance: { approvedEvidenceIds: ['identity'], omittedEvidenceIds: [], sourceMode: 'JOB_MATCH', atsStrategy: 'COMPOSITE' },
-    });
+    version: 4,
+    generationId: 'g1',
+    identity: { fullName: 'Alex McCandidate', headline: 'Evidence Engineer', email: 'alex@example.com', phone: '+44 7700 900123', location: 'London' },
+    links: [{ id: 'linkedin', label: 'LinkedIn', url: 'https://linkedin.com/in/alex', type: 'LINKEDIN' }],
+    sections: [
+      { type: 'PROJECTS', heading: 'Projects', items: [{ id: 'project-1', name: 'Lighthouse API', subtitle: 'Reliable services', technologies: ['TypeScript', 'PostgreSQL'], lines: [{ id: 'project-line', text: 'Reduced API latency by 25%.' }], links: [
+        { id: 'project-live', label: 'Live demo', url: 'https://example.com/demo', type: 'PROJECT_LIVE' },
+        { id: 'project-repo', label: 'Repository', url: 'https://github.com/alex/project', type: 'PROJECT_REPOSITORY' },
+      ] }] },
+      { type: 'EXPERIENCE', heading: 'Experience', items: [{ id: 'role-1', title: 'Platform Engineer', employer: 'Northwind Robotics', startDate: '2022-01', endDate: '2024-12', lines: [{ id: 'role-line', text: 'Led a safe platform migration.' }], links: [] }] },
+      { type: 'SKILLS', heading: 'Skills', items: [{ id: 'skill-category:languages', category: 'Languages', skills: [{ id: 'skill-rust', name: 'Rust' }] }] },
+      { type: 'EDUCATION', heading: 'Education', items: [{ id: 'education-1', degree: 'BSc Data Engineering', institution: 'Westbridge Institute', grade: 'First', lines: [], links: [] }] },
+    ],
+    evidenceBindings: [],
+    normalizationIssues: [],
+    presentation: { templateId, density: 'BALANCED', targetLength: 'TWO_PAGES' },
+    provenance: { approvedEvidenceIds: [], omittedEvidenceIds: [], sourceMode: 'JOB_MATCH', atsStrategy: 'COMPOSITE' },
+  });
 
   it('registers one distinct renderer implementation for every supported template', () => {
-    expect(CV_TEMPLATE_RENDERERS).toEqual({
-      architect: generateArchitectTemplate,
-      editorial_refined: generateEditorialTemplate,
-      technical_precision: generateTechnicalTemplate,
-      academic_latex: generateAcademicTemplate,
-    });
+    expect(CV_TEMPLATE_RENDERERS).toEqual({ architect: generateArchitectTemplate, editorial_refined: generateEditorialTemplate, technical_precision: generateTechnicalTemplate, academic_latex: generateAcademicTemplate });
     expect(new Set(Object.values(CV_TEMPLATE_RENDERERS)).size).toBe(4);
   });
 
@@ -37,41 +41,35 @@ describe('V2 rendered DOCX', () => {
     ['editorial_refined', '8B4513', 'Calibri'],
     ['technical_precision', '087E8B', 'Aptos'],
     ['academic_latex', '000000', 'Times New Roman'],
-  ] as const)('routes %s to its presentation while preserving every section and link', async (templateId, marker, font) => {
+  ] as const)('renders %s from presentation fields only', async (templateId, marker, font) => {
     const zip = await JSZip.loadAsync(await generateV2Template(spec(templateId)));
     const xml = await zip.file('word/document.xml')!.async('string');
     const relationships = await zip.file('word/_rels/document.xml.rels')!.async('string');
-    for (const type of sectionTypes) expect(xml).toContain(type.replaceAll('_', ' '));
-    const sectionPositions = sectionTypes.map((type) => xml.indexOf(type.replaceAll('_', ' ')));
-    expect(sectionPositions).toEqual([...sectionPositions].sort((left, right) => left - right));
+    const positions = sectionOrder.map((type) => xml.indexOf(type[0] + type.slice(1).toLocaleLowerCase('en-GB')));
+    expect(positions).toEqual([...positions].sort((left, right) => left - right));
+    for (const text of ['Lighthouse API', 'TypeScript', 'PostgreSQL', 'Platform Engineer', 'Northwind Robotics', 'Languages', 'Rust', 'BSc Data Engineering', 'Westbridge Institute', 'Reduced API latency by 25%.', 'Led a safe platform migration.']) {
+      expect(xml.split(text)).toHaveLength(2);
+    }
+    expect(xml.split('alex@example.com')).toHaveLength(2);
+    expect(xml.split('+44 7700 900123')).toHaveLength(2);
+    expect(xml).toContain('Alex McCandidate');
     expect(xml).toContain(marker);
     expect(xml).toContain(font);
-    expect(xml).toContain('Live demo');
-    expect(xml).toContain('Employment Type');
-    expect(xml).toContain('Part-time');
-    expect(xml).toContain('TypeScript, PostgreSQL');
-    expect(relationships).toContain('https://example.com/demo');
-    expect(relationships).toContain('https://github.com/alex/project');
-    expect(relationships).toContain('https://linkedin.com/in/alex');
+    for (const forbidden of ['Excerpt:', 'Skill Ids:', 'sourceEntityId', 'evidenceId', 'requirementIds', 'canonicalData', 'Category:', 'Company:', 'Degree:', 'University:']) expect(xml).not.toContain(forbidden);
+    expect(relationships.split('https://example.com/demo')).toHaveLength(2);
+    expect(relationships.split('https://github.com/alex/project')).toHaveLength(2);
+    expect(relationships.split('https://linkedin.com/in/alex')).toHaveLength(2);
   });
 
-  it('preserves meaningful pre-V2 presentation primitives per renderer', async () => {
-    const architect = await JSZip.loadAsync(await generateV2Template(spec('architect')));
-    const editorial = await JSZip.loadAsync(await generateV2Template(spec('editorial_refined')));
-    const technical = await JSZip.loadAsync(await generateV2Template(spec('technical_precision')));
-    const academic = await JSZip.loadAsync(await generateV2Template(spec('academic_latex')));
-    const [architectXml, editorialXml, technicalXml, academicXml] = await Promise.all([
-      architect.file('word/document.xml')!.async('string'),
-      editorial.file('word/document.xml')!.async('string'),
-      technical.file('word/document.xml')!.async('string'),
-      academic.file('word/document.xml')!.async('string'),
-    ]);
-    expect(architectXml).toMatch(/w:val=.right./);
-    expect(editorialXml).toContain('▪');
-    expect(technicalXml).toContain('alex candidate');
-    expect(technicalXml).toMatch(/<w:left w:val=.single./);
-    expect(academicXml).toContain('Times New Roman');
-    expect(academicXml).toContain('<w:tbl>');
+  it('preserves meaningful template presentation primitives without lowercasing the technical name', async () => {
+    const buffers = await Promise.all((['architect', 'editorial_refined', 'technical_precision', 'academic_latex'] as const).map((id) => generateV2Template(spec(id))));
+    const xml = await Promise.all(buffers.map(async (buffer) => (await JSZip.loadAsync(buffer)).file('word/document.xml')!.async('string')));
+    expect(xml[0]).toMatch(/w:val=.right./);
+    expect(xml[1]).toContain('▪');
+    expect(xml[2]).toContain('Alex McCandidate');
+    expect(xml[2]).not.toContain('alex mccandidate');
+    expect(xml[2]).toMatch(/<w:left w:val=.single./);
+    expect(xml[3]).toContain('Times New Roman');
   });
 
   it('fails clearly for an unknown template instead of rendering a generic fallback', async () => {

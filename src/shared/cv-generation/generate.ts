@@ -70,6 +70,10 @@ export async function generateApprovedCv(userId: string, generationId: string) {
   const plan = ApprovedCvPlanSchema.parse(generation.planRevisions[0].planJson);
   const template = TemplateIdSchema.parse(generation.template) as TemplateId;
   const deterministicOnly = plan.sourceMode === 'CAREER_PROFILE' && plan.targetStrategy === 'PROFILE_ONLY';
+  const authorityContext = {
+    currentProfileSnapshotId: generation.generationProfileSnapshotId ?? undefined,
+    matchProfileSnapshotId: generation.matchProfileSnapshotId ?? undefined,
+  };
   if (generation.generatedCv) {
     if (!deterministicOnly) {
       const finalised = await commitCapability({ userId, capability: 'cv_regeneration', operationId: generation.operationId, resultRef: generation.generatedCv.id });
@@ -96,7 +100,7 @@ export async function generateApprovedCv(userId: string, generationId: string) {
       }
       const result = await executeAiTask({
         task: 'cv_regeneration', userId, operationId: generation.operationId, temperature: 0.1, thinkingBudget: 0,
-        structuredOutput: createCvRewriteCandidateContract({ generationId: generation.id, evidence, plan, templateId: template }),
+        structuredOutput: createCvRewriteCandidateContract({ generationId: generation.id, evidence, plan, templateId: template, authorityContext }),
         prompt: [
           'Rewrite only the approved evidence below for the stated target. Return only the strict patch schema. Each patch must target one approved evidenceId and include that same id in sourceEvidenceIds. Never invent, infer, merge, remove, or upgrade a fact. Preserve every metric, date, employer, qualification, credential and eligibility fact exactly. Omit a patch when wording should remain unchanged.',
           `TARGET CONTEXT:\n${JSON.stringify(generation.targetContextJson ?? {})}`,
@@ -119,7 +123,7 @@ export async function generateApprovedCv(userId: string, generationId: string) {
         ...rewriteDiagnostics,
       });
     } else {
-      spec = assembleCvBuildSpec({ generationId: generation.id, evidence, plan, templateId: template });
+      spec = assembleCvBuildSpec({ generationId: generation.id, evidence, plan, templateId: template, authorityContext });
       const finalValidation = validateBuildSpec(spec, evidence, plan);
       if (!finalValidation.ok) {
         throw new CvGenerationValidationError(

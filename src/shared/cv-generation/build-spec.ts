@@ -1,25 +1,13 @@
 import type { TemplateId } from '@/shared/constants/templates';
-import type { ApprovedCvPlan, CvPlanSection, ProfessionalLink, UnifiedCandidateEvidence, UnifiedEvidenceEntity } from './types';
+import { dedupePresentationLines, normalizeEntitySections, type NormalizationInput } from './presentation-normalization';
+import { normalizePresentationSkills } from './presentation-skills';
+import { normalizePresentationIdentity, normalizeProjectLinks } from './presentation-links';
 import { validateRewritePatches } from './rewrite-validator';
-import { isPatchableEvidence } from './patchable-evidence';
+import type { ApprovedCvPlan, CvPlanSection, UnifiedCandidateEvidence } from './types';
+import type { NormalizationAuthorityContext } from './presentation-authority';
+import { CV_BUILD_SPEC_V2_VERSION, type CvBuildSectionV2, type CvBuildSpecV2, type CvPresentationLine } from './build-spec-types';
 
-export const CV_BUILD_SPEC_V2_VERSION = 3 as const;
-
-export interface CvBuildLineV2 { evidenceId: string; text: string }
-export interface CvBuildEntryV2 {
-  id: string; title: string; subtitle?: string; startDate?: string; endDate?: string;
-  evidenceIds: string[]; metadata?: Array<{ label: string; value: string }>; lines: CvBuildLineV2[]; links: ProfessionalLink[];
-}
-export interface CvBuildSectionV2 { type: CvPlanSection; heading: string; entries: CvBuildEntryV2[] }
-export interface CvBuildSpecV2 {
-  version: typeof CV_BUILD_SPEC_V2_VERSION;
-  generationId: string;
-  identity: { fullName: string; headline?: string; email?: string; phone?: string; location?: string; evidenceIds: string[] };
-  links: ProfessionalLink[];
-  sections: CvBuildSectionV2[];
-  presentation: { templateId: TemplateId; density: ApprovedCvPlan['density']; targetLength: ApprovedCvPlan['targetLength'] };
-  provenance: { approvedEvidenceIds: string[]; omittedEvidenceIds: string[]; sourceMode: ApprovedCvPlan['sourceMode']; atsStrategy: ApprovedCvPlan['atsStrategy'] };
-}
+export * from './build-spec-types';
 
 const headings: Record<CvPlanSection, string> = {
   PROFILE: 'Profile', EXECUTIVE_SUMMARY: 'Executive Summary', CORE_EXPERTISE: 'Core Expertise', EXPERIENCE: 'Experience',
@@ -27,100 +15,93 @@ const headings: Record<CvPlanSection, string> = {
   CERTIFICATIONS: 'Certifications', TRAINING: 'Training', VOLUNTEERING: 'Volunteering', OPEN_SOURCE: 'Open Source', OTHER: 'Additional Evidence',
 };
 
-const strings = (details: Record<string, unknown>, keys: string[]) => keys.map((key) => details[key]).find((value): value is string => typeof value === 'string' && value.trim().length > 0);
-
-const STRUCTURAL_DETAIL_KEYS = new Set(['id', 'name', 'title', 'jobTitle', 'course', 'officialName', 'projectName', 'startDate', 'endDate', 'issueDate', 'expiryDate', 'year', 'current', 'liveUrl', 'repositoryUrl', 'projectUrl', 'achievements', 'evidenceMetadata', 'sortOrder', 'sourceOrder']);
-
-function detailLabel(key: string): string {
-  return key.replace(/([a-z0-9])([A-Z])/g, '$1 $2').replace(/^./, (letter) => letter.toUpperCase());
-}
-
-function renderableMetadata(entity: UnifiedEvidenceEntity): Array<{ label: string; value: string }> {
-  const values = Object.entries(entity.details).flatMap(([key, value]) => {
-    if (STRUCTURAL_DETAIL_KEYS.has(key) || value == null || value === '') return [];
-    const rendered = Array.isArray(value)
-      ? value.filter((item): item is string => typeof item === 'string' && item.trim().length > 0).join(', ')
-      : typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean' ? String(value) : '';
-    return rendered ? [{ label: detailLabel(key), value: rendered }] : [];
-  });
-  if ('category' in entity && typeof entity.category === 'string' && entity.category.trim()) {
-    values.unshift({ label: 'Category', value: entity.category });
-  }
-  return values;
-}
-
-function toEntry(entity: UnifiedEvidenceEntity, evidence: UnifiedCandidateEvidence, selected: Set<string>, patches: Map<string, string>): CvBuildEntryV2 | null {
-  const evidenceIds = entity.evidenceIds.filter((id) => selected.has(id));
-  if (!evidenceIds.length) return null;
-  const patchableIds = evidenceIds.filter((id) => isPatchableEvidence(evidence.evidenceById[id]));
-  const lines = patchableIds.map((id) => ({ evidenceId: id, text: patches.get(id) ?? evidence.evidenceById[id].canonicalText }));
-  const details = entity.details;
-  return {
-    id: entity.id, title: entity.label,
-    subtitle: strings(details, ['location', 'provider', 'issuer', 'grade', 'role']),
-    startDate: strings(details, ['startDate', 'issueDate', 'year']), endDate: details.current === true ? 'Present' : strings(details, ['endDate', 'expiryDate']),
-    evidenceIds, metadata: renderableMetadata(entity), lines,
-    links: evidence.professionalLinks.filter((link) => link.projectId && (link.projectId === entity.id || link.projectId === entity.sourceEntityId) && selected.has(link.evidenceId)),
+export function assembleCvBuildSpec(args: {
+  generationId: string;
+  evidence: UnifiedCandidateEvidence;
+  plan: ApprovedCvPlan;
+  templateId: TemplateId;
+  patches?: Map<string, string>;
+  authorityContext?: NormalizationAuthorityContext;
+}): CvBuildSpecV2 {
+  const selectedEvidenceIds = new Set([...args.plan.includedEvidenceIds, ...args.plan.optionalEvidenceIds]);
+  const input: NormalizationInput = {
+    evidence: args.evidence,
+    selectedEvidenceIds,
+    patches: args.patches ?? new Map(),
+    authorityContext: args.authorityContext ?? {},
   };
-}
+  const entities = normalizeEntitySections(input);
+  const skills = normalizePresentationSkills({ ...input, sparseSkillArtifacts: entities.sparseSkillArtifacts });
+  const identity = normalizePresentationIdentity(input);
+  const normalizedLinks = normalizeProjectLinks(args.evidence.professionalLinks, entities.entityAliasIndex, selectedEvidenceIds);
+  for (const project of entities.projects) project.links = normalizedLinks.projectLinks.get(project.id) ?? [];
+  for (const project of entities.openSource) project.links = normalizedLinks.projectLinks.get(project.id) ?? [];
 
-function entitiesFor(section: CvPlanSection, evidence: UnifiedCandidateEvidence): UnifiedEvidenceEntity[] {
-  if (section === 'EXPERIENCE' || section === 'SELECTED_IMPACT') return evidence.employment;
-  if (section === 'PROJECTS') return evidence.projects;
-  if (section === 'EDUCATION') return evidence.education;
-  if (section === 'CERTIFICATIONS') return evidence.certifications;
-  if (section === 'TRAINING') return evidence.training;
-  if (section === 'VOLUNTEERING') return evidence.volunteerExperience;
-  if (section === 'OPEN_SOURCE') return evidence.openSource;
-  if (section === 'SKILLS' || section === 'CORE_EXPERTISE') return evidence.skills;
-  if (section === 'OTHER') return evidence.otherEvidence;
-  return [];
-}
+  const summaryItems = [...selectedEvidenceIds].map((id) => args.evidence.evidenceById[id]).filter((item) => item?.field === 'summary');
+  const summary = dedupePresentationLines(summaryItems, input.patches, input.authorityContext);
+  const selectedImpact = dedupePresentationLines(entities.experience.flatMap(({ lines }) => lines.map(({ id, text }) => args.evidence.evidenceById[id] ?? {
+    id, kind: 'ACHIEVEMENT' as const, field: 'achievement', canonicalText: text, provenance: 'VERIFIED_DERIVED_FACT' as const,
+    preservationTier: 0 as const, requirementIds: [], sourceRefs: [],
+  })), input.patches, input.authorityContext);
 
-export function assembleCvBuildSpec(args: { generationId: string; evidence: UnifiedCandidateEvidence; plan: ApprovedCvPlan; templateId: TemplateId; patches?: Map<string, string> }): CvBuildSpecV2 {
-  const selected = new Set([...args.plan.includedEvidenceIds, ...args.plan.optionalEvidenceIds]);
-  const patches = args.patches ?? new Map<string, string>();
-  const sections: CvBuildSectionV2[] = [];
-  for (const section of args.plan.sectionOrder) {
-    if (section === 'PROFILE' || section === 'EXECUTIVE_SUMMARY') {
-      const summaryIds = [...selected].filter((id) => args.evidence.evidenceById[id]?.field === 'summary');
-      const entries = summaryIds.map((id) => ({ id, title: '', evidenceIds: [id], metadata: [], lines: [{ evidenceId: id, text: patches.get(id) ?? args.evidence.evidenceById[id].canonicalText }], links: [] }));
-      if (entries.length) sections.push({ type: section, heading: headings[section], entries });
-      continue;
+  const sections = args.plan.sectionOrder.map((type): CvBuildSectionV2 => {
+    const heading = headings[type];
+    switch (type) {
+      case 'PROFILE': case 'EXECUTIVE_SUMMARY': return { type, heading, lines: summary.lines };
+      case 'SELECTED_IMPACT': return { type, heading, lines: selectedImpact.lines };
+      case 'CORE_EXPERTISE': case 'SKILLS': return { type, heading, items: skills.groups };
+      case 'EXPERIENCE': return { type, heading, items: entities.experience };
+      case 'PROJECTS': return { type, heading, items: entities.projects };
+      case 'EDUCATION': return { type, heading, items: entities.education };
+      case 'CERTIFICATIONS': return { type, heading, items: entities.certifications };
+      case 'TRAINING': return { type, heading, items: entities.training };
+      case 'VOLUNTEERING': return { type, heading, items: entities.volunteering };
+      case 'OPEN_SOURCE': return { type, heading, items: entities.openSource };
+      case 'OTHER': return { type, heading, items: entities.other };
     }
-    const entries = entitiesFor(section, args.evidence).map((entity) => toEntry(entity, args.evidence, selected, patches)).filter((entry): entry is CvBuildEntryV2 => Boolean(entry));
-    if (entries.length) sections.push({ type: section, heading: headings[section], entries });
+  });
+
+  const allBindings = [...identity.bindings, ...entities.bindings, ...skills.bindings, ...normalizedLinks.bindings, ...summary.bindings];
+  const visibleNodeIds = new Set(identity.bindings.map(({ nodeId }) => nodeId));
+  for (const link of normalizedLinks.links) visibleNodeIds.add(`link:${link.id}`);
+  for (const section of sections) {
+    if ('lines' in section) for (const line of section.lines) visibleNodeIds.add(`line:${line.id}`);
+    else for (const item of section.items) {
+      visibleNodeIds.add(item.id);
+      if ('lines' in item) for (const line of item.lines) visibleNodeIds.add(`line:${line.id}`);
+      if ('links' in item) for (const link of item.links) visibleNodeIds.add(`link:${link.id}`);
+      if ('skills' in item) for (const skill of item.skills) visibleNodeIds.add(skill.id);
+    }
   }
-  const selectedLinks = args.evidence.professionalLinks.filter((link) => selected.has(link.evidenceId));
+  const evidenceBindings = allBindings.filter(({ nodeId }) => visibleNodeIds.has(nodeId));
   return {
-    version: CV_BUILD_SPEC_V2_VERSION, generationId: args.generationId,
-    identity: {
-      fullName: args.evidence.identity.fullName ?? '', headline: args.evidence.identity.headline,
-      email: args.evidence.contact.email, phone: args.evidence.contact.phone, location: args.evidence.contact.location,
-      evidenceIds: [...new Set([...(args.evidence.identity.evidenceIds ?? []), ...(args.evidence.contact.evidenceIds ?? [])].filter((id) => selected.has(id)))],
-    },
-    links: selectedLinks.filter((link) => !link.projectId), sections,
+    version: CV_BUILD_SPEC_V2_VERSION,
+    generationId: args.generationId,
+    identity: identity.identity,
+    links: normalizedLinks.links,
+    sections,
+    evidenceBindings,
+    normalizationIssues: entities.issues,
     presentation: { templateId: args.templateId, density: args.plan.density, targetLength: args.plan.targetLength },
-    provenance: { approvedEvidenceIds: [...selected], omittedEvidenceIds: args.plan.omittedEvidence.map((item) => item.evidenceId), sourceMode: args.plan.sourceMode, atsStrategy: args.plan.atsStrategy },
+    provenance: {
+      approvedEvidenceIds: [...selectedEvidenceIds], omittedEvidenceIds: args.plan.omittedEvidence.map(({ evidenceId }) => evidenceId),
+      sourceMode: args.plan.sourceMode, atsStrategy: args.plan.atsStrategy,
+    },
   };
 }
 
-export function validateBuildSpecPreservation(spec: CvBuildSpecV2, evidence: UnifiedCandidateEvidence): string[] {
-  const rendered = renderedEvidenceIds(spec);
-  return spec.provenance.approvedEvidenceIds.filter((id) => evidence.evidenceById[id]?.preservationTier <= 1 && !rendered.has(id));
+function boundEvidenceIds(spec: CvBuildSpecV2): Set<string> {
+  return new Set(spec.evidenceBindings.flatMap(({ evidenceIds }) => evidenceIds));
 }
 
-function renderedEvidenceIds(spec: CvBuildSpecV2): Set<string> {
-  const rendered = new Set(spec.sections.flatMap((section) => section.entries.flatMap((entry) => entry.evidenceIds)));
-  for (const id of spec.identity.evidenceIds) rendered.add(id);
-  for (const link of spec.links) rendered.add(link.evidenceId);
-  for (const section of spec.sections) for (const entry of section.entries) for (const link of entry.links) rendered.add(link.evidenceId);
-  return rendered;
+export function validateBuildSpecPreservation(spec: CvBuildSpecV2, _evidence: UnifiedCandidateEvidence): string[] {
+  const bound = boundEvidenceIds(spec);
+  return spec.provenance.approvedEvidenceIds.filter((id) => !bound.has(id));
 }
 
 export interface CvBuildValidationIssue {
   evidenceId: string;
-  code: 'TRUTH_VALIDATION_FAILED' | 'PROVENANCE_VALIDATION_FAILED' | 'PRESERVATION_VALIDATION_FAILED';
+  code: 'TRUTH_VALIDATION_FAILED' | 'PROVENANCE_VALIDATION_FAILED' | 'PRESERVATION_VALIDATION_FAILED' | 'AMBIGUOUS_EVIDENCE_ENTITY';
 }
 
 export interface CvBuildValidationResult {
@@ -130,42 +111,30 @@ export interface CvBuildValidationResult {
   preservation: CvBuildValidationIssue[];
 }
 
+function presentationLines(spec: CvBuildSpecV2): CvPresentationLine[] {
+  return spec.sections.flatMap((section) => 'lines' in section ? section.lines : section.items.flatMap((item) => 'lines' in item ? item.lines : []));
+}
+
 export function validateBuildSpec(spec: CvBuildSpecV2, evidence: UnifiedCandidateEvidence, plan: ApprovedCvPlan): CvBuildValidationResult {
   const approved = new Set([...plan.includedEvidenceIds, ...plan.optionalEvidenceIds]);
-  const truth: CvBuildValidationIssue[] = [];
+  const truth: CvBuildValidationIssue[] = spec.normalizationIssues.map(({ evidenceId, code }) => ({ evidenceId, code }));
   const provenance: CvBuildValidationIssue[] = [];
-  const checkedProvenance = new Set<string>();
-  const checkProvenance = (evidenceId: string) => {
-    if (checkedProvenance.has(evidenceId)) return;
-    checkedProvenance.add(evidenceId);
-    if (!approved.has(evidenceId) || !evidence.evidenceById[evidenceId]) {
-      provenance.push({ evidenceId, code: 'PROVENANCE_VALIDATION_FAILED' });
-    }
-  };
-  for (const id of spec.identity.evidenceIds) checkProvenance(id);
-  for (const link of spec.links) checkProvenance(link.evidenceId);
-  for (const section of spec.sections) {
-    for (const entry of section.entries) {
-      for (const id of entry.evidenceIds) checkProvenance(id);
-      for (const link of entry.links) checkProvenance(link.evidenceId);
-      for (const line of entry.lines) {
-        checkProvenance(line.evidenceId);
-        const item = evidence.evidenceById[line.evidenceId];
-        if (!item) {
-          truth.push({ evidenceId: line.evidenceId, code: 'TRUTH_VALIDATION_FAILED' });
-          continue;
-        }
-        const validation = validateRewritePatches({
-          schemaVersion: 1,
-          patches: [{ evidenceId: line.evidenceId, text: line.text, sourceEvidenceIds: [line.evidenceId] }],
-        }, evidence, plan);
-        if (!validation.patches.has(line.evidenceId)) truth.push({ evidenceId: line.evidenceId, code: 'TRUTH_VALIDATION_FAILED' });
-      }
-    }
+  const seenProvenance = new Set<string>();
+  for (const evidenceId of spec.evidenceBindings.flatMap(({ evidenceIds }) => evidenceIds)) {
+    if (seenProvenance.has(evidenceId)) continue;
+    seenProvenance.add(evidenceId);
+    if (!approved.has(evidenceId) || !evidence.evidenceById[evidenceId]) provenance.push({ evidenceId, code: 'PROVENANCE_VALIDATION_FAILED' });
   }
-  const rendered = renderedEvidenceIds(spec);
-  const preservation = [...plan.includedEvidenceIds, ...plan.optionalEvidenceIds]
-    .filter((id) => !rendered.has(id))
-    .map((evidenceId) => ({ evidenceId, code: 'PRESERVATION_VALIDATION_FAILED' as const }));
+  for (const line of presentationLines(spec)) {
+    const binding = spec.evidenceBindings.find(({ nodeId }) => nodeId === `line:${line.id}`);
+    const representativeEvidenceId = binding?.representativeEvidenceId ?? line.id;
+    if (!binding || !evidence.evidenceById[representativeEvidenceId]) {
+      truth.push({ evidenceId: representativeEvidenceId, code: 'TRUTH_VALIDATION_FAILED' });
+      continue;
+    }
+    const validated = validateRewritePatches({ schemaVersion: 1, patches: [{ evidenceId: representativeEvidenceId, text: line.text, sourceEvidenceIds: [representativeEvidenceId] }] }, evidence, plan);
+    if (!validated.patches.has(representativeEvidenceId)) truth.push({ evidenceId: representativeEvidenceId, code: 'TRUTH_VALIDATION_FAILED' });
+  }
+  const preservation = validateBuildSpecPreservation(spec, evidence).map((evidenceId) => ({ evidenceId, code: 'PRESERVATION_VALIDATION_FAILED' as const }));
   return { ok: truth.length === 0 && provenance.length === 0 && preservation.length === 0, truth, provenance, preservation };
 }
