@@ -1,5 +1,5 @@
 import { groupEntityRepresentations, stablePresentationEntityId, type EntityIdentityRepresentation, type NormalizableEntityKind } from './entity-identity';
-import { selectAuthoritativeField, type NormalizationAuthorityContext, type StructuralFieldCandidate } from './presentation-authority';
+import { authorityFor, selectAuthoritativeField, type NormalizationAuthorityContext, type StructuralFieldCandidate } from './presentation-authority';
 import type {
   CvEvidenceBinding,
   CvPresentationCertification,
@@ -12,6 +12,8 @@ import type {
   CvPresentationVolunteerExperience,
 } from './build-spec-types';
 import type { CandidateEvidenceItem, EvidenceKind, EvidenceSourceType, UnifiedCandidateEvidence, UnifiedEvidenceEntity } from './types';
+import { isPatchableEvidence } from './patchable-evidence';
+import { normalizeIdentityText } from './entity-identity';
 
 export interface NormalizationInput {
   evidence: UnifiedCandidateEvidence;
@@ -31,6 +33,23 @@ export interface NormalizedEntitySections {
   other: CvPresentationOtherEvidence[];
   bindings: CvEvidenceBinding[];
   entityAliasIndex: Map<string, string>;
+  issues: NormalizationIssue[];
+  sparseSkillArtifacts: Array<{ skillName: string; evidenceIds: string[] }>;
+}
+
+export interface NormalizationIssue {
+  code: 'AMBIGUOUS_EVIDENCE_ENTITY';
+  evidenceId: string;
+}
+
+export interface AssignableEntityGroup {
+  id: string;
+  aliases: string[];
+}
+
+export interface EvidenceAssignmentResult {
+  assignments: Map<string, CandidateEvidenceItem[]>;
+  issues: NormalizationIssue[];
 }
 
 interface ContextualRepresentation extends EntityIdentityRepresentation {
@@ -139,14 +158,73 @@ function normalizeKind(kind: NormalizableEntityKind, input: NormalizationInput) 
 
 const base = (id: string) => ({ id, lines: [], links: [] });
 
+export function dedupePresentationLines(
+  items: CandidateEvidenceItem[],
+  patches: Map<string, string>,
+  authorityContext: NormalizationAuthorityContext
+): { lines: import('./build-spec-types').CvPresentationLine[]; bindings: CvEvidenceBinding[] } {
+  const uniqueById = [...new Map(items.map((item) => [item.id, item])).values()];
+  const byText = new Map<string, CandidateEvidenceItem[]>();
+  for (const item of uniqueById) {
+    const key = normalizeIdentityText(item.canonicalText);
+    byText.set(key, [...(byText.get(key) ?? []), item]);
+  }
+  const groups = [...byText.values()].map((duplicates) => {
+    const representative = [...duplicates].sort((left, right) => {
+      const leftRef = left.sourceRefs[0];
+      const rightRef = right.sourceRefs[0];
+      const leftAuthority = authorityFor({ value: left.canonicalText, representationId: left.id, sourceType: left.provenance, snapshotId: leftRef?.snapshotId, canonicalEntityId: left.sourceEntityId, supportKeys: [left.id] }, authorityContext);
+      const rightAuthority = authorityFor({ value: right.canonicalText, representationId: right.id, sourceType: right.provenance, snapshotId: rightRef?.snapshotId, canonicalEntityId: right.sourceEntityId, supportKeys: [right.id] }, authorityContext);
+      const rank = ['CURRENT_PROFILE', 'CANONICAL_REUSABLE', 'APPLICATION_ENTITY', 'MATCH_PROFILE', 'EXTRACTED', 'SAFE_FALLBACK'];
+      return rank.indexOf(leftAuthority) - rank.indexOf(rightAuthority) || left.id.localeCompare(right.id);
+    })[0];
+    const evidenceIds = duplicates.map(({ id }) => id).sort();
+    return {
+      line: { id: representative.id, text: patches.get(representative.id) ?? representative.canonicalText },
+      binding: { nodeId: `line:${representative.id}`, evidenceIds, representativeEvidenceId: representative.id },
+    };
+  }).sort((a, b) => a.line.id.localeCompare(b.line.id));
+  return { lines: groups.map(({ line }) => line), bindings: groups.map(({ binding }) => binding) };
+}
+
+export function assignPositiveEvidence(groups: AssignableEntityGroup[], input: NormalizationInput): EvidenceAssignmentResult {
+  const assignments = new Map<string, CandidateEvidenceItem[]>();
+  const issues: NormalizationIssue[] = [];
+  for (const evidenceId of [...input.selectedEvidenceIds].sort()) {
+    const item = input.evidence.evidenceById[evidenceId];
+    if (!item || item.field === 'summary' || !isPatchableEvidence(item)) continue;
+    const references = new Set([item.sourceEntityId, ...item.sourceRefs.map(({ entityId }) => entityId)].filter((id): id is string => Boolean(id)));
+    const matches = groups.filter((group) => group.aliases.some((alias) => references.has(alias)));
+    if (matches.length > 1) {
+      issues.push({ code: 'AMBIGUOUS_EVIDENCE_ENTITY', evidenceId });
+      continue;
+    }
+    if (matches[0]) assignments.set(matches[0].id, [...(assignments.get(matches[0].id) ?? []), item]);
+  }
+  return { assignments, issues };
+}
+
 export function normalizeEntitySections(input: NormalizationInput): NormalizedEntitySections {
   const bindings: CvEvidenceBinding[] = [];
   const entityAliasIndex = new Map<string, string>();
-  const groups = <T>(kind: NormalizableEntityKind, mapper: (id: string, members: ContextualRepresentation[]) => T | null): T[] =>
-    normalizeKind(kind, input).flatMap(({ id, members, evidenceIds, aliases }) => {
-      const item = mapper(id, members);
+  const issues: NormalizationIssue[] = [];
+  const sparseSkillArtifacts: Array<{ skillName: string; evidenceIds: string[] }> = [];
+  const groups = <T>(kind: NormalizableEntityKind, mapper: (id: string, members: ContextualRepresentation[], positiveItems: CandidateEvidenceItem[], evidenceIds: string[]) => T | null): T[] => {
+    const normalized = normalizeKind(kind, input);
+    const assignable = normalized.map(({ id, members, aliases }) => ({
+      id,
+      aliases: [...new Set([id, ...aliases.map(({ value }) => value), ...members.flatMap((member) => [member.sourceEntityId, member.canonicalEntityId, ...member.sourceRefs.map(({ entityId }) => entityId)].filter((value): value is string => Boolean(value)))])],
+    }));
+    const assignment = assignPositiveEvidence(assignable, input);
+    issues.push(...assignment.issues);
+    return normalized.flatMap(({ id, members, evidenceIds, aliases }) => {
+      const positiveItems = assignment.assignments.get(id) ?? [];
+      const item = mapper(id, members, positiveItems, evidenceIds);
       if (!item) return [];
       bindings.push({ nodeId: id, evidenceIds });
+      const deduped = dedupePresentationLines(positiveItems, input.patches, input.authorityContext);
+      bindings.push(...deduped.bindings);
+      if ('lines' in (item as object)) (item as unknown as { lines: typeof deduped.lines }).lines = deduped.lines;
       for (const alias of aliases) entityAliasIndex.set(alias.value, id);
       for (const member of members) {
         entityAliasIndex.set(member.representationId, id);
@@ -155,15 +233,29 @@ export function normalizeEntitySections(input: NormalizationInput): NormalizedEn
       }
       return [item];
     });
+  };
 
   const experience = groups('EXPERIENCE', (id, members) => {
     const title = field(members, ['title', 'jobTitle'], input);
     const employer = field(members, ['employer', 'company'], input);
     return title && employer ? { ...base(id), title, employer, location: field(members, ['location'], input), employmentType: field(members, ['employmentType', 'type'], input), startDate: field(members, ['startDate'], input), endDate: field(members, ['endDate'], input) } : null;
   });
-  const projects = groups('PROJECT', (id, members) => {
+  const selectedSkillNames = new Set(input.evidence.skills
+    .filter((skill) => skill.evidenceIds.some((evidenceId) => input.selectedEvidenceIds.has(evidenceId)))
+    .map((skill) => normalizeIdentityText(skill.name)));
+  const projects = groups('PROJECT', (id, members, positiveItems, evidenceIds) => {
     const name = field(members, ['name', 'projectName'], input);
     if (!name) return null;
+    const hasProjectIdentity = members.some((member) => ['repositoryUrl', 'liveUrl', 'projectUrl', 'startDate', 'endDate', 'subtitle', 'description', 'purpose']
+      .some((key) => raw(member.details, [key])));
+    const isSparseSkill = members.every((member) => member.sourceType === 'SOURCE_CV' && !member.canonicalEntityId)
+      && selectedSkillNames.has(normalizeIdentityText(name))
+      && !hasProjectIdentity
+      && positiveItems.length === 0;
+    if (isSparseSkill) {
+      sparseSkillArtifacts.push({ skillName: name, evidenceIds });
+      return null;
+    }
     const ordered = [...members].sort((a, b) => a.representationId.localeCompare(b.representationId));
     const technologies = [...new Set(ordered.flatMap((member) => strings(member.details, 'technologies')))];
     return { ...base(id), name, subtitle: field(members, ['subtitle', 'description', 'purpose'], input), startDate: field(members, ['startDate'], input), endDate: field(members, ['endDate'], input), technologies };
@@ -194,5 +286,5 @@ export function normalizeEntitySections(input: NormalizationInput): NormalizedEn
     const title = field(members, ['title'], input);
     return title ? { ...base(id), title, context: field(members, ['context'], input), period: field(members, ['period'], input) } : null;
   });
-  return { experience, projects, education, certifications, training, volunteering, openSource, other, bindings, entityAliasIndex };
+  return { experience, projects, education, certifications, training, volunteering, openSource, other, bindings, entityAliasIndex, issues, sparseSkillArtifacts };
 }

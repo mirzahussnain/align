@@ -47,10 +47,29 @@ function normalizationInput() {
 
   return {
     evidence,
-    selectedEvidenceIds: new Set(records.map(([id]) => id)),
+    selectedEvidenceIds: new Set<string>(records.map(([id]) => id)),
     patches: new Map<string, string>(),
     authorityContext: { currentProfileSnapshotId: 'profile-current', matchProfileSnapshotId: 'profile-match' },
   };
+}
+
+function positiveEvidenceInput() {
+  const input = normalizationInput();
+  const add = (id: string, canonicalText: string, provenance: 'APPLICATION_EVIDENCE' | 'HITL', sourceEntityId: string, requirementIds = ['requirement-1']) => {
+    input.evidence.evidenceById[id] = {
+      id, kind: 'ACHIEVEMENT', field: 'achievement', canonicalText, provenance,
+      preservationTier: 0, requirementIds, sourceEntityId,
+      sourceRefs: [{ sourceType: provenance, entityType: 'ACHIEVEMENT', entityId: sourceEntityId, fieldPath: 'achievement' }],
+    };
+    input.selectedEvidenceIds.add(id);
+  };
+  add('project-impact', 'Reduced API latency by 35%.', 'APPLICATION_EVIDENCE', 'project-1');
+  add('role-impact-a', 'Led platform migration.', 'HITL', 'role-1');
+  add('role-impact-b', '  LED\u00a0PLATFORM   MIGRATION. ', 'APPLICATION_EVIDENCE', 'role-1');
+  add('role-distinct', 'Mentored four engineers.', 'HITL', 'role-1');
+  input.patches.set('role-impact-a', 'Led the platform migration safely.');
+  input.patches.set('role-impact-b', 'Different duplicate rewrite.');
+  return input;
 }
 
 describe('structural presentation normalization', () => {
@@ -75,5 +94,53 @@ describe('structural presentation normalization', () => {
     for (const forbidden of ['metadata', 'excerpt', 'skillIds', 'internalRecordId', 'reconciliation', 'nested', 'unknown']) {
       expect(serialized).not.toContain(forbidden);
     }
+  });
+
+  it('assigns positive evidence once and deduplicates exact normalized text with union bindings', () => {
+    const result = normalizeEntitySections(positiveEvidenceInput());
+
+    expect(result.projects[0].lines.map(({ text }) => text)).toEqual(['Reduced API latency by 35%.']);
+    expect(result.experience[0].lines.map(({ text }) => text)).toEqual(expect.arrayContaining([
+      'Led the platform migration safely.', 'Mentored four engineers.',
+    ]));
+    expect(result.experience[0].lines).toHaveLength(2);
+    expect(result.bindings).toContainEqual(expect.objectContaining({
+      nodeId: 'line:role-impact-a', evidenceIds: ['role-impact-a', 'role-impact-b'], representativeEvidenceId: 'role-impact-a',
+    }));
+  });
+
+  it('reports ambiguous explicit entity references instead of guessing', () => {
+    const input = normalizationInput();
+    input.evidence.projects.push(presentationEntity('project-2', 'project-2', 'Harbor API', { name: 'Harbor API' }, ['project-2-record']));
+    input.evidence.evidenceById['project-2-record'] = structuralEvidence('project-2-record', 'PROJECT', 'CAREER_PROFILE', 'project-2', 'profile-current');
+    input.evidence.evidenceById.ambiguous = {
+      id: 'ambiguous', kind: 'ACHIEVEMENT', field: 'achievement', canonicalText: 'Improved delivery.', provenance: 'APPLICATION_EVIDENCE', preservationTier: 0, requirementIds: [],
+      sourceRefs: [
+        { sourceType: 'APPLICATION_EVIDENCE', entityType: 'PROJECT', entityId: 'project-1', fieldPath: 'achievement' },
+        { sourceType: 'APPLICATION_EVIDENCE', entityType: 'PROJECT', entityId: 'project-2', fieldPath: 'achievement' },
+      ],
+    };
+    input.selectedEvidenceIds.add('project-2-record');
+    input.selectedEvidenceIds.add('ambiguous');
+
+    expect(normalizeEntitySections(input).issues).toContainEqual({ code: 'AMBIGUOUS_EVIDENCE_ENTITY', evidenceId: 'ambiguous' });
+  });
+
+  it('reclassifies only a fully sparse technology-named project', () => {
+    const input = normalizationInput();
+    input.evidence.skills.push({ id: 'skill-rust', sourceEntityId: 'skill-rust', label: 'Rust', name: 'Rust', category: 'Languages', details: {}, evidenceIds: ['skill-rust-record'] });
+    input.evidence.evidenceById['skill-rust-record'] = structuralEvidence('skill-rust-record', 'SKILL', 'CAREER_PROFILE', 'skill-rust', 'profile-current');
+    input.evidence.projects.push(
+      presentationEntity('sparse-rust', 'sparse-rust', 'Rust', { name: 'Rust' }, ['sparse-rust-record']),
+      presentationEntity('real-rust', 'real-rust', 'Rust', { name: 'Rust', repositoryUrl: 'https://github.com/example/rust-project' }, ['real-rust-record']),
+    );
+    input.evidence.evidenceById['sparse-rust-record'] = structuralEvidence('sparse-rust-record', 'PROJECT', 'SOURCE_CV', 'sparse-rust', 'extract-1');
+    input.evidence.evidenceById['real-rust-record'] = structuralEvidence('real-rust-record', 'PROJECT', 'SOURCE_CV', 'real-rust', 'extract-1');
+    for (const id of ['skill-rust-record', 'sparse-rust-record', 'real-rust-record']) input.selectedEvidenceIds.add(id);
+
+    const result = normalizeEntitySections(input);
+    expect(result.sparseSkillArtifacts).toEqual([{ skillName: 'Rust', evidenceIds: ['sparse-rust-record'] }]);
+    expect(result.projects.filter(({ name }) => name === 'Rust')).toHaveLength(1);
+    expect(result.projects.find(({ name }) => name === 'Rust')?.links).toEqual([]);
   });
 });
