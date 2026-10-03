@@ -4,6 +4,7 @@ import type {
   UnifiedCandidateEvidence,
   UnifiedEvidenceEntity,
 } from './types';
+import { primaryEntityIdentityFingerprint } from './entity-identity';
 
 export interface ExistingRecordOption {
   key: string;
@@ -29,7 +30,6 @@ const collections: Record<HitlEvidenceEntityKind, keyof UnifiedCandidateEvidence
   OTHER: 'otherEvidence',
 };
 
-const lower = (value: unknown) => String(value ?? '').trim().replace(/\s+/g, ' ').toLocaleLowerCase('en-GB');
 const text = (details: Record<string, unknown>, ...keys: string[]) => {
   for (const key of keys) {
     const value = String(details[key] ?? '').trim();
@@ -74,26 +74,6 @@ export function canonicalEntityData(kind: HitlEvidenceEntityKind, details: Recor
     case 'OTHER': return { title: value('title'), context: value('context'), period: value('period') };
   }
 }
-function identityFingerprint(kind: HitlEvidenceEntityKind, entity: UnifiedEvidenceEntity): string {
-  const details = entity.details;
-  const parts = kind === 'EXPERIENCE'
-    ? [text(details, 'jobTitle', 'title'), text(details, 'company', 'employer'), text(details, 'startDate')]
-    : kind === 'PROJECT'
-      ? [text(details, 'repositoryUrl', 'liveUrl') || text(details, 'name', 'projectName')]
-      : kind === 'EDUCATION'
-        ? [text(details, 'degree', 'qualification'), text(details, 'university', 'institution')]
-        : kind === 'CERTIFICATION'
-          ? [text(details, 'name', 'officialName'), text(details, 'issuer', 'issuingBody')]
-          : kind === 'TRAINING'
-            ? [text(details, 'course'), text(details, 'provider')]
-            : kind === 'VOLUNTEERING'
-              ? [text(details, 'role'), text(details, 'organisation')]
-              : kind === 'OPEN_SOURCE'
-                ? [text(details, 'repositoryUrl', 'projectUrl') || text(details, 'projectName', 'name')]
-                : [text(details, 'title')];
-  return parts.map(lower).filter(Boolean).join('|') || lower(entity.label);
-}
-
 function refsFor(entity: UnifiedEvidenceEntity, evidence: UnifiedCandidateEvidence): EvidenceSourceRef[] {
   const refs = entity.evidenceIds.flatMap((id) => evidence.evidenceById[id]?.sourceRefs ?? []);
   const unique = new Map(refs.map((ref) => [
@@ -121,7 +101,19 @@ export function buildExistingRecordOptions(
     .filter((entity) => entity.sourceEntityId)
     .map((entity) => {
       const sourceRefs = refsFor(entity, evidence);
-      return { entity, sourceRefs, profileBacked: isProfileBacked(sourceRefs), fingerprint: identityFingerprint(kind, entity) };
+      return {
+        entity,
+        sourceRefs,
+        profileBacked: isProfileBacked(sourceRefs),
+        fingerprint: primaryEntityIdentityFingerprint(kind, {
+          representationId: entity.id,
+          kind,
+          label: entity.label,
+          details: entity.details,
+          evidenceIds: entity.evidenceIds,
+          sourceRefs,
+        }),
+      };
     });
   const byFingerprint = new Map<string, typeof candidates>();
   for (const candidate of candidates) {
