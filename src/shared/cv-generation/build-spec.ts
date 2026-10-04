@@ -1,7 +1,8 @@
 import type { TemplateId } from '@/shared/constants/templates';
 import { dedupePresentationLines, normalizeEntitySections, type NormalizationInput } from './presentation-normalization';
 import { normalizePresentationSkills } from './presentation-skills';
-import { normalizePresentationIdentity, normalizeProjectLinks } from './presentation-links';
+import { normalizePresentationIdentity, normalizeProfessionalUrl, normalizeProjectLinks } from './presentation-links';
+import { normalizeIdentityText } from './entity-identity';
 import { validateRewritePatches } from './rewrite-validator';
 import type { ApprovedCvPlan, CvPlanSection, UnifiedCandidateEvidence } from './types';
 import type { NormalizationAuthorityContext } from './presentation-authority';
@@ -39,16 +40,13 @@ export function assembleCvBuildSpec(args: {
 
   const summaryItems = [...selectedEvidenceIds].map((id) => args.evidence.evidenceById[id]).filter((item) => item?.field === 'summary');
   const summary = dedupePresentationLines(summaryItems, input.patches, input.authorityContext);
-  const selectedImpact = dedupePresentationLines(entities.experience.flatMap(({ lines }) => lines.map(({ id, text }) => args.evidence.evidenceById[id] ?? {
-    id, kind: 'ACHIEVEMENT' as const, field: 'achievement', canonicalText: text, provenance: 'VERIFIED_DERIVED_FACT' as const,
-    preservationTier: 0 as const, requirementIds: [], sourceRefs: [],
-  })), input.patches, input.authorityContext);
+  const selectedImpact = entities.experience.filter(({ lines }) => lines.length > 0).map(({ id, title, employer, lines }) => ({ id, heading: `${title} — ${employer}`, lines }));
 
   const sections = args.plan.sectionOrder.map((type): CvBuildSectionV2 => {
     const heading = headings[type];
     switch (type) {
       case 'PROFILE': case 'EXECUTIVE_SUMMARY': return { type, heading, lines: summary.lines };
-      case 'SELECTED_IMPACT': return { type, heading, lines: selectedImpact.lines };
+      case 'SELECTED_IMPACT': return { type, heading, items: selectedImpact };
       case 'CORE_EXPERTISE': case 'SKILLS': return { type, heading, items: skills.groups };
       case 'EXPERIENCE': return { type, heading, items: entities.experience };
       case 'PROJECTS': return { type, heading, items: entities.projects };
@@ -115,9 +113,85 @@ function presentationLines(spec: CvBuildSpecV2): CvPresentationLine[] {
   return spec.sections.flatMap((section) => 'lines' in section ? section.lines : section.items.flatMap((item) => 'lines' in item ? item.lines : []));
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+function recordsForBinding(evidenceIds: string[], evidence: UnifiedCandidateEvidence): Record<string, unknown>[] {
+  const selected = new Set(evidenceIds);
+  const records = evidenceIds.flatMap((id) => {
+    const data = evidence.evidenceById[id]?.canonicalData;
+    return isRecord(data) ? [data] : [];
+  });
+  const entities = [evidence.employment, evidence.projects, evidence.education, evidence.certifications, evidence.training, evidence.volunteerExperience, evidence.openSource, evidence.otherEvidence];
+  for (const entity of entities.flat()) if (entity.evidenceIds.some((id) => selected.has(id))) records.push(entity.details);
+  for (const skill of evidence.skills) if (skill.evidenceIds.some((id) => selected.has(id))) records.push({ ...skill.details, name: skill.name, category: skill.category });
+  if ((evidence.identity.evidenceIds ?? []).some((id) => selected.has(id))) records.push(evidence.identity as unknown as Record<string, unknown>);
+  if ((evidence.contact.evidenceIds ?? []).some((id) => selected.has(id))) records.push(evidence.contact as unknown as Record<string, unknown>);
+  for (const link of evidence.professionalLinks) if (selected.has(link.evidenceId)) records.push(link as unknown as Record<string, unknown>);
+  return records;
+}
+
+function supportsField(records: Record<string, unknown>[], presented: string | undefined, keys: string[]): boolean {
+  if (!presented) return true;
+  const expected = normalizeIdentityText(presented);
+  return records.some((record) => keys.some((key) => typeof record[key] === 'string' && normalizeIdentityText(record[key]) === expected));
+}
+
+function structuralTruthIssues(spec: CvBuildSpecV2, evidence: UnifiedCandidateEvidence): CvBuildValidationIssue[] {
+  const issues: CvBuildValidationIssue[] = [];
+  const check = (nodeId: string, fields: Array<[string | undefined, string[]]>, extra?: (records: Record<string, unknown>[]) => boolean) => {
+    const binding = spec.evidenceBindings.find((candidate) => candidate.nodeId === nodeId);
+    if (!binding) return;
+    const records = recordsForBinding(binding.evidenceIds, evidence);
+    if (fields.some(([value, keys]) => !supportsField(records, value, keys)) || (extra && !extra(records))) {
+      const structuralEvidenceId = binding.evidenceIds.find((id) => isRecord(evidence.evidenceById[id]?.canonicalData));
+      issues.push({ evidenceId: binding.representativeEvidenceId ?? structuralEvidenceId ?? binding.evidenceIds[0] ?? nodeId, code: 'TRUTH_VALIDATION_FAILED' });
+    }
+  };
+  for (const key of ['fullName', 'headline', 'email', 'phone', 'location'] as const) check(`identity:${key}`, [[spec.identity[key], [key]]]);
+  const checkLinks = (links: CvBuildSpecV2['links']) => {
+    for (const link of links) check(`link:${link.id}`, [[link.label, ['label']], [link.type, ['type']]], (records) => records.some((record) => typeof record.url === 'string' && normalizeProfessionalUrl(record.url) === normalizeProfessionalUrl(link.url)));
+  };
+  checkLinks(spec.links);
+  for (const section of spec.sections) {
+    switch (section.type) {
+      case 'PROFILE': case 'EXECUTIVE_SUMMARY': case 'SELECTED_IMPACT': break;
+      case 'CORE_EXPERTISE': case 'SKILLS':
+        for (const group of section.items) for (const skill of group.skills) check(skill.id, [[skill.name, ['name']], [group.category, ['category']]]);
+        break;
+      case 'EXPERIENCE':
+        for (const item of section.items) { check(item.id, [[item.title, ['title', 'jobTitle']], [item.employer, ['employer', 'company']], [item.location, ['location']], [item.employmentType, ['employmentType', 'type']], [item.startDate, ['startDate']], [item.endDate, ['endDate']]]); checkLinks(item.links); }
+        break;
+      case 'PROJECTS':
+        for (const item of section.items) { check(item.id, [[item.name, ['name', 'projectName']], [item.subtitle, ['subtitle', 'description', 'purpose']], [item.startDate, ['startDate']], [item.endDate, ['endDate']]], (records) => item.technologies.every((technology) => records.some((record) => Array.isArray(record.technologies) && record.technologies.some((value) => typeof value === 'string' && normalizeIdentityText(value) === normalizeIdentityText(technology))))); checkLinks(item.links); }
+        break;
+      case 'EDUCATION':
+        for (const item of section.items) { check(item.id, [[item.degree, ['degree', 'qualification']], [item.institution, ['university', 'institution']], [item.location, ['location']], [item.startDate, ['startDate']], [item.endDate, ['endDate']], [item.grade, ['grade']]]); checkLinks(item.links); }
+        break;
+      case 'CERTIFICATIONS':
+        for (const item of section.items) { check(item.id, [[item.name, ['name', 'officialName']], [item.issuer, ['issuer', 'issuingBody']], [item.issueDate, ['issueDate']], [item.expiryDate, ['expiryDate']], [item.credentialId, ['credentialId', 'credentialNumber']], [item.credentialUrl, ['credentialUrl', 'verificationUrl']]]); checkLinks(item.links); }
+        break;
+      case 'TRAINING':
+        for (const item of section.items) { check(item.id, [[item.course, ['course']], [item.provider, ['provider']], [item.field, ['field']], [item.status, ['status']], [item.startDate, ['startDate']], [item.endDate, ['endDate']], [item.result, ['result']]]); checkLinks(item.links); }
+        break;
+      case 'VOLUNTEERING':
+        for (const item of section.items) { check(item.id, [[item.role, ['role']], [item.organisation, ['organisation', 'organization']], [item.startDate, ['startDate']], [item.endDate, ['endDate']]]); checkLinks(item.links); }
+        break;
+      case 'OPEN_SOURCE':
+        for (const item of section.items) { check(item.id, [[item.projectName, ['projectName', 'name']], [item.role, ['role']], [item.repositoryUrl, ['repositoryUrl']], [item.projectUrl, ['projectUrl']], [item.startDate, ['startDate']], [item.endDate, ['endDate']], [item.description, ['description']]], (records) => item.technologies.every((technology) => records.some((record) => Array.isArray(record.technologies) && record.technologies.some((value) => typeof value === 'string' && normalizeIdentityText(value) === normalizeIdentityText(technology))))); checkLinks(item.links); }
+        break;
+      case 'OTHER':
+        for (const item of section.items) { check(item.id, [[item.title, ['title']], [item.context, ['context']], [item.period, ['period']]]); checkLinks(item.links); }
+        break;
+    }
+  }
+  return issues;
+}
+
 export function validateBuildSpec(spec: CvBuildSpecV2, evidence: UnifiedCandidateEvidence, plan: ApprovedCvPlan): CvBuildValidationResult {
   const approved = new Set([...plan.includedEvidenceIds, ...plan.optionalEvidenceIds]);
-  const truth: CvBuildValidationIssue[] = spec.normalizationIssues.map(({ evidenceId, code }) => ({ evidenceId, code }));
+  const truth: CvBuildValidationIssue[] = [...spec.normalizationIssues.map(({ evidenceId, code }) => ({ evidenceId, code })), ...structuralTruthIssues(spec, evidence)];
   const provenance: CvBuildValidationIssue[] = [];
   const seenProvenance = new Set<string>();
   for (const evidenceId of spec.evidenceBindings.flatMap(({ evidenceIds }) => evidenceIds)) {

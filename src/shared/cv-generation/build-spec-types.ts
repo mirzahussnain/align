@@ -61,6 +61,12 @@ export interface CvPresentationSkillGroup {
   skills: Array<{ id: string; name: string }>;
 }
 
+export interface CvPresentationImpactGroup {
+  id: string;
+  heading: string;
+  lines: CvPresentationLine[];
+}
+
 export interface CvPresentationCertification extends CvPresentationEntityBase {
   name: string;
   issuer?: string;
@@ -114,7 +120,8 @@ type EntitySection<TType extends CvPlanSection, TItem> = { type: TType; heading:
 type LineSection<TType extends CvPlanSection> = { type: TType; heading: string; lines: CvPresentationLine[] };
 
 export type CvBuildSectionV2 =
-  | LineSection<'PROFILE' | 'EXECUTIVE_SUMMARY' | 'SELECTED_IMPACT'>
+  | LineSection<'PROFILE' | 'EXECUTIVE_SUMMARY'>
+  | EntitySection<'SELECTED_IMPACT', CvPresentationImpactGroup>
   | EntitySection<'CORE_EXPERTISE' | 'SKILLS', CvPresentationSkillGroup>
   | EntitySection<'EXPERIENCE', CvPresentationExperience>
   | EntitySection<'PROJECTS', CvPresentationProject>

@@ -83,6 +83,17 @@ describe('structural presentation normalization', () => {
     expect(result.entityAliasIndex.get('role-extracted')).toBe(result.experience[0].id);
   });
 
+  it('prefers a valid date within the same authority rank', () => {
+    const input = normalizationInput();
+    input.evidence.employment.push(presentationEntity('role-current-invalid', 'role-1', 'Platform Engineer', {
+      title: 'Platform Engineer', employer: 'Northwind Robotics', startDate: '2024-00',
+    }, ['role-current-invalid-record']));
+    input.evidence.evidenceById['role-current-invalid-record'] = structuralEvidence('role-current-invalid-record', 'EMPLOYMENT', 'CAREER_PROFILE', 'role-1', 'profile-current');
+    input.selectedEvidenceIds.add('role-current-invalid-record');
+
+    expect(normalizeEntitySections(input).experience[0].startDate).toBe('2024-01');
+  });
+
   it('maps every supported entity to known presentation fields without metadata leakage', () => {
     const result = normalizeEntitySections(normalizationInput());
     expect(result.certifications[0]).toMatchObject({ name: 'Cloud Associate', issuer: 'Example Cloud' });
@@ -143,5 +154,18 @@ describe('structural presentation normalization', () => {
     expect(result.sparseSkillArtifacts).toEqual([{ skillName: 'Rust', evidenceIds: ['sparse-rust-record'] }]);
     expect(result.projects.filter(({ name }) => name === 'Rust')).toHaveLength(1);
     expect(result.projects.find(({ name }) => name === 'Rust')?.links).toEqual([]);
+  });
+
+  it('keeps a technology-named project when a selected project link supplies its URL', () => {
+    const input = normalizationInput();
+    input.evidence.skills.push({ id: 'skill-rust', sourceEntityId: 'skill-rust', label: 'Rust', name: 'Rust', category: 'Languages', details: {}, evidenceIds: ['skill-rust-record'] });
+    input.evidence.projects.push(presentationEntity('sparse-rust', 'sparse-rust', 'Rust', { name: 'Rust' }, ['sparse-rust-record']));
+    input.evidence.evidenceById['skill-rust-record'] = structuralEvidence('skill-rust-record', 'SKILL', 'CAREER_PROFILE', 'skill-rust', 'profile-current');
+    input.evidence.evidenceById['sparse-rust-record'] = structuralEvidence('sparse-rust-record', 'PROJECT', 'SOURCE_CV', 'sparse-rust', 'extract-1');
+    input.evidence.evidenceById['rust-link-record'] = { id: 'rust-link-record', kind: 'LINK', field: 'link', canonicalText: 'https://example.test/rust', provenance: 'SOURCE_CV', preservationTier: 1, requirementIds: [], sourceRefs: [{ sourceType: 'SOURCE_CV', entityType: 'PROJECT', entityId: 'sparse-rust', fieldPath: 'projectUrl' }] };
+    input.evidence.professionalLinks.push({ id: 'rust-link', label: 'Project', url: 'https://example.test/rust', type: 'PROJECT_LIVE', evidenceId: 'rust-link-record', projectId: 'sparse-rust' });
+    for (const id of ['skill-rust-record', 'sparse-rust-record', 'rust-link-record']) input.selectedEvidenceIds.add(id);
+
+    expect(normalizeEntitySections(input).projects).toContainEqual(expect.objectContaining({ name: 'Rust' }));
   });
 });

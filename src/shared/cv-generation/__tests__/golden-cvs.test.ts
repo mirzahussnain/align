@@ -11,7 +11,8 @@ const project = (id: string, name: string, startDate: string, endDate: string, v
 const education = (id: string, degree: string, institution: string, values: string[]): CvBuildSectionV2 => ({ type: 'EDUCATION', heading: 'Education', items: [{ id, degree, institution, lines: lines(id, values), links: [] }] });
 const skills = (type: 'SKILLS' | 'CORE_EXPERTISE', id: string, category: string, names: string[]): CvBuildSectionV2 => ({ type, heading: type === 'SKILLS' ? 'Skills' : 'Core Expertise', items: [{ id, category, skills: names.map((name, index) => ({ id: `${id}-${index}`, name })) }] });
 const certification = (id: string, name: string, values: string[]): CvBuildSectionV2 => ({ type: 'CERTIFICATIONS', heading: 'Certifications', items: [{ id, name, lines: lines(id, values), links: [] }] });
-const lineSection = (type: 'PROFILE' | 'SELECTED_IMPACT', id: string, values: string[]): CvBuildSectionV2 => ({ type, heading: type === 'PROFILE' ? 'Profile' : 'Selected Impact', lines: lines(id, values) });
+const lineSection = (type: 'PROFILE', id: string, values: string[]): CvBuildSectionV2 => ({ type, heading: 'Profile', lines: lines(id, values) });
+const impactSection = (id: string, heading: string, values: string[]): CvBuildSectionV2 => ({ type: 'SELECTED_IMPACT', heading: 'Selected Impact', items: [{ id, heading, lines: lines(id, values) }] });
 
 const GOLDEN_CASES: GoldenCase[] = [
   { id: 'multi-role-software-engineer', headline: 'Senior Software Engineer', sourceMode: 'JOB_MATCH', sections: [
@@ -30,7 +31,7 @@ const GOLDEN_CASES: GoldenCase[] = [
   { id: 'confirmed-essential-gap', headline: 'Data Analyst', sourceMode: 'JOB_MATCH', sections: [experience('insight', 'Data Analyst', 'Insight Co', '2023-01', 'Present', ['Built Power BI reporting used by 45 colleagues.'])], expected: ['Power BI', '45 colleagues'] },
   { id: 'hitl-new-project', headline: 'Full-stack Developer', sourceMode: 'JOB_MATCH', sections: [project('access-map', 'Access Map', '2026-01', '2026-07', ['Created an accessibility map covering 120 venues.'])], expected: ['Access Map', '120 venues'] },
   { id: 'hitl-enriched-experience', headline: 'Engineering Manager', sourceMode: 'JOB_MATCH', sections: [experience('scaleup', 'Engineering Manager', 'ScaleUp', '2021-06', 'Present', ['Mentored 6 engineers and introduced fortnightly delivery reviews.'])], expected: ['Mentored 6 engineers', 'fortnightly delivery reviews'] },
-  { id: 'application-only-evidence', headline: 'Implementation Consultant', sourceMode: 'JOB_MATCH', sections: [lineSection('SELECTED_IMPACT', 'migration', ['Coordinated a 9-team migration for this application context.'])], expected: ['9-team migration', 'application context'] },
+  { id: 'application-only-evidence', headline: 'Implementation Consultant', sourceMode: 'JOB_MATCH', sections: [impactSection('migration', 'Migration Programme', ['Coordinated a 9-team migration for this application context.'])], expected: ['9-team migration', 'application context'] },
 ];
 
 function buildSpec(golden: GoldenCase, index: number): CvBuildSpecV2 {

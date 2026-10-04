@@ -1,5 +1,5 @@
 import { groupEntityRepresentations, stablePresentationEntityId, type EntityIdentityRepresentation, type NormalizableEntityKind } from './entity-identity';
-import { authorityFor, selectAuthoritativeField, type NormalizationAuthorityContext, type StructuralFieldCandidate } from './presentation-authority';
+import { authorityFor, selectAuthoritativeField, type NormalizationAuthorityContext, type StructuralFieldCandidate, type StructuralFieldValidation } from './presentation-authority';
 import type {
   CvEvidenceBinding,
   CvPresentationCertification,
@@ -133,7 +133,7 @@ function strings(details: Record<string, unknown>, key: string): string[] {
   return Array.isArray(value) ? [...new Set(value.filter((item): item is string => typeof item === 'string' && item.trim().length > 0).map((item) => item.trim()))] : [];
 }
 
-function field(group: ContextualRepresentation[], keys: string[], input: NormalizationInput): string | undefined {
+function field(group: ContextualRepresentation[], keys: string[], input: NormalizationInput, validation?: StructuralFieldValidation<string>): string | undefined {
   const candidates = group.flatMap((representation): StructuralFieldCandidate<string>[] => {
     const value = raw(representation.details, keys);
     return value ? [{
@@ -145,8 +145,14 @@ function field(group: ContextualRepresentation[], keys: string[], input: Normali
       supportKeys: representation.evidenceIds,
     }] : [];
   });
-  return selectAuthoritativeField(candidates, input.authorityContext);
+  return selectAuthoritativeField(candidates, input.authorityContext, validation);
 }
+
+const dateValidation: StructuralFieldValidation<string> = {
+  isValid: (value) => !/^\d{4}-\d{2}$/.test(value) || /^\d{4}-(0[1-9]|1[0-2])$/.test(value),
+};
+
+const dateField = (group: ContextualRepresentation[], key: 'startDate' | 'endDate' | 'issueDate' | 'expiryDate', input: NormalizationInput) => field(group, [key], input, dateValidation);
 
 function normalizeKind(kind: NormalizableEntityKind, input: NormalizationInput) {
   const representations = representationsFor(kind, input);
@@ -242,7 +248,7 @@ export function normalizeEntitySections(input: NormalizationInput): NormalizedEn
   const experience = groups('EXPERIENCE', (id, members) => {
     const title = field(members, ['title', 'jobTitle'], input);
     const employer = field(members, ['employer', 'company'], input);
-    return title && employer ? { ...base(id), title, employer, location: field(members, ['location'], input), employmentType: field(members, ['employmentType', 'type'], input), startDate: field(members, ['startDate'], input), endDate: field(members, ['endDate'], input) } : null;
+    return title && employer ? { ...base(id), title, employer, location: field(members, ['location'], input), employmentType: field(members, ['employmentType', 'type'], input), startDate: dateField(members, 'startDate', input), endDate: dateField(members, 'endDate', input) } : null;
   });
   const selectedSkillNames = new Set(input.evidence.skills
     .filter((skill) => skill.evidenceIds.some((evidenceId) => input.selectedEvidenceIds.has(evidenceId)))
@@ -250,7 +256,9 @@ export function normalizeEntitySections(input: NormalizationInput): NormalizedEn
   const projects = groups('PROJECT', (id, members, positiveItems, evidenceIds) => {
     const name = field(members, ['name', 'projectName'], input);
     if (!name) return null;
-    const hasProjectIdentity = members.some((member) => ['repositoryUrl', 'liveUrl', 'projectUrl', 'startDate', 'endDate', 'subtitle', 'description', 'purpose']
+    const memberAliases = new Set(members.flatMap((member) => [member.entityId, member.sourceEntityId, member.canonicalEntityId, ...member.sourceRefs.map(({ entityId }) => entityId)].filter((value): value is string => Boolean(value))));
+    const hasSelectedProjectLink = input.evidence.professionalLinks.some((link) => link.projectId && memberAliases.has(link.projectId) && input.selectedEvidenceIds.has(link.evidenceId));
+    const hasProjectIdentity = hasSelectedProjectLink || members.some((member) => ['repositoryUrl', 'liveUrl', 'projectUrl', 'startDate', 'endDate', 'subtitle', 'description', 'purpose']
       .some((key) => raw(member.details, [key])));
     const isSparseSkill = members.every((member) => member.sourceType === 'SOURCE_CV' && !member.canonicalEntityId)
       && selectedSkillNames.has(normalizeIdentityText(name))
@@ -262,29 +270,29 @@ export function normalizeEntitySections(input: NormalizationInput): NormalizedEn
     }
     const ordered = [...members].sort((a, b) => a.representationId.localeCompare(b.representationId));
     const technologies = [...new Set(ordered.flatMap((member) => strings(member.details, 'technologies')))];
-    return { ...base(id), name, subtitle: field(members, ['subtitle', 'description', 'purpose'], input), startDate: field(members, ['startDate'], input), endDate: field(members, ['endDate'], input), technologies };
+    return { ...base(id), name, subtitle: field(members, ['subtitle', 'description', 'purpose'], input), startDate: dateField(members, 'startDate', input), endDate: dateField(members, 'endDate', input), technologies };
   });
   const education = groups('EDUCATION', (id, members) => {
     const degree = field(members, ['degree', 'qualification'], input);
     const institution = field(members, ['university', 'institution'], input);
-    return degree && institution ? { ...base(id), degree, institution, location: field(members, ['location'], input), startDate: field(members, ['startDate'], input), endDate: field(members, ['endDate'], input), grade: field(members, ['grade'], input) } : null;
+    return degree && institution ? { ...base(id), degree, institution, location: field(members, ['location'], input), startDate: dateField(members, 'startDate', input), endDate: dateField(members, 'endDate', input), grade: field(members, ['grade'], input) } : null;
   });
   const certifications = groups('CERTIFICATION', (id, members) => {
     const name = field(members, ['name', 'officialName'], input);
-    return name ? { ...base(id), name, issuer: field(members, ['issuer', 'issuingBody'], input), issueDate: field(members, ['issueDate'], input), expiryDate: field(members, ['expiryDate'], input), credentialId: field(members, ['credentialId', 'credentialNumber'], input), credentialUrl: field(members, ['credentialUrl', 'verificationUrl'], input) } : null;
+    return name ? { ...base(id), name, issuer: field(members, ['issuer', 'issuingBody'], input), issueDate: dateField(members, 'issueDate', input), expiryDate: dateField(members, 'expiryDate', input), credentialId: field(members, ['credentialId', 'credentialNumber'], input), credentialUrl: field(members, ['credentialUrl', 'verificationUrl'], input) } : null;
   });
   const training = groups('TRAINING', (id, members) => {
     const course = field(members, ['course'], input);
-    return course ? { ...base(id), course, provider: field(members, ['provider'], input), field: field(members, ['field'], input), status: field(members, ['status'], input), startDate: field(members, ['startDate'], input), endDate: field(members, ['endDate'], input), result: field(members, ['result'], input) } : null;
+    return course ? { ...base(id), course, provider: field(members, ['provider'], input), field: field(members, ['field'], input), status: field(members, ['status'], input), startDate: dateField(members, 'startDate', input), endDate: dateField(members, 'endDate', input), result: field(members, ['result'], input) } : null;
   });
   const volunteering = groups('VOLUNTEERING', (id, members) => {
     const role = field(members, ['role'], input);
     const organisation = field(members, ['organisation', 'organization'], input);
-    return role && organisation ? { ...base(id), role, organisation, startDate: field(members, ['startDate'], input), endDate: field(members, ['endDate'], input) } : null;
+    return role && organisation ? { ...base(id), role, organisation, startDate: dateField(members, 'startDate', input), endDate: dateField(members, 'endDate', input) } : null;
   });
   const openSource = groups('OPEN_SOURCE', (id, members) => {
     const projectName = field(members, ['projectName', 'name'], input);
-    return projectName ? { ...base(id), projectName, role: field(members, ['role'], input), repositoryUrl: field(members, ['repositoryUrl'], input), projectUrl: field(members, ['projectUrl'], input), startDate: field(members, ['startDate'], input), endDate: field(members, ['endDate'], input), description: field(members, ['description'], input), technologies: [...new Set(members.flatMap((member) => strings(member.details, 'technologies')))] } : null;
+    return projectName ? { ...base(id), projectName, role: field(members, ['role'], input), repositoryUrl: field(members, ['repositoryUrl'], input), projectUrl: field(members, ['projectUrl'], input), startDate: dateField(members, 'startDate', input), endDate: dateField(members, 'endDate', input), description: field(members, ['description'], input), technologies: [...new Set(members.flatMap((member) => strings(member.details, 'technologies')))] } : null;
   });
   const other = groups('OTHER', (id, members) => {
     const title = field(members, ['title'], input);

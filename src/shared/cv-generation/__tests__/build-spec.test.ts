@@ -51,6 +51,31 @@ describe('V2 normalized build assembly', () => {
     expect(validateBuildSpec(spec, evidence, plan).provenance).toContainEqual({ evidenceId: 'not-approved', code: 'PROVENANCE_VALIDATION_FAILED' });
   });
 
+  it('rejects structural presentation text unsupported by its bound evidence', () => {
+    const { evidence, plan } = fixture();
+    const spec = assembleCvBuildSpec({ generationId: 'g1', evidence, plan, templateId: 'architect' });
+    const projects = spec.sections.find((section) => section.type === 'PROJECTS');
+    if (projects?.type !== 'PROJECTS') throw new Error('Expected projects section');
+    projects.items[0].name = 'Invented Project';
+
+    expect(validateBuildSpec(spec, evidence, plan).truth).toContainEqual({ evidenceId: 'project-record', code: 'TRUTH_VALIDATION_FAILED' });
+  });
+
+  it('models selected impact as entity-headed groups', () => {
+    const { evidence, plan } = fixture();
+    evidence.evidenceById['role-line'] = { id: 'role-line', kind: 'ACHIEVEMENT', field: 'experience.achievement', canonicalText: 'Improved platform reliability.', provenance: 'APPLICATION_EVIDENCE', preservationTier: 0, requirementIds: [], sourceEntityId: 'role-1', sourceRefs: [{ sourceType: 'APPLICATION_EVIDENCE', entityType: 'EXPERIENCE', entityId: 'role-1', fieldPath: 'achievement' }] };
+    evidence.employment[0].evidenceIds.push('role-line');
+    plan.includedEvidenceIds.push('role-line');
+    plan.sectionOrder = ['EXPERIENCE', 'SELECTED_IMPACT'];
+    const spec = assembleCvBuildSpec({ generationId: 'g1', evidence, plan, templateId: 'architect' });
+    const selectedImpact = spec.sections.find((section) => section.type === 'SELECTED_IMPACT');
+
+    expect(selectedImpact).toEqual(expect.objectContaining({
+      type: 'SELECTED_IMPACT',
+      items: [expect.objectContaining({ heading: 'Platform Engineer — Northwind Robotics' })],
+    }));
+  });
+
   it('validates a rewritten line through its representative and keeps rejected text unchanged', () => {
     const { evidence, plan } = fixture();
     const validated = validateRewritePatches({ schemaVersion: 1, patches: [

@@ -47,8 +47,10 @@ function entryParagraphs(entry: PresentationEntry, theme: V2TemplateTheme, optio
 
 export function sectionParagraphs(section: CvBuildSectionV2, theme: V2TemplateTheme, options?: { compact?: boolean; titleSize?: number; dateTabStopPosition?: number }): Paragraph[] {
   switch (section.type) {
-    case 'PROFILE': case 'EXECUTIVE_SUMMARY': case 'SELECTED_IMPACT':
+    case 'PROFILE': case 'EXECUTIVE_SUMMARY':
       return section.lines.map((line) => new Paragraph({ keepLines: true, spacing: { after: 45 }, children: [new TextRun({ text: line.text, size: 19, font: theme.font, color: theme.body })] }));
+    case 'SELECTED_IMPACT':
+      return section.items.flatMap((item) => entryParagraphs({ title: item.heading, lines: item.lines, links: [] }, theme, options));
     case 'CORE_EXPERTISE': case 'SKILLS':
       return section.items.map((group) => new Paragraph({ keepLines: true, spacing: { after: 35 }, children: [
         new TextRun({ text: group.category, bold: true, size: 19, font: theme.font, color: theme.heading }),
