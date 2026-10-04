@@ -80,6 +80,7 @@ describe('structural presentation normalization', () => {
     expect(result.experience).toEqual([expect.objectContaining({ title: 'Platform Engineer', employer: 'Northwind Robotics', location: 'Leeds' })]);
     expect(result.projects).toEqual([expect.objectContaining({ name: 'Lighthouse API', technologies: ['TypeScript', 'PostgreSQL'] })]);
     expect(result.education).toEqual([expect.objectContaining({ degree: 'BSc Data Engineering', institution: 'Westbridge Institute', grade: 'First' })]);
+    expect(result.entityAliasIndex.get('role-extracted')).toBe(result.experience[0].id);
   });
 
   it('maps every supported entity to known presentation fields without metadata leakage', () => {

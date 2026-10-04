@@ -64,7 +64,7 @@ export function normalizePresentationIdentity(input: NormalizationInput): { iden
     const selected = selectAuthoritativeField(candidates, input.authorityContext);
     if (!selected) return undefined;
     const normalize = key === 'phone' ? (value: string) => value.replace(/[^+\d]/g, '') : normalizeIdentityText;
-    const evidenceIds = candidates.filter((candidate) => normalize(candidate.value) === normalize(selected)).flatMap(({ supportKeys }) => supportKeys);
+    const evidenceIds = candidates.flatMap(({ supportKeys }) => supportKeys);
     if (key === 'email' || key === 'phone') {
       for (const link of input.evidence.professionalLinks) {
         if ((link.type === 'EMAIL' || link.type === 'PHONE') && link.type === key.toLocaleUpperCase('en-GB') && input.selectedEvidenceIds.has(link.evidenceId) && contactValue(link.url, link.type) === normalize(selected)) evidenceIds.push(link.evidenceId);

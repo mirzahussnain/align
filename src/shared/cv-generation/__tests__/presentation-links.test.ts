@@ -60,8 +60,8 @@ describe('presentation contact and links', () => {
 
   it('binds email and phone links to header fields instead of rendering them as links', () => {
     const normalized = normalizePresentationIdentity(input());
-    expect(normalized.bindings.find(({ nodeId }) => nodeId === 'identity:email')?.evidenceIds).toEqual(expect.arrayContaining(['contact-current', 'email-link-record']));
-    expect(normalized.bindings.find(({ nodeId }) => nodeId === 'identity:phone')?.evidenceIds).toEqual(expect.arrayContaining(['contact-current', 'phone-link-record']));
+    expect(normalized.bindings.find(({ nodeId }) => nodeId === 'identity:email')?.evidenceIds).toEqual(['contact-current', 'contact-old', 'email-link-record']);
+    expect(normalized.bindings.find(({ nodeId }) => nodeId === 'identity:phone')?.evidenceIds).toEqual(['contact-current', 'contact-old', 'phone-link-record']);
   });
 
   it('normalizes host casing and trailing slashes for comparison', () => {

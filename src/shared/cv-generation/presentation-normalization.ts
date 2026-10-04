@@ -53,6 +53,7 @@ export interface EvidenceAssignmentResult {
 }
 
 interface ContextualRepresentation extends EntityIdentityRepresentation {
+  entityId: string;
   sourceType: EvidenceSourceType;
   snapshotId?: string;
 }
@@ -86,6 +87,7 @@ function representationsFor(kind: NormalizableEntityKind, input: NormalizationIn
       const context = itemContext(item);
       result.push({
         representationId: `${entity.id}:${evidenceId}`,
+        entityId: entity.id,
         kind,
         canonicalEntityId: ['CAREER_PROFILE', 'PROFILE_EVIDENCE', 'HITL'].includes(context.sourceType) ? entity.sourceEntityId : undefined,
         sourceEntityId: entity.sourceEntityId,
@@ -104,6 +106,7 @@ function representationsFor(kind: NormalizableEntityKind, input: NormalizationIn
     const ref = item.sourceRefs[0];
     result.push({
       representationId: `evidence:${evidenceId}`,
+      entityId: `evidence:${evidenceId}`,
       kind,
       canonicalEntityId: ['CAREER_PROFILE', 'PROFILE_EVIDENCE', 'HITL'].includes(context.sourceType) ? item.sourceEntityId ?? ref?.entityId : undefined,
       sourceEntityId: item.sourceEntityId ?? ref?.entityId,
@@ -213,7 +216,7 @@ export function normalizeEntitySections(input: NormalizationInput): NormalizedEn
     const normalized = normalizeKind(kind, input);
     const assignable = normalized.map(({ id, members, aliases }) => ({
       id,
-      aliases: [...new Set([id, ...aliases.map(({ value }) => value), ...members.flatMap((member) => [member.sourceEntityId, member.canonicalEntityId, ...member.sourceRefs.map(({ entityId }) => entityId)].filter((value): value is string => Boolean(value)))])],
+      aliases: [...new Set([id, ...aliases.map(({ value }) => value), ...members.flatMap((member) => [member.entityId, member.sourceEntityId, member.canonicalEntityId, ...member.sourceRefs.map(({ entityId }) => entityId)].filter((value): value is string => Boolean(value)))])],
     }));
     const assignment = assignPositiveEvidence(assignable, input);
     issues.push(...assignment.issues);
@@ -228,6 +231,7 @@ export function normalizeEntitySections(input: NormalizationInput): NormalizedEn
       for (const alias of aliases) entityAliasIndex.set(alias.value, id);
       for (const member of members) {
         entityAliasIndex.set(member.representationId, id);
+        entityAliasIndex.set(member.entityId, id);
         if (member.sourceEntityId) entityAliasIndex.set(member.sourceEntityId, id);
         if (member.canonicalEntityId) entityAliasIndex.set(member.canonicalEntityId, id);
       }
