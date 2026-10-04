@@ -5,6 +5,8 @@ import { detectFormatFromBytes, type CvSourceFormat } from './formats';
 import { hasUsableText } from './text';
 import { CV_PARSER_VERSION, parseCvStructure } from './structured';
 import type { CvExtractionPayload } from './types';
+import { projectNormalizedDocument } from './document/projection';
+import type { NormalizedDocument } from './document/types';
 
 export * from './errors';
 export * from './formats';
@@ -23,7 +25,17 @@ export {
 } from './links';
 export { parseCvDateRange, parseCvDateToken, findDateRange } from './dates';
 
-const EXTRACTORS: Record<CvSourceFormat, (bytes: Buffer) => Promise<RawExtraction>> = {
+export { projectNormalizedDocument, type DocumentProjection } from './document/projection';
+export type {
+  NormalizedDocument,
+  NormalizedDocumentBlock,
+  NormalizedDocumentKind,
+} from './document/types';
+
+type DocumentExtractor = (bytes: Buffer) => Promise<NormalizedDocument>;
+type RawExtractor = (bytes: Buffer) => Promise<RawExtraction>;
+
+const EXTRACTORS: Record<CvSourceFormat, DocumentExtractor | RawExtractor> = {
   pdf: extractPdf,
   docx: extractDocx,
 };
@@ -53,7 +65,10 @@ export async function extractStoredCv(bytes: Buffer): Promise<CvExtractionResult
   const format = detectFormatFromBytes(bytes);
   if (!format) throw new CvPipelineError('UNSUPPORTED_FORMAT');
 
-  const raw = await EXTRACTORS[format](bytes);
+  const extracted = await EXTRACTORS[format](bytes);
+  const raw = 'blocks' in extracted
+    ? { ...projectNormalizedDocument(extracted), pageCount: extracted.pageCount }
+    : extracted;
   if (!hasUsableText(raw.text)) throw new CvPipelineError('EMPTY_TEXT');
 
   return {
