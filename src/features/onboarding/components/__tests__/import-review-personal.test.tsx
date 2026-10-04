@@ -220,3 +220,49 @@ describe('details the CV did not contain', () => {
     expect(await screen.findByText(/added below for you to confirm/i)).toBeTruthy();
   });
 });
+
+describe('skill review rows', () => {
+  it('shows one editable category for a resolved logical skill and submits the edit', async () => {
+    confirmImport.mockResolvedValue({
+      imported: 1,
+      pendingCapacity: 0,
+      failed: 0,
+      outcomes: [],
+      session: session([]),
+      evidenceCapacity: decision(),
+    });
+    renderReview([candidate({
+      id: 'typescript',
+      entityType: 'SKILL',
+      structuredData: { name: 'TypeScript', category: 'Languages' },
+      bulkConfirmable: true,
+    })]);
+
+    await userEvent.click(screen.getByRole('button', { name: /review each item individually/i }));
+    const category = screen.getByLabelText(/category for typescript/i);
+    expect(category).toHaveValue('Languages');
+    await userEvent.clear(category);
+    await userEvent.type(category, 'Frontend');
+    await userEvent.click(screen.getByRole('button', { name: /add typescript/i }));
+
+    expect(confirmImport).toHaveBeenCalledWith('s1', [{
+      candidateId: 'typescript',
+      action: 'confirm',
+      edited: { name: 'TypeScript', category: 'Frontend' },
+    }]);
+  });
+
+  it('shows a category conflict on the same editable logical-skill row', () => {
+    renderReview([candidate({
+      id: 'typescript-conflict',
+      entityType: 'SKILL',
+      reviewStatus: 'CONFLICT',
+      conflictCode: 'CONFLICTING_SKILL_CATEGORY',
+      structuredData: { name: 'TypeScript', category: 'Languages' },
+      bulkConfirmable: true,
+    })]);
+
+    expect(screen.getByText(/different specific categories/i)).toBeTruthy();
+    expect(screen.getByLabelText(/category for typescript/i)).toHaveValue('Languages');
+  });
+});

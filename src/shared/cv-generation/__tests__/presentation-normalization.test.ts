@@ -121,6 +121,41 @@ describe('structural presentation normalization', () => {
     }));
   });
 
+  it('normalizes unicode and collapsed whitespace without merging distinct evidence ids', () => {
+    const input = normalizationInput();
+    input.evidence.evidenceById['wrapped-impact'] = {
+      id: 'wrapped-impact', kind: 'ACHIEVEMENT', field: 'achievement',
+      canonicalText: '  Built a fullwidth ＡPI\n across\r\n  three services.  ',
+      provenance: 'SOURCE_CV', preservationTier: 0, requirementIds: [], sourceEntityId: 'project-1',
+      sourceRefs: [{ sourceType: 'SOURCE_CV', entityType: 'PROJECT', entityId: 'project-1', fieldPath: 'achievement' }],
+    };
+    input.selectedEvidenceIds.add('wrapped-impact');
+
+    const result = normalizeEntitySections(input);
+    expect(result.projects[0].lines).toEqual([
+      { id: 'wrapped-impact', text: 'Built a fullwidth API across three services.' },
+    ]);
+    expect(result.bindings).toContainEqual({
+      nodeId: 'line:wrapped-impact',
+      evidenceIds: ['wrapped-impact'],
+      representativeEvidenceId: 'wrapped-impact',
+    });
+  });
+
+  it('carries authoritative current state independently of the end date', () => {
+    const input = normalizationInput();
+    const current = input.evidence.employment.find(({ id }) => id === 'role-current');
+    if (!current) throw new Error('Expected current role fixture');
+    current.details.current = true;
+    current.details.endDate = null;
+
+    expect(normalizeEntitySections(input).experience[0]).toMatchObject({
+      current: true,
+      startDate: '2024-01',
+      endDate: undefined,
+    });
+  });
+
   it('reports ambiguous explicit entity references instead of guessing', () => {
     const input = normalizationInput();
     input.evidence.projects.push(presentationEntity('project-2', 'project-2', 'Harbor API', { name: 'Harbor API' }, ['project-2-record']));
@@ -136,6 +171,47 @@ describe('structural presentation normalization', () => {
     input.selectedEvidenceIds.add('ambiguous');
 
     expect(normalizeEntitySections(input).issues).toContainEqual({ code: 'AMBIGUOUS_EVIDENCE_ENTITY', evidenceId: 'ambiguous' });
+  });
+
+  it('reports an unresolved explicit entity reference instead of guessing', () => {
+    const input = normalizationInput();
+    input.evidence.evidenceById.unresolved = {
+      id: 'unresolved', kind: 'ACHIEVEMENT', field: 'achievement', canonicalText: 'Improved delivery.', provenance: 'APPLICATION_EVIDENCE', preservationTier: 0, requirementIds: [],
+      sourceEntityId: 'missing-project',
+      sourceRefs: [{ sourceType: 'APPLICATION_EVIDENCE', entityType: 'PROJECT', entityId: 'missing-project', fieldPath: 'achievement' }],
+    };
+    input.selectedEvidenceIds.add('unresolved');
+
+    const result = normalizeEntitySections(input);
+    expect(result.issues).toContainEqual({ code: 'UNRESOLVED_EVIDENCE_ENTITY', evidenceId: 'unresolved' });
+    expect(result.projects.flatMap(({ lines }) => lines)).not.toContainEqual(expect.objectContaining({ id: 'unresolved' }));
+  });
+
+  it('suppresses a skill-shaped project with only exactly duplicated facts and keeps bindings complete', () => {
+    const input = normalizationInput();
+    input.evidence.skills.push({ id: 'skill-rust', sourceEntityId: 'skill-rust', label: 'Rust', name: 'Rust', category: 'Languages', details: {}, evidenceIds: ['skill-rust-record'] });
+    input.evidence.projects.push(presentationEntity('sparse-rust', 'sparse-rust', 'Rust', { name: 'Rust' }, ['sparse-rust-record']));
+    input.evidence.evidenceById['skill-rust-record'] = structuralEvidence('skill-rust-record', 'SKILL', 'CAREER_PROFILE', 'skill-rust', 'profile-current');
+    input.evidence.evidenceById['sparse-rust-record'] = structuralEvidence('sparse-rust-record', 'PROJECT', 'SOURCE_CV', 'sparse-rust', 'extract-1');
+    const duplicateText = 'Reduced API latency by 35%.';
+    for (const [id, sourceEntityId] of [['real-impact', 'project-1'], ['sparse-impact', 'sparse-rust']] as const) {
+      input.evidence.evidenceById[id] = {
+        id, kind: 'ACHIEVEMENT', field: 'achievement', canonicalText: duplicateText, provenance: 'SOURCE_CV', preservationTier: 0, requirementIds: [], sourceEntityId,
+        sourceRefs: [{ sourceType: 'SOURCE_CV', entityType: 'PROJECT', entityId: sourceEntityId, fieldPath: 'achievement' }],
+      };
+      input.selectedEvidenceIds.add(id);
+    }
+    for (const id of ['skill-rust-record', 'sparse-rust-record']) input.selectedEvidenceIds.add(id);
+
+    const result = normalizeEntitySections(input);
+    expect(result.projects.map(({ name }) => name)).not.toContain('Rust');
+    expect(result.projects.find(({ name }) => name === 'Lighthouse API')?.lines).toEqual([
+      { id: 'real-impact', text: duplicateText },
+    ]);
+    expect(result.bindings).toContainEqual(expect.objectContaining({
+      nodeId: 'line:real-impact', evidenceIds: ['real-impact', 'sparse-impact'],
+    }));
+    expect(result.sparseSkillArtifacts).toEqual([{ skillName: 'Rust', evidenceIds: ['sparse-rust-record'] }]);
   });
 
   it('reclassifies only a fully sparse technology-named project', () => {

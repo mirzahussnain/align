@@ -58,6 +58,7 @@ interface ProfileIndex {
   educationByDegree: Map<string, string>;
   projects: Set<string>;
   skills: Set<string>;
+  skillCategories: Map<string, string>;
   certifications: Set<string>;
   training: Set<string>;
   licences: Set<string>;
@@ -87,6 +88,13 @@ export function indexProfile(profile: ProfileData): ProfileIndex {
     educationByDegree.set(key(item.degree), item.university);
   }
 
+  const skillCategories = new Map<string, string>();
+  for (const group of profile.skills) {
+    for (const skill of group.skillItems) {
+      skillCategories.set(normaliseSkillName(skill.name), group.category);
+    }
+  }
+
   return {
     experience,
     currentEmployers,
@@ -96,6 +104,7 @@ export function indexProfile(profile: ProfileData): ProfileIndex {
     skills: new Set(
       profile.skills.flatMap((group) => group.skillItems.map((skill) => normaliseSkillName(skill.name)))
     ),
+    skillCategories,
     certifications: new Set(profile.certifications.map((item) => key(item.name, item.issuer))),
     training: new Set(profile.trainings.map((item) => key(item.course, item.provider))),
     licences: new Set(profile.licences.map((item) => key(item.officialName, item.issuingBody))),
@@ -107,6 +116,33 @@ export function indexProfile(profile: ProfileData): ProfileIndex {
     otherEvidence: new Set(profile.otherEvidence.map((item) => key(item.title))),
     fullName: key(profile.personal.fullName),
   };
+}
+
+const ADDITIONAL_CATEGORIES = new Set(['additional', 'additional skills']);
+
+function isAdditionalCategory(value: string | undefined): boolean {
+  return !value || ADDITIONAL_CATEGORIES.has(key(value));
+}
+
+export function resolveSkillCategory(input: {
+  existingCategory?: string;
+  taxonomyCategory?: string;
+  extractedCategories: Array<string | undefined>;
+}): { category: string; conflict: boolean } {
+  if (input.existingCategory?.trim()) {
+    return { category: input.existingCategory.trim(), conflict: false };
+  }
+  if (input.taxonomyCategory?.trim()) {
+    return { category: input.taxonomyCategory.trim(), conflict: false };
+  }
+  const specific = [...new Map(
+    input.extractedCategories
+      .map((category) => category?.normalize('NFKC').trim().replace(/\s+/gu, ' '))
+      .filter((category): category is string => Boolean(category) && !isAdditionalCategory(category))
+      .map((category) => [key(category), category])
+  ).values()].sort((left, right) => left.localeCompare(right, 'en-GB'));
+  if (specific.length > 0) return { category: specific[0], conflict: specific.length > 1 };
+  return { category: 'Additional Skills', conflict: false };
 }
 
 function statusFor(
@@ -288,12 +324,24 @@ export function buildImportCandidates(input: BuildCandidatesInput): CandidateDra
   }
 
   // ── Skills ─────────────────────────────────────────────────────────────────
+  const skillRepresentations = new Map<string, typeof extraction.skills>();
   for (const item of extraction.skills) {
     const normalised = normaliseSkillName(item.name);
-    const { excerpt, sourceLocation, ...payload } = item;
+    if (!normalised) continue;
+    skillRepresentations.set(normalised, [...(skillRepresentations.get(normalised) ?? []), item]);
+  }
+  for (const [normalised, representations] of skillRepresentations) {
+    const item = representations[0];
+    const resolved = resolveSkillCategory({
+      existingCategory: index.skillCategories.get(normalised),
+      extractedCategories: representations.map(({ category }) => category),
+    });
+    const { excerpt, sourceLocation } = item;
+    const payload = { name: item.name, category: resolved.category };
     drafts.push(
       draft(CvImportEntityType.SKILL, normalised, payload, { excerpt, sourceLocation }, {
         duplicate: index.skills.has(normalised),
+        conflict: resolved.conflict ? 'CONFLICTING_SKILL_CATEGORY' : null,
       })
     );
   }

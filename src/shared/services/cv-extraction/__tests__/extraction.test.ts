@@ -221,6 +221,20 @@ describe('structured parsing', () => {
     ]);
   });
 
+  it('preserves repeated skill representations until category resolution', () => {
+    const structured = parseCvStructure([
+      'Sam Iyer',
+      'SKILLS',
+      'Additional: TypeScript',
+      'Languages: TypeScript',
+    ].join('\n'));
+
+    expect(structured.skills).toEqual([
+      expect.objectContaining({ name: 'TypeScript', category: 'Additional' }),
+      expect.objectContaining({ name: 'TypeScript', category: 'Languages' }),
+    ]);
+  });
+
   it('reads a DOCX assembled as a desktop word processor emits it', async () => {
     const { structured, format } = await extractStoredCv(await docxFromHandBuiltOoxml());
 

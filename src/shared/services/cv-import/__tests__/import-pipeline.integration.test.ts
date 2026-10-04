@@ -452,12 +452,8 @@ describe.skipIf(!isLocalDb)('CV import pipeline — real Postgres', () => {
     });
   });
 
-  describe('a single failing candidate', () => {
-    it('is reported and left proposed, while the rest of the batch still lands', async () => {
-      // The per-candidate transaction exists so one item cannot take the batch
-      // with it. That has to hold for EVERY failure, not only the anticipated
-      // ones: here the profile already holds this skill, so the unique index
-      // refuses a second copy when the user confirms it anyway.
+  describe('idempotent skill confirmation', () => {
+    it('merges a stale skill candidate while the rest of the batch still lands', async () => {
       await prisma.skill.create({
         data: { profileId, name: 'Wound care', normalizedName: 'wound care' },
       });
@@ -476,16 +472,35 @@ describe.skipIf(!isLocalDb)('CV import pipeline — real Postgres', () => {
         })),
       });
 
-      expect(result.imported).toBe(1);
-      expect(result.failed).toBe(1);
-      expect(result.outcomes.filter((outcome) => outcome.outcome === 'failed')).toHaveLength(1);
-      // The experience still landed, and the skill is still there to review.
+      expect(result.imported).toBe(2);
+      expect(result.failed).toBe(0);
+      expect(result.outcomes.filter((outcome) => outcome.outcome === 'failed')).toHaveLength(0);
       expect(await prisma.experience.count({ where: { profileId } })).toBe(1);
+      expect(await prisma.skill.count({ where: { profileId, normalizedName: 'wound care' } })).toBe(1);
       const reloaded = await loadImportSession(userId, session.id);
       const skill = reloaded.candidates.find(
         (candidate) => candidate.entityType === CvImportEntityType.SKILL
       );
-      expect(skill?.reviewStatus).not.toBe(CvImportReviewStatus.CONFIRMED);
+      expect(skill?.reviewStatus).toBe(CvImportReviewStatus.CONFIRMED);
+    });
+
+    it('does not create duplicates or constraint failures across repeated import sessions', async () => {
+      const importOnce = async () => {
+        await seedExtraction({ skills: [{ name: 'TypeScript', category: 'Languages', ...provenance }] });
+        const session = await open();
+        const candidate = session.candidates.find((item) => item.entityType === CvImportEntityType.SKILL)!;
+        return applyCandidateDecisions({
+          userId,
+          sessionId: session.id,
+          decisions: [{ candidateId: candidate.id, action: 'confirm' }],
+        });
+      };
+
+      const first = await importOnce();
+      const second = await importOnce();
+      expect(first.failed).toBe(0);
+      expect(second.failed).toBe(0);
+      expect(await prisma.skill.count({ where: { profileId, normalizedName: 'typescript' } })).toBe(1);
     });
   });
 

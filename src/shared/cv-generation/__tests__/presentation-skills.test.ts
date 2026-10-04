@@ -49,4 +49,17 @@ describe('presentation skill normalization', () => {
   it('keeps category and skill ordering independent of source order', () => {
     expect(normalizePresentationSkills(input(true)).groups).toEqual(normalizePresentationSkills(input()).groups);
   });
+
+  it('uses the category saved by the Career Profile editor for future CV generation', () => {
+    const value = input();
+    const canonical = value.evidence.skills.find(({ id }) => id === 'rust-canonical');
+    if (!canonical) throw new Error('Expected canonical Rust fixture');
+    canonical.category = 'User edited category';
+
+    expect(normalizePresentationSkills(value).groups).toContainEqual({
+      id: 'skill-category:user edited category',
+      category: 'User edited category',
+      skills: [{ id: 'skill-rust', name: 'Rust' }],
+    });
+  });
 });

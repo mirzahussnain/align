@@ -650,6 +650,42 @@ describe('project layouts', () => {
     expect(projects[1].achievements).toEqual(['Matched 40,000 invoices a day.']);
   });
 
+  it('suppresses a skill-shaped project only when every carried fact is exactly represented elsewhere', () => {
+    const structured = parseCvStructure([
+      'Sam Iyer',
+      'SKILLS',
+      'Frameworks: Next.js',
+      'PROJECTS',
+      'CareTrack',
+      'Built an accessible patient portal.',
+      'Next.js',
+      'Built an accessible patient portal.',
+    ].join('\n'));
+
+    expect(structured.skills).toEqual([
+      expect.objectContaining({ name: 'Next.js', category: 'Frameworks' }),
+    ]);
+    expect(structured.projects.map(({ name }) => name)).toEqual(['CareTrack']);
+    expect(structured.projects[0].achievements).toEqual(['Built an accessible patient portal.']);
+  });
+
+  it.each([
+    ['unique achievement', ['Next.js', 'Shipped a unique rendering optimisation.']],
+    ['dates', ['Next.js, 2024', 'Built an accessible patient portal.']],
+  ])('keeps a technology-named project with %s', (_case, projectLines) => {
+    const structured = parseCvStructure([
+      'Sam Iyer',
+      'SKILLS',
+      'Frameworks: Next.js',
+      'PROJECTS',
+      'CareTrack',
+      'Built an accessible patient portal.',
+      ...projectLines,
+    ].join('\n'));
+
+    expect(structured.projects.map(({ name }) => name)).toContain('Next.js');
+  });
+
   it('reads projects under every heading wording CVs use', () => {
     for (const heading of ['PROJECTS', 'KEY PROJECTS', 'ACADEMIC PROJECTS', 'PROJECTS & PORTFOLIO']) {
       expect(project([heading, 'Bus Tracker']).length, heading).toBe(1);

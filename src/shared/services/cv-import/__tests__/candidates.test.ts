@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { CvImportEntityType, CvImportReviewStatus } from '@/generated/prisma/client';
 import type { ProfileData } from '@/features/dashboard/data/load-profile';
-import { buildImportCandidates } from '../candidates';
+import { buildImportCandidates, resolveSkillCategory } from '../candidates';
 import {
   consumesReusableEvidenceAllowance,
   isCanonicalProfileEntity,
@@ -133,6 +133,68 @@ describe('proposals', () => {
   it('collapses a CV that lists the same thing twice', () => {
     const candidates = build(extraction({ experience: [EXPERIENCE, { ...EXPERIENCE }] }));
     expect(candidates).toHaveLength(1);
+  });
+
+  it('groups raw skill representations by identity and lets a specific category beat Additional', () => {
+    const candidates = build(extraction({ skills: [
+      { name: 'TypeScript', category: 'Additional', ...provenance },
+      { name: ' typescript ', category: 'Languages', ...provenance },
+    ] }));
+    const skills = candidates.filter(({ entityType }) => entityType === CvImportEntityType.SKILL);
+
+    expect(skills).toHaveLength(1);
+    expect(skills[0].structuredData).toMatchObject({ name: 'TypeScript', category: 'Languages' });
+    expect(skills[0].reviewStatus).toBe(CvImportReviewStatus.PROPOSED);
+  });
+
+  it('resolves skill category independently of extraction order', () => {
+    const representations = [
+      { name: 'TypeScript', category: 'Additional', ...provenance },
+      { name: 'typescript', category: 'Languages', ...provenance },
+    ];
+    const category = (skills: typeof representations) =>
+      build(extraction({ skills }))[0].structuredData.category;
+
+    expect(category(representations)).toBe('Languages');
+    expect(category([...representations].reverse())).toBe('Languages');
+  });
+
+  it('surfaces conflicting specific skill categories instead of choosing the first', () => {
+    const [candidate] = build(extraction({ skills: [
+      { name: 'TypeScript', category: 'Languages', ...provenance },
+      { name: 'typescript', category: 'Tools', ...provenance },
+    ] }));
+
+    expect(candidate.reviewStatus).toBe(CvImportReviewStatus.CONFLICT);
+    expect(candidate.conflictCode).toBe('CONFLICTING_SKILL_CATEGORY');
+    expect(candidate.structuredData).toMatchObject({ name: 'TypeScript', category: 'Languages' });
+  });
+
+  it('keeps the saved Career Profile category authoritative over imported categories', () => {
+    const profile = emptyProfile({ skills: [{
+      id: 'group-1',
+      category: 'User edited category',
+      skills: ['TypeScript'],
+      skillItems: [{ id: 'skill-1', name: 'TypeScript' }],
+    }] });
+    const [candidate] = build(extraction({ skills: [
+      { name: 'TypeScript', category: 'Additional', ...provenance },
+      { name: 'typescript', category: 'Languages', ...provenance },
+    ] }), profile);
+
+    expect(candidate.reviewStatus).toBe(CvImportReviewStatus.DUPLICATE);
+    expect(candidate.structuredData).toMatchObject({ name: 'TypeScript', category: 'User edited category' });
+  });
+
+  it('uses a canonical taxonomy category when available and otherwise falls back to Additional Skills', () => {
+    expect(resolveSkillCategory({
+      taxonomyCategory: 'Programming Languages',
+      extractedCategories: ['Tools', 'Additional'],
+    })).toEqual({ category: 'Programming Languages', conflict: false });
+    expect(resolveSkillCategory({ extractedCategories: [undefined, 'Additional'] })).toEqual({
+      category: 'Additional Skills',
+      conflict: false,
+    });
   });
 });
 

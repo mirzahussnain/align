@@ -116,16 +116,10 @@ async function resolveProjectSkills(
     if (!normalizedName || seen.has(normalizedName)) continue;
     seen.add(normalizedName);
 
-    const existing = await tx.skill.findUnique({
+    const skill = await tx.skill.upsert({
       where: { profileId_normalizedName: { profileId, normalizedName } },
-      select: { id: true },
-    });
-    if (existing) {
-      ids.push(existing.id);
-      continue;
-    }
-    const created = await tx.skill.create({
-      data: {
+      update: {},
+      create: {
         profileId,
         name,
         normalizedName,
@@ -133,7 +127,7 @@ async function resolveProjectSkills(
       },
       select: { id: true },
     });
-    ids.push(created.id);
+    ids.push(skill.id);
   }
 
   return ids;
@@ -245,16 +239,25 @@ export async function createCanonicalRecord(args: {
             select: { id: true },
           })))
         : null;
-      const row = await tx.skill.create({
-        data: {
+      const normalizedName = normaliseSkillName(name);
+      const row = await tx.skill.upsert({
+        where: { profileId_normalizedName: { profileId, normalizedName } },
+        create: {
           profileId,
           skillGroupId: group?.id ?? null,
           name,
-          normalizedName: normaliseSkillName(name),
+          normalizedName,
           sortOrder: await nextSortOrder(tx, 'skill', profileId),
         },
-        select: { id: true },
+        update: {},
+        select: { id: true, skillGroupId: true },
       });
+      if (!row.skillGroupId && group) {
+        await tx.skill.updateMany({
+          where: { id: row.id, skillGroupId: null },
+          data: { skillGroupId: group.id },
+        });
+      }
       return { entityType: 'skill', entityId: row.id };
     }
 

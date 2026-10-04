@@ -121,6 +121,8 @@ export const IMPORT_CONFLICT_CODES = [
    * the real hyperlink disagreed, so a handle shows intent, not an address.
    */
   'UNVERIFIED_LINK',
+  /** The same logical skill was listed under multiple equally specific headings. */
+  'CONFLICTING_SKILL_CATEGORY',
 ] as const;
 
 export type ImportConflictCode = (typeof IMPORT_CONFLICT_CODES)[number];

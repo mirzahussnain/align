@@ -2,6 +2,7 @@ import { Document, ExternalHyperlink, Packer, Paragraph, Table, TabStopType, Tex
 import type { CvBuildSectionV2, CvBuildSpecV2, CvPresentationLine, CvPresentationLink } from '@/shared/cv-generation/build-spec-types';
 import { formatDateRangeStyled, type DateDisplayStyle } from '@/shared/utils/date';
 import { formatLinkUrl } from './utils';
+import { employmentTypeLabel } from '@/shared/constants/employment-type';
 
 export interface V2TemplateTheme {
   accent: string;
@@ -16,6 +17,7 @@ interface PresentationEntry {
   subtitle?: string;
   startDate?: string;
   endDate?: string;
+  current?: boolean;
   technologies?: string[];
   lines: CvPresentationLine[];
   links: CvPresentationLink[];
@@ -32,7 +34,7 @@ export function linkRuns(items: CvPresentationLink[], theme: V2TemplateTheme): A
 }
 
 function entryParagraphs(entry: PresentationEntry, theme: V2TemplateTheme, options?: { compact?: boolean; titleSize?: number; dateTabStopPosition?: number }): Paragraph[] {
-  const dates = formatDateRangeStyled(entry.startDate, entry.endDate, theme.dateStyle);
+  const dates = formatDateRangeStyled(entry.startDate, entry.endDate, theme.dateStyle, entry.current);
   const result = [new Paragraph({ keepNext: true, spacing: { before: options?.compact ? 55 : 100, after: 20 }, children: [new TextRun({ text: entry.title, bold: true, size: options?.titleSize ?? 21, font: theme.font, color: theme.heading })] })];
   const meta = [entry.subtitle, !options?.dateTabStopPosition && dates].filter(Boolean).join(' · ');
   if (meta || (options?.dateTabStopPosition && dates)) result.push(new Paragraph({ keepNext: true, tabStops: options?.dateTabStopPosition ? [{ type: TabStopType.RIGHT, position: options.dateTabStopPosition }] : undefined, spacing: { after: 35 }, children: [
@@ -57,7 +59,7 @@ export function sectionParagraphs(section: CvBuildSectionV2, theme: V2TemplateTh
         new TextRun({ text: ` — ${group.skills.map(({ name }) => name).join(', ')}`, size: 19, font: theme.font, color: theme.body }),
       ] }));
     case 'EXPERIENCE':
-      return section.items.flatMap((item) => entryParagraphs({ title: item.title, subtitle: [item.employer, item.location, item.employmentType].filter(Boolean).join(' · '), startDate: item.startDate, endDate: item.endDate, lines: item.lines, links: item.links }, theme, options));
+      return section.items.flatMap((item) => entryParagraphs({ title: item.title, subtitle: [item.employer, item.location, employmentTypeLabel(item.employmentType)].filter(Boolean).join(' · '), startDate: item.startDate, endDate: item.endDate, current: item.current, lines: item.lines, links: item.links }, theme, options));
     case 'PROJECTS':
       return section.items.flatMap((item) => entryParagraphs({ title: item.name, subtitle: item.subtitle, startDate: item.startDate, endDate: item.endDate, technologies: item.technologies, lines: item.lines, links: item.links }, theme, options));
     case 'EDUCATION':

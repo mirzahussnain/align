@@ -7,6 +7,7 @@ import { generateTechnicalTemplate } from '../template3_technical';
 import { generateAcademicTemplate } from '../template4_academic';
 import type { CvBuildSpecV2 } from '@/shared/cv-generation/build-spec-types';
 import type { TemplateId } from '@/shared/constants/templates';
+import { employmentTypeLabel } from '@/shared/constants/employment-type';
 
 const sectionOrder = ['PROJECTS', 'EXPERIENCE', 'SKILLS', 'EDUCATION'] as const;
 
@@ -70,6 +71,40 @@ describe('V2 rendered DOCX', () => {
     expect(xml[2]).not.toContain('alex mccandidate');
     expect(xml[2]).toMatch(/<w:left w:val=.single./);
     expect(xml[3]).toContain('Times New Roman');
+  });
+
+  it('renders authoritative current dates, completed open-ended dates, and shared employment labels', async () => {
+    const value = spec('architect');
+    value.sections = [{
+      type: 'EXPERIENCE',
+      heading: 'Experience',
+      items: [
+        { id: 'current', title: 'Consultant', employer: 'Current Co', employmentType: 'FREELANCE', startDate: '2023-01', current: true, lines: [], links: [] },
+        { id: 'completed', title: 'Developer', employer: 'Former Co', employmentType: 'FIXED_TERM', startDate: '2020-01', current: false, lines: [], links: [] },
+        { id: 'intern', title: 'Intern', employer: 'Early Co', employmentType: 'INTERNSHIP', startDate: '2019-01', endDate: '2019-06', current: false, lines: [], links: [] },
+      ],
+    }];
+
+    const xml = await (await JSZip.loadAsync(await generateV2Template(value))).file('word/document.xml')!.async('string');
+    expect(xml).toMatch(/Jan 2023[^<]+Present/);
+    expect(xml).toContain('Jan 2020');
+    expect(xml.split('Present')).toHaveLength(2);
+    for (const label of ['Freelance', 'Fixed-term', 'Internship']) expect(xml).toContain(label);
+    expect(employmentTypeLabel('FREELANCE')).toBe('Freelance');
+    expect(employmentTypeLabel('FIXED_TERM')).toBe('Fixed-term');
+    expect(employmentTypeLabel('INTERNSHIP')).toBe('Internship');
+  });
+
+  it('renders one presentation line as one DOCX bullet even when its source was wrapped', async () => {
+    const value = spec('architect');
+    value.sections = [{
+      type: 'PROJECTS',
+      heading: 'Projects',
+      items: [{ id: 'project-1', name: 'Lighthouse API', technologies: [], lines: [{ id: 'one-evidence', text: 'Built one coherent evidence line.' }], links: [] }],
+    }];
+    const xml = await (await JSZip.loadAsync(await generateV2Template(value))).file('word/document.xml')!.async('string');
+    expect(xml.match(/<w:numPr>/g)).toHaveLength(1);
+    expect(xml.split('Built one coherent evidence line.')).toHaveLength(2);
   });
 
   it('fails clearly for an unknown template instead of rendering a generic fallback', async () => {

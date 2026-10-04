@@ -785,7 +785,6 @@ function readVolunteering(sectioned: SectionedCv): ExtractedVolunteering[] {
  */
 function readSkills(sectioned: SectionedCv): ExtractedSkill[] {
   const skills: ExtractedSkill[] = [];
-  const seen = new Set<string>();
 
   for (const { index, text } of linesForSection(sectioned, 'skills')) {
     const stripped = stripBullet(text);
@@ -799,9 +798,6 @@ function readSkills(sectioned: SectionedCv): ExtractedSkill[] {
       if (!name || name.length > 60) continue;
       // Needs a letter, and must not be a sentence fragment.
       if (!/\p{L}/u.test(name) || name.split(/\s+/).length > 6) continue;
-      const key = name.toLowerCase();
-      if (seen.has(key)) continue;
-      seen.add(key);
       skills.push({
         name,
         ...(category ? { category } : {}),
@@ -812,6 +808,42 @@ function readSkills(sectioned: SectionedCv): ExtractedSkill[] {
   }
 
   return skills;
+}
+
+function normalizedExtractedIdentity(value: string): string {
+  return value.normalize('NFKC').trim().replace(/\s+/gu, ' ').toLocaleLowerCase('en-GB');
+}
+
+/**
+ * Remove only the parser artefact we can prove is redundant: a source-only
+ * project whose entire identity is also a skill and whose carried facts already
+ * occur verbatim on another project. Unique facts or project-specific fields
+ * keep the row, even when its name is a technology.
+ */
+function suppressRedundantSkillProjects(
+  projects: ExtractedProject[],
+  skills: ExtractedSkill[]
+): ExtractedProject[] {
+  const skillNames = new Set(skills.map(({ name }) => normalizedExtractedIdentity(name)));
+  return projects.filter((project, projectIndex) => {
+    if (!skillNames.has(normalizedExtractedIdentity(project.name))) return true;
+    if (
+      project.repositoryUrl ||
+      project.liveUrl ||
+      project.sourceLinks?.length ||
+      project.startDate ||
+      project.endDate ||
+      project.technologies?.length
+    ) return true;
+    return !project.achievements.every((achievement) =>
+      projects.some((other, otherIndex) =>
+        otherIndex !== projectIndex &&
+        other.achievements.some((candidate) =>
+          normalizedExtractedIdentity(candidate) === normalizedExtractedIdentity(achievement)
+        )
+      )
+    );
+  });
 }
 
 /** Credential-style sections: one entry per line, "Name — Issuer, dates". */
@@ -994,6 +1026,8 @@ export function parseCvStructure(text: string, documentLinks: ExtractedLink[] = 
   );
   const summary = readSummary(sectioned);
 
+  const skills = readSkills(sectioned);
+  const projects = suppressRedundantSkillProjects(readProjects(sectioned, links), skills);
   const payload: CvExtractionPayload = {
     ...emptyExtractionPayload(),
     identity,
@@ -1006,8 +1040,8 @@ export function parseCvStructure(text: string, documentLinks: ExtractedLink[] = 
     detectedSections: [...new Set(sectioned.sections.map((section) => section.heading))].slice(0, 40),
     experience: readExperience(sectioned),
     education: readEducation(sectioned),
-    projects: readProjects(sectioned, links),
-    skills: readSkills(sectioned),
+    projects,
+    skills,
     certifications: readCredentials(sectioned, 'certifications'),
     training: readTraining(sectioned),
     licences: readCredentials(sectioned, 'licences'),

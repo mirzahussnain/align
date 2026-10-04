@@ -93,13 +93,14 @@ function boundEvidenceIds(spec: CvBuildSpecV2): Set<string> {
 }
 
 export function validateBuildSpecPreservation(spec: CvBuildSpecV2, _evidence: UnifiedCandidateEvidence): string[] {
+  void _evidence;
   const bound = boundEvidenceIds(spec);
   return spec.provenance.approvedEvidenceIds.filter((id) => !bound.has(id));
 }
 
 export interface CvBuildValidationIssue {
   evidenceId: string;
-  code: 'TRUTH_VALIDATION_FAILED' | 'PROVENANCE_VALIDATION_FAILED' | 'PRESERVATION_VALIDATION_FAILED' | 'AMBIGUOUS_EVIDENCE_ENTITY';
+  code: 'TRUTH_VALIDATION_FAILED' | 'PROVENANCE_VALIDATION_FAILED' | 'PRESERVATION_VALIDATION_FAILED' | 'AMBIGUOUS_EVIDENCE_ENTITY' | 'UNRESOLVED_EVIDENCE_ENTITY';
 }
 
 export interface CvBuildValidationResult {
@@ -132,15 +133,15 @@ function recordsForBinding(evidenceIds: string[], evidence: UnifiedCandidateEvid
   return records;
 }
 
-function supportsField(records: Record<string, unknown>[], presented: string | undefined, keys: string[]): boolean {
-  if (!presented) return true;
+function supportsField(records: Record<string, unknown>[], presented: unknown, keys: string[]): boolean {
+  if (presented === undefined || presented === null || presented === '') return true;
   const expected = normalizeIdentityText(presented);
-  return records.some((record) => keys.some((key) => typeof record[key] === 'string' && normalizeIdentityText(record[key]) === expected));
+  return records.some((record) => keys.some((key) => record[key] !== undefined && record[key] !== null && normalizeIdentityText(record[key]) === expected));
 }
 
 function structuralTruthIssues(spec: CvBuildSpecV2, evidence: UnifiedCandidateEvidence): CvBuildValidationIssue[] {
   const issues: CvBuildValidationIssue[] = [];
-  const check = (nodeId: string, fields: Array<[string | undefined, string[]]>, extra?: (records: Record<string, unknown>[]) => boolean) => {
+  const check = (nodeId: string, fields: Array<[unknown, string[]]>, extra?: (records: Record<string, unknown>[]) => boolean) => {
     const binding = spec.evidenceBindings.find((candidate) => candidate.nodeId === nodeId);
     if (!binding) return;
     const records = recordsForBinding(binding.evidenceIds, evidence);
@@ -161,7 +162,7 @@ function structuralTruthIssues(spec: CvBuildSpecV2, evidence: UnifiedCandidateEv
         for (const group of section.items) for (const skill of group.skills) check(skill.id, [[skill.name, ['name']], [group.category, ['category']]]);
         break;
       case 'EXPERIENCE':
-        for (const item of section.items) { check(item.id, [[item.title, ['title', 'jobTitle']], [item.employer, ['employer', 'company']], [item.location, ['location']], [item.employmentType, ['employmentType', 'type']], [item.startDate, ['startDate']], [item.endDate, ['endDate']]]); checkLinks(item.links); }
+        for (const item of section.items) { check(item.id, [[item.title, ['title', 'jobTitle']], [item.employer, ['employer', 'company']], [item.location, ['location']], [item.employmentType, ['employmentType', 'type']], [item.startDate, ['startDate']], [item.endDate, ['endDate']], [item.current, ['current']]]); checkLinks(item.links); }
         break;
       case 'PROJECTS':
         for (const item of section.items) { check(item.id, [[item.name, ['name', 'projectName']], [item.subtitle, ['subtitle', 'description', 'purpose']], [item.startDate, ['startDate']], [item.endDate, ['endDate']]], (records) => item.technologies.every((technology) => records.some((record) => Array.isArray(record.technologies) && record.technologies.some((value) => typeof value === 'string' && normalizeIdentityText(value) === normalizeIdentityText(technology))))); checkLinks(item.links); }

@@ -7,6 +7,7 @@ import type {
   CvPresentationExperience,
   CvPresentationOpenSource,
   CvPresentationOtherEvidence,
+  CvPresentationLine,
   CvPresentationProject,
   CvPresentationTraining,
   CvPresentationVolunteerExperience,
@@ -38,7 +39,7 @@ export interface NormalizedEntitySections {
 }
 
 export interface NormalizationIssue {
-  code: 'AMBIGUOUS_EVIDENCE_ENTITY';
+  code: 'AMBIGUOUS_EVIDENCE_ENTITY' | 'UNRESOLVED_EVIDENCE_ENTITY';
   evidenceId: string;
 }
 
@@ -128,6 +129,27 @@ function raw(details: Record<string, unknown>, keys: string[]): string | undefin
   return undefined;
 }
 
+function booleanField(
+  group: ContextualRepresentation[],
+  key: string,
+  input: NormalizationInput
+): boolean | undefined {
+  const candidates = group.flatMap((representation): StructuralFieldCandidate<boolean>[] => {
+    const value = representation.details[key];
+    return typeof value === 'boolean' ? [{
+      value,
+      representationId: representation.representationId,
+      sourceType: representation.sourceType,
+      snapshotId: representation.snapshotId,
+      canonicalEntityId: representation.canonicalEntityId,
+      supportKeys: representation.evidenceIds,
+    }] : [];
+  });
+  return selectAuthoritativeField(candidates, input.authorityContext, {
+    normalize: (value) => String(value),
+  });
+}
+
 function strings(details: Record<string, unknown>, key: string): string[] {
   const value = details[key];
   return Array.isArray(value) ? [...new Set(value.filter((item): item is string => typeof item === 'string' && item.trim().length > 0).map((item) => item.trim()))] : [];
@@ -167,6 +189,10 @@ function normalizeKind(kind: NormalizableEntityKind, input: NormalizationInput) 
 
 const base = (id: string) => ({ id, lines: [], links: [] });
 
+function normalizePresentationText(value: string): string {
+  return value.normalize('NFKC').trim().replace(/\s+/gu, ' ');
+}
+
 export function dedupePresentationLines(
   items: CandidateEvidenceItem[],
   patches: Map<string, string>,
@@ -189,14 +215,18 @@ export function dedupePresentationLines(
     })[0];
     const evidenceIds = duplicates.map(({ id }) => id).sort();
     return {
-      line: { id: representative.id, text: patches.get(representative.id) ?? representative.canonicalText },
+      line: { id: representative.id, text: normalizePresentationText(patches.get(representative.id) ?? representative.canonicalText) },
       binding: { nodeId: `line:${representative.id}`, evidenceIds, representativeEvidenceId: representative.id },
     };
   }).sort((a, b) => a.line.id.localeCompare(b.line.id));
   return { lines: groups.map(({ line }) => line), bindings: groups.map(({ binding }) => binding) };
 }
 
-export function assignPositiveEvidence(groups: AssignableEntityGroup[], input: NormalizationInput): EvidenceAssignmentResult {
+export function assignPositiveEvidence(
+  groups: AssignableEntityGroup[],
+  input: NormalizationInput,
+  kind?: NormalizableEntityKind
+): EvidenceAssignmentResult {
   const assignments = new Map<string, CandidateEvidenceItem[]>();
   const issues: NormalizationIssue[] = [];
   for (const evidenceId of [...input.selectedEvidenceIds].sort()) {
@@ -204,11 +234,16 @@ export function assignPositiveEvidence(groups: AssignableEntityGroup[], input: N
     if (!item || item.field === 'summary' || !isPatchableEvidence(item)) continue;
     const references = new Set([item.sourceEntityId, ...item.sourceRefs.map(({ entityId }) => entityId)].filter((id): id is string => Boolean(id)));
     const matches = groups.filter((group) => group.aliases.some((alias) => references.has(alias)));
+    const referencedKinds = new Set(item.sourceRefs.map(({ entityType }) => entityType));
+    const referencesThisKind = kind === 'EXPERIENCE'
+      ? referencedKinds.has('EXPERIENCE') || referencedKinds.has('EMPLOYMENT')
+      : kind ? referencedKinds.has(kind) : false;
     if (matches.length > 1) {
       issues.push({ code: 'AMBIGUOUS_EVIDENCE_ENTITY', evidenceId });
       continue;
     }
     if (matches[0]) assignments.set(matches[0].id, [...(assignments.get(matches[0].id) ?? []), item]);
+    else if (referencesThisKind) issues.push({ code: 'UNRESOLVED_EVIDENCE_ENTITY', evidenceId });
   }
   return { assignments, issues };
 }
@@ -218,13 +253,14 @@ export function normalizeEntitySections(input: NormalizationInput): NormalizedEn
   const entityAliasIndex = new Map<string, string>();
   const issues: NormalizationIssue[] = [];
   const sparseSkillArtifacts: Array<{ skillName: string; evidenceIds: string[] }> = [];
+  const sparseProjectCandidates = new Map<string, { skillName: string; evidenceIds: string[] }>();
   const groups = <T>(kind: NormalizableEntityKind, mapper: (id: string, members: ContextualRepresentation[], positiveItems: CandidateEvidenceItem[], evidenceIds: string[]) => T | null): T[] => {
     const normalized = normalizeKind(kind, input);
     const assignable = normalized.map(({ id, members, aliases }) => ({
       id,
       aliases: [...new Set([id, ...aliases.map(({ value }) => value), ...members.flatMap((member) => [member.entityId, member.sourceEntityId, member.canonicalEntityId, ...member.sourceRefs.map(({ entityId }) => entityId)].filter((value): value is string => Boolean(value)))])],
     }));
-    const assignment = assignPositiveEvidence(assignable, input);
+    const assignment = assignPositiveEvidence(assignable, input, kind);
     issues.push(...assignment.issues);
     return normalized.flatMap(({ id, members, evidenceIds, aliases }) => {
       const positiveItems = assignment.assignments.get(id) ?? [];
@@ -248,12 +284,12 @@ export function normalizeEntitySections(input: NormalizationInput): NormalizedEn
   const experience = groups('EXPERIENCE', (id, members) => {
     const title = field(members, ['title', 'jobTitle'], input);
     const employer = field(members, ['employer', 'company'], input);
-    return title && employer ? { ...base(id), title, employer, location: field(members, ['location'], input), employmentType: field(members, ['employmentType', 'type'], input), startDate: dateField(members, 'startDate', input), endDate: dateField(members, 'endDate', input) } : null;
+    return title && employer ? { ...base(id), title, employer, location: field(members, ['location'], input), employmentType: field(members, ['employmentType', 'type'], input), startDate: dateField(members, 'startDate', input), endDate: dateField(members, 'endDate', input), current: booleanField(members, 'current', input) } : null;
   });
   const selectedSkillNames = new Set(input.evidence.skills
     .filter((skill) => skill.evidenceIds.some((evidenceId) => input.selectedEvidenceIds.has(evidenceId)))
     .map((skill) => normalizeIdentityText(skill.name)));
-  const projects = groups('PROJECT', (id, members, positiveItems, evidenceIds) => {
+  let projects: CvPresentationProject[] = groups('PROJECT', (id, members, _positiveItems, evidenceIds) => {
     const name = field(members, ['name', 'projectName'], input);
     if (!name) return null;
     const memberAliases = new Set(members.flatMap((member) => [member.entityId, member.sourceEntityId, member.canonicalEntityId, ...member.sourceRefs.map(({ entityId }) => entityId)].filter((value): value is string => Boolean(value))));
@@ -262,12 +298,8 @@ export function normalizeEntitySections(input: NormalizationInput): NormalizedEn
       .some((key) => raw(member.details, [key])));
     const isSparseSkill = members.every((member) => member.sourceType === 'SOURCE_CV' && !member.canonicalEntityId)
       && selectedSkillNames.has(normalizeIdentityText(name))
-      && !hasProjectIdentity
-      && positiveItems.length === 0;
-    if (isSparseSkill) {
-      sparseSkillArtifacts.push({ skillName: name, evidenceIds });
-      return null;
-    }
+      && !hasProjectIdentity;
+    if (isSparseSkill) sparseProjectCandidates.set(id, { skillName: name, evidenceIds });
     const ordered = [...members].sort((a, b) => a.representationId.localeCompare(b.representationId));
     const technologies = [...new Set(ordered.flatMap((member) => strings(member.details, 'technologies')))];
     return { ...base(id), name, subtitle: field(members, ['subtitle', 'description', 'purpose'], input), startDate: dateField(members, 'startDate', input), endDate: dateField(members, 'endDate', input), technologies };
@@ -297,6 +329,32 @@ export function normalizeEntitySections(input: NormalizationInput): NormalizedEn
   const other = groups('OTHER', (id, members) => {
     const title = field(members, ['title'], input);
     return title ? { ...base(id), title, context: field(members, ['context'], input), period: field(members, ['period'], input) } : null;
+  });
+  const lineEntities: Array<{ id: string; lines: CvPresentationLine[] }> = [
+    ...experience, ...projects, ...education, ...certifications, ...training, ...volunteering, ...openSource, ...other,
+  ];
+  const otherLines = lineEntities
+    .flatMap((entity) => entity.lines.map((line) => ({ entityId: entity.id, line })));
+  projects = projects.filter((project) => {
+    const candidate = sparseProjectCandidates.get(project.id);
+    if (!candidate) return true;
+    const replacements = project.lines.map((line) =>
+      otherLines.find(({ entityId, line: otherLine }) =>
+        entityId !== project.id &&
+        normalizeIdentityText(otherLine.text) === normalizeIdentityText(line.text)
+      )
+    );
+    if (replacements.some((replacement) => !replacement)) return true;
+    sparseSkillArtifacts.push(candidate);
+    for (const [index, replacement] of replacements.entries()) {
+      if (!replacement) continue;
+      const sourceBinding = bindings.find(({ nodeId }) => nodeId === 'line:' + project.lines[index].id);
+      const targetBinding = bindings.find(({ nodeId }) => nodeId === 'line:' + replacement.line.id);
+      if (sourceBinding && targetBinding) {
+        targetBinding.evidenceIds = [...new Set([...targetBinding.evidenceIds, ...sourceBinding.evidenceIds])].sort();
+      }
+    }
+    return false;
   });
   return { experience, projects, education, certifications, training, volunteering, openSource, other, bindings, entityAliasIndex, issues, sparseSkillArtifacts };
 }
