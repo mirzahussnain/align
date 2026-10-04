@@ -1,13 +1,23 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { CvPipelineError } from '../errors';
 import { extractPdfDocument } from '../pdf';
+import { extractDocxDocument } from '../docx';
+import { blocksFromMammothHtml } from '../document/docx-html';
 import {
   attachPdfAnnotations,
   detectColumns,
   groupPdfPageItems,
   type PdfTextItem,
 } from '../document/pdf-layout';
-import { emptyPdf, minimalPdf, pdfWithUnplacedLink, twoColumnPdf } from './fixtures';
+import {
+  docxStructuredContent,
+  docxWithHeaderAndHyperlinks,
+  docxWithTextBoxAndFieldLink,
+  emptyPdf,
+  minimalPdf,
+  pdfWithUnplacedLink,
+  twoColumnPdf,
+} from './fixtures';
 
 const unpdfControl = vi.hoisted(() => ({
   getDocumentProxy: undefined as undefined | ((...args: unknown[]) => unknown),
@@ -191,6 +201,75 @@ describe('PDF page layout', () => {
     expect(attached[0].links).toEqual(['https://example.com']);
     expect(attached).toContainEqual(
       expect.objectContaining({ kind: 'link', page: 2, links: ['https://wrong-page.example.com'] })
+    );
+  });
+});
+
+describe('DOCX normalized adapter', () => {
+  it('preserves Mammoth heading, paragraph, list, table, link, emphasis, and body order', async () => {
+    const document = await extractDocxDocument(await docxStructuredContent());
+
+    expect(document.sourceType).toBe('docx');
+    expect(document.blocks.map((block) => block.text)).toEqual([
+      'STRUCTURED CV',
+      'Ordinary body paragraph',
+      'Whole bold paragraph',
+      'Whole italic paragraph',
+      'Parent bullet',
+      'Nested bullet',
+      'First numbered item',
+      'Second numbered item',
+      'Left cell',
+      'Right cell',
+      'Portfolio',
+    ]);
+    expect(document.blocks[0]).toMatchObject({ kind: 'heading', style: { headingLevel: 2 } });
+    expect(document.blocks[2]).toMatchObject({ kind: 'paragraph', style: { bold: true } });
+    expect(document.blocks[3]).toMatchObject({ kind: 'paragraph', style: { italic: true } });
+    expect(document.blocks[4]).toMatchObject({ kind: 'bullet', list: { level: 0, ordered: false } });
+    expect(document.blocks[5]).toMatchObject({ kind: 'bullet', list: { level: 1, ordered: false } });
+    expect(document.blocks[6]).toMatchObject({ kind: 'bullet', list: { level: 0, ordered: true } });
+    expect(document.blocks[8]).toMatchObject({ kind: 'table-cell', table: { table: 0, row: 0, column: 0 } });
+    expect(document.blocks[9]).toMatchObject({ kind: 'table-cell', table: { table: 0, row: 0, column: 1 } });
+    expect(document.blocks[10].links).toEqual(['https://example.com/portfolio']);
+  });
+
+  it('walks only meaningful generated HTML and retains nested parentage', () => {
+    const blocks = blocksFromMammothHtml(
+      '<h3>Skills</h3><ul><li>Testing<ul><li><strong>API/Integration Testing</strong></li></ul></li></ul>' +
+      '<ol><li>CI/CD</li></ol><p><em>Mixed <strong>emphasis</strong></em></p>' +
+      '<img src=data:image/png;base64,nope><script>ignored()</script>'
+    );
+
+    expect(blocks.map((block) => block.text)).toEqual([
+      'Skills',
+      'Testing',
+      'API/Integration Testing',
+      'CI/CD',
+      'Mixed emphasis',
+    ]);
+    expect(blocks[2].parentId).toBe(blocks[1].id);
+    expect(blocks[2]).toMatchObject({ list: { level: 1, ordered: false }, style: { bold: true } });
+    expect(blocks[3]).toMatchObject({ list: { level: 0, ordered: true } });
+    expect(blocks[4].style).toEqual({ italic: true });
+  });
+
+  it('keeps headers, footers, text boxes, and field-code links as supplemental blocks', async () => {
+    const headerDocument = await extractDocxDocument(await docxWithHeaderAndHyperlinks());
+    expect(headerDocument.blocks[0].text).toBe('Priya Raman');
+    expect(headerDocument.blocks.some((block) => block.text === 'Confidential footer')).toBe(true);
+
+    const textBoxDocument = await extractDocxDocument(await docxWithTextBoxAndFieldLink());
+    expect(textBoxDocument.blocks[0].text).toBe('Nadia Haddad');
+    expect(textBoxDocument.blocks.some((block) =>
+      block.links?.includes('https://nadiahaddad.dev')
+    )).toBe(true);
+    expect(textBoxDocument.blocks.filter((block) => block.text === 'Portfolio: see my work')).toHaveLength(1);
+  });
+
+  it('maps a malformed OOXML archive to CORRUPT_DOCUMENT', async () => {
+    expect(await errorCode(() => extractDocxDocument(Buffer.from('PK malformed zip')))).toBe(
+      'CORRUPT_DOCUMENT'
     );
   });
 });

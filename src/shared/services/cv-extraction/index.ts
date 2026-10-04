@@ -1,6 +1,6 @@
 import { CvPipelineError } from './errors';
-import { extractDocx } from './docx';
-import { extractPdfDocument, type RawExtraction } from './pdf';
+import { extractDocxDocument } from './docx';
+import { extractPdfDocument } from './pdf';
 import { detectFormatFromBytes, type CvSourceFormat } from './formats';
 import { hasUsableText } from './text';
 import { CV_PARSER_VERSION, parseCvStructure } from './structured';
@@ -33,11 +33,10 @@ export type {
 } from './document/types';
 
 type DocumentExtractor = (bytes: Buffer) => Promise<NormalizedDocument>;
-type RawExtractor = (bytes: Buffer) => Promise<RawExtraction>;
 
-const EXTRACTORS: Record<CvSourceFormat, DocumentExtractor | RawExtractor> = {
+const EXTRACTORS: Record<CvSourceFormat, DocumentExtractor> = {
   pdf: extractPdfDocument,
-  docx: extractDocx,
+  docx: extractDocxDocument,
 };
 
 export interface CvExtractionResult {
@@ -66,9 +65,7 @@ export async function extractStoredCv(bytes: Buffer): Promise<CvExtractionResult
   if (!format) throw new CvPipelineError('UNSUPPORTED_FORMAT');
 
   const extracted = await EXTRACTORS[format](bytes);
-  const raw = 'blocks' in extracted
-    ? { ...projectNormalizedDocument(extracted), pageCount: extracted.pageCount }
-    : extracted;
+  const raw = { ...projectNormalizedDocument(extracted), pageCount: extracted.pageCount };
   if (!hasUsableText(raw.text)) throw new CvPipelineError('EMPTY_TEXT');
 
   return {

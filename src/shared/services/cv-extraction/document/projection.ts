@@ -26,14 +26,16 @@ export function projectNormalizedDocument(document: NormalizedDocument): Documen
     lines.push(text);
     lineByBlockId.set(block.id, line);
 
-    for (const rawUrl of block.links ?? []) {
-      const url = normaliseUrl(rawUrl);
+    const blockLinks: { url: string; visibleText?: string }[] =
+      block.linkDetails ?? (block.links ?? []).map((url) => ({ url }));
+    for (const detail of blockLinks) {
+      const url = normaliseUrl(detail.url);
       if (!url) continue;
       links.push({
         url,
         ...(block.page !== undefined ? { page: block.page } : {}),
         line,
-        visibleText: text,
+        visibleText: detail.visibleText?.trim() || text,
         surroundingText: text,
       });
     }

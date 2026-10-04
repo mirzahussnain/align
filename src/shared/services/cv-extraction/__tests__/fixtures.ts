@@ -3,8 +3,10 @@ import {
   AlignmentType,
   Document,
   ExternalHyperlink,
+  Footer,
   Header,
   HeadingLevel,
+  LevelFormat,
   Packer,
   Paragraph,
   Table,
@@ -76,6 +78,60 @@ export async function docxFromDocxLibrary(): Promise<Buffer> {
   return Packer.toBuffer(document);
 }
 
+/** A semantic DOCX fixture exercising the structures Mammoth exposes as HTML. */
+export async function docxStructuredContent(): Promise<Buffer> {
+  const document = new Document({
+    numbering: {
+      config: [
+        {
+          reference: 'ordered-items',
+          levels: [
+            {
+              level: 0,
+              format: LevelFormat.DECIMAL,
+              text: '%1.',
+              alignment: AlignmentType.LEFT,
+            },
+          ],
+        },
+      ],
+    },
+    sections: [
+      {
+        children: [
+          new Paragraph({ text: 'STRUCTURED CV', heading: HeadingLevel.HEADING_2 }),
+          new Paragraph('Ordinary body paragraph'),
+          new Paragraph({ children: [new TextRun({ text: 'Whole bold paragraph', bold: true })] }),
+          new Paragraph({ children: [new TextRun({ text: 'Whole italic paragraph', italics: true })] }),
+          new Paragraph({ text: 'Parent bullet', bullet: { level: 0 } }),
+          new Paragraph({ text: 'Nested bullet', bullet: { level: 1 } }),
+          new Paragraph({ text: 'First numbered item', numbering: { reference: 'ordered-items', level: 0 } }),
+          new Paragraph({ text: 'Second numbered item', numbering: { reference: 'ordered-items', level: 0 } }),
+          new Table({
+            rows: [
+              new TableRow({
+                children: [
+                  new TableCell({ children: [new Paragraph('Left cell')] }),
+                  new TableCell({ children: [new Paragraph('Right cell')] }),
+                ],
+              }),
+            ],
+          }),
+          new Paragraph({
+            children: [
+              new ExternalHyperlink({
+                children: [new TextRun('Portfolio')],
+                link: 'https://example.com/portfolio',
+              }),
+            ],
+          }),
+        ],
+      },
+    ],
+  });
+  return Packer.toBuffer(document);
+}
+
 /**
  * A .docx whose contact details live in the page HEADER, with clickable labels.
  *
@@ -116,6 +172,9 @@ export async function docxWithHeaderAndHyperlinks(): Promise<Buffer> {
               }),
             ],
           }),
+        },
+        footers: {
+          default: new Footer({ children: [new Paragraph('Confidential footer')] }),
         },
         children: [
           new Paragraph({ text: 'PROFESSIONAL SUMMARY', heading: HeadingLevel.HEADING_2 }),

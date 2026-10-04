@@ -34,6 +34,8 @@ export interface NormalizedDocumentBlock {
     headingLevel?: number;
   };
   links?: string[];
+  /** Optional provider label for a block-local link; retained for compatibility projection. */
+  linkDetails?: { url: string; visibleText?: string }[];
 }
 
 export interface NormalizedDocument {
