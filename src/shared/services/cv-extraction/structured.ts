@@ -34,6 +34,8 @@ import {
   type ExtractedTraining,
   type ExtractedVolunteering,
 } from './types';
+import { interpretCvDocument } from './interpreter';
+import type { NormalizedDocumentBlock } from './document/types';
 
 /**
  * Deterministic structured reading of a CV.
@@ -49,7 +51,7 @@ import {
  * and unmetered, so a user out of AI quota can still import their CV.
  */
 
-export const CV_PARSER_VERSION = `cv-extract@1.${CV_EXTRACTION_SCHEMA_VERSION}`;
+export const CV_PARSER_VERSION = `cv-extract@2.${CV_EXTRACTION_SCHEMA_VERSION}`;
 
 const BULLET = /^[-*•▪◦●·‣–—]\s+/;
 const EMAIL = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/;
@@ -1017,8 +1019,11 @@ function contactLinks(sectioned: SectionedCv, links: ExtractedLink[]): Extracted
  * the review step handles, whereas a thrown error would lose the stored CV the
  * user already uploaded.
  */
-export function parseCvStructure(text: string, documentLinks: ExtractedLink[] = []): CvExtractionPayload {
-  const sectioned = sectionCv(text);
+export function parseSectionedCvStructure(
+  text: string,
+  sectioned: SectionedCv,
+  documentLinks: ExtractedLink[] = []
+): CvExtractionPayload {
   const links = collectLinks(text, sectioned, documentLinks);
   const { identity, headline, derivedIdentity } = readIdentity(
     sectioned.head,
@@ -1065,4 +1070,48 @@ export function parseCvStructure(text: string, documentLinks: ExtractedLink[] = 
     result.error.issues.slice(0, 10).map((issue) => `${issue.path.join('.')}:${issue.code}`).join(', ')
   );
   return emptyExtractionPayload();
+}
+
+/** Text-only compatibility reader used solely by parseCvStructure. */
+export function parseProjectedCvStructure(
+  text: string,
+  documentLinks: ExtractedLink[] = []
+): CvExtractionPayload {
+  return parseSectionedCvStructure(text, sectionCv(text), documentLinks);
+}
+
+/** Compatibility-only text entry point; production ingestion passes blocks directly. */
+export function parseCvStructure(text: string, documentLinks: ExtractedLink[] = []): CvExtractionPayload {
+  const blocks: NormalizedDocumentBlock[] = text.split('\n').flatMap((lineText, order) => {
+    const trimmed = lineText.trim();
+    if (!trimmed) return [];
+    const lineLinks = documentLinks.filter((link) => link.line === order);
+    return [{
+      id: `compat-${order}`,
+      order,
+      text: trimmed,
+      kind: 'paragraph' as const,
+      ...(lineLinks.length ? {
+        links: lineLinks.map((link) => link.url),
+        linkDetails: lineLinks.map((link) => ({
+          url: link.url,
+          ...(link.visibleText ? { visibleText: link.visibleText } : {}),
+        })),
+      } : {}),
+    }];
+  });
+  for (const [index, link] of documentLinks.filter((candidate) => candidate.line === undefined).entries()) {
+    blocks.push({
+      id: `compat-link-${index}`,
+      order: blocks.length,
+      text: '',
+      kind: 'unknown',
+      links: [link.url],
+      linkDetails: [{
+        url: link.url,
+        ...(link.visibleText ? { visibleText: link.visibleText } : {}),
+      }],
+    });
+  }
+  return interpretCvDocument({ sourceType: 'docx', pageCount: null, blocks }).payload;
 }

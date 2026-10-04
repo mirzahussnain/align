@@ -20,11 +20,11 @@ export function projectNormalizedDocument(document: NormalizedDocument): Documen
 
   for (const block of [...document.blocks].sort((left, right) => left.order - right.order)) {
     const text = normalizeBlockText(block.text);
-    if (!text) continue;
-
-    const line = lines.length;
-    lines.push(text);
-    lineByBlockId.set(block.id, line);
+    const line = text ? lines.length : undefined;
+    if (text) {
+      lines.push(text);
+      lineByBlockId.set(block.id, line!);
+    }
 
     const blockLinks: { url: string; visibleText?: string }[] =
       block.linkDetails ?? (block.links ?? []).map((url) => ({ url }));
@@ -34,9 +34,11 @@ export function projectNormalizedDocument(document: NormalizedDocument): Documen
       links.push({
         url,
         ...(block.page !== undefined ? { page: block.page } : {}),
-        line,
-        visibleText: detail.visibleText?.trim() || text,
-        surroundingText: text,
+        ...(line !== undefined ? { line } : {}),
+        ...((detail.visibleText?.trim() || text)
+          ? { visibleText: detail.visibleText?.trim() || text }
+          : {}),
+        ...(text ? { surroundingText: text } : {}),
       });
     }
   }
