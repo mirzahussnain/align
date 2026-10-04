@@ -1,6 +1,6 @@
 import { CvPipelineError } from './errors';
 import { extractDocx } from './docx';
-import { extractPdf, type RawExtraction } from './pdf';
+import { extractPdfDocument, type RawExtraction } from './pdf';
 import { detectFormatFromBytes, type CvSourceFormat } from './formats';
 import { hasUsableText } from './text';
 import { CV_PARSER_VERSION, parseCvStructure } from './structured';
@@ -36,7 +36,7 @@ type DocumentExtractor = (bytes: Buffer) => Promise<NormalizedDocument>;
 type RawExtractor = (bytes: Buffer) => Promise<RawExtraction>;
 
 const EXTRACTORS: Record<CvSourceFormat, DocumentExtractor | RawExtractor> = {
-  pdf: extractPdf,
+  pdf: extractPdfDocument,
   docx: extractDocx,
 };
 

@@ -13,6 +13,8 @@ export interface NormalizedDocumentBlock {
   text: string;
   kind: NormalizedDocumentKind;
   page?: number;
+  /** Provider-reported writing direction; never inferred. */
+  direction?: string;
   parentId?: string;
   list?: { level: number; ordered: boolean };
   table?: { table: number; row: number; column: number };
@@ -27,6 +29,8 @@ export interface NormalizedDocumentBlock {
     bold?: boolean;
     italic?: boolean;
     fontSize?: number;
+    /** Provider-reported font family; never used as semantic vocabulary. */
+    fontFamily?: string;
     headingLevel?: number;
   };
   links?: string[];

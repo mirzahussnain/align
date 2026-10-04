@@ -347,6 +347,75 @@ export function minimalPdf(lines: (string | PdfLine)[]): Buffer {
   return Buffer.from(pdf, 'binary');
 }
 
+interface PositionedPdfLine {
+  text: string;
+  x: number;
+  y: number;
+  fontSize?: number;
+}
+
+function positionedPdf(lines: PositionedPdfLine[], annotations: string[] = []): Buffer {
+  const content = lines
+    .map(({ text, x, y, fontSize = 12 }) => {
+      const escaped = text.replace(/([()\\])/g, '\\$1');
+      return `BT /F1 ${fontSize} Tf 1 0 0 1 ${x} ${y} Tm (${escaped}) Tj ET`;
+    })
+    .join('\n');
+  const annotationRefs = annotations.map((_, index) => `${6 + index} 0 R`).join(' ');
+  const objects = [
+    '<< /Type /Catalog /Pages 2 0 R >>',
+    '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+    '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R ' +
+      (annotations.length ? `/Annots [${annotationRefs}] ` : '') +
+      '/Resources << /Font << /F1 5 0 R >> >> >>',
+    `<< /Length ${Buffer.byteLength(content)} >>\nstream\n${content}\nendstream`,
+    '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
+    ...annotations,
+  ];
+
+  let pdf = '%PDF-1.4\n';
+  const offsets: number[] = [];
+  objects.forEach((object, index) => {
+    offsets.push(Buffer.byteLength(pdf));
+    pdf += `${index + 1} 0 obj\n${object}\nendobj\n`;
+  });
+  const xrefOffset = Buffer.byteLength(pdf);
+  pdf += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
+  for (const offset of offsets) pdf += `${String(offset).padStart(10, '0')} 00000 n \n`;
+  pdf += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF`;
+  return Buffer.from(pdf, 'binary');
+}
+
+/** Two recurring x bands whose content operators deliberately alternate right/left. */
+export function twoColumnPdf(): Buffer {
+  return positionedPdf([
+    { text: 'Right one', x: 330, y: 720 },
+    { text: 'Left one', x: 72, y: 720 },
+    { text: 'Right two', x: 330, y: 700 },
+    { text: 'Left two', x: 72, y: 700 },
+    { text: 'Right three', x: 330, y: 680 },
+    { text: 'Left three', x: 72, y: 680 },
+    { text: 'Right four', x: 330, y: 660 },
+    { text: 'Left four', x: 72, y: 660 },
+  ]);
+}
+
+/** A valid one-page PDF with no text layer, matching a raster-only upload. */
+export function emptyPdf(): Buffer {
+  return positionedPdf([]);
+}
+
+/** A link annotation placed far away from the page's only text block. */
+export function pdfWithUnplacedLink(): Buffer {
+  return positionedPdf(
+    [{ text: 'Visible text', x: 72, y: 720 }],
+    [
+      '<< /Type /Annot /Subtype /Link /Rect [500 40 590 60] /Border [0 0 0] ' +
+        '/A << /S /URI /URI (https://example.com/unplaced) >> >>',
+    ]
+  );
+}
+
 /**
  * A fillable PDF: the contact details are AcroForm field VALUES and the text
  * layer holds only the blank labels.
