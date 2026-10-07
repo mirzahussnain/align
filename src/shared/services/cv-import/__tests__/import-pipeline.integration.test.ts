@@ -502,6 +502,47 @@ describe.skipIf(!isLocalDb)('CV import pipeline — real Postgres', () => {
       expect(second.failed).toBe(0);
       expect(await prisma.skill.count({ where: { profileId, normalizedName: 'typescript' } })).toBe(1);
     });
+
+    it('upgrades a project-created skill when its specific skill candidate is confirmed later', async () => {
+      await seedExtraction({
+        projects: [{
+          name: 'Compiler',
+          startDate: null,
+          endDate: null,
+          achievements: [],
+          technologies: ['TypeScript'],
+          ...provenance,
+        }],
+      });
+      const projectSession = await open();
+      const project = projectSession.candidates.find(
+        (candidate) => candidate.entityType === CvImportEntityType.PROJECT
+      )!;
+      await applyCandidateDecisions({
+        userId,
+        sessionId: projectSession.id,
+        decisions: [{ candidateId: project.id, action: 'confirm' }],
+      });
+
+      await seedExtraction({ skills: [{ name: 'TypeScript', category: 'Languages', ...provenance }] });
+      const skillSession = await open();
+      const skill = skillSession.candidates.find(
+        (candidate) => candidate.entityType === CvImportEntityType.SKILL
+      )!;
+      const result = await applyCandidateDecisions({
+        userId,
+        sessionId: skillSession.id,
+        decisions: [{ candidateId: skill.id, action: 'confirm' }],
+      });
+
+      expect(result.failed).toBe(0);
+      expect(await prisma.skill.count({ where: { profileId, normalizedName: 'typescript' } })).toBe(1);
+      const canonical = await prisma.skill.findUniqueOrThrow({
+        where: { profileId_normalizedName: { profileId, normalizedName: 'typescript' } },
+        include: { skillGroup: true },
+      });
+      expect(canonical.skillGroup?.category).toBe('Languages');
+    });
   });
 
   describe('stored source CV limit', () => {

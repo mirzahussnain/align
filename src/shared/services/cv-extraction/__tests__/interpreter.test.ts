@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { groupSectionBlocks } from '../interpreter/grouping';
 import { readExperienceSections } from '../interpreter/experience';
 import { readProjectSections } from '../interpreter/projects';
+import { readSkillSections } from '../interpreter/skills';
 import { sectionDocument } from '../interpreter/sections';
 import { findDateRange } from '../dates';
 import type { NormalizedDocument, NormalizedDocumentBlock } from '../document/types';
@@ -284,6 +285,64 @@ describe('interpreter projects', () => {
     expect(result.projects[0].achievements).toEqual([]);
     expect(result.issues).toEqual([
       expect.objectContaining({ code: 'AMBIGUOUS_ENTITY_OWNERSHIP', blockIds: ['b2'] }),
+    ]);
+  });
+});
+
+describe('interpreter skills', () => {
+  it('keeps slash compounds atomic while splitting explicit list separators', () => {
+    const sections = sectionDocument(document([
+      { text: 'Skills', kind: 'heading', style: { headingLevel: 2 } },
+      { text: 'Testing: API/Integration Testing, CI/CD · OAuth/OIDC', kind: 'paragraph' },
+    ]));
+    expect(readSkillSections(sections, [])).toEqual([
+      expect.objectContaining({ name: 'API/Integration Testing', category: 'Testing' }),
+      expect.objectContaining({ name: 'CI/CD', category: 'Testing' }),
+      expect.objectContaining({ name: 'OAuth/OIDC', category: 'Testing' }),
+    ]);
+  });
+
+  it('normalizes Additional labels and preserves unknown explicit categories', () => {
+    const sections = sectionDocument(document([
+      { text: 'Skills', kind: 'heading', style: { headingLevel: 2 } },
+      { text: 'Additional: Mentoring', kind: 'paragraph' },
+      { text: 'Additional Skills: Facilitation', kind: 'paragraph' },
+      { text: 'Fieldcraft: Route planning', kind: 'paragraph' },
+    ]));
+    expect(readSkillSections(sections, []).map(({ name, category }) => ({ name, category }))).toEqual([
+      { name: 'Mentoring', category: 'Additional' },
+      { name: 'Facilitation', category: 'Additional' },
+      { name: 'Route planning', category: 'Fieldcraft' },
+    ]);
+  });
+
+  it('uses list and table-cell boundaries without losing categories', () => {
+    const sections = sectionDocument(document([
+      { text: 'Skills', kind: 'heading', style: { headingLevel: 2 } },
+      { text: 'Clinical', kind: 'table-cell', table: { table: 0, row: 0, column: 0 } },
+      { text: 'Cannulation, Venepuncture', kind: 'table-cell', table: { table: 0, row: 0, column: 1 } },
+      { text: 'Mentoring', kind: 'bullet', list: { level: 0, ordered: false } },
+    ]));
+    expect(readSkillSections(sections, []).map(({ name, category }) => ({ name, category }))).toEqual([
+      { name: 'Cannulation', category: 'Clinical' },
+      { name: 'Venepuncture', category: 'Clinical' },
+      { name: 'Mentoring', category: undefined },
+    ]);
+  });
+
+  it('preserves project and Skills-section representations until reconciliation', () => {
+    const sections = sectionDocument(document([
+      { text: 'Skills', kind: 'heading', style: { headingLevel: 2 } },
+      { text: 'Languages: TypeScript', kind: 'paragraph' },
+    ]));
+    const projectRepresentations = [{
+      name: 'TypeScript',
+      excerpt: 'Align · TypeScript',
+      sourceLocation: { line: 8, section: 'Projects' },
+    }];
+    expect(readSkillSections(sections, projectRepresentations)).toEqual([
+      expect.objectContaining({ name: 'TypeScript', category: 'Languages' }),
+      projectRepresentations[0],
     ]);
   });
 });

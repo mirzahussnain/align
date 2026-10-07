@@ -27,6 +27,10 @@ export interface CreatedEntity {
   entityId: string;
 }
 
+function isAdditionalSkillCategory(category: string | undefined): boolean {
+  return Boolean(category && /^(?:additional|additional skills)$/i.test(category.trim()));
+}
+
 /** Words a CV uses for a proficiency, mapped onto the shared scale. */
 const PROFICIENCY_SYNONYMS: Record<string, string> = {
   native: 'native_bilingual',
@@ -250,11 +254,17 @@ export async function createCanonicalRecord(args: {
           sortOrder: await nextSortOrder(tx, 'skill', profileId),
         },
         update: {},
-        select: { id: true, skillGroupId: true },
+        select: {
+          id: true,
+          skillGroupId: true,
+          skillGroup: { select: { category: true } },
+        },
       });
-      if (!row.skillGroupId && group) {
+      const mayUpgradeCategory = !row.skillGroupId
+        || (isAdditionalSkillCategory(row.skillGroup?.category) && !isAdditionalSkillCategory(category));
+      if (group && mayUpgradeCategory) {
         await tx.skill.updateMany({
-          where: { id: row.id, skillGroupId: null },
+          where: { id: row.id, skillGroupId: row.skillGroupId },
           data: { skillGroupId: group.id },
         });
       }

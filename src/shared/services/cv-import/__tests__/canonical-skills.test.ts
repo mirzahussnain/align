@@ -3,7 +3,11 @@ import type { Prisma } from '@/generated/prisma/client';
 import { CvImportEntityType } from '@/generated/prisma/client';
 import { createCanonicalRecord } from '../canonical';
 
-function transaction(existing: { id: string; skillGroupId: string | null }) {
+function transaction(existing: {
+  id: string;
+  skillGroupId: string | null;
+  skillGroup?: { category: string } | null;
+}) {
   const upsert = vi.fn().mockResolvedValue(existing);
   const updateMany = vi.fn().mockResolvedValue({ count: existing.skillGroupId ? 0 : 1 });
   const tx = {
@@ -54,6 +58,43 @@ describe('canonical skill persistence', () => {
       where: { id: 'skill-project-created', skillGroupId: null },
       data: { skillGroupId: 'group-imported' },
     });
+  });
+
+  it('upgrades an Additional import to a confirmed specific category', async () => {
+    const fake = transaction({
+      id: 'skill-project-created',
+      skillGroupId: 'group-additional',
+      skillGroup: { category: 'Additional Skills' },
+    });
+    await createCanonicalRecord({
+      tx: fake.tx,
+      userId: 'user-1',
+      profileId: 'profile-1',
+      entityType: CvImportEntityType.SKILL,
+      payload: { name: 'TypeScript', category: 'Languages' },
+    });
+
+    expect(fake.updateMany).toHaveBeenCalledWith({
+      where: { id: 'skill-project-created', skillGroupId: 'group-additional' },
+      data: { skillGroupId: 'group-imported' },
+    });
+  });
+
+  it('never overwrites an existing specific category', async () => {
+    const fake = transaction({
+      id: 'skill-existing',
+      skillGroupId: 'group-user',
+      skillGroup: { category: 'User category' },
+    });
+    await createCanonicalRecord({
+      tx: fake.tx,
+      userId: 'user-1',
+      profileId: 'profile-1',
+      entityType: CvImportEntityType.SKILL,
+      payload: { name: 'TypeScript', category: 'Languages' },
+    });
+
+    expect(fake.updateMany).not.toHaveBeenCalled();
   });
 
   it('upserts project technologies by canonical identity', async () => {

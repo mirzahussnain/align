@@ -6,6 +6,7 @@ import type { SectionedCv } from '../sections';
 import { groupSectionBlocks } from './grouping';
 import { readExperienceSections } from './experience';
 import { readProjectSections } from './projects';
+import { readSkillSections } from './skills';
 import { sectionDocument } from './sections';
 import type { CvInterpretationIssue } from './types';
 
@@ -57,6 +58,7 @@ export function interpretCvDocument(document: NormalizedDocument): CvInterpretat
   const payload = parseSectionedCvStructure(compatibilityText, sectioned, projection.links);
   const experience = readExperienceSections(sections);
   const projects = readProjectSections(sections);
+  const skills = readSkillSections(sections, projects.skillRepresentations);
   const unknownEvidence = sections
     .filter((section) => section.id === 'unknown' && section.heading && section.blocks.length)
     .flatMap((section) => {
@@ -76,6 +78,7 @@ export function interpretCvDocument(document: NormalizedDocument): CvInterpretat
       ...payload,
       experience: experience.entries,
       projects: isCompatibilityDocument ? payload.projects : projects.projects,
+      skills,
       ...(unknownEvidence.length
         ? { otherEvidence: [...payload.otherEvidence, ...unknownEvidence] }
         : {}),
@@ -88,6 +91,7 @@ export { sectionDocument } from './sections';
 export { groupSectionBlocks } from './grouping';
 export { readExperienceSections } from './experience';
 export { readProjectSections } from './projects';
+export { readSkillSections } from './skills';
 export type {
   CvInterpretationIssue,
   CvInterpretationIssueCode,
