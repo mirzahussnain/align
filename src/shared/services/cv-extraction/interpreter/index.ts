@@ -4,6 +4,7 @@ import { parseSectionedCvStructure } from '../structured';
 import type { CvExtractionPayload } from '../types';
 import type { SectionedCv } from '../sections';
 import { groupSectionBlocks } from './grouping';
+import { readExperienceSections } from './experience';
 import { sectionDocument } from './sections';
 import type { CvInterpretationIssue } from './types';
 
@@ -52,6 +53,7 @@ export function interpretCvDocument(document: NormalizedDocument): CvInterpretat
     }),
   };
   const payload = parseSectionedCvStructure(compatibilityText, sectioned, projection.links);
+  const experience = readExperienceSections(sections);
   const unknownEvidence = sections
     .filter((section) => section.id === 'unknown' && section.heading && section.blocks.length)
     .flatMap((section) => {
@@ -67,15 +69,20 @@ export function interpretCvDocument(document: NormalizedDocument): CvInterpretat
       }];
     });
   return {
-    payload: unknownEvidence.length
-      ? { ...payload, otherEvidence: [...payload.otherEvidence, ...unknownEvidence] }
-      : payload,
-    issues: [],
+    payload: {
+      ...payload,
+      experience: experience.entries,
+      ...(unknownEvidence.length
+        ? { otherEvidence: [...payload.otherEvidence, ...unknownEvidence] }
+        : {}),
+    },
+    issues: experience.issues,
   };
 }
 
 export { sectionDocument } from './sections';
 export { groupSectionBlocks } from './grouping';
+export { readExperienceSections } from './experience';
 export type {
   CvInterpretationIssue,
   CvInterpretationIssueCode,

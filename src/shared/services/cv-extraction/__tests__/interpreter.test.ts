@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { groupSectionBlocks } from '../interpreter/grouping';
+import { readExperienceSections } from '../interpreter/experience';
 import { sectionDocument } from '../interpreter/sections';
+import { findDateRange } from '../dates';
 import type { NormalizedDocument, NormalizedDocumentBlock } from '../document/types';
 
 function document(blocks: Omit<NormalizedDocumentBlock, 'id' | 'order'>[]): NormalizedDocument {
@@ -90,5 +92,94 @@ describe('interpreter groups', () => {
       ['Category A', 'TypeScript'],
       ['Category B', 'Docker'],
     ]);
+  });
+});
+
+function experience(blocks: Omit<NormalizedDocumentBlock, 'id' | 'order'>[]) {
+  return readExperienceSections(sectionDocument(document([
+    { text: 'Experience', kind: 'heading', style: { headingLevel: 2 } },
+    ...blocks,
+  ])));
+}
+
+describe('interpreter experience', () => {
+  it.each([
+    {
+      name: 'role-first inline',
+      blocks: [{ text: 'Lead Analyst | Northstar Group | Jan 2021 - Present', kind: 'paragraph' }],
+      expected: { jobTitle: 'Lead Analyst', company: 'Northstar Group', startDate: '2021-01', endDate: null, current: true },
+    },
+    {
+      name: 'employer-first three-block',
+      blocks: [
+        { text: 'Northstar Group', kind: 'paragraph', style: { bold: true } },
+        { text: 'Lead Analyst', kind: 'paragraph' },
+        { text: 'Jan 2021 - Dec 2023', kind: 'paragraph' },
+      ],
+      expected: { jobTitle: 'Lead Analyst', company: 'Northstar Group', startDate: '2021-01', endDate: '2023-12', current: false },
+    },
+    {
+      name: 'dates-first pipe-delimited',
+      blocks: [{ text: 'Jan 2021 - Dec 2023 | Lead Analyst | Northstar Group', kind: 'paragraph' }],
+      expected: { jobTitle: 'Lead Analyst', company: 'Northstar Group', startDate: '2021-01', endDate: '2023-12', current: false },
+    },
+    {
+      name: 'employer and location plus separate date',
+      blocks: [
+        { text: 'Northstar Group | Bristol, UK', kind: 'paragraph', style: { bold: true } },
+        { text: 'Lead Analyst', kind: 'paragraph' },
+        { text: 'Jan 2021 - Dec 2023', kind: 'paragraph' },
+      ],
+      expected: { jobTitle: 'Lead Analyst', company: 'Northstar Group', location: 'Bristol, UK', startDate: '2021-01', endDate: '2023-12', current: false },
+    },
+    {
+      name: 'title and employer plus next-block date',
+      blocks: [
+        { text: 'Lead Analyst | Northstar Group', kind: 'paragraph' },
+        { text: 'Jan 2021 - Dec 2023', kind: 'paragraph' },
+      ],
+      expected: { jobTitle: 'Lead Analyst', company: 'Northstar Group', startDate: '2021-01', endDate: '2023-12', current: false },
+    },
+    {
+      name: 'table row',
+      blocks: [
+        { text: 'Lead Analyst', kind: 'table-cell', table: { table: 0, row: 0, column: 0 } },
+        { text: 'Northstar Group', kind: 'table-cell', table: { table: 0, row: 0, column: 1 } },
+        { text: 'Jan 2021 - Dec 2023', kind: 'table-cell', table: { table: 0, row: 0, column: 2 } },
+      ],
+      expected: { jobTitle: 'Lead Analyst', company: 'Northstar Group', startDate: '2021-01', endDate: '2023-12', current: false },
+    },
+  ])('reads $name using only local structure', ({ blocks, expected }) => {
+    const result = experience(blocks as Omit<NormalizedDocumentBlock, 'id' | 'order'>[]);
+    expect(result.entries).toHaveLength(1);
+    expect(result.entries[0]).toMatchObject(expected);
+    expect(result.issues).toEqual([]);
+  });
+
+  it('does not infer current when an end date is missing', () => {
+    const result = experience([{ text: 'Lead Analyst | Northstar Group | Jan 2021', kind: 'paragraph' }]);
+    expect(result.entries[0]).toMatchObject({ startDate: '2021-01', endDate: null, current: false });
+  });
+
+  it('reports a date that has no local experience header', () => {
+    const result = experience([{ text: 'Jan 2021 - Dec 2023', kind: 'paragraph' }]);
+    expect(result.entries).toEqual([]);
+    expect(result.issues).toEqual([expect.objectContaining({ code: 'AMBIGUOUS_DATE_OWNERSHIP', blockIds: ['b1'] })]);
+  });
+
+  it('does not invent title or employer when two plain blocks are equally plausible', () => {
+    const result = experience([
+      { text: 'Northstar Group', kind: 'paragraph' },
+      { text: 'Lead Analyst', kind: 'paragraph' },
+      { text: 'Jan 2021 - Dec 2023', kind: 'paragraph' },
+    ]);
+    expect(result.entries).toEqual([]);
+    expect(result.issues).toEqual([expect.objectContaining({ code: 'AMBIGUOUS_EXPERIENCE_HEADER', blockIds: ['b1', 'b2'] })]);
+  });
+
+  it('returns the exact source span of an embedded date range', () => {
+    const line = 'Lead Analyst | Northstar Group | Jan 2021 - Dec 2023 | Bristol';
+    const found = findDateRange(line);
+    expect(found && line.slice(found.startIndex, found.endIndex)).toBe('Jan 2021 - Dec 2023');
   });
 });
