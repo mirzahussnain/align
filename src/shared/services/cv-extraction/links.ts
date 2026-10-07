@@ -70,7 +70,7 @@ const NOT_A_DOMAIN = new Set(['asp.net', 'vb.net', 'ado.net', 'dot.net', 'socket
 const EXPLICIT_URL = /\b(?:https?:\/\/|www\.)[^\s,;<>()\][]+/gi;
 /** `host.tld[/path]` with no scheme — only accepted for a known TLD, see above. */
 const BARE_DOMAIN = /\b((?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+([a-z]{2,24}))(\/[^\s,;<>()\][]*)?/gi;
-/** A `[label](url)` pair, the shape pdf-parse emits for an annotated link. */
+/** A `[label](url)` pair, a compatibility shape used for annotated links. */
 const MARKDOWN_LINK = /\[([^\]\n]*)\]\((https?:\/\/[^\s)]+|mailto:[^\s)]+)\)/g;
 
 /** Trailing characters that belong to the sentence, not to the address. */
@@ -311,7 +311,7 @@ export function findWrittenHandles(text: string): WrittenHandle[] {
  * Pull `[label](url)` pairs out of a line, returning the line as the reader sees
  * it plus the links that were embedded in it.
  *
- * pdf-parse emits annotated links in this shape when asked to resolve them. The
+ * Some compatibility readers emit annotated links in this shape. The
  * markdown is stripped back out before the text is stored, because the extracted
  * text is a record of what the document SAYS and a reader of that text should
  * see the label the CV printed, not our encoding of it.

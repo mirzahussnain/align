@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { withErrorHandler, APIError } from '@/shared/utils/api-error';
 import { applyRateLimit, analysisLimiter } from '@/shared/lib/rate-limit';
 import { auth } from '@/shared/lib/auth';
-import { extractTextFromPDF } from '@/shared/utils/pdf-parser';
+import { extractPdfDocument } from '@/shared/services/cv-extraction/pdf';
+import { projectNormalizedDocument } from '@/shared/services/cv-extraction/document/projection';
 import { detectCvTarget } from '@/shared/services/analysis-context';
 import { getOccupationProfile, isKnownOccupation } from '@/shared/occupations/registry';
 import {
@@ -60,7 +61,9 @@ export async function POST(request: NextRequest) {
     }
     const { file, profileId } = parsed.data;
 
-    const { text } = await extractTextFromPDF(file);
+    const bytes = Buffer.from(await file.arrayBuffer());
+    const document = await extractPdfDocument(bytes);
+    const { text } = projectNormalizedDocument(document);
     if (!text || text.trim().length < 50) {
       throw new APIError(
         'Could not extract text from PDF. The file may be image-based or corrupted.',
