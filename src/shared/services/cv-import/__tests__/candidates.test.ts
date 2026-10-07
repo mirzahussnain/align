@@ -8,7 +8,11 @@ import {
   isBulkConfirmable,
   CANONICAL_PROFILE_ENTITY_TYPES,
 } from '../classification';
-import { emptyExtractionPayload, type CvExtractionPayload } from '../../cv-extraction/types';
+import {
+  CvExtractionPayloadSchema,
+  emptyExtractionPayload,
+  type CvExtractionPayload,
+} from '../../cv-extraction/types';
 
 /**
  * Turning an extraction into proposals: what becomes a candidate, what is
@@ -101,6 +105,71 @@ describe('entity classification', () => {
 });
 
 describe('proposals', () => {
+  it('keeps schema versions 1 and 2 readable and round-trips optional review issues', () => {
+    for (const schemaVersion of [1, 2]) {
+      expect(CvExtractionPayloadSchema.safeParse({
+        ...emptyExtractionPayload(),
+        schemaVersion,
+        reviewIssues: undefined,
+      }).success).toBe(true);
+    }
+    const issue = {
+      code: 'AMBIGUOUS_ENTITY_OWNERSHIP' as const,
+      blockIds: ['b7'],
+      candidateIds: ['PROJECT:align', 'PROJECT:kinetix'],
+      messageKey: 'cvImport.review.ambiguousEntityOwnership',
+      excerpt: 'Reduced latency by 20%.',
+    };
+    expect(CvExtractionPayloadSchema.parse({
+      ...emptyExtractionPayload(),
+      reviewIssues: [issue],
+    }).reviewIssues).toEqual([issue]);
+  });
+
+  it('projects an entity-bound issue onto only the referenced candidate', () => {
+    const candidates = build(extraction({
+      projects: [
+        { name: 'Align', startDate: null, endDate: null, achievements: [], ...provenance },
+        { name: 'Kinetix', startDate: null, endDate: null, achievements: [], ...provenance },
+      ],
+      reviewIssues: [{
+        code: 'AMBIGUOUS_ENTITY_TYPE',
+        blockIds: ['b4'],
+        candidateIds: ['PROJECT:align'],
+        messageKey: 'cvImport.review.ambiguousEntityType',
+        excerpt: 'Align',
+      }],
+    }));
+    const align = candidates.find((item) => item.structuredData.name === 'Align');
+    const kinetix = candidates.find((item) => item.structuredData.name === 'Kinetix');
+    expect(align).toMatchObject({ reviewStatus: CvImportReviewStatus.CONFLICT, conflictCode: 'AMBIGUOUS_VALUE' });
+    expect(align?.confidence).toBeLessThan(1);
+    expect(kinetix?.conflictCode).toBeNull();
+  });
+
+  it('projects unowned content once with its excerpt and candidate owner choices', () => {
+    const candidates = build(extraction({
+      reviewIssues: [{
+        code: 'AMBIGUOUS_ENTITY_OWNERSHIP',
+        blockIds: ['b7'],
+        candidateIds: ['PROJECT:align', 'PROJECT:kinetix'],
+        messageKey: 'cvImport.review.ambiguousEntityOwnership',
+        excerpt: 'Reduced latency by 20%.',
+      }],
+    }));
+    expect(candidates).toEqual([
+      expect.objectContaining({
+        entityType: CvImportEntityType.OTHER_EVIDENCE,
+        reviewStatus: CvImportReviewStatus.CONFLICT,
+        conflictCode: 'AMBIGUOUS_VALUE',
+        sourceExcerpt: 'Reduced latency by 20%.',
+        structuredData: expect.objectContaining({
+          ownerChoices: ['PROJECT:align', 'PROJECT:kinetix'],
+        }),
+      }),
+    ]);
+  });
+
   it('proposes new records rather than importing them', () => {
     const [candidate] = build(extraction({ experience: [EXPERIENCE] }));
     expect(candidate.entityType).toBe(CvImportEntityType.EXPERIENCE);

@@ -266,3 +266,30 @@ describe('skill review rows', () => {
     expect(screen.getByLabelText(/category for typescript/i)).toHaveValue('Languages');
   });
 });
+
+describe('ambiguous structure review', () => {
+  it('requires an individual edit or rejection and shows candidate owners', async () => {
+    renderReview([candidate({
+      id: 'ambiguous-detail',
+      entityType: 'OTHER_EVIDENCE',
+      reviewStatus: 'CONFLICT',
+      conflictCode: 'AMBIGUOUS_VALUE',
+      structuredData: {
+        title: 'Unresolved CV content',
+        description: 'Reduced latency by 20%.',
+        ownerChoices: ['PROJECT:align', 'PROJECT:kinetix'],
+      },
+      sourceExcerpt: 'Reduced latency by 20%.',
+      bulkConfirmable: false,
+    })]);
+
+    expect(screen.queryByText(/detail ready to add/i)).toBeNull();
+    expect(screen.getByText(/project:align/i)).toBeTruthy();
+    expect(screen.getByText(/project:kinetix/i)).toBeTruthy();
+    const add = screen.getByRole('button', { name: /add resolved content/i });
+    expect(add).toBeDisabled();
+    await userEvent.type(screen.getByLabelText(/edit unresolved content/i), 'Reduced latency on Align by 20%.');
+    expect(add).toBeEnabled();
+    expect(screen.getByRole('button', { name: /leave it out/i })).toBeTruthy();
+  });
+});

@@ -429,6 +429,49 @@ export function buildImportCandidates(input: BuildCandidatesInput): CandidateDra
     );
   }
 
+  const candidateReference = (candidate: CandidateDraft): string | null => {
+    const data = candidate.structuredData;
+    switch (candidate.entityType) {
+      case CvImportEntityType.PROJECT:
+        return `PROJECT:${key(data.name as string | undefined)}`;
+      case CvImportEntityType.EXPERIENCE:
+        return `EXPERIENCE:${key(data.jobTitle as string | undefined, data.company as string | undefined)}`;
+      case CvImportEntityType.SKILL:
+        return `SKILL:${normaliseSkillName(String(data.name ?? ''))}`;
+      default:
+        return null;
+    }
+  };
+
+  for (const issue of extraction.reviewIssues ?? []) {
+    const owners = issue.candidateIds ?? [];
+    const bound = owners.length === 1
+      ? drafts.find((candidate) => candidateReference(candidate) === owners[0])
+      : undefined;
+    if (bound) {
+      bound.reviewStatus = CvImportReviewStatus.CONFLICT;
+      bound.conflictCode = 'AMBIGUOUS_VALUE';
+      bound.confidence = 0.5;
+      continue;
+    }
+
+    drafts.push({
+      ...draft(
+        CvImportEntityType.OTHER_EVIDENCE,
+        `review-issue:${issue.code}:${issue.blockIds.join('|')}`,
+        {
+          title: 'Unresolved CV content',
+          description: issue.excerpt,
+          ownerChoices: owners,
+          reviewIssueCode: issue.code,
+        },
+        { excerpt: issue.excerpt },
+        { conflict: 'AMBIGUOUS_VALUE' }
+      ),
+      confidence: 0.35,
+    });
+  }
+
   // Two proposals with the same dedupe key would violate the session's unique
   // index. That means the CV listed the same thing twice; the first wins and the
   // second is not a separate fact.

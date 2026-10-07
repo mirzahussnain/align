@@ -658,6 +658,14 @@ export function ImportReviewStep({
             {conflicts.map((candidate) => {
               const fields = REQUIRED_FIELD_BY_TYPE[candidate.entityType] ?? [];
               const needsFields = candidate.conflictCode === 'MISSING_REQUIRED_FIELD' && fields.length > 0;
+              const unresolvedContent = candidate.entityType === 'OTHER_EVIDENCE'
+                && candidate.conflictCode === 'AMBIGUOUS_VALUE';
+              const ownerChoices = unresolvedContent
+                ? ((candidate.structuredData as { ownerChoices?: unknown }).ownerChoices ?? [])
+                : [];
+              const owners = Array.isArray(ownerChoices)
+                ? ownerChoices.filter((owner): owner is string => typeof owner === 'string')
+                : [];
               return (
                 <li key={candidate.id} className="rounded-xl border border-amber-200 bg-amber-50 p-3">
                   <p className="text-xs font-semibold text-neutral-900">{candidateTitle(candidate)}</p>
@@ -667,6 +675,24 @@ export function ImportReviewStep({
                   <p className="mt-1 text-[11px] italic text-neutral-500">
                     From your CV: “{candidate.sourceExcerpt}”
                   </p>
+
+                  {unresolvedContent && owners.length > 0 && (
+                    <p className={'mt-3 text-[11px] text-neutral-600'}>
+                      Possible owners: {owners.join(', ')}
+                    </p>
+                  )}
+
+                  {unresolvedContent && (
+                    <div className={'mt-3'}>
+                      <Label htmlFor={candidate.id + '-description'}>Edit unresolved content</Label>
+                      <TextField
+                        id={candidate.id + '-description'}
+                        value={editValue(candidate.id, 'description')}
+                        onChange={(event) => setEdit(candidate.id, 'description', event.target.value)}
+                        placeholder={candidate.sourceExcerpt}
+                      />
+                    </div>
+                  )}
 
                   {needsFields && (
                     <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -699,11 +725,13 @@ export function ImportReviewStep({
                     <button
                       type="button"
                       onClick={() => confirmWithEdits(candidate)}
-                      disabled={busy}
+                      disabled={busy || (unresolvedContent && !editValue(candidate.id, 'description').trim())}
                       className="inline-flex items-center gap-1.5 rounded-full bg-neutral-900 px-3 py-1.5 text-[11px] font-semibold text-white transition-colors hover:bg-neutral-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-400 disabled:opacity-50"
                     >
                       <Check className="h-3 w-3" aria-hidden="true" />
-                      {needsFields ? 'Save with these details' : 'Add it anyway'}
+                      {unresolvedContent
+                        ? 'Add resolved content'
+                        : needsFields ? 'Save with these details' : 'Add it anyway'}
                     </button>
                     <button
                       type="button"

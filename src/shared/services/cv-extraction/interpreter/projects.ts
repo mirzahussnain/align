@@ -90,6 +90,11 @@ function issue(block: NormalizedDocumentBlock): CvInterpretationIssue {
   };
 }
 
+function projectCandidateId(project: ExtractedProject): string {
+  const identity = project.name.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+  return `PROJECT:${identity}`;
+}
+
 function projectUrls(links: ProjectLink[]): Pick<ExtractedProject, 'repositoryUrl' | 'liveUrl' | 'sourceLinks'> {
   let repositoryUrl: string | undefined;
   let liveUrl: string | undefined;
@@ -259,6 +264,9 @@ export function readProjectSections(
     }
   }
 
-  const issues = projects.length ? orphanDetails.map(issue) : [];
+  const candidateIds = projects.map(projectCandidateId);
+  const issues = projects.length
+    ? orphanDetails.map((block) => ({ ...issue(block), candidateIds }))
+    : [];
   return { projects, skillRepresentations, issues };
 }

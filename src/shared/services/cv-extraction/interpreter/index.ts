@@ -73,12 +73,22 @@ export function interpretCvDocument(document: NormalizedDocument): CvInterpretat
         sourceLocation: { line, section: section.heading },
       }];
     });
+  const reviewIssues = [...experience.issues, ...projects.issues].flatMap((issue) => {
+    const excerpt = issue.blockIds
+      .map((id) => document.blocks.find((block) => block.id === id)?.text ?? '')
+      .filter(Boolean)
+      .join(' ')
+      .trim()
+      .slice(0, 400);
+    return excerpt ? [{ ...issue, excerpt }] : [];
+  });
   return {
     payload: {
       ...payload,
       experience: experience.entries,
       projects: isCompatibilityDocument ? payload.projects : projects.projects,
       skills,
+      ...(reviewIssues.length ? { reviewIssues } : {}),
       ...(unknownEvidence.length
         ? { otherEvidence: [...payload.otherEvidence, ...unknownEvidence] }
         : {}),
