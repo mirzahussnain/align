@@ -5,6 +5,7 @@ import type { CvExtractionPayload } from '../types';
 import type { SectionedCv } from '../sections';
 import { groupSectionBlocks } from './grouping';
 import { readExperienceSections } from './experience';
+import { readProjectSections } from './projects';
 import { sectionDocument } from './sections';
 import type { CvInterpretationIssue } from './types';
 
@@ -21,7 +22,8 @@ export function interpretCvDocument(document: NormalizedDocument): CvInterpretat
   // their compatibility counterparts task-by-task in Tasks 5–7.
   sections.forEach((section) => groupSectionBlocks(section));
   const projection = projectNormalizedDocument(document);
-  const compatibilityText = document.blocks.every((block) => block.id.startsWith('compat-'))
+  const isCompatibilityDocument = document.blocks.every((block) => block.id.startsWith('compat-'));
+  const compatibilityText = isCompatibilityDocument
     ? document.blocks
         .filter((block) => block.text)
         .sort((left, right) => left.order - right.order)
@@ -54,6 +56,7 @@ export function interpretCvDocument(document: NormalizedDocument): CvInterpretat
   };
   const payload = parseSectionedCvStructure(compatibilityText, sectioned, projection.links);
   const experience = readExperienceSections(sections);
+  const projects = readProjectSections(sections);
   const unknownEvidence = sections
     .filter((section) => section.id === 'unknown' && section.heading && section.blocks.length)
     .flatMap((section) => {
@@ -72,17 +75,19 @@ export function interpretCvDocument(document: NormalizedDocument): CvInterpretat
     payload: {
       ...payload,
       experience: experience.entries,
+      projects: isCompatibilityDocument ? payload.projects : projects.projects,
       ...(unknownEvidence.length
         ? { otherEvidence: [...payload.otherEvidence, ...unknownEvidence] }
         : {}),
     },
-    issues: experience.issues,
+    issues: [...experience.issues, ...projects.issues],
   };
 }
 
 export { sectionDocument } from './sections';
 export { groupSectionBlocks } from './grouping';
 export { readExperienceSections } from './experience';
+export { readProjectSections } from './projects';
 export type {
   CvInterpretationIssue,
   CvInterpretationIssueCode,

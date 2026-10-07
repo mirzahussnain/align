@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { groupSectionBlocks } from '../interpreter/grouping';
 import { readExperienceSections } from '../interpreter/experience';
+import { readProjectSections } from '../interpreter/projects';
 import { sectionDocument } from '../interpreter/sections';
 import { findDateRange } from '../dates';
 import type { NormalizedDocument, NormalizedDocumentBlock } from '../document/types';
@@ -181,5 +182,108 @@ describe('interpreter experience', () => {
     const line = 'Lead Analyst | Northstar Group | Jan 2021 - Dec 2023 | Bristol';
     const found = findDateRange(line);
     expect(found && line.slice(found.startIndex, found.endIndex)).toBe('Jan 2021 - Dec 2023');
+  });
+});
+
+function projectResult(blocks: Omit<NormalizedDocumentBlock, 'id' | 'order'>[]) {
+  return readProjectSections(sectionDocument(document([
+    { text: 'Projects', kind: 'heading', style: { headingLevel: 2 } },
+    ...blocks,
+  ])));
+}
+
+describe('interpreter projects', () => {
+  it.each([
+    ['marketing', 'Audience Renewal Study', 'Email | Paid social', 'Lifted returning visits by 18%.'],
+    ['research', 'Coastal Resilience Review', 'Interviews | Thematic analysis', 'Synthesised evidence from 42 interviews.'],
+    ['operations', 'Depot Flow Redesign', 'Process mapping | Capacity planning', 'Reduced average dispatch time by 11%.'],
+  ])('keeps %s project metadata and detail on its styled heading', (_domain, name, metadata, detail) => {
+    const result = projectResult([
+      { text: name, kind: 'paragraph', style: { bold: true } },
+      { text: metadata, kind: 'paragraph' },
+      { text: detail, kind: 'bullet', list: { level: 0, ordered: false } },
+    ]);
+    expect(result.projects).toEqual([
+      expect.objectContaining({
+        name,
+        technologies: metadata.split(' | '),
+        achievements: [detail],
+      }),
+    ]);
+    expect(result.skillRepresentations.map(({ name: skill }) => skill)).toEqual(metadata.split(' | '));
+    expect(result.issues).toEqual([]);
+  });
+
+  it('does not promote a short metadata row to a fake project', () => {
+    const result = projectResult([
+      { text: 'Align', kind: 'paragraph', style: { bold: true } },
+      { text: 'Next.js | PostgreSQL', kind: 'paragraph' },
+      { text: 'Built an evidence-led career workflow.', kind: 'bullet' },
+    ]);
+    expect(result.projects.map(({ name }) => name)).toEqual(['Align']);
+    expect(result.projects[0].technologies).toEqual(['Next.js', 'PostgreSQL']);
+    expect(result.projects[0].achievements).toEqual(['Built an evidence-led career workflow.']);
+  });
+
+  it('starts peer styled projects and keeps their details separate', () => {
+    const result = projectResult([
+      { text: 'Service Review', kind: 'paragraph', style: { bold: true } },
+      { text: 'Mapped a national support journey.', kind: 'bullet' },
+      { text: 'Intake Redesign', kind: 'paragraph', style: { bold: true } },
+      { text: 'Reduced hand-offs across three teams.', kind: 'bullet' },
+    ]);
+    expect(result.projects.map(({ name, achievements }) => ({ name, achievements }))).toEqual([
+      { name: 'Service Review', achievements: ['Mapped a national support journey.'] },
+      { name: 'Intake Redesign', achievements: ['Reduced hand-offs across three teams.'] },
+    ]);
+  });
+
+  it('reads dates and project links from the identity block', () => {
+    const result = projectResult([
+      {
+        text: 'Field Notes Portal | Jan 2022 - Mar 2023',
+        kind: 'paragraph',
+        style: { bold: true },
+        linkDetails: [
+          { url: 'https://github.com/example/field-notes', visibleText: 'Repository' },
+          { url: 'https://field-notes.example.com', visibleText: 'Live demo' },
+        ],
+      },
+      { text: 'Published an accessible research archive.', kind: 'bullet' },
+    ]);
+    expect(result.projects[0]).toMatchObject({
+      name: 'Field Notes Portal',
+      startDate: '2022-01',
+      endDate: '2023-03',
+      repositoryUrl: 'https://github.com/example/field-notes',
+      liveUrl: 'https://field-notes.example.com',
+    });
+  });
+
+  it('reads an independently linked project embedded in experience', () => {
+    const sections = sectionDocument(document([
+      { text: 'Experience', kind: 'heading', style: { headingLevel: 2 } },
+      {
+        text: 'Customer Evidence Hub',
+        kind: 'paragraph',
+        style: { bold: true },
+        linkDetails: [{ url: 'https://github.com/example/evidence-hub', visibleText: 'Repository' }],
+      },
+      { text: 'Consolidated research evidence for six teams.', kind: 'bullet' },
+    ]));
+    expect(readProjectSections(sections).projects).toEqual([
+      expect.objectContaining({ name: 'Customer Evidence Hub', repositoryUrl: 'https://github.com/example/evidence-hub' }),
+    ]);
+  });
+
+  it('reports a cross-column detail instead of attaching it to a nearby project', () => {
+    const result = projectResult([
+      { text: 'Operations Review', kind: 'paragraph', style: { bold: true }, layout: { column: 1 } },
+      { text: 'Reduced queue time by 20%.', kind: 'bullet', layout: { column: 0 } },
+    ]);
+    expect(result.projects[0].achievements).toEqual([]);
+    expect(result.issues).toEqual([
+      expect.objectContaining({ code: 'AMBIGUOUS_ENTITY_OWNERSHIP', blockIds: ['b2'] }),
+    ]);
   });
 });
