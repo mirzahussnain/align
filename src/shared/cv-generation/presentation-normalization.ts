@@ -57,6 +57,7 @@ interface ContextualRepresentation extends EntityIdentityRepresentation {
   entityId: string;
   sourceType: EvidenceSourceType;
   snapshotId?: string;
+  collectionOrder: number;
 }
 
 const collectionByKind: Record<NormalizableEntityKind, keyof UnifiedCandidateEvidence> = {
@@ -81,8 +82,8 @@ function itemContext(item: CandidateEvidenceItem): Pick<ContextualRepresentation
 function representationsFor(kind: NormalizableEntityKind, input: NormalizationInput): ContextualRepresentation[] {
   const entities = input.evidence[collectionByKind[kind]] as UnifiedEvidenceEntity[];
   const result: ContextualRepresentation[] = [];
-  for (const entity of entities) {
-    for (const evidenceId of entity.evidenceIds.filter((id) => input.selectedEvidenceIds.has(id)).sort()) {
+  for (const [collectionOrder, entity] of entities.entries()) {
+    for (const evidenceId of entity.evidenceIds.filter((id) => input.selectedEvidenceIds.has(id))) {
       const item = input.evidence.evidenceById[evidenceId];
       if (!item) continue;
       const context = itemContext(item);
@@ -96,6 +97,7 @@ function representationsFor(kind: NormalizableEntityKind, input: NormalizationIn
         details: entity.details,
         evidenceIds: [evidenceId],
         sourceRefs: item.sourceRefs,
+        collectionOrder,
         ...context,
       });
     }
@@ -115,6 +117,7 @@ function representationsFor(kind: NormalizableEntityKind, input: NormalizationIn
       details: item.canonicalData,
       evidenceIds: [evidenceId],
       sourceRefs: item.sourceRefs,
+      collectionOrder: Number.MAX_SAFE_INTEGER,
       ...context,
     });
   }
@@ -179,12 +182,30 @@ const dateField = (group: ContextualRepresentation[], key: 'startDate' | 'endDat
 function normalizeKind(kind: NormalizableEntityKind, input: NormalizationInput) {
   const representations = representationsFor(kind, input);
   const contexts = new Map(representations.map((representation) => [representation.representationId, representation]));
+  const evidenceOrder = new Map<string, number>();
+  const entities = input.evidence[collectionByKind[kind]] as UnifiedEvidenceEntity[];
+  for (const entity of entities) for (const evidenceId of entity.evidenceIds) {
+    if (!evidenceOrder.has(evidenceId)) evidenceOrder.set(evidenceId, evidenceOrder.size);
+  }
   return groupEntityRepresentations(representations).map((group) => {
     const members = group.representations.map((item) => contexts.get(item.representationId)!).filter(Boolean);
     const id = stablePresentationEntityId(group);
-    const evidenceIds = [...new Set(members.flatMap((item) => item.evidenceIds))].sort();
-    return { id, members, evidenceIds, aliases: group.aliases };
-  });
+    const evidenceIds = [...new Set(members.flatMap((item) => item.evidenceIds))].sort((left, right) =>
+      (evidenceOrder.get(left) ?? Number.MAX_SAFE_INTEGER) - (evidenceOrder.get(right) ?? Number.MAX_SAFE_INTEGER)
+      || left.localeCompare(right)
+    );
+    const order = selectAuthoritativeField(members.map((member): StructuralFieldCandidate<number> => ({
+      value: typeof member.details.sortOrder === 'number'
+        ? member.details.sortOrder
+        : typeof member.details.sourceOrder === 'number' ? member.details.sourceOrder : member.collectionOrder,
+      representationId: member.representationId,
+      sourceType: member.sourceType,
+      snapshotId: member.snapshotId,
+      canonicalEntityId: member.canonicalEntityId,
+      supportKeys: member.evidenceIds,
+    })), input.authorityContext, { normalize: (value) => value.toString().padStart(12, '0') });
+    return { id, members, evidenceIds, aliases: group.aliases, order };
+  }).sort((left, right) => (left.order ?? Number.MAX_SAFE_INTEGER) - (right.order ?? Number.MAX_SAFE_INTEGER) || left.id.localeCompare(right.id));
 }
 
 const base = (id: string) => ({ id, lines: [], links: [] });
@@ -196,8 +217,10 @@ function normalizePresentationText(value: string): string {
 export function dedupePresentationLines(
   items: CandidateEvidenceItem[],
   patches: Map<string, string>,
-  authorityContext: NormalizationAuthorityContext
+  authorityContext: NormalizationAuthorityContext,
+  orderedEvidenceIds: string[] = []
 ): { lines: import('./build-spec-types').CvPresentationLine[]; bindings: CvEvidenceBinding[] } {
+  const sourceOrder = new Map(orderedEvidenceIds.map((id, index) => [id, index]));
   const uniqueById = [...new Map(items.map((item) => [item.id, item])).values()];
   const byText = new Map<string, CandidateEvidenceItem[]>();
   for (const item of uniqueById) {
@@ -217,8 +240,9 @@ export function dedupePresentationLines(
     return {
       line: { id: representative.id, text: normalizePresentationText(patches.get(representative.id) ?? representative.canonicalText) },
       binding: { nodeId: `line:${representative.id}`, evidenceIds, representativeEvidenceId: representative.id },
+      order: Math.min(...duplicates.map(({ id }) => sourceOrder.get(id) ?? Number.MAX_SAFE_INTEGER)),
     };
-  }).sort((a, b) => a.line.id.localeCompare(b.line.id));
+  }).sort((a, b) => a.order - b.order || a.line.id.localeCompare(b.line.id));
   return { lines: groups.map(({ line }) => line), bindings: groups.map(({ binding }) => binding) };
 }
 
@@ -267,7 +291,7 @@ export function normalizeEntitySections(input: NormalizationInput): NormalizedEn
       const item = mapper(id, members, positiveItems, evidenceIds);
       if (!item) return [];
       bindings.push({ nodeId: id, evidenceIds });
-      const deduped = dedupePresentationLines(positiveItems, input.patches, input.authorityContext);
+      const deduped = dedupePresentationLines(positiveItems, input.patches, input.authorityContext, evidenceIds);
       bindings.push(...deduped.bindings);
       if ('lines' in (item as object)) (item as unknown as { lines: typeof deduped.lines }).lines = deduped.lines;
       for (const alias of aliases) entityAliasIndex.set(alias.value, id);

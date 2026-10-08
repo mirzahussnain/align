@@ -164,6 +164,21 @@ describe('PDF page layout', () => {
     ]);
   });
 
+  it('rejoins zero-gap PDF glyph fragments without inserting spaces inside words', () => {
+    const items: PdfTextItem[] = [
+      { text: '• Reduced response time by refactor', x: 36, y: 700, width: 240, height: 12, fontSize: 12, direction: 'ltr' },
+      { text: 'ing multi-', x: 276, y: 700, width: 52, height: 12, fontSize: 12, direction: 'ltr' },
+      { text: 'join Prisma queries.', x: 328, y: 700, width: 96, height: 12, fontSize: 12, direction: 'ltr', hasEOL: true },
+      { text: '• Built a mobile', x: 36, y: 680, width: 90, height: 12, fontSize: 12, direction: 'ltr' },
+      { text: '-first workflow.', x: 126, y: 680, width: 78, height: 12, fontSize: 12, direction: 'ltr' },
+    ];
+
+    expect(groupPdfPageItems(items, 1).map(({ text }) => text)).toEqual([
+      '• Reduced response time by refactoring multi-join Prisma queries.',
+      '• Built a mobile-first workflow.',
+    ]);
+  });
+
   it('classifies a visible bullet glyph as a bullet block', () => {
     const blocks = groupPdfPageItems(
       [{ text: '• Delivered the release.', x: 72, y: 700, width: 120, height: 12, fontSize: 12, direction: 'ltr' }],

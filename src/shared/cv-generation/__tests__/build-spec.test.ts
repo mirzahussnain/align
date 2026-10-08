@@ -76,6 +76,24 @@ describe('V2 normalized build assembly', () => {
     }));
   });
 
+  it('uses explicit source order for entities instead of stable hash or entity IDs', () => {
+    const { evidence, plan } = fixture();
+    const earlier = recordForOrder('role-z-record', 'role-z', 'Earlier Role', 'First Company', 0);
+    const later = recordForOrder('role-a-record', 'role-a', 'Later Role', 'Second Company', 1);
+    evidence.evidenceById[earlier.id] = earlier;
+    evidence.evidenceById[later.id] = later;
+    evidence.employment = [
+      { id: 'role-z', sourceEntityId: 'role-z', label: 'Earlier Role', details: { title: 'Earlier Role', employer: 'First Company', sortOrder: 0 }, evidenceIds: [earlier.id] },
+      { id: 'role-a', sourceEntityId: 'role-a', label: 'Later Role', details: { title: 'Later Role', employer: 'Second Company', sortOrder: 1 }, evidenceIds: [later.id] },
+    ];
+    plan.includedEvidenceIds = [earlier.id, later.id];
+    plan.sectionOrder = ['EXPERIENCE'];
+
+    const spec = assembleCvBuildSpec({ generationId: 'g1', evidence, plan, templateId: 'architect', authorityContext: { currentProfileSnapshotId: 'profile-current' } });
+    const section = spec.sections.find((item) => item.type === 'EXPERIENCE');
+    expect(section?.items.map((item) => item.title)).toEqual(['Earlier Role', 'Later Role']);
+  });
+
   it('validates a rewritten line through its representative and keeps rejected text unchanged', () => {
     const { evidence, plan } = fixture();
     const validated = validateRewritePatches({ schemaVersion: 1, patches: [
@@ -87,3 +105,12 @@ describe('V2 normalized build assembly', () => {
     expect(validateBuildSpec(spec, evidence, plan)).toEqual({ ok: true, truth: [], provenance: [], preservation: [] });
   });
 });
+
+function recordForOrder(id: string, entityId: string, title: string, employer: string, sortOrder: number): CandidateEvidenceItem {
+  return {
+    id, kind: 'EMPLOYMENT', field: 'record', canonicalText: title,
+    canonicalData: { title, employer, sortOrder },
+    provenance: 'CAREER_PROFILE', preservationTier: 1, requirementIds: [],
+    sourceRefs: [{ sourceType: 'CAREER_PROFILE', entityType: 'Experience', entityId, fieldPath: 'record', snapshotId: 'profile-current' }],
+  };
+}

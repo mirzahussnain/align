@@ -40,8 +40,22 @@ describe('provider rewrite candidate validation', () => {
     expect(result.data.rejected).toEqual([expect.objectContaining({ evidenceId: 'metric', reason: 'unsupported_metric' })]);
     const section = result.data.spec.sections.find((item) => item.type === 'EXPERIENCE');
     expect(section?.items[0].lines).toEqual([
-      { id: 'delivery', text: 'Built dependable internal services' },
       { id: 'metric', text: 'Reduced latency by 25%' },
+      { id: 'delivery', text: 'Built dependable internal services' },
+    ]);
+  });
+
+  it('preserves canonical bullet order and text when the provider returns no patches', () => {
+    const { evidence, plan } = fixture();
+    const contract = createCvRewriteCandidateContract({ generationId: 'g1', evidence, plan, templateId: 'architect' });
+    const result = contract.runtimeSchema.safeParse({ schemaVersion: 1, patches: [] });
+
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    const section = result.data.spec.sections.find((item) => item.type === 'EXPERIENCE');
+    expect(section?.items[0].lines).toEqual([
+      { id: 'metric', text: 'Reduced latency by 25%' },
+      { id: 'delivery', text: 'Built reliable internal services' },
     ]);
   });
 

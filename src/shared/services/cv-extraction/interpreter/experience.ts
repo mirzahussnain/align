@@ -2,6 +2,7 @@ import { findDateRange, type DateFragmentMatch } from '../dates';
 import type { NormalizedDocumentBlock } from '../document/types';
 import type { ExtractedExperience } from '../types';
 import { groupSectionBlocks } from './grouping';
+import { cleanListItemText, coalesceWrappedListBlocks } from './logical-lines';
 import type { CvInterpretationIssue, InterpretedSection, LocalBlockGroup } from './types';
 
 const FACT_SEPARATOR = /\s*(?:\||·|•)\s*|\s+[–—-]\s+/u;
@@ -122,11 +123,11 @@ function readGroup(
   const attachPending = (blocks: NormalizedDocumentBlock[]) => {
     if (!active) return;
     active.achievements.push(...blocks
-      .map(({ text }) => tidy(text).slice(0, 2000))
+      .map(({ text }) => cleanListItemText(text).slice(0, 2000))
       .filter(Boolean));
   };
 
-  for (const block of group.blocks) {
+  for (const block of coalesceWrappedListBlocks(group.blocks)) {
     const date = findDateRange(block.text);
     if (!date) {
       pending.push(block);

@@ -163,8 +163,8 @@ describe('generateApprovedCv orchestration', () => {
     expect(mocks.render).toHaveBeenCalledWith(expect.objectContaining({
       presentation: expect.objectContaining({ templateId: 'architect' }),
       sections: [expect.objectContaining({ items: [expect.objectContaining({ lines: [
-        { id: 'delivery', text: 'Built dependable internal services' },
         { id: 'metric', text: 'Reduced latency by 25%' },
+        { id: 'delivery', text: 'Built dependable internal services' },
       ] })] })],
     }));
     expect(mocks.createGenerated).toHaveBeenCalledOnce();

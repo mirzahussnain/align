@@ -43,11 +43,16 @@ function canJoin(group: LineGroup, item: PdfTextItem): boolean {
 
 function joinItemText(items: PdfTextItem[]): string {
   let result = '';
+  let previous: PdfTextItem | undefined;
   for (const item of items) {
     const text = item.text.normalize('NFKC');
     if (!text.trim()) continue;
-    const needsSpace = result.length > 0 && !/\s$/.test(result) && !/^\s/.test(text);
+    const gap = previous ? item.x - (previous.x + previous.width) : Number.POSITIVE_INFINITY;
+    const touching = previous !== undefined && gap <= Math.max(0.5, 0.08 * Math.max(previous.fontSize, item.fontSize));
+    const continuesToken = touching || /^[-,.;:!?)]/u.test(text) || /[-/]$/u.test(result);
+    const needsSpace = result.length > 0 && !continuesToken && !/\s$/u.test(result) && !/^\s/u.test(text);
     result += `${needsSpace ? ' ' : ''}${text}`;
+    previous = item;
   }
   return result.replace(/\s+/g, ' ').trim();
 }

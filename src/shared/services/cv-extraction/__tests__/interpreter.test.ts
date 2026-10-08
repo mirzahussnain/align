@@ -3,6 +3,7 @@ import { groupSectionBlocks } from '../interpreter/grouping';
 import { readExperienceSections } from '../interpreter/experience';
 import { readProjectSections } from '../interpreter/projects';
 import { readSkillSections } from '../interpreter/skills';
+import { coalesceWrappedListBlocks } from '../interpreter/logical-lines';
 import { sectionDocument } from '../interpreter/sections';
 import { findDateRange } from '../dates';
 import type { NormalizedDocument, NormalizedDocumentBlock } from '../document/types';
@@ -95,6 +96,22 @@ describe('interpreter groups', () => {
       ['Category B', 'Docker'],
     ]);
   });
+
+  it('never merges a continuation across a page, column, or explicit bullet boundary', () => {
+    const blocks = document([
+      { text: '• First bullet.', kind: 'bullet', page: 1, layout: { x: 36, y: 700, height: 10, column: 0 } },
+      { text: 'Other column.', kind: 'paragraph', page: 1, layout: { x: 43, y: 690, height: 10, column: 1 } },
+      { text: '• Second bullet.', kind: 'bullet', page: 1, layout: { x: 36, y: 680, height: 10, column: 0 } },
+      { text: 'Other page.', kind: 'paragraph', page: 2, layout: { x: 43, y: 670, height: 10, column: 0 } },
+    ]).blocks;
+
+    expect(coalesceWrappedListBlocks(blocks).map(({ text }) => text)).toEqual([
+      'First bullet.',
+      'Other column.',
+      'Second bullet.',
+      'Other page.',
+    ]);
+  });
 });
 
 function experience(blocks: Omit<NormalizedDocumentBlock, 'id' | 'order'>[]) {
@@ -169,6 +186,26 @@ describe('interpreter experience', () => {
   it('does not infer current when an end date is missing', () => {
     const result = experience([{ text: 'Lead Analyst | Northstar Group | Jan 2021', kind: 'paragraph' }]);
     expect(result.entries[0]).toMatchObject({ startDate: '2021-01', endDate: null, current: false });
+  });
+
+  it('reconstructs wrapped visual lines as complete bullets without crossing bullets or roles', () => {
+    const result = experience([
+      { text: 'Engineer | First Company | Jan 2021 - Dec 2022', kind: 'paragraph', page: 1, layout: { x: 34, y: 700, height: 10, column: 0 } },
+      { text: '• Diagnosed authentication, storage and mobile-browser issues, validating releases through automated tests,', kind: 'bullet', page: 1, layout: { x: 36, y: 680, height: 10, column: 0 } },
+      { text: 'type checking, linting and real-device testing.', kind: 'paragraph', page: 1, layout: { x: 43, y: 670, height: 10, column: 0 } },
+      { text: '• Reduced redundant API calls by 30% and improved database response time by 20% by refactoring multi-', kind: 'bullet', page: 1, layout: { x: 36, y: 650, height: 10, column: 0 } },
+      { text: 'join Prisma queries.', kind: 'paragraph', page: 1, layout: { x: 43, y: 640, height: 10, column: 0 } },
+      { text: 'Senior Engineer | Second Company | Jan 2023 - Present', kind: 'paragraph', page: 1, layout: { x: 34, y: 620, height: 10, column: 0 } },
+      { text: '• Led the second role without inheriting the prior bullet.', kind: 'bullet', page: 1, layout: { x: 36, y: 600, height: 10, column: 0 } },
+    ]);
+
+    expect(result.entries.map(({ achievements }) => achievements)).toEqual([
+      [
+        'Diagnosed authentication, storage and mobile-browser issues, validating releases through automated tests, type checking, linting and real-device testing.',
+        'Reduced redundant API calls by 30% and improved database response time by 20% by refactoring multi-join Prisma queries.',
+      ],
+      ['Led the second role without inheriting the prior bullet.'],
+    ]);
   });
 
   it('reports a date that has no local experience header', () => {

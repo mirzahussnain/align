@@ -9,6 +9,7 @@ import {
 } from '../links';
 import type { ExtractedProject, ExtractedSkill } from '../types';
 import { groupSectionBlocks } from './grouping';
+import { cleanListItemText, coalesceWrappedListBlocks } from './logical-lines';
 import type { CvInterpretationIssue, InterpretedSection, LocalBlockGroup } from './types';
 
 const DELIMITER = /\s*(?:\||·|•)\s*/u;
@@ -189,28 +190,16 @@ function readGroup(
   const orphans: NormalizedDocumentBlock[] = [];
   let open: OpenProject | undefined;
 
-  for (let index = 0; index < group.blocks.length; index += 1) {
-    const block = group.blocks[index];
-    const previous = group.blocks[index - 1];
-    const next = group.blocks[index + 1];
+  const blocks = coalesceWrappedListBlocks(group.blocks);
+  for (let index = 0; index < blocks.length; index += 1) {
+    const block = blocks[index];
+    const previous = blocks[index - 1];
+    const next = blocks[index + 1];
     const blockLinks = linksOf(block);
     if (open && isLinkOnlyBlock(block, blockLinks)) {
       open.blocks.push(block);
       open.links.push(...blockLinks);
       continue;
-    }
-    if (
-      open && previous?.kind === 'bullet' && block.kind === 'paragraph' &&
-      !blockLinks.length && !isStyledPeer(block)
-    ) {
-      const continuation = tidy(block.text);
-      const achievement = open.project.achievements.length - 1;
-      if (continuation && achievement >= 0) {
-        open.project.achievements[achievement] =
-          `${open.project.achievements[achievement]} ${continuation}`.slice(0, 2000);
-        open.blocks.push(block);
-        continue;
-      }
     }
     const embeddedIdentity = !allowUnlinkedIdentity && isStyledPeer(block) && blockLinks.some(isProjectLink);
     const independentIdentity = allowUnlinkedIdentity && (
@@ -258,7 +247,9 @@ function readGroup(
     open.blocks.push(block);
     open.links.push(...blockLinks);
     if (!blockLinks.length || tidy(stripLinkText(block.text, blockLinks))) {
-      const detail = tidy(stripLinkText(block.text, blockLinks));
+      const detail = blockLinks.length
+        ? cleanListItemText(stripLinkText(block.text, blockLinks))
+        : cleanListItemText(block.text);
       if (detail && isDetail(block)) open.project.achievements.push(detail.slice(0, 2000));
     }
   }

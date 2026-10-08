@@ -255,6 +255,21 @@ describe('CV extraction acceptance matrix', () => {
       ['Software Engineer (Junior Full-Stack Developer)', 'NextPak Agile Solutions', '2023-12', '2024-05', false],
       ['Associate Web Developer', 'Cosmic365 AI', '2022-08', '2022-10', false],
     ]);
+    expect(structured.experience.map(({ achievements }) => achievements)).toEqual([
+      [
+        'Built and shipped full-stack products across frontend, backend, APIs, authentication, databases and infrastructure, taking features from requirements through testing, deployment and iterative optimisation.',
+        'Developed browser-based computer vision, real-time workflows, AI-enabled features, external API integrations and asynchronous processing using React, TypeScript, Python, Node.js, PostgreSQL, Redis and cloud services.',
+        'Diagnosed authentication, storage, performance and mobile-browser issues, validating releases through automated tests, type checking, linting and real-device testing.',
+      ],
+      [
+        'Reduced redundant API calls by 30% through RTK Query caching and improved average database response time by 20% by refactoring multi-join Prisma queries.',
+        'Built reusable, strictly typed React and TypeScript components, reducing UI defects by 40% while collaborating in a five-engineer Agile team through sprint planning and code reviews.',
+        'Implemented role-based access control across three user roles, securing sensitive workflows and maintaining data isolation.',
+      ],
+      [
+        'Resolved data-fetching race conditions responsible for a 30% production bug rate and contributed to schema refactoring that improved query efficiency by 25%.',
+      ],
+    ]);
     expect(report.counts.education).toBe(2);
     expect(structured.education).toEqual([
       expect.objectContaining({
