@@ -143,6 +143,14 @@ describe('interpreter experience', () => {
       expected: { jobTitle: 'Lead Analyst', company: 'Northstar Group', startDate: '2021-01', endDate: '2023-12', current: false },
     },
     {
+      name: 'title and employer connector plus next-block date',
+      blocks: [
+        { text: 'Lead Analyst at Northstar Group', kind: 'paragraph' },
+        { text: 'Jan 2021 - Dec 2023', kind: 'paragraph' },
+      ],
+      expected: { jobTitle: 'Lead Analyst', company: 'Northstar Group', startDate: '2021-01', endDate: '2023-12', current: false },
+    },
+    {
       name: 'table row',
       blocks: [
         { text: 'Lead Analyst', kind: 'table-cell', table: { table: 0, row: 0, column: 0 } },
@@ -261,6 +269,28 @@ describe('interpreter projects', () => {
     });
   });
 
+  it('separates a linked project identity from its subtitle and link labels', () => {
+    const result = projectResult([
+      {
+        text: 'Bhejo - Remote Document Scanning Platform Live | Repo',
+        kind: 'paragraph',
+        links: ['https://bhejo.example.com', 'https://github.com/example/bhejo'],
+      },
+      { text: 'Next.js · TypeScript', kind: 'paragraph' },
+      { text: '• Shipped a browser-based', kind: 'bullet' },
+      { text: 'scanning workflow.', kind: 'paragraph' },
+    ]);
+
+    expect(result.projects).toEqual([
+      expect.objectContaining({
+        name: 'Bhejo',
+        technologies: ['Next.js', 'TypeScript'],
+        achievements: ['Shipped a browser-based scanning workflow.'],
+      }),
+    ]);
+    expect(result.skillRepresentations.map(({ name }) => name)).toEqual(['Next.js', 'TypeScript']);
+  });
+
   it('reads an independently linked project embedded in experience', () => {
     const sections = sectionDocument(document([
       { text: 'Experience', kind: 'heading', style: { headingLevel: 2 } },
@@ -286,6 +316,21 @@ describe('interpreter projects', () => {
     expect(result.issues).toEqual([
       expect.objectContaining({ code: 'AMBIGUOUS_ENTITY_OWNERSHIP', blockIds: ['b2'] }),
     ]);
+  });
+
+  it('does not reinterpret experience achievements as project orphans', () => {
+    const sections = sectionDocument(document([
+      { text: 'Experience', kind: 'heading', style: { headingLevel: 2 } },
+      { text: 'Analyst | Northstar | Jan 2021 - Present', kind: 'paragraph' },
+      { text: 'Improved the monthly reporting process.', kind: 'bullet' },
+      { text: 'Projects', kind: 'heading', style: { headingLevel: 2 } },
+      { text: 'Reporting Hub', kind: 'paragraph', style: { bold: true } },
+      { text: 'Published a shared reporting workflow.', kind: 'bullet' },
+    ]));
+
+    const result = readProjectSections(sections);
+    expect(result.projects.map(({ name }) => name)).toEqual(['Reporting Hub']);
+    expect(result.issues).toEqual([]);
   });
 });
 

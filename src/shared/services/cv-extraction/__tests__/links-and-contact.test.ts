@@ -527,6 +527,21 @@ describe('an institution on the line below its qualification', () => {
     expect(entry.description).toBeUndefined();
   });
 
+  it('keeps an inline grade separate from a wrapped institution', () => {
+    const [entry] = education([
+      'BSc Software Engineering - First Class Honours, 3.82/4.0 GPA · Capital University of Science &',
+      'Sep 2019 - Jul 2023',
+      'Technology, Pakistan',
+    ]);
+
+    expect(entry).toMatchObject({
+      degree: 'BSc Software Engineering',
+      university: 'Capital University of Science & Technology, Pakistan',
+      grade: 'First Class Honours, 3.82/4.0 GPA',
+    });
+    expect(entry.description).toBeUndefined();
+  });
+
   it('reads the grade wordings the profile form itself lists', () => {
     for (const [written, expected] of [
       ['Distinction', 'Distinction'],

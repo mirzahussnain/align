@@ -164,6 +164,17 @@ describe('PDF page layout', () => {
     ]);
   });
 
+  it('classifies a visible bullet glyph as a bullet block', () => {
+    const blocks = groupPdfPageItems(
+      [{ text: '• Delivered the release.', x: 72, y: 700, width: 120, height: 12, fontSize: 12, direction: 'ltr' }],
+      1
+    );
+
+    expect(blocks).toEqual([
+      expect.objectContaining({ text: '• Delivered the release.', kind: 'bullet' }),
+    ]);
+  });
+
   it('declines a right-aligned date tail as a second column', () => {
     const blocks = Array.from({ length: 5 }, (_, index) => ({
       id: `pdf-p1-b${index}`,
@@ -185,6 +196,29 @@ describe('PDF page layout', () => {
     ]);
 
     expect(detectColumns(blocks).every((block) => block.layout?.column === undefined)).toBe(true);
+  });
+
+  it('orders overlapping row peers from left to right despite small baseline drift', () => {
+    const blocks = [
+      {
+        id: 'date',
+        order: 0,
+        text: 'Oct 2025 - Present',
+        kind: 'paragraph' as const,
+        page: 1,
+        layout: { x: 506, y: 610.3, width: 72, height: 9 },
+      },
+      {
+        id: 'role',
+        order: 1,
+        text: 'Software Engineer · Independent Products',
+        kind: 'paragraph' as const,
+        page: 1,
+        layout: { x: 34, y: 609.82, width: 186, height: 9.96 },
+      },
+    ];
+
+    expect(detectColumns(blocks).map((block) => block.id)).toEqual(['role', 'date']);
   });
 
   it('attaches annotations only by same-page rectangle overlap', () => {

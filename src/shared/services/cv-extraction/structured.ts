@@ -276,6 +276,7 @@ interface DatedEntry {
   achievements: string[];
   line: number;
   excerpt: string;
+  source: string;
 }
 
 /**
@@ -374,6 +375,7 @@ function readDatedEntries(lines: { index: number; text: string }[]): DatedEntry[
       achievements: [],
       line: remainder ? index : heading?.index ?? index,
       excerpt: sourceExcerpt(remainder ? text : `${source} ${text}`),
+      source,
     });
   }
 
@@ -480,20 +482,45 @@ function splitGrade(text: string): { grade?: string; rest: string } {
 
 function readEducation(sectioned: SectionedCv): ExtractedEducation[] {
   return readDatedEntries(linesForSection(sectioned, 'education')).map((entry) => {
+    const headerFacts = entry.source
+      .split(/\s+[–—-]\s+|\s*[|·•]\s*/u)
+      .map(tidy)
+      .filter(Boolean);
+    let degree = entry.title;
+    let university = entry.company;
+    let inlineGrade: string | undefined;
+    if (headerFacts.length > 1) {
+      degree = headerFacts[0];
+      university = undefined;
+      for (const fact of headerFacts.slice(1)) {
+        const classified = splitGrade(fact);
+        if (classified.grade && !classified.rest) {
+          inlineGrade = [inlineGrade, classified.grade].filter(Boolean).join(', ');
+        } else if (!university) {
+          university = fact;
+        }
+      }
+    }
+
     // Only the FIRST detail is considered. That is the segment that came off the
     // institution line, where a classification is written; a grade appearing
     // three bullets down is part of a sentence, not the award.
-    const [first, ...others] = entry.achievements;
+    let [first, ...others] = entry.achievements;
+    if (university?.trim().endsWith('&') && first && !/[.!?]$/u.test(first)) {
+      university = `${university} ${first}`;
+      first = others[0];
+      others = others.slice(1);
+    }
     const { grade, rest } = first ? splitGrade(first) : { grade: undefined, rest: '' };
     const description = [rest, ...others].filter(Boolean).join(' ');
 
     return {
-      degree: entry.title,
-      ...(entry.company ? { university: entry.company } : {}),
+      degree,
+      ...(university ? { university } : {}),
       startDate: entry.startDate,
       endDate: entry.endDate,
       current: entry.current,
-      ...(grade ? { grade } : {}),
+      ...(inlineGrade || grade ? { grade: [inlineGrade, grade].filter(Boolean).join(', ') } : {}),
       ...(description ? { description } : {}),
       excerpt: entry.excerpt,
       sourceLocation: locate(sectioned, entry.line),

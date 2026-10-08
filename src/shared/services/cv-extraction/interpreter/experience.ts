@@ -48,7 +48,8 @@ function detachedHeader(
   const last = candidates.at(-1);
   if (!last) return { header: null, consumed: 0, ambiguous: [] };
 
-  const inlineFacts = splitFacts(last.text);
+  const connectorFacts = last.text.split(ROLE_COMPANY_CONNECTOR).map(tidy).filter(Boolean);
+  const inlineFacts = connectorFacts.length > 1 ? connectorFacts : splitFacts(last.text);
   if (inlineFacts.length >= 2) {
     return {
       header: {

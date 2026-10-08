@@ -82,7 +82,7 @@ export function groupPdfPageItems(items: PdfTextItem[], page: number): Normalize
       id: `pdf-p${page}-b${index}`,
       order: index,
       text,
-      kind: 'paragraph',
+      kind: /^\s*[•▪◦●]/u.test(text) ? 'bullet' : 'paragraph',
       page,
       ...(directions.length === 1 ? { direction: directions[0] } : {}),
       layout: { x: left, y: bottom, width: right - left, height: top - bottom },
@@ -116,6 +116,22 @@ function readingOrder(left: NormalizedDocumentBlock, right: NormalizedDocumentBl
     if (leftColumn === undefined) return -1;
     if (rightColumn === undefined) return 1;
     return leftColumn - rightColumn;
+  }
+  const leftBottom = left.layout?.y;
+  const rightBottom = right.layout?.y;
+  const leftHeight = left.layout?.height;
+  const rightHeight = right.layout?.height;
+  if (
+    leftBottom !== undefined && rightBottom !== undefined &&
+    leftHeight !== undefined && rightHeight !== undefined
+  ) {
+    const overlap = Math.max(
+      0,
+      Math.min(leftBottom + leftHeight, rightBottom + rightHeight) - Math.max(leftBottom, rightBottom)
+    );
+    if (overlap >= Math.min(leftHeight, rightHeight) / 2) {
+      return (left.layout?.x ?? 0) - (right.layout?.x ?? 0) || left.order - right.order;
+    }
   }
   return (right.layout?.y ?? 0) - (left.layout?.y ?? 0) ||
     (left.layout?.x ?? 0) - (right.layout?.x ?? 0) ||

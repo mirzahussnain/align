@@ -46,6 +46,7 @@ const SECTION_VOCABULARY: Record<CvSectionId, readonly string[]> = {
     'experience', 'work experience', 'professional experience', 'employment',
     'employment history', 'work history', 'career history', 'relevant experience',
     'clinical experience', 'professional background', 'engagements',
+    'research experience',
   ],
   education: [
     'education', 'education and qualifications', 'qualifications',

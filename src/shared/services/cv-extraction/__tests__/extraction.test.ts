@@ -150,6 +150,7 @@ describe('date reading', () => {
 describe('section detection', () => {
   it('recognises headings by vocabulary, in several wordings', () => {
     expect(matchSectionHeading('WORK EXPERIENCE')).toBe('experience');
+    expect(matchSectionHeading('RESEARCH EXPERIENCE')).toBe('experience');
     expect(matchSectionHeading('Employment History:')).toBe('experience');
     expect(matchSectionHeading('Education & Qualifications')).toBe('education');
     expect(matchSectionHeading('Core Skills')).toBe('skills');

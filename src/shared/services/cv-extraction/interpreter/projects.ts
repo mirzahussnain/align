@@ -119,14 +119,21 @@ function projectUrls(links: ProjectLink[]): Pick<ExtractedProject, 'repositoryUr
 
 function startProject(block: NormalizedDocumentBlock, section: InterpretedSection): OpenProject | null {
   const blockLinks = linksOf(block);
+  const hasProjectLink = blockLinks.some(isProjectLink);
   const date = findDateRange(block.text);
   const withoutDate = date
     ? `${block.text.slice(0, date.startIndex)} ${block.text.slice(date.endIndex)}`
     : block.text;
   const segments = facts(stripLinkText(withoutDate, blockLinks));
-  const name = segments[0];
+  const linkedIdentity = hasProjectLink
+    ? segments[0]?.split(/\s+[–—-]\s+/u)[0]
+    : segments[0];
+  const name = linkedIdentity;
   if (!name || !/\p{L}/u.test(name)) return null;
-  const technologies = segments.slice(1).filter((part) => !/[.!?]$/u.test(part));
+  const technologies = segments.slice(1).filter((part) =>
+    !/[.!?]$/u.test(part) &&
+    !/^(?:repository|repo|source(?: code)?|code|live(?: demo)?|demo|view project)$/iu.test(part)
+  );
   const excerpt = tidy(block.text).slice(0, 400);
   return {
     project: {
@@ -163,7 +170,9 @@ function isMetadataRow(
   block: NormalizedDocumentBlock,
   next: NormalizedDocumentBlock | undefined
 ): boolean {
-  return !isStyledPeer(block)
+  return block.kind !== 'bullet'
+    && !block.list
+    && !isStyledPeer(block)
     && hasDelimiter(block.text)
     && !findDateRange(block.text)
     && !linksOf(block).some(isProjectLink)
@@ -189,6 +198,19 @@ function readGroup(
       open.blocks.push(block);
       open.links.push(...blockLinks);
       continue;
+    }
+    if (
+      open && previous?.kind === 'bullet' && block.kind === 'paragraph' &&
+      !blockLinks.length && !isStyledPeer(block)
+    ) {
+      const continuation = tidy(block.text);
+      const achievement = open.project.achievements.length - 1;
+      if (continuation && achievement >= 0) {
+        open.project.achievements[achievement] =
+          `${open.project.achievements[achievement]} ${continuation}`.slice(0, 2000);
+        open.blocks.push(block);
+        continue;
+      }
     }
     const embeddedIdentity = !allowUnlinkedIdentity && isStyledPeer(block) && blockLinks.some(isProjectLink);
     const independentIdentity = allowUnlinkedIdentity && (
@@ -260,7 +282,7 @@ export function readProjectSections(
       const result = readGroup(group, section, section.id === 'projects');
       projects.push(...result.projects.map(({ project }) => project));
       skillRepresentations.push(...result.skills);
-      orphanDetails.push(...result.orphans);
+      if (section.id === 'projects') orphanDetails.push(...result.orphans);
     }
   }
 

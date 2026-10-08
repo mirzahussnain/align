@@ -453,6 +453,51 @@ describe.skipIf(!isLocalDb)('CV import pipeline — real Postgres', () => {
   });
 
   describe('idempotent skill confirmation', () => {
+    it('stores one logical skill when project and skills-section evidence repeat it', async () => {
+      await seedExtraction({
+        projects: [{
+          name: 'Release Dashboard',
+          startDate: null,
+          endDate: null,
+          achievements: ['Published delivery health metrics.'],
+          technologies: ['CI/CD', 'Vitest'],
+          ...provenance,
+        }],
+        skills: [
+          { name: 'CI/CD', ...provenance },
+          { name: 'CI/CD', category: 'Testing & Delivery', ...provenance },
+          { name: 'Vitest', category: 'Testing & Delivery', ...provenance },
+        ],
+      });
+
+      const session = await open();
+      expect(session.candidates.filter((candidate) =>
+        candidate.entityType === CvImportEntityType.SKILL &&
+        (candidate.structuredData as { name?: string }).name === 'CI/CD'
+      )).toHaveLength(1);
+
+      const result = await applyCandidateDecisions({
+        userId,
+        sessionId: session.id,
+        decisions: session.candidates
+          .filter((candidate) => candidate.entityType !== CvImportEntityType.IDENTITY_UPDATE)
+          .map((candidate) => ({ candidateId: candidate.id, action: 'confirm' as const })),
+      });
+
+      expect(result.failed).toBe(0);
+      const skills = await prisma.skill.findMany({
+        where: { profileId },
+        include: { skillGroup: true },
+      });
+      expect(skills.map(({ normalizedName }) => normalizedName).sort()).toEqual(['ci/cd', 'vitest']);
+      expect(skills.every(({ skillGroup }) => skillGroup?.category === 'Testing & Delivery')).toBe(true);
+      const project = await prisma.projectEntry.findFirstOrThrow({
+        where: { profileId, name: 'Release Dashboard' },
+        include: { projectSkills: true },
+      });
+      expect(project.projectSkills).toHaveLength(2);
+    });
+
     it('merges a stale skill candidate while the rest of the batch still lands', async () => {
       await prisma.skill.create({
         data: { profileId, name: 'Wound care', normalizedName: 'wound care' },
