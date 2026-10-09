@@ -51,7 +51,12 @@ import type { NormalizedDocumentBlock } from './document/types';
  * and unmetered, so a user out of AI quota can still import their CV.
  */
 
-export const CV_PARSER_VERSION = `cv-extract@2.${CV_EXTRACTION_SCHEMA_VERSION}`;
+/**
+ * Parser behavior changes independently from the stored payload schema. Keep
+ * this explicit so a bug fix that changes extracted evidence invalidates the
+ * deterministic extraction cache without pretending the JSON shape changed.
+ */
+export const CV_PARSER_VERSION = 'cv-extract@2.4';
 
 const BULLET = /^[-*•▪◦●·‣–—]\s+/;
 const EMAIL = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/;

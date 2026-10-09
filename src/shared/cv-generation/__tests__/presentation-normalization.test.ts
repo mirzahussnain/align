@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { emptyCandidateEvidence } from '../merge-evidence';
-import { normalizeEntitySections } from '../presentation-normalization';
+import { dedupePresentationLines, normalizeEntitySections } from '../presentation-normalization';
 import { CV_BUILD_SPEC_V2_VERSION } from '../build-spec-types';
 import { presentationEntity, structuralEvidence } from './fixtures/presentation-normalization';
 
@@ -73,6 +73,54 @@ function positiveEvidenceInput() {
 }
 
 describe('structural presentation normalization', () => {
+  it('uses current source boundaries when an older profile snapshot has the same text split into fragments', () => {
+    const source = [
+      'Reduced redundant API calls by 30% through RTK Query caching and improved average database response time by 20% by refactoring multi-join Prisma queries.',
+      'Built reusable, strictly typed React and TypeScript components, reducing UI defects by 40% while collaborating in a five-engineer Agile team through sprint planning and code reviews.',
+      'Implemented role-based access control across three user roles, securing sensitive workflows and maintaining data isolation.',
+    ];
+    const stale = [
+      'Reduced redundant API calls by 30% through RTK Query caching and improved average database response time by 20% by refactor ing multi',
+      'join Prisma queries.',
+      'Built reusable, strictly typed React and TypeScript components, reducing UI defects by 40% while collaborating in a five -engineer Agile team',
+      'through sprint planning and code reviews.',
+      'Implemented role -based access control across three user roles, securing sensitive workflows and maintaining data isolation.',
+    ];
+    const item = (
+      id: string,
+      canonicalText: string,
+      provenance: 'SOURCE_CV' | 'CAREER_PROFILE',
+      entityId: string,
+      snapshotId: string
+    ) => ({
+      id, kind: 'ACHIEVEMENT' as const, field: 'experience.achievement', canonicalText, provenance,
+      preservationTier: 0 as const, requirementIds: [], sourceEntityId: entityId,
+      sourceRefs: [{ sourceType: provenance, entityType: 'Experience', entityId, fieldPath: 'achievement', snapshotId }],
+    });
+    const items = [
+      ...source.map((text, index) => item(`source-${index}`, text, 'SOURCE_CV', 'experience-1', 'extraction-current')),
+      ...stale.map((text, index) => item(`stale-${index}`, text, 'CAREER_PROFILE', 'profile-experience-1', 'profile-match')),
+    ];
+    const ordered = items.map(({ id }) => id);
+
+    const result = dedupePresentationLines(items, new Map(), {
+      currentProfileSnapshotId: 'profile-current',
+      matchProfileSnapshotId: 'profile-match',
+    }, ordered);
+
+    expect(result.lines.map(({ text }) => text)).toEqual(source);
+    expect(result.lines.map(({ text }) => text).join(' ')).not.toMatch(/refactor ing|^join Prisma|five -engineer/);
+    expect(new Set(result.bindings.flatMap(({ evidenceIds }) => evidenceIds))).toEqual(new Set(ordered));
+  });
+
+  it('does not collapse separate evidence when the normalized content differs', () => {
+    const base = positiveEvidenceInput();
+    const result = normalizeEntitySections(base);
+    expect(result.experience[0].lines.map(({ text }) => text)).toEqual(expect.arrayContaining([
+      'Led the platform migration safely.', 'Mentored four engineers.',
+    ]));
+  });
+
   it('emits one explicit experience, project, and authoritative education per component', () => {
     const result = normalizeEntitySections(normalizationInput());
 

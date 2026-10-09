@@ -214,6 +214,62 @@ function normalizePresentationText(value: string): string {
   return value.normalize('NFKC').trim().replace(/\s+/gu, ' ');
 }
 
+function boundarySignature(value: string): string {
+  return value.normalize('NFKC').toLocaleLowerCase('en').replace(/[^\p{L}\p{N}]+/gu, '');
+}
+
+function selectEquivalentBoundarySet(
+  items: CandidateEvidenceItem[],
+  sourceOrder: Map<string, number>,
+  authorityContext: NormalizationAuthorityContext
+): { items: CandidateEvidenceItem[]; equivalentIds: Map<string, string[]> } {
+  const eligible = items.filter((item) => item.provenance === 'SOURCE_CV' || item.provenance === 'CAREER_PROFILE');
+  const partitions = new Map<string, CandidateEvidenceItem[]>();
+  for (const item of eligible) {
+    const ref = item.sourceRefs.find((candidate) => candidate.sourceType === item.provenance) ?? item.sourceRefs[0];
+    const key = [item.provenance, ref?.snapshotId ?? '', item.sourceEntityId ?? ref?.entityId ?? ''].join(':');
+    partitions.set(key, [...(partitions.get(key) ?? []), item]);
+  }
+  const candidates = [...partitions.values()].map((partition) => {
+    const ordered = [...partition].sort((left, right) =>
+      (sourceOrder.get(left.id) ?? Number.MAX_SAFE_INTEGER) - (sourceOrder.get(right.id) ?? Number.MAX_SAFE_INTEGER)
+      || left.id.localeCompare(right.id)
+    );
+    return { items: ordered, signature: boundarySignature(ordered.map(({ canonicalText }) => canonicalText).join('')) };
+  }).filter(({ signature }) => signature.length > 0);
+  const equivalentIds = new Map<string, string[]>();
+  const suppressed = new Set<string>();
+  for (const signature of new Set(candidates.map((candidate) => candidate.signature))) {
+    const equivalent = candidates.filter((candidate) => candidate.signature === signature);
+    if (equivalent.length < 2) continue;
+    const chosen = [...equivalent].sort((left, right) => {
+      const sourceRank = Number(left.items[0]?.provenance !== 'SOURCE_CV') - Number(right.items[0]?.provenance !== 'SOURCE_CV');
+      if (sourceRank) return sourceRank;
+      const rank = ['CURRENT_PROFILE', 'CANONICAL_REUSABLE', 'APPLICATION_ENTITY', 'MATCH_PROFILE', 'EXTRACTED', 'SAFE_FALLBACK'];
+      const authority = (candidate: CandidateEvidenceItem) => {
+        const ref = candidate.sourceRefs[0];
+        return rank.indexOf(authorityFor({
+          value: candidate.canonicalText,
+          representationId: candidate.id,
+          sourceType: candidate.provenance,
+          snapshotId: ref?.snapshotId,
+          canonicalEntityId: candidate.sourceEntityId,
+          supportKeys: [candidate.id],
+        }, authorityContext));
+      };
+      return authority(left.items[0]!) - authority(right.items[0]!);
+    })[0]!;
+    for (const redundant of equivalent.filter((candidate) => candidate !== chosen).flatMap((candidate) => candidate.items)) {
+      suppressed.add(redundant.id);
+      const redundantSignature = boundarySignature(redundant.canonicalText);
+      const owner = chosen.items.find((candidate) => boundarySignature(candidate.canonicalText).includes(redundantSignature))
+        ?? chosen.items[0];
+      if (owner) equivalentIds.set(owner.id, [...(equivalentIds.get(owner.id) ?? []), redundant.id]);
+    }
+  }
+  return { items: items.filter(({ id }) => !suppressed.has(id)), equivalentIds };
+}
+
 export function dedupePresentationLines(
   items: CandidateEvidenceItem[],
   patches: Map<string, string>,
@@ -222,8 +278,9 @@ export function dedupePresentationLines(
 ): { lines: import('./build-spec-types').CvPresentationLine[]; bindings: CvEvidenceBinding[] } {
   const sourceOrder = new Map(orderedEvidenceIds.map((id, index) => [id, index]));
   const uniqueById = [...new Map(items.map((item) => [item.id, item])).values()];
+  const boundarySelection = selectEquivalentBoundarySet(uniqueById, sourceOrder, authorityContext);
   const byText = new Map<string, CandidateEvidenceItem[]>();
-  for (const item of uniqueById) {
+  for (const item of boundarySelection.items) {
     const key = normalizeIdentityText(item.canonicalText);
     byText.set(key, [...(byText.get(key) ?? []), item]);
   }
@@ -236,7 +293,10 @@ export function dedupePresentationLines(
       const rank = ['CURRENT_PROFILE', 'CANONICAL_REUSABLE', 'APPLICATION_ENTITY', 'MATCH_PROFILE', 'EXTRACTED', 'SAFE_FALLBACK'];
       return rank.indexOf(leftAuthority) - rank.indexOf(rightAuthority) || left.id.localeCompare(right.id);
     })[0];
-    const evidenceIds = duplicates.map(({ id }) => id).sort();
+    const evidenceIds = [...new Set(duplicates.flatMap(({ id }) => [
+      id,
+      ...(boundarySelection.equivalentIds.get(id) ?? []),
+    ]))].sort();
     return {
       line: { id: representative.id, text: normalizePresentationText(patches.get(representative.id) ?? representative.canonicalText) },
       binding: { nodeId: `line:${representative.id}`, evidenceIds, representativeEvidenceId: representative.id },
