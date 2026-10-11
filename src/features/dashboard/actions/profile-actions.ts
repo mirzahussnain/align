@@ -24,6 +24,11 @@ import { repairStoredPhone } from '@/shared/utils/phone';
 import { cleanSkillDisplayName, normaliseSkillName } from '@/shared/utils/skill-normalization';
 import { searchLocalSkillTaxonomy, skillTaxonomySearchLimits } from '@/shared/services/skill-taxonomy';
 import { recordProfileFirstValue } from '@/shared/services/onboarding';
+import {
+  practicalPreferencesSchema,
+  type PracticalPreferencesInput,
+} from '@/shared/schemas/practical-preferences';
+import { savePracticalPreferences } from '@/shared/services/practical-preferences';
 
 async function requireUserId(): Promise<string> {
   const session = await auth.api.getSession({ headers: await headers() });
@@ -31,7 +36,7 @@ async function requireUserId(): Promise<string> {
   return session.user.id;
 }
 
-export interface PersonalInfoInput {
+export interface PersonalInfoInput extends Partial<PracticalPreferencesInput> {
   /** This career track's own name, e.g. "Software Engineering" — never the account holder's name. */
   label: string;
   fullName: string;
@@ -66,6 +71,10 @@ export interface PersonalInfoInput {
  */
 export async function savePersonalInfo(input: PersonalInfoInput, profileId?: string) {
   const userId = await requireUserId();
+  const preferences =
+    'relocationPreference' in input || 'maxCommuteMinutes' in input || 'preferredWorkStyles' in input
+      ? practicalPreferencesSchema.parse(input)
+      : null;
 
   const visaStatus =
     input.visaStatus && isVisaStatus(input.visaStatus) ? (input.visaStatus as VisaStatus) : null;
@@ -131,14 +140,15 @@ export async function savePersonalInfo(input: PersonalInfoInput, profileId?: str
     targetIndustry: isKnownIndustry(input.targetIndustry) ? input.targetIndustry : null,
   };
 
-  await prisma.$transaction([
-    prisma.profileIdentity.upsert({
+  await prisma.$transaction(async (tx) => {
+    await tx.profileIdentity.upsert({
       where: { userId },
       create: { userId, ...identity },
       update: identity,
-    }),
-    prisma.profile.update({ where: { id: resolvedProfileId }, data: trackData }),
-  ]);
+    });
+    await tx.profile.update({ where: { id: resolvedProfileId }, data: trackData });
+    if (preferences) await savePracticalPreferences(userId, preferences, tx);
+  });
 
   revalidatePath('/dashboard');
   return { ok: true as const };

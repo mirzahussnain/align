@@ -1,5 +1,10 @@
 import { prisma } from '@/shared/lib/prisma';
 import { repairStoredPhone } from '@/shared/utils/phone';
+import {
+  EMPTY_PRACTICAL_PREFERENCES,
+  practicalPreferencesSchema,
+  type PracticalPreferencesInput,
+} from '@/shared/schemas/practical-preferences';
 
 /** One career track in the switcher — no content, just enough to list and pick. */
 export interface ProfileSummary {
@@ -25,6 +30,7 @@ export interface ProfileData {
   profileId: string;
   label: string;
   targetIndustry: string;
+  practicalPreferences: PracticalPreferencesInput;
   personal: {
     /** This career track's own name — mirrors the top-level `label`, editable via the same form. */
     label: string;
@@ -216,8 +222,16 @@ export async function resolveProfileId(
  * pre-multi-profile caller wants.
  */
 export async function loadProfileData(userId: string, profileId?: string): Promise<ProfileData> {
-  const [identity, profile] = await Promise.all([
+  const [identity, practicalPreferences, profile] = await Promise.all([
     prisma.profileIdentity.findUnique({ where: { userId } }),
+    prisma.profilePracticalFacts.findUnique({
+      where: { userId },
+      select: {
+        relocationPreference: true,
+        maxCommuteMinutes: true,
+        preferredWorkStyles: true,
+      },
+    }),
     resolveProfile(userId, profileId),
   ]);
 
@@ -248,6 +262,7 @@ export async function loadProfileData(userId: string, profileId?: string): Promi
     profileId: profile?.id ?? '',
     label: profile?.label ?? 'Default',
     targetIndustry: profile?.targetIndustry ?? '',
+    practicalPreferences: practicalPreferencesSchema.parse(practicalPreferences ?? EMPTY_PRACTICAL_PREFERENCES),
     personal: {
       label: profile?.label ?? 'Default',
       fullName: identity?.fullName ?? '',

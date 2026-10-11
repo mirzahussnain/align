@@ -29,6 +29,10 @@ describe('Job Match revision capture', () => {
           title: 'Platform Engineer',
           employerName: 'Acme',
           locationText: 'London',
+          city: 'London',
+          region: 'Greater London',
+          country: 'United Kingdom',
+          workStyle: 'HYBRID',
           canonicalJobId: 'canonical-1',
           providerDescription: 'A later refreshed description',
           providerReferences: [],
@@ -57,5 +61,11 @@ describe('Job Match revision capture', () => {
         descriptionHash: 'prepared-hash',
       }),
     });
+    expect(mocks.createRevision.mock.calls[0][0].data.providerMetadataJson).toEqual(
+      expect.objectContaining({
+        locationText: 'London', city: 'London', region: 'Greater London',
+        country: 'United Kingdom', workStyle: 'HYBRID',
+      }),
+    );
   });
 });

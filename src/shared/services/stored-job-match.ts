@@ -2,6 +2,7 @@ import { JobMatchDataV2Schema } from '@/shared/schemas/ai-output';
 import { RequirementLedgerSnapshotSchema } from '@/shared/cv-generation/schemas';
 import { analyzeCV } from '@/shared/utils/scoring-engine';
 import type { CVAnalysisResult } from '@/shared/types/cv';
+import { practicalCompatibilityViewModelSchema } from '@/shared/schemas/practical-compatibility';
 
 interface StoredJobMatchRow {
   id: string;
@@ -9,6 +10,8 @@ interface StoredJobMatchRow {
   requirementLedgerJson: unknown;
   advisoryJson: unknown;
   cvRevision: { extractedText: string; pageCount: number | null; filename: string };
+  practicalCompatibilityJson?: unknown;
+  practicalCompatibilityVersion?: number;
   jobRevision: { description: string };
 }
 
@@ -51,6 +54,11 @@ export function storedJobMatchResult(row: StoredJobMatchRow): CVAnalysisResult {
   result.fileName = row.cvRevision.filename;
   result.mode = 'job_match';
   result.jobDescription = row.jobRevision.description;
+  if (row.practicalCompatibilityJson != null && row.practicalCompatibilityVersion === 1) {
+    result.practicalCompatibility = practicalCompatibilityViewModelSchema.parse(
+      row.practicalCompatibilityJson,
+    );
+  }
   result.jobMatchData = jobMatchData;
   result.overallScore = row.matchScore;
   result.aiApplied = true;

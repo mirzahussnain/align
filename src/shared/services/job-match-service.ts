@@ -19,6 +19,7 @@ import { AiOrchestrationError } from './ai-orchestrator';
 import { AiOperationError } from './ai-failure';
 import { applyStructuredCandidateEvidence } from './job-match-structured-evidence';
 import { storedJobMatchResult } from './stored-job-match';
+import { buildMatchPracticalCompatibility } from './job-match-practical-compatibility';
 
 export interface JobMatchInput {
   userId: string;
@@ -60,6 +61,10 @@ export async function runJobMatch(input: JobMatchInput): Promise<CVAnalysisResul
     const profileSnapshot = await createCareerProfileSnapshot({ userId: input.userId, profileId: prepared.request.profileId });
     const snapshotData = profileSnapshot.snapshotJson as unknown as CareerProfileSnapshotData;
     const target = snapshotData.profile.personal;
+    const practicalCompatibility = buildMatchPracticalCompatibility({
+      jobRevision,
+      practicalFacts: snapshotData.practicalFacts,
+    });
     const { context, classification } = await resolveAnalysisContext({
       mode: 'job_match',
       cvText: cv.text,
@@ -89,6 +94,7 @@ export async function runJobMatch(input: JobMatchInput): Promise<CVAnalysisResul
     result.jobMatchData = match;
     result.overallScore = match.matchScore;
     result.aiDetectedIndustry = classification.sector;
+    result.practicalCompatibility = practicalCompatibility;
 
     const row = await prisma.jobMatch.create({
       data: {
@@ -129,6 +135,8 @@ export async function runJobMatch(input: JobMatchInput): Promise<CVAnalysisResul
           experienceGap: match.experienceGap,
           tailoredRewrites: match.tailoredRewrites,
         })) as Prisma.InputJsonValue,
+        practicalCompatibilityJson: JSON.parse(JSON.stringify(practicalCompatibility)) as Prisma.InputJsonValue,
+        practicalCompatibilityVersion: 1,
         advisoryVersion: 1,
         analysisVersion: ANALYSIS_VERSIONS.jobMatchAlgorithm,
         promptVersion: ANALYSIS_VERSIONS.jobMatchPrompt,

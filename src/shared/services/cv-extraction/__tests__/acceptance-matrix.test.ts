@@ -43,6 +43,7 @@ function emptyProfile(fullName: string): ProfileData {
     profileId: 'acceptance-profile',
     label: 'Acceptance',
     targetIndustry: '',
+    practicalPreferences: { relocationPreference: null, maxCommuteMinutes: null, preferredWorkStyles: [] },
     personal: {
       label: 'Acceptance',
       fullName,

@@ -113,10 +113,10 @@ export type ConfirmedCandidateFacts = {
   homeCity?: string;
   homeRegion?: string;
   homeCountry?: string;
-  openToRelocation?: boolean;
+  relocationPreference?: 'YES' | 'NO' | 'CONSIDER';
   relocationLocations?: string[];
   maxCommuteMinutes?: number;
-  workPatternPreference?: 'REMOTE_ONLY' | 'HYBRID' | 'ONSITE' | 'FLEXIBLE';
+  preferredWorkStyles?: Array<'REMOTE' | 'HYBRID' | 'ONSITE'>;
   maxOnsiteDaysPerWeek?: number;
 
   // Mobility

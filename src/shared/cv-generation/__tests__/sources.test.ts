@@ -7,6 +7,7 @@ import type { ProfileData } from '@/features/dashboard/data/load-profile';
 
 const profile: ProfileData = {
   profileId: 'profile-1', label: 'Software', targetIndustry: 'technology',
+  practicalPreferences: { relocationPreference: null, maxCommuteMinutes: null, preferredWorkStyles: [] },
   personal: {
     label: 'Software', fullName: 'Amina Shah', tagline: 'Software Engineer', professionalSummary: 'Builds dependable products.',
     targetOccupation: 'software-engineer', targetRoleTitle: 'Backend Engineer', targetSeniority: 'mid', targetIndustry: 'technology',

@@ -29,7 +29,7 @@ const completeRow = {
     domainFit: {
       roleDomain: 'Data engineering',
       candidateDomain: 'Data engineering',
-      status: 'strong',
+      status: 'aligned',
       overlapAreas: ['SQL'],
       detail: 'Direct domain match.',
       confidence: 0.95,
@@ -41,6 +41,18 @@ const completeRow = {
   },
   cvRevision: { extractedText: 'Experienced data engineer with SQL delivery.', pageCount: 1, filename: 'cv.pdf' },
   jobRevision: { description: 'Data engineer with strong SQL experience.' },
+  practicalCompatibilityJson: {
+    items: [{
+      category: 'REMOTE_ONSITE', state: 'CONFLICT', source: 'BOTH',
+      vacancyRequirement: 'Onsite work style',
+      confirmedProfileFact: 'Preferred work styles: remote',
+      explanation: 'Preference mismatch: the vacancy is onsite.',
+    }],
+    summary: { confirmed: 0, conflicts: 1, unknown: 0, notApplicable: 0 },
+    updatableCategories: [],
+    disclaimer: 'Snapshot disclaimer.',
+  },
+  practicalCompatibilityVersion: 1,
 };
 
 describe('stored Job Match contract', () => {
@@ -53,4 +65,19 @@ describe('stored Job Match contract', () => {
       expect(() => storedJobMatchResult({ ...completeRow, advisoryJson })).toThrow();
     },
   );
+
+  it('rehydrates the persisted practical conclusion without recalculating it', () => {
+    const result = storedJobMatchResult(completeRow);
+    expect(result.practicalCompatibility).toEqual(completeRow.practicalCompatibilityJson);
+  });
+
+  it('keeps legacy rows without a practical snapshot readable', () => {
+    const legacy = {
+      ...completeRow,
+      practicalCompatibilityJson: undefined,
+      practicalCompatibilityVersion: undefined,
+    };
+    const result = storedJobMatchResult(legacy);
+    expect(result.practicalCompatibility).toBeUndefined();
+  });
 });

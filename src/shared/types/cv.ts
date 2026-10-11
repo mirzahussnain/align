@@ -3,6 +3,7 @@ import type { JobMatchDataV2 } from './ai';
 import type { JobMatchReportView } from './job-match-report';
 import type { Sector } from '@/shared/constants/sector-keywords';
 import type { Classification } from './classification';
+import type { PracticalCompatibilityViewModel } from './practical-compatibility';
 import type { AnalysisContext } from './analysis-context';
 
 export interface CVAnalysisResult {
@@ -76,6 +77,8 @@ export interface CVAnalysisResult {
    */
   jobMatchReport?: JobMatchReportView;
   jobDescription?: string;
+  /** Deterministic, unscored practical fit captured for this exact match snapshot. */
+  practicalCompatibility?: PracticalCompatibilityViewModel;
 
   /**
    * Id of the persisted ATS analysis or Job Match this result was saved as. Attached to the

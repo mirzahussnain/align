@@ -8,6 +8,7 @@ import TargetRolePicker from './TargetRolePicker';
 import LocationPicker from './LocationPicker';
 import PhonePicker from './PhonePicker';
 import VisaStatusPicker from './VisaStatusPicker';
+import PracticalPreferencesFields from './PracticalPreferencesFields';
 import { savePersonalInfo, type PersonalInfoInput } from '@/features/dashboard/actions/profile-actions';
 import type { ProfileData } from '@/features/dashboard/data/load-profile';
 import { visaRequiresExpiry } from '@/shared/constants/visa-status';
@@ -22,15 +23,17 @@ function validate(form: PersonalInfoInput): string | null {
 }
 
 export default function PersonalInfoForm({
+  initialPreferences,
   initial,
   profileId,
 }: {
   initial: ProfileData['personal'];
+  initialPreferences: ProfileData['practicalPreferences'];
   /** Career track the tagline/summary belong to; identity fields are shared. */
   profileId?: string;
 }) {
   const router = useRouter();
-  const [form, setForm] = useState<PersonalInfoInput>(initial);
+  const [form, setForm] = useState<PersonalInfoInput & ProfileData['practicalPreferences']>({ ...initial, ...initialPreferences });
   const [isPending, startTransition] = useTransition();
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState('');
@@ -101,6 +104,16 @@ export default function PersonalInfoForm({
         <VisaStatusPicker value={form} onChange={patch} />
 
         <div>
+
+        <div className="sm:col-span-2 border-t border-neutral-200 pt-5">
+          <h3 className="text-sm font-bold text-neutral-900">Eligibility and work preferences</h3>
+          <p className="mt-1 text-xs leading-relaxed text-neutral-500">
+            Used separately from CV scoring to flag practical fit for a role.
+          </p>
+          <div className="mt-4">
+            <PracticalPreferencesFields value={form} onChange={patch} idPrefix="profile" />
+          </div>
+        </div>
           <Label htmlFor="website">Website</Label>
           <TextField id="website" value={form.website} onChange={(e) => set('website', e.target.value)} placeholder="https://…" />
         </div>

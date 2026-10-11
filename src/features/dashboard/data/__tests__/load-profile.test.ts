@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 vi.mock('@/shared/lib/prisma', () => ({
   prisma: {
     profileIdentity: { findUnique: vi.fn() },
+    profilePracticalFacts: { findUnique: vi.fn() },
     profile: { findFirst: vi.fn() },
   },
 }));
@@ -38,6 +39,7 @@ const storedProfile = {
 beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(prisma.profileIdentity.findUnique).mockResolvedValue(null);
+  vi.mocked(prisma.profilePracticalFacts.findUnique).mockResolvedValue(null);
 });
 
 describe('profile evidence loading', () => {

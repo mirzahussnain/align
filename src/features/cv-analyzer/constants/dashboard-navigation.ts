@@ -84,6 +84,7 @@ export const JOB_MATCH_NAVIGATION = [
   { id: 'summary', label: 'Score & Summary', iconName: 'Target' },
   { id: 'skills', label: 'Skill Alignment', iconName: 'Target' },
   { id: 'domain', label: 'Domain & Eligibility', iconName: 'Briefcase' },
+  { id: 'practical', label: 'Practical Compatibility', iconName: 'MapPinned' },
   { id: 'scoring', label: 'Score Breakdown', iconName: 'BarChart2' },
   { id: 'rewrites', label: 'Tailored Rewrites', iconName: 'FileEdit' },
   { id: 'strategy', label: 'Rewrite Strategy', iconName: 'LayoutList' }

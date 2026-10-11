@@ -12,6 +12,11 @@ import { isSeniorityValue } from '@/shared/constants/occupation-options';
 import { createProfileWithinPlanLimit } from '@/shared/services/career-profile';
 import { APIError } from '@/shared/utils/api-error';
 import { suggestCareerTrackLabel } from '@/shared/occupations/track-label';
+import {
+  practicalPreferencesSchema,
+  type PracticalPreferencesInput,
+} from '@/shared/schemas/practical-preferences';
+import { savePracticalPreferences } from '@/shared/services/practical-preferences';
 
 /**
  * Server actions for the goal-led onboarding journey.
@@ -138,7 +143,7 @@ export async function saveCareerDirection(input: CareerDirectionInput) {
   return { ok: true as const };
 }
 
-export interface EligibilityBasicsInput {
+export interface EligibilityBasicsInput extends PracticalPreferencesInput {
   country: string;
   city: string;
   visaStatus: string;
@@ -167,6 +172,10 @@ export async function saveEligibilityBasics(input: EligibilityBasicsInput) {
   if (visaStatus && visaRequiresExpiry(visaStatus) && !input.visaExpiry.trim()) {
     return { ok: false as const, error: 'Add the expiry date for this visa status.' };
   }
+  const parsedPreferences = practicalPreferencesSchema.safeParse(input);
+  if (!parsedPreferences.success) {
+    return { ok: false as const, error: 'Choose valid relocation, commute and work-style preferences.' };
+  }
 
   const identity = {
     country: input.country.trim() || null,
@@ -179,13 +188,16 @@ export async function saveEligibilityBasics(input: EligibilityBasicsInput) {
         : null,
   };
 
-  await prisma.profileIdentity.upsert({
-    where: { userId },
-    // `fullName` is NOT NULL and this screen does not collect it; an empty
-    // string is only ever used to create a row that the career-direction step
-    // has not already made, and it never overwrites a name that exists.
-    create: { userId, fullName: '', ...identity },
-    update: identity,
+  await prisma.$transaction(async (tx) => {
+    await tx.profileIdentity.upsert({
+      where: { userId },
+      // `fullName` is NOT NULL and this screen does not collect it; an empty
+      // string is only ever used to create a row that the career-direction step
+      // has not already made, and it never overwrites a name that exists.
+      create: { userId, fullName: '', ...identity },
+      update: identity,
+    });
+    await savePracticalPreferences(userId, parsedPreferences.data, tx);
   });
 
   revalidatePath('/dashboard');

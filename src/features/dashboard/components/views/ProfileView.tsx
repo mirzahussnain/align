@@ -53,7 +53,7 @@ export default function ProfileView({ initial, name, email, image }: { initial: 
         </div>
       </div>
       <div className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-6 lg:p-8">
-        {section === 'personal' && <PersonalInfoForm initial={initial.personal} profileId={initial.profileId} />}
+        {section === 'personal' && <PersonalInfoForm initial={initial.personal} initialPreferences={initial.practicalPreferences} profileId={initial.profileId} />}
         {section === 'experience' && <ExperienceForm key={`${initial.profileId}:experience`} initial={initial.experience} profileId={initial.profileId} />}
         {section === 'projects' && <ProjectsForm key={`${initial.profileId}:projects`} initial={initial.projects} skills={initial.skills} profileId={initial.profileId} />}
         {section === 'education' && <EducationForm key={`${initial.profileId}:education`} initial={initial.education} profileId={initial.profileId} />}

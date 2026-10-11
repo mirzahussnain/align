@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { AnimatePresence } from 'framer-motion';
-import { Target, AlertCircle, FileEdit, Briefcase, BarChart2, ShieldAlert, Lock } from 'lucide-react';
+import { Target, AlertCircle, FileEdit, Briefcase, BarChart2, ShieldAlert, Lock, MapPinned } from 'lucide-react';
 import type { CVAnalysisResult } from '@/shared/types/cv';
 import type { JobMatchReportView } from '@/shared/types/job-match-report';
 import { SidebarNavItem } from '../shared/SidebarNavItem';
@@ -16,6 +16,7 @@ import DomainFitPanel from './panels/DomainFitPanel';
 import ScoringBreakdownPanel from './panels/ScoringBreakdownPanel';
 import TailoredRewritesPanel from './panels/TailoredRewritesPanel';
 import RewriteStrategyPanel from './panels/RewriteStrategyPanel';
+import PracticalCompatibilityPanel from './panels/PracticalCompatibilityPanel';
 import CvGenerationWizard from '@/features/cv-generation/components/CvGenerationWizard';
 import { Sparkles, LayoutList } from 'lucide-react';
 
@@ -23,7 +24,7 @@ interface JobMatchDashboardProps {
   result: CVAnalysisResult;
 }
 
-type TabKey = 'summary' | 'criteria' | 'skills' | 'domain' | 'scoring' | 'rewrites' | 'strategy';
+type TabKey = 'summary' | 'criteria' | 'skills' | 'domain' | 'practical' | 'scoring' | 'rewrites' | 'strategy';
 
 export default function JobMatchDashboard({ result }: JobMatchDashboardProps) {
   const [activeTab, setActiveTab] = useState<TabKey>('summary');
@@ -49,13 +50,16 @@ export default function JobMatchDashboard({ result }: JobMatchDashboardProps) {
   // Person-spec criteria only exist when the JD contained an explicit
   // essential/desirable list (NHS/council-style adverts).
   const hasCriteria = view.requirements.hasPersonSpecification;
+  const baseNavigation = result.practicalCompatibility
+    ? [...JOB_MATCH_NAVIGATION]
+    : JOB_MATCH_NAVIGATION.filter((item) => item.id !== 'practical');
   const navigation = hasCriteria
     ? [
-        ...JOB_MATCH_NAVIGATION.slice(0, 1),
+        ...baseNavigation.slice(0, 1),
         { id: 'criteria', label: 'Person Specification', iconName: 'ClipboardList' },
-        ...JOB_MATCH_NAVIGATION.slice(1),
+        ...baseNavigation.slice(1),
       ]
-    : [...JOB_MATCH_NAVIGATION];
+    : baseNavigation;
 
   // Animation variants
   const contentVariants = {
@@ -113,6 +117,15 @@ export default function JobMatchDashboard({ result }: JobMatchDashboardProps) {
           (v.scoreExplanation.domainDeduction ? 1 : 0) +
           (v.scoreExplanation.lockedDeductionCount > 0 ? 1 : 0);
         return { status: 'info' as const, badgeText: `${rows} Items`, icon: <BarChart2 size={12} /> };
+      }
+      case 'practical': {
+        const practical = result.practicalCompatibility;
+        const reviewCount = (practical?.summary.conflicts ?? 0) + (practical?.summary.unknown ?? 0);
+        return {
+          status: reviewCount > 0 ? 'warning' : 'success',
+          badgeText: reviewCount > 0 ? `${reviewCount} to review` : 'Compatible',
+          icon: <MapPinned size={12} />,
+        };
       }
       case 'rewrites':
         return {
@@ -183,6 +196,8 @@ export default function JobMatchDashboard({ result }: JobMatchDashboardProps) {
         return <SkillAlignmentPanel view={view} contentVariants={contentVariants} />;
       case 'domain':
         return <DomainFitPanel view={view} contentVariants={contentVariants} />;
+      case 'practical':
+        return result.practicalCompatibility ? <PracticalCompatibilityPanel compatibility={result.practicalCompatibility} /> : null;
       case 'scoring':
         return <ScoringBreakdownPanel view={view} contentVariants={contentVariants} />;
       case 'rewrites':

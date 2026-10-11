@@ -83,6 +83,8 @@ type RequirementRule = { category: VacancyRequirementCategory; pattern: RegExp; 
 const requirementRules: RequirementRule[] = [
   { category: 'RIGHT_TO_WORK', pattern: /\b(?:must|need to|applicants? must|you must|already)\s+(?:already\s+)?(?:have|hold)\s+(?:an?\s+)?(?:the\s+)?(?:existing\s+)?(?:right[- ]to[- ]work|right to work in (?:the\s+)?uk)\b/gi, requirement: 'REQUIRED' },
   { category: 'SPONSORSHIP', pattern: /\b(?:no|not|unable to|cannot)\s+(?:offer|provide|support)?\s*(?:skilled worker |visa )?sponsorship\b/gi, requirement: 'REQUIRED' },
+  { category: 'RELOCATION', pattern: /\brelocation\s+(?:is\s+)?(?:required|mandatory)\b/gi, requirement: 'REQUIRED' },
+  { category: 'RELOCATION', pattern: /\b(?:must|will need to|required to)\s+relocate\b/gi, requirement: 'REQUIRED' },
   { category: 'UK_RESIDENCY', pattern: /\b(?:must have lived|(?:three|four|five|\d+) years?(?:'|’)?\s+(?:continuous )?uk residency|residency required for vetting)\b[^.]{0,80}/gi, value: (match) => match[0], requirement: 'REQUIRED' },
   { category: 'SECURITY_CLEARANCE', pattern: /\b(?:must (?:already )?(?:hold|have)|existing)\s+(?:an? )?(SC|DV|BPSS|CTC|security clearance)\b/gi, value: (match) => match[1]?.toUpperCase(), requirement: 'REQUIRED' },
   { category: 'SECURITY_CLEARANCE', pattern: /\b(?:eligible to obtain|able to obtain|willing to undergo)\s+(?:an? )?(SC|DV|BPSS|CTC|security clearance)\b/gi, value: (match) => `Eligible to obtain ${match[1]?.toUpperCase() ?? 'clearance'}`, requirement: 'MENTIONED' },

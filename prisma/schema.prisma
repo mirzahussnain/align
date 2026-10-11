@@ -232,14 +232,19 @@ model ProfileIdentity {
 }
 
 /**
- * How the candidate is willing to attend a workplace. Distinct from a vacancy's
- * `workStyle`: this is a stated preference, never derived from a CV.
+ * Optional candidate preferences. These are stated choices, never inferred
+ * from a CV or from the candidate's current location.
  */
-enum WorkPatternPreference {
-  REMOTE_ONLY
+enum RelocationPreference {
+  YES
+  NO
+  CONSIDER
+}
+
+enum WorkStylePreference {
+  REMOTE
   HYBRID
   ONSITE
-  FLEXIBLE
 }
 
 /**
@@ -284,11 +289,11 @@ model ProfilePracticalFacts {
   mayRequireSponsorshipLater Boolean?
 
   // Location and work pattern. Home location itself is ProfileIdentity.city/state.
-  openToRelocation      Boolean?
-  relocationLocations   String[]               @default([])
-  maxCommuteMinutes     Int?
-  workPatternPreference WorkPatternPreference?
-  maxOnsiteDaysPerWeek  Int?
+  relocationPreference RelocationPreference?
+  relocationLocations  String[]              @default([])
+  maxCommuteMinutes    Int?
+  preferredWorkStyles  WorkStylePreference[] @default([])
+  maxOnsiteDaysPerWeek Int?
 
   // Mobility
   drivingLicenceHeld  Boolean?
@@ -857,27 +862,29 @@ model CareerProfileSnapshot {
  * Candidate-to-vacancy result over three exact immutable inputs.
  */
 model JobMatch {
-  id                       String                @id @default(cuid())
-  userId                   String
-  user                     User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
-  cvRevisionId             String
-  cvRevision               CvRevision            @relation(fields: [cvRevisionId], references: [id], onDelete: Restrict)
-  jobRevisionId            String
-  jobRevision              JobRevision           @relation(fields: [jobRevisionId], references: [id], onDelete: Restrict)
-  profileSnapshotId        String
-  profileSnapshot          CareerProfileSnapshot @relation(fields: [profileSnapshotId], references: [id], onDelete: Restrict)
-  requestId                String?               @unique
-  request                  JobMatchRequest?      @relation(fields: [requestId], references: [id], onDelete: SetNull)
-  matchScore               Int
-  requirementLedgerJson    Json?
-  requirementLedgerVersion Int                   @default(1)
-  advisoryJson             Json?
-  advisoryVersion          Int                   @default(1)
-  analysisVersion          String?
-  promptVersion            String
-  aiProvider               String?
-  aiModel                  String?
-  createdAt                DateTime              @default(now())
+  id                            String                @id @default(cuid())
+  userId                        String
+  user                          User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  cvRevisionId                  String
+  cvRevision                    CvRevision            @relation(fields: [cvRevisionId], references: [id], onDelete: Restrict)
+  jobRevisionId                 String
+  jobRevision                   JobRevision           @relation(fields: [jobRevisionId], references: [id], onDelete: Restrict)
+  profileSnapshotId             String
+  profileSnapshot               CareerProfileSnapshot @relation(fields: [profileSnapshotId], references: [id], onDelete: Restrict)
+  requestId                     String?               @unique
+  request                       JobMatchRequest?      @relation(fields: [requestId], references: [id], onDelete: SetNull)
+  matchScore                    Int
+  practicalCompatibilityJson    Json?
+  practicalCompatibilityVersion Int                   @default(1)
+  requirementLedgerJson         Json?
+  requirementLedgerVersion      Int                   @default(1)
+  advisoryJson                  Json?
+  advisoryVersion               Int                   @default(1)
+  analysisVersion               String?
+  promptVersion                 String
+  aiProvider                    String?
+  aiModel                       String?
+  createdAt                     DateTime              @default(now())
 
   generatedCVs  GeneratedCV[]
   cvGenerations CvGeneration[]

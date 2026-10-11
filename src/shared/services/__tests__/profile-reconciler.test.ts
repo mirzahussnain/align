@@ -39,6 +39,7 @@ function profile(overrides: Partial<ProfileData> = {}): ProfileData {
     profileId: 'profile-a',
     label: 'Finance',
     targetIndustry: 'finance',
+    practicalPreferences: { relocationPreference: null, maxCommuteMinutes: null, preferredWorkStyles: [] },
     personal: PERSONAL,
     experience: [
       {

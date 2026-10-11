@@ -6,8 +6,10 @@ import { FieldHint, Label, TextField } from '@/features/dashboard/components/pro
 import type { ProfileStepHandle } from '@/features/dashboard/components/profile/step-handle';
 import { saveEligibilityBasics } from '../actions';
 import { VISA_STATUSES, visaRequiresExpiry } from '@/shared/constants/visa-status';
+import PracticalPreferencesFields from '@/features/dashboard/components/profile/PracticalPreferencesFields';
+import type { PracticalPreferencesInput } from '@/shared/schemas/practical-preferences';
 
-export const ManualEligibilityStep = forwardRef<ProfileStepHandle, { initial: { country: string; city: string; visaStatus: string; visaExpiry: string } }>(function ManualEligibilityStep({ initial }, ref) {
+export const ManualEligibilityStep = forwardRef<ProfileStepHandle, { initial: { country: string; city: string; visaStatus: string; visaExpiry: string } & PracticalPreferencesInput }>(function ManualEligibilityStep({ initial }, ref) {
   const [form, setForm] = useState(initial);
   useImperativeHandle(ref, () => ({ save: async () => {
     const result = await saveEligibilityBasics(form);
@@ -24,5 +26,12 @@ export const ManualEligibilityStep = forwardRef<ProfileStepHandle, { initial: { 
       <FieldHint id="eligibility-visa-hint">Used to tell you whether a role needs sponsorship you do not have.</FieldHint>
     </div>
     {needsExpiry && <div><Label htmlFor="eligibility-visa-expiry" required>Visa expiry</Label><TextField id="eligibility-visa-expiry" type="date" value={form.visaExpiry} onChange={(event) => set('visaExpiry', event.target.value)} /></div>}
+    <div className="sm:col-span-2 border-t border-neutral-200 pt-5">
+      <PracticalPreferencesFields
+        value={form}
+        onChange={(preferences) => setForm((current) => ({ ...current, ...preferences }))}
+        idPrefix="manual-eligibility"
+      />
+    </div>
   </div>;
 });

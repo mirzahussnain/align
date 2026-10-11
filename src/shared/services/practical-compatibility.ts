@@ -114,7 +114,7 @@ export function assessLocationCompatibility(
   const homeCity = normalisePlace(facts.homeCity);
   const homeRegion = normalisePlace(facts.homeRegion);
 
-  if (vacancy.workStyle === 'REMOTE' && facts.workPatternPreference !== 'ONSITE') {
+  if (vacancy.workStyle?.toUpperCase() === 'REMOTE') {
     return {
       state: 'COMPATIBLE',
       explanation: 'The vacancy is advertised as remote, so a specific home location is not required.',
@@ -151,38 +151,9 @@ export function assessLocationCompatibility(
       vacancyFact: vacancyLabel,
     };
   }
-  const relocationTargets = (facts.relocationLocations ?? []).map(normalisePlace).filter(Boolean);
-  if (facts.openToRelocation === true) {
-    const named = relocationTargets.length > 0;
-    const covered = !named || relocationTargets.some((target) => target === vacancyCity || target === vacancyRegion);
-    if (covered) {
-      return {
-        state: 'POSSIBLY_COMPATIBLE',
-        explanation: named
-          ? 'The vacancy location is among the places you have recorded as open to relocation.'
-          : 'Your profile records that you are open to relocation, without naming specific places.',
-        profileFact: named ? facts.relocationLocations!.join(', ') : 'Open to relocation',
-        vacancyFact: vacancyLabel,
-      };
-    }
-    return {
-      state: 'CONFLICT',
-      explanation: 'The vacancy location is outside the places you have recorded as open to relocation.',
-      profileFact: facts.relocationLocations!.join(', '),
-      vacancyFact: vacancyLabel,
-    };
-  }
-  if (facts.openToRelocation === false) {
-    return {
-      state: 'CONFLICT',
-      explanation: 'The vacancy is not at your recorded home location and your profile records that you are not open to relocation.',
-      profileFact: facts.homeCity ?? facts.homeRegion,
-      vacancyFact: vacancyLabel,
-    };
-  }
   return {
     state: 'UNKNOWN',
-    explanation: 'The vacancy is not at your recorded home location, and your profile does not record whether you are open to relocation.',
+    explanation: 'The vacancy is in a different recorded location. No journey time or mandatory relocation requirement can be inferred from city names alone.',
     profileFact: facts.homeCity ?? facts.homeRegion,
     vacancyFact: vacancyLabel,
   };
@@ -457,6 +428,45 @@ function immigrationItems(
   }
 }
 
+function addWorkStylePreference(
+  builder: Builder,
+  facts: ConfirmedCandidateFacts,
+  vacancy: VacancyPracticalContext,
+  requirements: readonly VacancyRequirementEvidence[],
+): void {
+  const metadataStyle = vacancy.workStyle?.toUpperCase();
+  const style = metadataStyle === 'REMOTE' || metadataStyle === 'HYBRID' || metadataStyle === 'ONSITE'
+    ? metadataStyle
+    : requirements.some((item) => item.category === 'ONSITE')
+      ? 'ONSITE'
+      : undefined;
+  if (!style) return;
+
+  const selected = facts.preferredWorkStyles ?? [];
+  const vacancyRequirement = `${style.charAt(0)}${style.slice(1).toLowerCase()} work style`;
+  if (selected.length === 0) {
+    builder.add({
+      category: 'REMOTE_ONSITE', state: 'NOT_APPLICABLE', source: 'VACANCY', vacancyRequirement,
+      explanation: 'No work-style preference is recorded, so this vacancy work style is not treated as a mismatch.',
+    });
+    return;
+  }
+  const labels = selected.map((value) => value.toLowerCase()).join(', ');
+  if (selected.includes(style)) {
+    builder.add({
+      category: 'REMOTE_ONSITE', state: 'CONFIRMED', source: 'BOTH', vacancyRequirement,
+      confirmedProfileFact: `Preferred work styles: ${labels}`,
+      explanation: `The vacancy's ${style.toLowerCase()} work style is included in your recorded preferences.`,
+    });
+    return;
+  }
+  builder.add({
+    category: 'REMOTE_ONSITE', state: 'CONFLICT', source: 'BOTH', vacancyRequirement,
+    confirmedProfileFact: `Preferred work styles: ${labels}`,
+    explanation: `Preference mismatch: the vacancy is ${style.toLowerCase()}, which is not among your selected work styles. This is not a mandatory or legal eligibility conflict.`,
+  });
+}
+
 /** Categories whose UNKNOWN can be cleared by recording a structured profile value. */
 const UPDATABLE: ReadonlySet<PracticalCompatibilityCategory> = new Set([
   'SPONSORSHIP', 'RIGHT_TO_WORK', 'VISA_DURATION', 'LOCATION', 'RELOCATION', 'COMMUTE',
@@ -504,19 +514,20 @@ export function comparePracticalCompatibility(
           unknownExplanation: 'The vacancy states access to a vehicle. This is not confirmed in your profile.',
         }));
         break;
-      case 'ONSITE': {
-        const preference = facts.workPatternPreference;
-        const accepts = preference === undefined ? undefined : preference !== 'REMOTE_ONLY';
-        builder.add(booleanItem({
-          category: 'REMOTE_ONSITE',
-          requirement,
-          held: accepts,
-          confirmedLabel: `Work pattern preference recorded as ${preference?.toLowerCase().replace('_', ' ')}`,
-          deniedLabel: 'Work pattern preference recorded as remote only',
-          confirmedExplanation: 'The vacancy involves on-site attendance and your recorded work-pattern preference allows it.',
-          conflictExplanation: 'The vacancy involves on-site attendance and your profile records a remote-only preference.',
-          unknownExplanation: 'The vacancy involves on-site attendance. Your work-pattern preference is not recorded in your profile.',
-        }));
+      case 'ONSITE':
+        break;
+      case 'RELOCATION': {
+        const preference = facts.relocationPreference;
+        const common = { category: 'RELOCATION' as const, vacancyRequirement: vacancyStatement(requirement) };
+        if (preference === 'YES') {
+          builder.add({ ...common, state: 'CONFIRMED', source: 'BOTH', confirmedProfileFact: 'Willing to relocate', explanation: 'The vacancy explicitly requires relocation and your profile records that you are willing to relocate.' });
+        } else if (preference === 'NO') {
+          builder.add({ ...common, state: 'CONFLICT', source: 'BOTH', confirmedProfileFact: 'Not willing to relocate', explanation: 'Preference mismatch: the vacancy explicitly requires relocation and your profile records that you are not willing to relocate. This is not a legal eligibility conclusion.' });
+        } else if (preference === 'CONSIDER') {
+          builder.add({ ...common, state: 'UNKNOWN', source: 'BOTH', confirmedProfileFact: 'Would consider relocation', explanation: 'The vacancy explicitly requires relocation and your profile says you would consider it, so this needs your review.' });
+        } else {
+          builder.add({ ...common, state: 'UNKNOWN', source: 'VACANCY', explanation: 'The vacancy explicitly requires relocation. Your relocation preference is not recorded.' });
+        }
         break;
       }
       case 'TRAVEL':
@@ -581,6 +592,8 @@ export function comparePracticalCompatibility(
       }
     }
   }
+
+  addWorkStylePreference(builder, facts, vacancy, detected);
 
   // Location is assessed from vacancy METADATA, so it is offered whenever the
   // vacancy or the profile carries a location — not only when the advert text
