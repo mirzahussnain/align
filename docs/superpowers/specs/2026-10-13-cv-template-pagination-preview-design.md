@@ -163,6 +163,8 @@ Preview failures belong to `GeneratedCvPreview.failureCode` after the DOCX and P
 - `THUMBNAIL_RENDER_FAILED`: one or more PNG pages could not be rasterised or stored;
 - `PREVIEW_STORAGE_FAILED`: preview artifacts could not be durably stored;
 - `PREVIEW_LEASE_EXPIRED`: an interrupted conversion may be safely reclaimed.
+- `LEGACY_CONVERSION_FAILED`: an older DOCX could not be converted without changing it;
+- `LEGACY_PAGE_LIMIT_EXCEEDED`: an older DOCX renders above the new two-page limit and remains downloadable but is not labelled as validated.
 
 A new CV becomes `COMPLETED` only after DOCX→PDF conversion succeeds and the PDF proves one or two pages. PNG failure may still publish the valid DOCX/PDF with preview status `FAILED`; the library shows a retryable fallback and retains DOCX and authenticated PDF download. Quota is committed once for the valid generated CV, never for failed conversion/page validation.
 
