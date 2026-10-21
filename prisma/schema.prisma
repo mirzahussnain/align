@@ -34,6 +34,7 @@ model User {
   jobRevisions               JobRevision[]
   careerProfileSnapshots     CareerProfileSnapshot[]
   generatedCVs               GeneratedCV[]
+  generatedCvPreviews        GeneratedCvPreview[]
   cvGenerations              CvGeneration[]
   usage                      UsageCounter[]
   capabilityReservations     CapabilityReservation[]
@@ -917,6 +918,19 @@ enum CvGenerationStatus {
   GENERATION_FAILED
 }
 
+enum GeneratedCvPreviewStatus {
+  PENDING
+  RENDERING
+  READY
+  FAILED
+}
+
+enum GeneratedCvPreviewFailureCode {
+  THUMBNAIL_RENDER_FAILED
+  PREVIEW_STORAGE_FAILED
+  PREVIEW_LEASE_EXPIRED
+}
+
 enum CvGenerationSnapshotReason {
   INITIAL
   PROFILE_REFRESH
@@ -976,6 +990,10 @@ model CvGeneration {
   currentSnapshotVersion       Int                    @default(0)
   currentReconciliationVersion Int                    @default(0)
   failureCode                  String?
+  generationLeaseToken         String?
+  generationLeaseExpiresAt     DateTime?
+  generationAttemptCount       Int                    @default(0)
+  validatedAiCheckpoint        Json?
   createdAt                    DateTime               @default(now())
   updatedAt                    DateTime               @updatedAt
 
@@ -1578,7 +1596,7 @@ model AiUsageEvent {
   operationId            String?
   capability             String
   provider               String
-  model                  String
+  model                   String
   inputTokens            Int?
   outputTokens           Int?
   actualTotalTokens      Int?
@@ -1656,6 +1674,7 @@ model GeneratedCV {
    * Bytes of the archived DOCX, so quota is computed without listing R2.
    */
   fileSize            Int?
+  preview             GeneratedCvPreview?
   createdAt           DateTime               @default(now())
 
   @@index([userId])
@@ -1666,6 +1685,31 @@ model GeneratedCV {
   @@index([parentGeneratedCvId])
   @@index([profileId])
   @@map("generated_cv")
+}
+
+model GeneratedCvPreview {
+  id              String                         @id @default(cuid())
+  generatedCvId   String                         @unique
+  generatedCv     GeneratedCV                    @relation(fields: [generatedCvId], references: [id], onDelete: Cascade)
+  userId          String
+  user            User                           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  documentHash    String
+  rendererVersion String
+  status          GeneratedCvPreviewStatus       @default(PENDING)
+  failureCode     GeneratedCvPreviewFailureCode?
+  pageCount       Int?
+  pdfKey          String?
+  pageImageKeys   String[]                       @default([])
+  pdfSize         Int?
+  pageImageSizes  Int[]                          @default([])
+  attemptCount    Int                            @default(0)
+  leaseExpiresAt  DateTime?
+  createdAt       DateTime                       @default(now())
+  updatedAt       DateTime                       @updatedAt
+
+  @@index([userId, documentHash])
+  @@index([status, leaseExpiresAt])
+  @@map("generated_cv_preview")
 }
 
 model Session {
