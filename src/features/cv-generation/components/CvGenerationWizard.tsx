@@ -14,8 +14,9 @@ import type {
   SemanticGapGroup,
   UnifiedCandidateEvidence,
 } from '@/shared/cv-generation/types';
-import { DEFAULT_TEMPLATE_ID, TEMPLATE_IDS, type TemplateId } from '@/shared/constants/templates';
+import { DEFAULT_TEMPLATE_ID, type TemplateId } from '@/shared/constants/templates';
 import EvidenceReconciliationStep from './EvidenceReconciliationStep';
+import TemplateCarousel from './TemplateCarousel';
 
 type Step = 'SOURCE' | 'GAPS' | 'REVIEW' | 'DESIGN' | 'GENERATING' | 'DONE';
 
@@ -37,9 +38,6 @@ interface SessionResponse {
 }
 
 const WIZARD_STEPS = ['Source / Target', 'Evidence reconciliation', 'Review CV plan', 'Generate'] as const;
-const TEMPLATE_LABELS: Record<TemplateId, string> = {
-  architect: 'Architect', editorial_refined: 'Editorial Refined', technical_precision: 'Technical Precision', academic_latex: 'Academic Research',
-};
 const SECTION_LABELS: Record<CvPlanSection, string> = {
   PROFILE: 'Professional Summary', EXECUTIVE_SUMMARY: 'Executive Summary', CORE_EXPERTISE: 'Core Expertise',
   EXPERIENCE: 'Professional Experience', SELECTED_IMPACT: 'Selected Impact', SKILLS: 'Technical Skills',
@@ -196,7 +194,7 @@ export default function CvGenerationWizard({
           />}
           {step === 'REVIEW' && plan && <div className="space-y-6"><div><h3 className="text-lg font-bold text-text-primary">Review the CV plan</h3><p className="mt-1 text-sm text-text-secondary">This is the exact evidence and structure the generator will receive. Core facts cannot be removed.</p></div><div className="grid gap-3 sm:grid-cols-3"><Stat label="Strategy" value={plan.targetStrategy.replaceAll('_', ' ')} /><Stat label="Length" value={plan.targetLength.replaceAll('_', ' ')} /><Stat label="Density" value={plan.density} /></div><SectionOrderEditor order={sectionOrder} recommended={plan.sectionOrder} onChange={setSectionOrder} /><div><h4 className="text-sm font-bold text-text-primary">Optional supporting evidence</h4><p className="mt-1 text-xs text-text-tertiary">Optional items are included by default. Excluding one is recorded in the approved plan.</p><div className="mt-3 max-h-52 space-y-2 overflow-y-auto">{plan.optionalEvidenceIds.length ? plan.optionalEvidenceIds.map((id) => <label key={id} className="flex items-start gap-3 rounded-xl border border-border-subtle p-3 text-sm text-text-secondary"><input type="checkbox" checked={!excludedOptional.includes(id)} onChange={(event) => setExcludedOptional((items) => event.target.checked ? items.filter((item) => item !== id) : [...items, id])} className="mt-0.5" /><span>{evidence?.evidenceById[id]?.canonicalText ?? id}</span></label>) : <p className="rounded-xl bg-bg-primary p-3 text-sm text-text-tertiary">No optional items need a decision.</p>}</div></div></div>}
 
-          {step === 'DESIGN' && <div className="space-y-6"><div><h3 className="text-lg font-bold text-text-primary">Choose the presentation</h3><p className="mt-1 text-sm text-text-secondary">Templates change layout, not the approved evidence selection.</p></div><div className="grid gap-3 sm:grid-cols-2">{TEMPLATE_IDS.map((id) => <Choice key={id} selected={template === id} title={TEMPLATE_LABELS[id]} body="Single-column, readable headings, live links, and evidence-preserving sections." onClick={() => setTemplate(id)} />)}</div><div className="flex gap-3 rounded-2xl border border-accent-cyan/30 bg-accent-cyan/10 p-4 text-sm text-text-primary"><ShieldCheck className="mt-0.5 h-5 w-5 shrink-0" /><p><strong>Evidence-safe generation:</strong> wording may be tightened for the target, but unsupported claims, invented metrics, and guaranteed ATS outcomes are not permitted.</p></div></div>}
+          {step === 'DESIGN' && <div className="min-w-0 space-y-6"><div><h3 className="text-lg font-bold text-text-primary">Choose the presentation</h3><p className="mt-1 text-sm text-text-secondary">Templates change layout, not the approved evidence selection.</p></div><TemplateCarousel template={template} onTemplateChange={setTemplate} /><div className="flex gap-3 rounded-2xl border border-accent-cyan/30 bg-accent-cyan/10 p-4 text-sm text-text-primary"><ShieldCheck className="mt-0.5 h-5 w-5 shrink-0" /><p><strong>Evidence-safe generation:</strong> wording may be tightened for the target, but unsupported claims, invented metrics, and guaranteed ATS outcomes are not permitted.</p></div></div>}
           {step === 'GENERATING' && <div className="flex min-h-64 flex-col items-center justify-center text-center"><Loader2 className="h-8 w-8 animate-spin text-accent-cyan" /><h3 className="mt-5 text-lg font-bold text-text-primary">Building your approved CV</h3><p className="mt-2 max-w-md text-sm text-text-secondary">Rewriting approved evidence, validating preservation, and rendering the document.</p></div>}
           {step === 'DONE' && <div className="flex min-h-64 flex-col items-center justify-center text-center"><span className="flex h-12 w-12 items-center justify-center rounded-full bg-success/10 text-success"><Check /></span><h3 className="mt-5 text-xl font-bold text-text-primary">Your CV is ready</h3><p className="mt-2 text-sm text-text-secondary">The saved document was built from the plan you approved.</p>{downloadUrl && <a href={downloadUrl} download="CV.docx" className="mt-5 inline-flex items-center gap-2 rounded-full bg-brand-primary px-5 py-3 text-sm font-bold text-bg-secondary"><Download size={16} />Download DOCX</a>}</div>}
         </div>
