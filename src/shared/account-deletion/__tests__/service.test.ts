@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
   storedCvs: vi.fn(),
   uploadIntents: vi.fn(),
   generatedCvs: vi.fn(),
+  previews: vi.fn(),
 }));
 
 vi.mock('@/shared/billing/access', () => ({ resolveBillingAccess: mocks.resolveBillingAccess }));
@@ -19,6 +20,7 @@ vi.mock('@/shared/lib/prisma', () => ({
     storedCv: { findMany: mocks.storedCvs },
     cvUploadIntent: { findMany: mocks.uploadIntents },
     generatedCV: { findMany: mocks.generatedCvs },
+    generatedCvPreview: { findMany: mocks.previews },
   },
 }));
 
@@ -51,6 +53,13 @@ beforeEach(() => {
   mocks.storedCvs.mockResolvedValue([{ storageKey: 'users/u1/source.pdf' }]);
   mocks.uploadIntents.mockResolvedValue([{ objectKey: 'users/u1/source.pdf' }]);
   mocks.generatedCvs.mockResolvedValue([{ fileKey: 'users/u1/generated.docx' }]);
+  mocks.previews.mockResolvedValue([{
+    pdfKey: 'users/u1/cv-1/previews/hash/document.pdf',
+    pageImageKeys: [
+      'users/u1/cv-1/previews/hash/page-1.png',
+      'users/u1/cv-1/previews/hash/page-2.png',
+    ],
+  }]);
   mocks.storageDelete.mockResolvedValue(true);
 });
 
@@ -89,10 +98,13 @@ describe('prepareAccountDeletion', () => {
   it('deduplicates and deletes every server-owned object before user deletion', async () => {
     await withAccountDeletionAuthorization('u1', () => prepareAccountDeletion(user));
 
-    expect(mocks.storageDelete).toHaveBeenCalledTimes(3);
+    expect(mocks.storageDelete).toHaveBeenCalledTimes(6);
     expect(mocks.storageDelete).toHaveBeenCalledWith('uploads', 'users/u1/source.pdf');
     expect(mocks.storageDelete).toHaveBeenCalledWith('rewrites', 'users/u1/generated.docx');
     expect(mocks.storageDelete).toHaveBeenCalledWith('avatars', 'avatars/u1/avatar.png');
+    expect(mocks.storageDelete).toHaveBeenCalledWith('rewrites', 'users/u1/cv-1/previews/hash/document.pdf');
+    expect(mocks.storageDelete).toHaveBeenCalledWith('rewrites', 'users/u1/cv-1/previews/hash/page-1.png');
+    expect(mocks.storageDelete).toHaveBeenCalledWith('rewrites', 'users/u1/cv-1/previews/hash/page-2.png');
   });
 
   it('refuses a database key outside the authenticated user namespace', async () => {
@@ -110,5 +122,13 @@ describe('prepareAccountDeletion', () => {
     await expect(
       withAccountDeletionAuthorization('u1', () => prepareAccountDeletion(user))
     ).rejects.toMatchObject({ code: 'ACCOUNT_DELETION_STORAGE_FAILED' });
+  });
+
+  it('refuses a preview key outside the authenticated user namespace', async () => {
+    mocks.previews.mockResolvedValue([{ pdfKey: 'users/u2/private.pdf', pageImageKeys: [] }]);
+    await expect(
+      withAccountDeletionAuthorization('u1', () => prepareAccountDeletion(user))
+    ).rejects.toMatchObject({ code: 'ACCOUNT_DELETION_STORAGE_FAILED' });
+    expect(mocks.storageDelete).not.toHaveBeenCalled();
   });
 });

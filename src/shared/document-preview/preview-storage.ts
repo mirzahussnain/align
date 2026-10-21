@@ -126,3 +126,39 @@ export async function storeValidatedArtifacts(input: {
     },
   };
 }
+
+export async function storeRenderedPages(input: {
+  userId: string;
+  generatedCvId: string;
+  documentHash: string;
+  pages: Buffer[];
+  storage?: PreviewStorage;
+}) {
+  if (input.pages.length !== 1 && input.pages.length !== 2) {
+    throw new Error('Validated previews require exactly one or two pages');
+  }
+  const keys = previewArtifactKeys(
+    input.userId,
+    input.generatedCvId,
+    input.documentHash,
+    input.pages.length as 1 | 2,
+  );
+  const objectStorage = input.storage ?? defaultStorage;
+  const uploaded: string[] = [];
+  try {
+    for (let index = 0; index < input.pages.length; index += 1) {
+      const key = keys.pageImageKeys[index];
+      await objectStorage.upload({
+        bucket: 'rewrites', key, body: input.pages[index], contentType: 'image/png',
+      });
+      uploaded.push(key);
+    }
+  } catch {
+    await Promise.all(uploaded.map((key) => objectStorage.delete('rewrites', key)));
+    throw new PreviewArtifactStorageError('PREVIEW_STORAGE_FAILED', null);
+  }
+  return {
+    pageImageKeys: keys.pageImageKeys,
+    pageImageSizes: input.pages.map((page) => page.byteLength),
+  };
+}

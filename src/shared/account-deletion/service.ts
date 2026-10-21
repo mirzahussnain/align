@@ -60,7 +60,7 @@ export async function prepareAccountDeletion(user: DeletionUser): Promise<void> 
     );
   }
 
-  const [revisions, storedCvs, uploadIntents, generatedCvs] = await Promise.all([
+  const [revisions, storedCvs, uploadIntents, generatedCvs, previews] = await Promise.all([
     prisma.cvRevision.findMany({
       where: { userId: user.id, sourceObjectKey: { not: null } },
       select: { sourceObjectKey: true },
@@ -77,6 +77,10 @@ export async function prepareAccountDeletion(user: DeletionUser): Promise<void> 
       where: { userId: user.id, fileKey: { not: null } },
       select: { fileKey: true },
     }),
+    prisma.generatedCvPreview.findMany({
+      where: { userId: user.id },
+      select: { pdfKey: true, pageImageKeys: true },
+    }),
   ]);
 
   const objects = [
@@ -84,6 +88,8 @@ export async function prepareAccountDeletion(user: DeletionUser): Promise<void> 
     ...storedCvs.map((row) => checkedUserKey(user.id, row.storageKey, 'uploads')),
     ...uploadIntents.map((row) => checkedUserKey(user.id, row.objectKey, 'uploads')),
     ...generatedCvs.map((row) => checkedUserKey(user.id, row.fileKey, 'rewrites')),
+    ...previews.flatMap((row) => [row.pdfKey, ...row.pageImageKeys])
+      .map((key) => checkedUserKey(user.id, key, 'rewrites')),
     avatarObject(user.id, user.image),
   ].filter((object): object is StoredObject => object !== null);
   const unique = [
