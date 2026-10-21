@@ -70,3 +70,19 @@ The corrected-draft, quota, failure and evidence-isolation behaviours also have 
 The current canonical `CvBuildSpec` has summary, skills, experience, projects, education and certifications. Stage 4 does not add section types. Licences, registrations, languages, training and volunteering are tested as evidence-backed content within existing sections, with expected omissions recorded in the manifest.
 
 No calibrated IT Support / Service Management profile currently exists, so that fixture intentionally uses General.
+
+## LibreOffice rendered-page acceptance
+
+The document-preview acceptance matrix is separate from the deterministic DOCX golden review above. Run it against the authenticated loopback renderer with `RUN_RENDERER_INTEGRATION=1` and the documented `GOTENBERG_*` variables:
+
+```text
+npm run test:renderer
+```
+
+On 21 October 2026, all four template IDs passed each required case against Gotenberg 8.38.1 LibreOffice on Docker Desktop x86_64: a naturally fitting short CV rendered as one page, a representative medium CV rendered as two pages, and an oversized CV exhausted all three bounded readable layout profiles and returned `PAGE_LIMIT_EXCEEDED` without mutating or deleting content. The tested upstream image was `gotenberg/gotenberg:8.38.1-libreoffice@sha256:2098722190575dbd975d8abf02e4ce83ffe20783114c5cc56f1b2ac309e6a083`; the repository Dockerfile now pins that digest and verifies Arial, Georgia, Trebuchet MS and Times New Roman during its build. The locally built custom image produced manifest-list digest `sha256:a29c531fbd2f249b66de3a8cee4f7560abe47b1a4a05016410a6ef56b8f311d9`; that local digest is evidence only, not a claim that a production registry artifact exists.
+
+`npm run generate:template-previews` produced the four committed first-page PNGs and deterministic manifest from the same safe synthetic medium fixture. It contains no account or production CV data.
+
+The 21 October local deterministic benchmark (`npm run benchmark:cv-generation`) measured short, medium and all-three-profile overflow workflows for every template. It records evidence load, deterministic AI-contract/checkpoint work, every DOCX build and renderer/queue call, actual PDF inspection, PNG rasterisation, each artifact copy, publication shape, call counts and artifact sizes. Its worst warm-path total was 858.47 ms and peak process RSS was 297,328,640 bytes. This is not a production latency claim: paid AI-provider latency, renderer network transit and remote R2/database latency were intentionally not invoked. An explicitly opted-in staging mode calls the canonical provider-backed workflow only when a prepared user/generation/idempotency tuple matches and `LIVE_AI_BENCHMARK_CONFIRM_BILLABLE=YES`; it must be run before production enablement to capture those external timings without accidental duplicate billing. The application retains a 260-second workflow deadline inside the 300-second Vercel function ceiling, a single shared renderer retry budget, a fenced generation lease and checkpointed AI result so an interrupted request cannot republish or charge twice.
+
+LibreOffice PDF is the page-limit authority and the exact document offered for authenticated PDF download. Microsoft Word can paginate the downloadable DOCX differently because of Word version, printer metrics, text shaping and local font substitution; the DOCX is never stretched to imitate the verified PDF.

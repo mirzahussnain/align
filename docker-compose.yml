@@ -124,7 +124,7 @@ services:
   gotenberg:
     build:
       context: ./docker/gotenberg
-    image: align-gotenberg:8.38.1-candidate
+    image: align-gotenberg:8.38.1-verified
     container_name: align-gotenberg
     restart: unless-stopped
     environment:
