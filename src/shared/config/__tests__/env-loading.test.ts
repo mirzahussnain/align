@@ -23,6 +23,9 @@ function isolatedEnvironment(overrides: Partial<NodeJS.ProcessEnv> = {}) {
   delete environment.STRIPE_SECRET_KEY;
   delete environment.STRIPE_WEBHOOK_SECRET;
   delete environment.STRIPE_PRO_MONTHLY_PRICE_ID;
+  delete environment.NEXT_PUBLIC_GOTENBERG_PASSWORD;
+  delete environment.NEXT_PUBLIC_GOTENBERG_USERNAME;
+  delete environment.NEXT_PUBLIC_GOTENBERG_URL;
   return environment;
 }
 
@@ -96,5 +99,45 @@ describe('manual environment loading', () => {
     expect(result.stderr).toContain('DATABASE_URL must be a postgres:// URL');
     expect(result.stderr).toContain('1 problem(s) must be fixed');
     expect(result.stderr).not.toContain(environment.DATABASE_URL);
+  });
+
+  test('production rejects enabled document rendering without protected configuration', () => {
+    const cwd = temporaryProject('DATABASE_URL=postgresql://localhost/local-fallback\n');
+    const environment = isolatedEnvironment({
+      NODE_ENV: 'production',
+      DOCUMENT_RENDERER_ENABLED: 'true',
+      GOTENBERG_URL: 'http://renderer.example.test',
+      DATABASE_URL: 'postgresql://external.example/align',
+      BETTER_AUTH_SECRET: 'x'.repeat(32),
+      BETTER_AUTH_URL: 'https://example.test',
+      S3_ENDPOINT: 'https://storage.example.test',
+      S3_ACCESS_KEY_ID: 'test-access-key',
+      S3_SECRET_ACCESS_KEY: 'test-secret-key',
+      S3_REGION: 'test-region',
+      S3_FORCE_PATH_STYLE: 'true',
+      S3_BUCKET_UPLOADS: 'uploads',
+      S3_BUCKET_REWRITES: 'rewrites',
+      S3_BUCKET_AVATARS: 'avatars',
+      S3_PUBLIC_URL_AVATARS: 'https://avatars.example.test',
+      RESEND_API_KEY: 're_test',
+      AUTH_EMAIL_FROM: 'Align <test@example.test>',
+      UPSTASH_REDIS_REST_URL: 'https://redis.example.test',
+      UPSTASH_REDIS_REST_TOKEN: 'token',
+      CRON_SECRET: 'x'.repeat(16),
+      REDIS_URL: 'rediss://redis.example.test',
+    });
+
+    const result = spawnSync(
+      process.execPath,
+      ['--experimental-strip-types', '--no-warnings', checkEnvScript],
+      { cwd, env: environment, encoding: 'utf8' },
+    );
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain('GOTENBERG_URL must use https:// in production');
+    expect(result.stderr).toContain('GOTENBERG_USERNAME is required');
+    expect(result.stderr).toContain('GOTENBERG_PASSWORD is required');
+    expect(result.stderr).toContain('GOTENBERG_EXPECTED_VERSION is required');
+    expect(result.stderr).toContain('GOTENBERG_IMAGE_DIGEST is required');
   });
 });

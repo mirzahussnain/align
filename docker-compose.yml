@@ -121,6 +121,39 @@ services:
       timeout: 3s
       retries: 20
 
+  gotenberg:
+    build:
+      context: ./docker/gotenberg
+    image: align-gotenberg:8.38.1-candidate
+    container_name: align-gotenberg
+    restart: unless-stopped
+    environment:
+      API_ENABLE_BASIC_AUTH: 'true'
+      GOTENBERG_API_BASIC_AUTH_USERNAME: ${GOTENBERG_USERNAME:-align-renderer}
+      GOTENBERG_API_BASIC_AUTH_PASSWORD: ${GOTENBERG_PASSWORD:-local-renderer-change-me}
+      API_TIMEOUT: 45s
+      API_BODY_LIMIT: 10MB
+      API_DISABLE_DOWNLOAD_FROM: 'true'
+      API_ENABLE_DEBUG_ROUTE: 'false'
+      LIBREOFFICE_AUTO_START: 'true'
+      LIBREOFFICE_START_TIMEOUT: 20s
+      LIBREOFFICE_MAX_QUEUE_SIZE: '4'
+      LIBREOFFICE_RESTART_AFTER: '10'
+    ports:
+      - '127.0.0.1:3001:3000'
+    mem_limit: 2g
+    cpus: 1.0
+    healthcheck:
+      test:
+        [
+          'CMD-SHELL',
+          'curl --fail --silent --user "$$GOTENBERG_API_BASIC_AUTH_USERNAME:$$GOTENBERG_API_BASIC_AUTH_PASSWORD" http://127.0.0.1:3000/health >/dev/null',
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
 volumes:
   align-pgdata:
   align-miniodata:
