@@ -8,6 +8,7 @@ import { generateAcademicTemplate } from '../template4_academic';
 import type { CvBuildSpecV2 } from '@/shared/cv-generation/build-spec-types';
 import type { TemplateId } from '@/shared/constants/templates';
 import { employmentTypeLabel } from '@/shared/constants/employment-type';
+import { CV_LAYOUT_PROFILES, layoutFor } from '../layout';
 
 const sectionOrder = ['PROJECTS', 'EXPERIENCE', 'SKILLS', 'EDUCATION'] as const;
 
@@ -38,9 +39,9 @@ describe('V2 rendered DOCX', () => {
   });
 
   it.each([
-    ['architect', '1B5EA6', 'Calibri'],
-    ['editorial_refined', '8B4513', 'Calibri'],
-    ['technical_precision', '087E8B', 'Aptos'],
+    ['architect', '1B5EA6', 'Arial'],
+    ['editorial_refined', '8B4513', 'Georgia'],
+    ['technical_precision', '087E8B', 'Trebuchet MS'],
     ['academic_latex', '000000', 'Times New Roman'],
   ] as const)('renders %s from presentation fields only', async (templateId, marker, font) => {
     const zip = await JSZip.loadAsync(await generateV2Template(spec(templateId)));
@@ -60,6 +61,29 @@ describe('V2 rendered DOCX', () => {
     expect(relationships.split('https://example.com/demo')).toHaveLength(2);
     expect(relationships.split('https://github.com/alex/project')).toHaveLength(2);
     expect(relationships.split('https://linkedin.com/in/alex')).toHaveLength(2);
+  });
+
+  it.each([
+    ['architect', '1B5EA6', 'Arial'],
+    ['editorial_refined', '8B4513', 'Georgia'],
+    ['technical_precision', '087E8B', 'Trebuchet MS'],
+    ['academic_latex', '000000', 'Times New Roman'],
+  ] as const)('emits explicit A4 layout and unchanged content for every %s profile', async (templateId, marker, font) => {
+    for (const profile of CV_LAYOUT_PROFILES) {
+      const layout = layoutFor(templateId, 'BALANCED', profile);
+      const zip = await JSZip.loadAsync(await generateV2Template(spec(templateId), { profile }));
+      const xml = await zip.file('word/document.xml')!.async('string');
+      expect(xml).toMatch(new RegExp(`<w:pgSz[^>]*w:w=[^0-9]*${layout.page.width}[^>]*w:h=[^0-9]*${layout.page.height}`));
+      expect(xml).toMatch(new RegExp(`<w:pgMar[^>]*w:top=[^0-9]*${layout.margins.top}[^>]*w:right=[^0-9]*${layout.margins.right}[^>]*w:bottom=[^0-9]*${layout.margins.bottom}[^>]*w:left=[^0-9]*${layout.margins.left}`));
+      expect(xml).toContain(marker);
+      expect(xml).toContain(font);
+      expect(xml.match(/<w:numPr>/g)).toHaveLength(2);
+      const positions = sectionOrder.map((type) => xml.indexOf(type[0] + type.slice(1).toLocaleLowerCase('en-GB')));
+      expect(positions).toEqual([...positions].sort((left, right) => left - right));
+      for (const text of ['Lighthouse API', 'Reduced API latency by 25%.', 'Platform Engineer', 'Led a safe platform migration.']) {
+        expect(xml.split(text)).toHaveLength(2);
+      }
+    }
   });
 
   it('preserves meaningful template presentation primitives without lowercasing the technical name', async () => {
