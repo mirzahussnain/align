@@ -1,7 +1,7 @@
 # CV Template, Pagination, and Document Preview Design
 
 **Date:** 13 October 2026  
-**Status:** Approved architecture; implementation pending  
+**Status:** Approved architecture; implementation authorised
 **Scope:** CV templates, rendered pagination validation, template selection, and Generated CV previews only
 
 ## 1. Purpose and acceptance criteria
@@ -12,7 +12,7 @@ The same rendered document version supplies the verified page count, first-page 
 
 This phase is complete when:
 
-- all four existing template identifiers remain compatible and render distinct, professional documents;
+- all four existing template identifiers remain stable and render distinct, professional documents;
 - every successful new generation has a verified page count of one or two;
 - content that cannot fit within two pages under bounded readable adjustments returns `PAGE_LIMIT_EXCEEDED` without content loss;
 - conversion failure never produces a page-validated successful CV;
@@ -22,7 +22,7 @@ This phase is complete when:
 
 ## 2. Existing boundaries that remain authoritative
 
-The implementation extends the current flow rather than creating a second generation path:
+The implementation extends the current canonical flow rather than creating a second generation path. Legacy preview compatibility, conversion, backfill, and lazy migration are explicitly out of scope; existing development-only generated-CV/preview rows may be cleared only after the target database and object store are verified as disposable and non-production.
 
 1. The user selects a Career Profile or completed Job Match.
 2. Align reconciles evidence and prepares a plan.
@@ -59,7 +59,7 @@ These fonts are chosen because they are widely available in Microsoft Word and c
 
 All templates remain single-column and use normal paragraphs, lists, tabs, and simple borders. They do not use text boxes, progress bars, decorative icons, floating objects, or nested layout tables. Templates receive the same `CvBuildSpecV2` and preserve its section and item order. Project-Focused may change visual emphasis but must not reorder `PROJECTS` or any other section behind the user's approved plan.
 
-The default template remains `architect`. Previously generated records continue to resolve their stored IDs to the new labels.
+The default template remains `architect`. No deprecated renderer or document format is retained solely to support disposable development records.
 
 ## 4. Readable layout profiles and pagination policy
 
@@ -132,11 +132,11 @@ The DOCX remains at its current key. A new immutable generated CV version receiv
 
 ### 5.3 Conversion claims and duplicate prevention
 
-`GeneratedCvPreview` has one row per generated CV. A compare-and-set transition claims `PENDING` or retryable `FAILED` work as `RENDERING`, records a lease expiry, and increments an attempt counter. Requests that encounter an unexpired `RENDERING` lease return an in-progress result rather than starting another conversion. An expired lease may be reclaimed. New generation uses the compare-and-set `CvGeneration` claim before a `GeneratedCV` row exists; the preview lease applies to legacy generation and thumbnail retries after that row exists.
+`GeneratedCvPreview` has one row per newly generated CV version. New generation uses a compare-and-set `CvGeneration` claim with a renewable/expiring lease before AI or render work begins. An unexpired claim returns the existing in-progress result; an expired claim may be reclaimed without creating a second reservation, charge, or published row. The preview row is created in the same publication transaction as `GeneratedCV`. A preview compare-and-set lease is used only when retrying PNG generation from an already verified, stored PDF.
 
-The generation workflow also changes its status using a compare-and-set claim before provider/render work, covering the profile-only path that currently has no capability reservation. This preserves request idempotency without relying on process-local state.
+The generation operation keeps one idempotency/reservation identity across AI, DOCX generation, every bounded layout conversion, PDF inspection, PNG generation, object storage, and publication. Deterministic versioned object keys make an interrupted pre-publication upload safe to overwrite on retry. The final database transaction checks the claim and reservation again before inserting one `GeneratedCV`, one preview row, and committing quota. A request interrupted after publication returns the already published result on retry.
 
-Only an explicit document-version change changes the cache key. Listing Generated CVs never starts conversion. The browser may request a missing preview only after a legacy card enters the viewport, and it processes at most one legacy conversion at a time per page. The server-side lease prevents duplication across tabs or Vercel instances.
+Only an explicit document-version change changes the cache key. Listing Generated CVs never starts conversion, historical records are not backfilled, and the browser never requests migration work. Missing preview metadata is treated as unavailable/corrupt development data, not as a signal to convert an older DOCX.
 
 ## 6. Persistence and states
 
@@ -162,9 +162,7 @@ Preview failures belong to `GeneratedCvPreview.failureCode` after the DOCX and P
 
 - `THUMBNAIL_RENDER_FAILED`: one or more PNG pages could not be rasterised or stored;
 - `PREVIEW_STORAGE_FAILED`: preview artifacts could not be durably stored;
-- `PREVIEW_LEASE_EXPIRED`: an interrupted conversion may be safely reclaimed.
-- `LEGACY_CONVERSION_FAILED`: an older DOCX could not be converted without changing it;
-- `LEGACY_PAGE_LIMIT_EXCEEDED`: an older DOCX renders above the new two-page limit and remains downloadable but is not labelled as validated.
+- `PREVIEW_LEASE_EXPIRED`: an interrupted thumbnail retry may be safely reclaimed.
 
 A new CV becomes `COMPLETED` only after DOCX→PDF conversion succeeds and the PDF proves one or two pages. PNG failure may still publish the valid DOCX/PDF with preview status `FAILED`; the library shows a retryable fallback and retains DOCX and authenticated PDF download. Quota is committed once for the valid generated CV, never for failed conversion/page validation.
 
@@ -181,7 +179,7 @@ PDFs and PNGs use the existing private `rewrites` bucket. No preview artifact re
 Routes:
 
 - `GET /api/cv/[id]/preview` returns status, verified page count, and owner-scoped application URLs;
-- `POST /api/cv/[id]/preview` lazily claims a missing legacy preview or retries a recoverable thumbnail failure;
+- `POST /api/cv/[id]/preview` retries only a recoverable thumbnail failure from the already verified stored PDF;
 - `GET /api/cv/[id]/preview/pages/[page]` streams page one or two PNG;
 - `GET /api/cv/[id]/pdf` downloads or opens the verified PDF;
 - the existing `GET /api/cv/[id]/download` continues to serve DOCX.
@@ -194,41 +192,43 @@ Account deletion enumerates and deletes PDF/PNG keys together with DOCX keys bef
 
 ### 8.1 Image and configuration
 
-Use a custom image based on the pinned `gotenberg/gotenberg:8.37.0-libreoffice` image (pin the production digest after the first verified build). The image installs the exact Arial, Georgia, Times New Roman, and Trebuchet MS fonts used by templates, refreshes the font cache, and runs an image-level font verification script.
+Use `gotenberg/gotenberg:8.38.1-libreoffice` as the test candidate. Version 8.38.0 moved request-body enforcement ahead of multipart parsing, fixed a fail-closed matcher regression, updated LibreOffice and Debian security packages, and included a Chromium CVE fix; 8.38.1 resolves the moved Go tag and represents the same Docker code. Although Align uses the LibreOffice-only variant, the pre-parse body-limit fix and base-image updates are relevant, so 8.37.0 is rejected. After the complete real-render matrix passes, resolve the candidate's registry `RepoDigest`, replace the mutable tag in the Dockerfile/Compose/runbook with `gotenberg/gotenberg@sha256:<verified-digest>`, and record the tag, digest, build date, architecture, and test evidence. A tag without a tested digest is not production-approved.
 
-Local Docker Compose adds one renderer service on an internal Docker network. Production runs the same image as a small dedicated container service in the same region as Vercel/PostgreSQL/R2 where practical.
+The custom image installs the exact Arial, Georgia, Times New Roman, and Trebuchet MS fonts used by templates, refreshes the font cache, and fails its build/health contract unless `fc-match` resolves every declared family. The same image and digest are used locally and in production.
+
+Local Docker Compose adds one authenticated renderer service. When the application runs on the host, the port binds to `127.0.0.1` only; when both services are containerised, only the private Compose network is used. The renderer remains independently deployable and is configured only through `DOCUMENT_RENDERER_ENABLED`, `GOTENBERG_URL`, `GOTENBERG_USERNAME`, `GOTENBERG_PASSWORD`, the expected version/digest, and timeout variables. Production requires an explicit `DOCUMENT_RENDERER_ENABLED=true`; absent, incomplete, unhealthy, unauthenticated, or non-HTTPS production configuration keeps generation unavailable and never falls back to estimated pagination.
 
 Initial limits for Align's small CV workload:
 
 - one replica;
 - 1 vCPU and 2 GiB RAM minimum;
 - one active LibreOffice conversion per replica (Gotenberg's LibreOffice process is serial);
-- `API_TIMEOUT=60s`;
-- client abort timeout `65s`;
+- `API_TIMEOUT=45s`;
+- client abort timeout `50s`;
 - `LIBREOFFICE_START_TIMEOUT=20s`;
 - `LIBREOFFICE_MAX_QUEUE_SIZE=4`;
 - `LIBREOFFICE_RESTART_AFTER=10`;
 - request body limit `10MB`;
-- Vercel generation/legacy-preview route `maxDuration=120` seconds;
-- at most two attempts for retryable `500`/`503`/timeout failures with bounded jitter; no retry for deterministic `400` responses.
+- Vercel generation route `maxDuration=300` seconds with an internal 260-second workflow deadline;
+- no automatic whole-workflow retry; at most one additional renderer attempt across the entire workflow for a pre-response network failure or retryable `502`/`503`, only while the internal deadline permits it; no retry for deterministic `400`, body-limit, parsed-PDF, or page-limit failures.
 
-Scale to two replicas only when queue wait p95 exceeds 5 seconds or queue-full responses exceed 1% over 15 minutes. Do not raise the queue indefinitely; back-pressure is safer than allowing many CVs to occupy memory.
+The three layout profiles therefore cause at most three normal conversions and four calls in the single-retry worst case. The application checkpoint persists the paid AI result before rendering so a reclaimed request resumes without another provider call. Every claim carries a fencing token; a timed-out invocation cannot publish after a newer invocation reclaims the lease. Scale to two replicas only when a verified zero-cost allocation permits it and queue wait p95 exceeds 5 seconds or queue-full responses exceed 1% over 15 minutes. Do not raise the queue indefinitely.
 
 ### 8.2 Network and authentication
 
 Gotenberg must not be an anonymous public endpoint.
 
-Preferred production exposure is private service networking reachable only through a protected application egress/gateway. If the hosting combination requires an Internet-reachable hostname, all of these controls are mandatory:
+Preferred production exposure is private service networking reachable only through a protected application egress/gateway. Vercel's normal dynamic egress cannot be assumed to support a free IP allow-list. If the Oracle VM uses an Internet-reachable hostname, terminate TLS at Caddy or an equivalent gateway and keep Gotenberg behind it. All of these controls are mandatory:
 
 - TLS at the gateway;
-- Gotenberg basic authentication or OIDC enabled with credentials stored only in server-side environment variables;
+- Gotenberg built-in Basic authentication (or OIDC if already available at no additional cost) with a unique high-entropy credential stored only in Vercel server-side environment variables and the VM secret store;
 - gateway rate limiting and a request-size limit;
-- only `/forms/libreoffice/convert` and an authenticated/monitor-only health route exposed;
-- no Chromium, webhook, `downloadFrom`, or arbitrary PDF manipulation routes exposed by the gateway;
+- only `/forms/libreoffice/convert` and an authenticated monitor-only health/version route exposed by the gateway;
+- Chromium is absent, and webhook, `downloadFrom`, debug, and unrelated PDF manipulation routes/features are disabled or denied at the gateway;
 - credentials rotated on staff change or suspected exposure;
 - renderer URL and credentials never use `NEXT_PUBLIC_` variables.
 
-The client uploads bytes directly in multipart form. Gotenberg never receives a signed R2 URL, user ID, email, CV title, or source filename; the multipart filename is a constant `document.docx`. Correlation IDs use generation IDs only. Application and renderer logs must not contain request bodies, document text, rendered bytes, or storage keys.
+The production endpoint is an operator-supplied HTTPS origin such as `https://renderer.example.invalid`; no hostname is compiled into the application. Vercel sends Basic/OIDC credentials on every health/version/conversion request, rejects redirects and certificate errors, and validates the expected Gotenberg version. The client uploads bytes directly in multipart form. Gotenberg never receives a signed R2 URL, user ID, email, CV title, or source filename; the multipart filename is a constant `document.docx`. Correlation IDs use generation IDs only. Application and renderer logs must not contain request bodies, document text, rendered bytes, credentials, or storage keys.
 
 ### 8.3 Health and monitoring
 
@@ -243,11 +243,19 @@ Monitor `/health` from inside the protected boundary every 60 seconds and alert 
 
 Alert on health failure, any OOM, more than three container restarts in 15 minutes, conversion p95 above 30 seconds, or failure rate above 5% for 10 minutes. The application admin health surface may report renderer availability and last successful probe, but no document metadata.
 
-### 8.4 Expected cost
+### 8.4 Zero-cost deployment and production gate
 
-At launch volume, one always-on 1 vCPU/2 GiB container is expected to cost approximately US$10–25 per month depending on provider and region. A protected gateway may add US$0–10 per month. R2 preview storage is expected to be below 2 MiB per two-page CV (PDF plus two PNGs); 1,000 CV versions therefore require roughly 2 GiB before provider compression/overhead. Vercel conversion orchestration adds function duration and egress but no LibreOffice binary cost.
+Local Docker Compose is the fully supported development and validation deployment and has no incremental hosting charge. The feasible production candidate is one Oracle Cloud Always Free `VM.Standard.A1.Flex` VM using at least 1 OCPU/2 GiB (prefer 2 OCPUs/4–6 GiB when available), Ubuntu, Docker Compose, the pinned renderer image, and Caddy for HTTPS. Oracle currently documents an Always Free aggregate of 2 OCPUs/12 GiB for A1, but also documents regional “out of host capacity” failures and reclamation of idle instances. Account creation may require payment-card verification. This is an option, not an availability or uptime claim.
 
-These are planning estimates, not vendor commitments. Deployment documentation must record the selected provider's current price before launch and define a monthly alert at 150% of the expected renderer budget. A second replica roughly doubles container cost and is added only from observed queue metrics.
+The deployment sequence is: provision an Always Free-eligible VM in the tenancy home region; restrict its network security group to SSH from an operator address and HTTPS; install Docker/Compose; provision DNS and TLS; configure gateway rate/body limits and renderer credentials; deploy the digest-pinned image; verify fonts/version/auth; run the synthetic conversion and full render matrix; enable uptime/resource monitoring; then and only then set the Vercel production variables and `DOCUMENT_RENDERER_ENABLED=true`.
+
+The expected incremental renderer cost is £0 only while Oracle capacity is actually obtained and usage remains inside Always Free allowances. Existing Vercel, database, and R2 free allocations must be checked separately; this design does not claim that a commercial production workload is entitled to any particular plan. There is no paid-hosting fallback under the current budget. If capacity cannot be obtained, is reclaimed, or the secured endpoint cannot be verified, local implementation remains valid but production document generation stays disabled with a controlled `RENDERER_UNAVAILABLE` response. The project status must name this outstanding dependency accurately.
+
+### 8.5 End-to-end timing and interruption budget
+
+Instrumentation records durations without document content for evidence loading, AI tailoring, AI-checkpoint persistence, DOCX generation for each attempted profile, every renderer call and queue wait, PDF inspection, each PNG raster, each object upload, publication, and total wall time. A benchmark command exercises short (one conversion), medium (one conversion), and overflow (all three conversions) cases for every template. It supports a deterministic AI fixture for repeatable CI and an explicitly opted-in live-provider mode for a true provider measurement; a live run must reuse a dedicated idempotency key and is never an implicit test charge.
+
+The 300-second Vercel limit is a ceiling, not a performance target. Release evidence must include p50/p95 and worst observed stage/total timings, peak memory, artifact sizes, renderer calls, storage calls, and whether the 260-second internal deadline leaves at least 30 seconds for controlled failure/persistence. If the worst complete workflow cannot fit that budget, production remains disabled; the implementation must not merely increase retries. Interrupted-request tests prove that AI output is checkpointed once, quota commits once, immutable objects are reused/overwritten safely, stale fencing tokens cannot publish, and a retry returns or resumes the one canonical version.
 
 ## 9. Microsoft Word and LibreOffice fidelity
 
@@ -287,7 +295,7 @@ Each card shows:
 
 - the actual first-page PNG when `READY`;
 - title or target role, user-facing template name, creation date, generation status, and verified page count;
-- a neutral placeholder for legacy/pending documents;
+- a neutral placeholder for pending, failed, or structurally missing preview metadata;
 - a retry action for recoverable preview failures;
 - Preview, Editable DOCX, and Verified PDF actions where available.
 
@@ -295,7 +303,7 @@ Images use `loading="lazy"`, explicit A4 aspect ratio, and responsive dimensions
 
 Opening Preview uses the existing modal pattern and displays exactly `pageCount` page images. It supports scrolling, previous/next page controls, zoom presets bounded for mobile, Escape/close, focus restoration, loading skeletons, and explicit failure states. One-page documents never render a second placeholder. Zoom changes the page scale inside a contained scroll region and does not make the overall mobile layout overflow.
 
-Legacy cards request preview creation only after their card becomes visible and only while the page is active. The client limits itself to one outstanding legacy conversion; additional visible cards remain queued. Failures stop automatic retry and require a user action.
+The gallery consumes the new preview model directly. It does not inspect historical DOCX files, enqueue backfills, or create previews on viewport entry. An explicit retry is shown only for a recoverable thumbnail failure where the verified PDF already exists.
 
 ## 12. Error and recovery behaviour
 
@@ -307,7 +315,8 @@ Legacy cards request preview creation only after their card becomes visible and 
 | PDF verified, PNG rasterisation fails | Yes | Yes once | DOCX and PDF remain available; gallery shows retryable preview failure |
 | Preview artifact upload fails | Yes if DOCX/PDF are durable and page count verified | Yes once | Download remains available; preview can be retried |
 | Duplicate conversion request | At most one result | At most once | Later caller receives in-progress or cached result |
-| Legacy CV cannot render | Existing record unchanged | No new charge | Existing DOCX download remains available with fallback card |
+| Renderer/configuration unavailable | No | No | Generation is disabled with recoverable guidance; no estimated fallback |
+| Invocation interrupted or lease reclaimed | At most one canonical version | At most once | Retry resumes from the persisted AI checkpoint and fenced state |
 
 Errors exposed to users are stable, actionable messages. Internal logs carry only failure code, renderer status, duration, attempt number, and correlation ID.
 
@@ -321,7 +330,7 @@ Errors exposed to users are stable, actionable messages. Internal logs carry onl
 - Overflow returns `PAGE_LIMIT_EXCEEDED` with no omitted evidence.
 - Conversion, page validation, page limit, and thumbnail failure states remain distinct.
 - Hashing, cache reuse, lease claims, expiry, and retry transitions are deterministic.
-- Owner isolation protects preview metadata, page images, PDF, and legacy conversion.
+- Owner isolation protects preview metadata, page images, PDF, and thumbnail retry.
 - Carousel arrows, thumbnails, keyboard, swipe, reduced motion, selection persistence, and plan preservation work.
 - Gallery/viewer loading, exact page count, zoom, download links, fallbacks, focus, and mobile containment work.
 - Account deletion includes every preview artifact.
@@ -351,16 +360,17 @@ The suite must fail, not silently skip, in the dedicated renderer CI job. Ordina
 - desktop and mobile visual inspection of carousel, gallery, and viewer;
 - authenticated cross-account route tests and private-bucket verification;
 - renderer health, timeout, queue saturation, and recovery smoke tests.
+- complete workflow benchmark covering AI, DOCX profiles, all renderer calls, PDF/PNG work, storage, interruption, and publication.
 
 ## 14. Rollout and operations
 
-1. Build and deploy the pinned renderer image; verify fonts, health, authentication, resource limits, and monitoring.
+1. Build and test the 8.38.1 candidate, then pin its verified digest; verify fonts, health, authentication, resource limits, and monitoring locally.
 2. Apply the additive Prisma migration.
-3. Deploy application code with renderer environment variables and feature availability derived from renderer health.
+3. Deploy application code with production rendering disabled by default; enable only after the independently deployed protected endpoint passes the production smoke contract.
 4. Generate and commit synthetic template preview assets from the production-equivalent renderer.
 5. Run the real-render and Word inspection gates.
 6. Enable new generation validation and previews together; there is no mode that publishes unvalidated new CVs.
-7. Leave historical CVs untouched and generate their previews lazily as users encounter them.
+7. Do not backfill historical records. If disposable development records obstruct the canonical schema, verify both database and storage targets are non-production, record the check, then clear only those development records/artifacts.
 
 If the renderer is unavailable at rollout, new generation returns a recoverable availability error and existing DOCX downloads continue to work. The system never falls back to estimated pagination or fabricated HTML previews.
 
@@ -368,6 +378,8 @@ If the renderer is unavailable at rollout, new generation returns a recoverable 
 
 - [Gotenberg LibreOffice conversion](https://gotenberg.dev/docs/convert-with-libreoffice/convert-to-pdf)
 - [Gotenberg configuration and LibreOffice queue behaviour](https://gotenberg.dev/docs/configuration)
-- [Gotenberg 8.37.0 release](https://github.com/gotenberg/gotenberg/releases/tag/v8.37.0)
+- [Gotenberg 8.38.1 release](https://github.com/gotenberg/gotenberg/releases/tag/v8.38.1)
+- [Gotenberg 8.38.0 security and dependency release notes](https://github.com/gotenberg/gotenberg/releases/tag/v8.38.0)
 - [Vercel function runtimes and filesystem limits](https://vercel.com/docs/functions/runtimes)
-- [Vercel function duration](https://vercel.com/docs/functions/configuring-functions/duration)
+- [Vercel Function limits](https://vercel.com/docs/functions/limitations)
+- [Oracle Cloud Always Free resources and availability caveats](https://docs.oracle.com/en-us/iaas/Content/FreeTier/freetier_topic-Always_Free_Resources.htm)
