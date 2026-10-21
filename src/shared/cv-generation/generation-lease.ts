@@ -51,7 +51,11 @@ export function createGenerationLeaseRepository(
     ) {
       return { status: 'in_progress' as const, operationId: row.operationId };
     }
-    if (row.status !== 'PLAN_APPROVED' && row.status !== 'GENERATING') {
+    if (
+      row.status !== 'PLAN_APPROVED' &&
+      row.status !== 'GENERATING' &&
+      row.status !== 'GENERATION_FAILED'
+    ) {
       return { status: 'not_claimable' as const, operationId: row.operationId };
     }
 

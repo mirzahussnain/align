@@ -7,11 +7,14 @@ const mocks = vi.hoisted(() => ({
   countGenerated: vi.fn(), createGenerated: vi.fn(), transaction: vi.fn(), upload: vi.fn(), download: vi.fn(),
   generateAi: vi.fn(), reserve: vi.fn(), commit: vi.fn(), createResult: vi.fn(), release: vi.fn(),
   markRunning: vi.fn(), reservationIsRunning: vi.fn(), render: vi.fn(),
+  claimGeneration: vi.fn(), checkpointAi: vi.fn(), renewLease: vi.fn(), canPublish: vi.fn(),
+  storeArtifacts: vi.fn(), storePdf: vi.fn(), createPreview: vi.fn(), storageDelete: vi.fn(),
 }));
 
 const tx = {
   generatedCV: { count: mocks.countGenerated, create: mocks.createGenerated },
-  cvGeneration: { update: mocks.updateGeneration },
+  generatedCvPreview: { create: mocks.createPreview },
+  cvGeneration: { update: mocks.updateGeneration, updateMany: mocks.updateManyGeneration },
 };
 
 vi.mock('@/shared/lib/prisma', () => ({ prisma: {
@@ -19,7 +22,7 @@ vi.mock('@/shared/lib/prisma', () => ({ prisma: {
   generatedCV: { findFirst: mocks.findGenerated },
   $transaction: mocks.transaction,
 } }));
-vi.mock('@/shared/lib/storage', () => ({ storage: { upload: mocks.upload, download: mocks.download } }));
+vi.mock('@/shared/lib/storage', () => ({ storage: { upload: mocks.upload, download: mocks.download, delete: mocks.storageDelete } }));
 vi.mock('@/shared/services/ai-orchestrator', () => ({
   executeAiTask: mocks.generateAi,
   AiOrchestrationError: class AiOrchestrationError extends Error {
@@ -36,10 +39,31 @@ vi.mock('@/shared/services/ai-failure', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/shared/services/ai-failure')>()),
   markOperationRunning: mocks.markRunning, reservationIsRunning: mocks.reservationIsRunning,
 }));
-vi.mock('@/shared/templates/v2', () => ({ generateV2Template: mocks.render }));
+vi.mock('../generation-lease', () => ({
+  claimGeneration: mocks.claimGeneration,
+  checkpointAiResult: mocks.checkpointAi,
+  renewGenerationLease: mocks.renewLease,
+  canPublishGeneration: mocks.canPublish,
+}));
+vi.mock('@/shared/document-preview/validated-document', () => ({
+  DOCUMENT_RENDER_CONTRACT_VERSION: 'renderer-test',
+  renderValidatedDocument: mocks.render,
+}));
+vi.mock('@/shared/document-preview/preview-storage', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/shared/document-preview/preview-storage')>()),
+  storeValidatedArtifacts: mocks.storeArtifacts,
+  storeValidatedPdf: mocks.storePdf,
+}));
 
 import { AiOrchestrationError } from '@/shared/services/ai-orchestrator';
-import { CvGenerationValidationError, generateApprovedCv } from '../generate';
+import { DocumentConversionError, RendererUnavailableError } from '@/shared/document-preview/renderer-client';
+import { PageValidationError } from '@/shared/document-preview/pdf-preview';
+import { PreviewArtifactStorageError } from '@/shared/document-preview/preview-storage';
+import { assembleCvBuildSpec } from '../build-spec';
+import {
+  CvGenerationValidationError,
+  generateApprovedCv,
+} from '../generate';
 
 const evidence = emptyCandidateEvidence();
 const plan = (sourceMode: ApprovedCvPlan['sourceMode'], targetStrategy: ApprovedCvPlan['targetStrategy']): ApprovedCvPlan => ({
@@ -63,9 +87,23 @@ describe('generateApprovedCv orchestration', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.reservationIsRunning.mockReturnValue(false);
-    mocks.render.mockResolvedValue(Buffer.from('docx'));
+    mocks.claimGeneration.mockResolvedValue({ status: 'claimed', token: 'lease-1', operationId: 'operation-1', checkpoint: null });
+    mocks.checkpointAi.mockResolvedValue(true);
+    mocks.renewLease.mockResolvedValue(true);
+    mocks.canPublish.mockResolvedValue(true);
+    mocks.render.mockResolvedValue({
+      docx: Buffer.from('docx'), pdf: Buffer.from('%PDF-valid'), pageCount: 1,
+      profile: 'preferred', documentHash: 'a'.repeat(64),
+      preview: { status: 'READY', pages: [Buffer.from('png')] },
+    });
+    mocks.storeArtifacts.mockResolvedValue({
+      pdfKey: 'document.pdf', pageImageKeys: ['page-1.png'], sizes: { pdf: 10, pages: [3] },
+    });
+    mocks.storePdf.mockResolvedValue({ key: 'document.pdf', size: 10 });
     mocks.countGenerated.mockResolvedValue(0);
-    mocks.createGenerated.mockResolvedValue({ id: 'generated-1' });
+    mocks.createGenerated.mockResolvedValue({ id: 'generation-1' });
+    mocks.createPreview.mockResolvedValue({ id: 'preview-1' });
+    mocks.updateManyGeneration.mockResolvedValue({ count: 1 });
     mocks.transaction.mockImplementation((callback: (client: typeof tx) => unknown) => callback(tx));
     mocks.createResult.mockImplementation(async ({ creator }: { creator: (client: typeof tx) => Promise<{ resultRef: string; value: string }> }) => ({ status: 'created', ...(await creator(tx)) }));
   });
@@ -73,7 +111,7 @@ describe('generateApprovedCv orchestration', () => {
   it('keeps profile-only generation deterministic and unmetered', async () => {
     mocks.findGeneration.mockResolvedValue(generation('CAREER_PROFILE', 'PROFILE_ONLY'));
     const result = await generateApprovedCv('user-1', 'generation-1');
-    expect(result).toMatchObject({ generatedCvId: 'generated-1', recovered: false });
+    expect(result).toMatchObject({ generatedCvId: 'generation-1', recovered: false });
     expect(mocks.reserve).not.toHaveBeenCalled();
     expect(mocks.generateAi).not.toHaveBeenCalled();
     expect(mocks.commit).not.toHaveBeenCalled();
@@ -99,7 +137,7 @@ describe('generateApprovedCv orchestration', () => {
     mocks.findGeneration.mockResolvedValue(row);
 
     await generateApprovedCv('user-1', 'generation-1');
-    expect(mocks.render).toHaveBeenCalledWith(expect.objectContaining({ sections: [expect.objectContaining({ items: [expect.objectContaining({ degree: 'BSc Data Engineering' })] })] }));
+    expect(mocks.render).toHaveBeenCalledWith(expect.objectContaining({ spec: expect.objectContaining({ sections: [expect.objectContaining({ items: [expect.objectContaining({ degree: 'BSc Data Engineering' })] })] }) }));
   });
 
   it('reserves immediately before the provider and releases on provider failure', async () => {
@@ -159,15 +197,18 @@ describe('generateApprovedCv orchestration', () => {
       return { data: parsed.data, provenance: { provider: 'groq', model: 'test', attempt: 2, fallbackUsed: true } };
     });
 
-    await expect(generateApprovedCv('user-1', 'generation-1')).resolves.toMatchObject({ generatedCvId: 'generated-1' });
-    expect(mocks.render).toHaveBeenCalledWith(expect.objectContaining({
+    await expect(generateApprovedCv('user-1', 'generation-1')).resolves.toMatchObject({ generatedCvId: 'generation-1' });
+    expect(mocks.render).toHaveBeenCalledWith(expect.objectContaining({ spec: expect.objectContaining({
       presentation: expect.objectContaining({ templateId: 'architect' }),
       sections: [expect.objectContaining({ items: [expect.objectContaining({ lines: [
         { id: 'metric', text: 'Reduced latency by 25%' },
         { id: 'delivery', text: 'Built dependable internal services' },
       ] })] })],
-    }));
+    }) }));
     expect(mocks.createGenerated).toHaveBeenCalledOnce();
+    expect(mocks.checkpointAi.mock.invocationCallOrder[0]).toBeLessThan(
+      mocks.render.mock.invocationCallOrder[0],
+    );
     expect(mocks.commit).toHaveBeenCalledOnce();
     expect(mocks.release).not.toHaveBeenCalled();
     expect(mocks.createGenerated.mock.calls[0][0].data.provenance.provider).toMatchObject({
@@ -192,5 +233,144 @@ describe('generateApprovedCv orchestration', () => {
     expect(mocks.release).toHaveBeenCalledWith(expect.objectContaining({ reason: 'truthfulness_failure' }));
     expect(mocks.createGenerated).not.toHaveBeenCalled();
     expect(mocks.commit).not.toHaveBeenCalled();
+  });
+
+  it('checkpoints validated AI output before rendering and reuses it on a reclaimed request', async () => {
+    const row = generation('JOB_MATCH', 'EXPERIENCE_FORWARD');
+    const approvedPlan = plan('JOB_MATCH', 'EXPERIENCE_FORWARD');
+    const checkpointSpec = assembleCvBuildSpec({
+      generationId: row.id,
+      evidence,
+      plan: approvedPlan,
+      templateId: 'architect',
+      authorityContext: {
+        currentProfileSnapshotId: row.generationProfileSnapshotId,
+        matchProfileSnapshotId: row.matchProfileSnapshotId,
+      },
+    });
+    mocks.findGeneration.mockResolvedValue(row);
+    mocks.claimGeneration.mockResolvedValue({
+      status: 'claimed', token: 'lease-2', operationId: row.operationId,
+      checkpoint: { spec: checkpointSpec, provider: { model: 'checkpointed' } },
+    });
+    mocks.reserve.mockResolvedValue({ status: 'reserved', reservation: { status: 'RESERVED' } });
+    mocks.commit.mockResolvedValue({ status: 'committed' });
+
+    await generateApprovedCv('user-1', row.id);
+
+    expect(mocks.generateAi).not.toHaveBeenCalled();
+    expect(mocks.checkpointAi).not.toHaveBeenCalled();
+    expect(mocks.render).toHaveBeenCalledWith(expect.objectContaining({ spec: checkpointSpec }));
+    expect(mocks.commit).toHaveBeenCalledOnce();
+  });
+
+  it.each([
+    [new RendererUnavailableError(), 'RENDERER_UNAVAILABLE'],
+    [new DocumentConversionError('conversion failed', true, 503), 'DOCUMENT_CONVERSION_FAILED'],
+    [new PageValidationError('PAGE_VALIDATION_UNAVAILABLE'), 'PAGE_VALIDATION_UNAVAILABLE'],
+    [new PageValidationError('PAGE_LIMIT_EXCEEDED', [
+      { profile: 'preferred', pageCount: 3 },
+      { profile: 'compact', pageCount: 3 },
+      { profile: 'compact-tight', pageCount: 3 },
+    ]), 'PAGE_LIMIT_EXCEEDED'],
+  ] as const)('does not publish or charge after %s', async (failure, code) => {
+    mocks.findGeneration.mockResolvedValue(generation('JOB_MATCH', 'EXPERIENCE_FORWARD'));
+    mocks.reserve.mockResolvedValue({ status: 'reserved', reservation: { status: 'RESERVED' } });
+    mocks.generateAi.mockResolvedValue({
+      data: {
+        spec: assembleCvBuildSpec({
+          generationId: 'generation-1', evidence,
+          plan: plan('JOB_MATCH', 'EXPERIENCE_FORWARD'), templateId: 'architect',
+        }),
+        patchCount: { returned: 0, accepted: 0, rejected: 0 },
+        rejected: [], summaryValidation: [], finalValidation: { ok: true },
+      },
+      provenance: { provider: 'test', model: 'test' },
+    });
+    mocks.render.mockRejectedValue(failure);
+
+    await expect(generateApprovedCv('user-1', 'generation-1')).rejects.toMatchObject({
+      code,
+    });
+    expect(mocks.checkpointAi).toHaveBeenCalledOnce();
+    expect(mocks.createGenerated).not.toHaveBeenCalled();
+    expect(mocks.createPreview).not.toHaveBeenCalled();
+    expect(mocks.commit).not.toHaveBeenCalled();
+    expect(mocks.release).toHaveBeenCalledOnce();
+  });
+
+  it('publishes verified DOCX/PDF once when thumbnail rasterisation fails', async () => {
+    mocks.findGeneration.mockResolvedValue(generation('CAREER_PROFILE', 'PROFILE_ONLY'));
+    mocks.render.mockResolvedValue({
+      docx: Buffer.from('docx'), pdf: Buffer.from('%PDF-valid'), pageCount: 2,
+      profile: 'preferred', documentHash: 'a'.repeat(64),
+      preview: { status: 'FAILED', failureCode: 'THUMBNAIL_RENDER_FAILED' },
+    });
+
+    await generateApprovedCv('user-1', 'generation-1');
+
+    expect(mocks.storePdf).toHaveBeenCalledOnce();
+    expect(mocks.storeArtifacts).not.toHaveBeenCalled();
+    expect(mocks.createPreview).toHaveBeenCalledWith({ data: expect.objectContaining({
+      status: 'FAILED', failureCode: 'THUMBNAIL_RENDER_FAILED', pageCount: 2,
+      pageImageKeys: [],
+    }) });
+  });
+
+  it('publishes the durable PDF with recoverable preview failure after page storage fails', async () => {
+    mocks.findGeneration.mockResolvedValue(generation('CAREER_PROFILE', 'PROFILE_ONLY'));
+    mocks.storeArtifacts.mockRejectedValue(new PreviewArtifactStorageError(
+      'PREVIEW_STORAGE_FAILED', { key: 'document.pdf', size: 10 },
+    ));
+
+    await generateApprovedCv('user-1', 'generation-1');
+
+    expect(mocks.createPreview).toHaveBeenCalledWith({ data: expect.objectContaining({
+      status: 'FAILED', failureCode: 'PREVIEW_STORAGE_FAILED',
+      pdfKey: 'document.pdf', pageImageKeys: [],
+    }) });
+  });
+
+  it('does not publish and removes the DOCX when required PDF storage fails', async () => {
+    mocks.findGeneration.mockResolvedValue(generation('CAREER_PROFILE', 'PROFILE_ONLY'));
+    mocks.render.mockResolvedValue({
+      docx: Buffer.from('docx'), pdf: Buffer.from('%PDF-valid'), pageCount: 1,
+      profile: 'preferred', documentHash: 'a'.repeat(64),
+      preview: { status: 'FAILED', failureCode: 'THUMBNAIL_RENDER_FAILED' },
+    });
+    mocks.storePdf.mockRejectedValue(new PreviewArtifactStorageError('PDF_STORAGE_FAILED', null));
+
+    await expect(generateApprovedCv('user-1', 'generation-1')).rejects.toMatchObject({
+      code: 'PDF_STORAGE_FAILED',
+    });
+    expect(mocks.storageDelete).toHaveBeenCalledWith(
+      'rewrites', 'users/user-1/generation-1/CV.docx',
+    );
+    expect(mocks.createGenerated).not.toHaveBeenCalled();
+    expect(mocks.createPreview).not.toHaveBeenCalled();
+  });
+
+  it('denies stale-token publication without releasing another request reservation', async () => {
+    mocks.findGeneration.mockResolvedValue(generation('JOB_MATCH', 'EXPERIENCE_FORWARD'));
+    mocks.reserve.mockResolvedValue({ status: 'reserved', reservation: { status: 'RESERVED' } });
+    mocks.generateAi.mockResolvedValue({
+      data: {
+        spec: assembleCvBuildSpec({
+          generationId: 'generation-1', evidence,
+          plan: plan('JOB_MATCH', 'EXPERIENCE_FORWARD'), templateId: 'architect',
+        }),
+        patchCount: { returned: 0, accepted: 0, rejected: 0 },
+        rejected: [], summaryValidation: [], finalValidation: { ok: true },
+      },
+      provenance: { provider: 'test', model: 'test' },
+    });
+    mocks.updateManyGeneration.mockResolvedValue({ count: 0 });
+    mocks.canPublish.mockResolvedValue(false);
+
+    await expect(generateApprovedCv('user-1', 'generation-1')).rejects.toThrow('superseded');
+    expect(mocks.createGenerated).not.toHaveBeenCalled();
+    expect(mocks.createPreview).not.toHaveBeenCalled();
+    expect(mocks.commit).not.toHaveBeenCalled();
+    expect(mocks.release).not.toHaveBeenCalled();
   });
 });

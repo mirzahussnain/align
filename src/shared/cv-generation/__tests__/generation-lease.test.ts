@@ -80,4 +80,17 @@ describe('fenced generation leases', () => {
       .resolves.toBe(true);
     expect(claim.operationId).toBe('operation-1');
   });
+
+  it('reclaims a controlled failed generation while retaining its checkpoint', async () => {
+    const h = harness();
+    h.current().status = 'GENERATION_FAILED';
+    h.current().validatedAiCheckpoint = { spec: { version: 4 } };
+    const claim = await h.repository.claimGeneration({
+      userId: 'user-1', generationId: 'generation-1', now: NOW,
+    });
+    expect(claim).toMatchObject({
+      status: 'claimed', token: 'token-1',
+      checkpoint: { spec: { version: 4 } },
+    });
+  });
 });
