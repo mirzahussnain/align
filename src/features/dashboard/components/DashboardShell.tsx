@@ -13,6 +13,7 @@ import { useDashboardStore, type DashboardTab } from '@/shared/stores/dashboard-
 import type { ProfileData, ProfileSummary } from '@/features/dashboard/data/load-profile';
 import type { UsageSnapshot } from '@/shared/services/usage-meter';
 import type { EntitlementSnapshot } from '@/shared/entitlements/server';
+import type { CvPreviewView } from '@/shared/document-preview/preview-view';
 
 export interface AtsAnalysisRow {
   id: string;
@@ -55,6 +56,7 @@ export interface CvRow {
   jobCompany: string | null;
   matchScore: number | null;
   profileLabel: string | null;
+  preview: CvPreviewView | null;
 }
 
 export interface DashboardData {
