@@ -16,7 +16,7 @@ const row = (overrides: Partial<PreviewRecord> = {}): PreviewRecord => ({
 
 function harness(preview: PreviewRecord | null = row()) {
   const claimThumbnailRetry = vi.fn<RetryDependencies['claimThumbnailRetry']>(
-    async () => ({ status: 'claimed', previewId: 'preview-1' }),
+    async () => ({ status: 'claimed', previewId: 'preview-1', attemptCount: 2 }),
   );
   const dependencies = {
     loadOwnedPreview: vi.fn(async () => preview),
@@ -66,6 +66,7 @@ describe('verified-PDF thumbnail retry', () => {
     expect(h.dependencies.download).toHaveBeenCalledWith('rewrites', preview.pdfKey);
     expect(h.dependencies.renderPages).toHaveBeenCalledWith(expect.any(Buffer), pageCount);
     expect(h.dependencies.completePreview).toHaveBeenCalledOnce();
+    expect(h.dependencies.completePreview).toHaveBeenCalledWith(expect.objectContaining({ attemptCount: 2 }));
   });
 
   it('returns unavailable without mutation for missing canonical metadata', async () => {
@@ -83,6 +84,7 @@ describe('verified-PDF thumbnail retry', () => {
     await expect(missing.service.retryOwnedThumbnail({ userId: 'user-1', generatedCvId: 'cv-1' }))
       .resolves.toEqual({ status: 'failed', failureCode: 'PREVIEW_LEASE_EXPIRED' });
     expect(missing.dependencies.failPreview).toHaveBeenCalledWith(expect.objectContaining({
+      attemptCount: 2,
       failureCode: 'PREVIEW_LEASE_EXPIRED',
     }));
 
@@ -91,6 +93,7 @@ describe('verified-PDF thumbnail retry', () => {
     await malformed.service.retryOwnedThumbnail({ userId: 'user-1', generatedCvId: 'cv-1' });
     expect(malformed.dependencies.renderPages).not.toHaveBeenCalled();
     expect(malformed.dependencies.failPreview).toHaveBeenCalledWith(expect.objectContaining({
+      attemptCount: 2,
       failureCode: 'PREVIEW_LEASE_EXPIRED',
     }));
   });

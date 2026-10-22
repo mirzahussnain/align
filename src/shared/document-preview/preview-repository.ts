@@ -56,7 +56,7 @@ export function createPreviewRepository(db: PreviewDb) {
     documentHash: string;
     now: Date;
   }): Promise<
-    | { status: 'claimed'; previewId: string }
+    | { status: 'claimed'; previewId: string; attemptCount: number }
     | { status: 'ready'; preview: PreviewRecord }
     | { status: 'in_progress' }
   > {
@@ -103,7 +103,7 @@ export function createPreviewRepository(db: PreviewDb) {
       },
     });
     return claimed.count === 1
-      ? { status: 'claimed', previewId: row.id }
+      ? { status: 'claimed', previewId: row.id, attemptCount: row.attemptCount + 1 }
       : { status: 'in_progress' };
   }
 
@@ -111,6 +111,7 @@ export function createPreviewRepository(db: PreviewDb) {
     userId: string;
     previewId: string;
     documentHash: string;
+    attemptCount: number;
     pageImageKeys: string[];
     pageImageSizes: number[];
   }) {
@@ -122,6 +123,7 @@ export function createPreviewRepository(db: PreviewDb) {
         userId: input.userId,
         documentHash: input.documentHash,
         status: 'RENDERING',
+        attemptCount: input.attemptCount,
       },
       data: {
         status: 'READY',
@@ -138,6 +140,7 @@ export function createPreviewRepository(db: PreviewDb) {
     userId: string;
     previewId: string;
     documentHash: string;
+    attemptCount: number;
     failureCode: PreviewFailureCode;
   }) {
     const result = await db.generatedCvPreview.updateMany({
@@ -146,6 +149,7 @@ export function createPreviewRepository(db: PreviewDb) {
         userId: input.userId,
         documentHash: input.documentHash,
         status: 'RENDERING',
+        attemptCount: input.attemptCount,
       },
       data: {
         status: 'FAILED',

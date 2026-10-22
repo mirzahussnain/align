@@ -15,16 +15,18 @@ export interface RetryDependencies {
   claimThumbnailRetry(input: {
     userId: string; generatedCvId: string; documentHash: string; now: Date;
   }): Promise<
-    | { status: 'claimed'; previewId: string }
+    | { status: 'claimed'; previewId: string; attemptCount: number }
     | { status: 'ready'; preview: PreviewRecord }
     | { status: 'in_progress' }
   >;
   completePreview(input: {
     userId: string; previewId: string; documentHash: string;
+    attemptCount: number;
     pageImageKeys: string[]; pageImageSizes: number[];
   }): Promise<boolean>;
   failPreview(input: {
     userId: string; previewId: string; documentHash: string;
+    attemptCount: number;
     failureCode: PreviewFailureCode;
   }): Promise<boolean>;
   download(bucket: 'rewrites', key: string): Promise<Buffer>;
@@ -57,11 +59,13 @@ export function createPreviewService(dependencies: RetryDependencies) {
   async function terminal(
     preview: PreviewRecord,
     previewId: string,
+    attemptCount: number,
   ): Promise<PreviewRetryResult> {
     await dependencies.failPreview({
       userId: preview.userId,
       previewId,
       documentHash: preview.documentHash,
+      attemptCount,
       failureCode: 'PREVIEW_LEASE_EXPIRED',
     });
     return { status: 'failed', failureCode: 'PREVIEW_LEASE_EXPIRED' };
@@ -103,13 +107,15 @@ export function createPreviewService(dependencies: RetryDependencies) {
     try {
       pdf = await dependencies.download('rewrites', preview.pdfKey);
     } catch {
-      return terminal(preview, claim.previewId);
+      return terminal(preview, claim.previewId, claim.attemptCount);
     }
     try {
       const inspected = await dependencies.inspect(pdf);
-      if (inspected.pageCount !== preview.pageCount) return terminal(preview, claim.previewId);
+      if (inspected.pageCount !== preview.pageCount) {
+        return terminal(preview, claim.previewId, claim.attemptCount);
+      }
     } catch {
-      return terminal(preview, claim.previewId);
+      return terminal(preview, claim.previewId, claim.attemptCount);
     }
 
     let pages: Buffer[];
@@ -118,6 +124,7 @@ export function createPreviewService(dependencies: RetryDependencies) {
     } catch {
       await dependencies.failPreview({
         userId: input.userId, previewId: claim.previewId,
+        attemptCount: claim.attemptCount,
         documentHash: preview.documentHash, failureCode: 'THUMBNAIL_RENDER_FAILED',
       });
       return { status: 'failed', failureCode: 'THUMBNAIL_RENDER_FAILED' };
@@ -134,6 +141,7 @@ export function createPreviewService(dependencies: RetryDependencies) {
     } catch {
       await dependencies.failPreview({
         userId: input.userId, previewId: claim.previewId,
+        attemptCount: claim.attemptCount,
         documentHash: preview.documentHash, failureCode: 'PREVIEW_STORAGE_FAILED',
       });
       return { status: 'failed', failureCode: 'PREVIEW_STORAGE_FAILED' };
@@ -141,6 +149,7 @@ export function createPreviewService(dependencies: RetryDependencies) {
     const completed = await dependencies.completePreview({
       userId: input.userId,
       previewId: claim.previewId,
+      attemptCount: claim.attemptCount,
       documentHash: preview.documentHash,
       ...stored,
     });

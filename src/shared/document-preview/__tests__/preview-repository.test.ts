@@ -32,6 +32,7 @@ function harness(initial: ReturnType<typeof row> | null) {
     if (!current || current.id !== where.id || current.userId !== where.userId) return { count: 0 };
     if (where.documentHash && current.documentHash !== where.documentHash) return { count: 0 };
     if (where.status && typeof where.status === 'string' && current.status !== where.status) return { count: 0 };
+    if (typeof where.attemptCount === 'number' && current.attemptCount !== where.attemptCount) return { count: 0 };
     current = {
       ...current,
       ...data,
@@ -73,7 +74,7 @@ describe('preview persistence contract', () => {
     const h = harness(row());
     await expect(h.repository.claimThumbnailRetry({
       userId: 'user-1', generatedCvId: 'cv-1', documentHash: 'hash-1', now: NOW,
-    })).resolves.toEqual({ status: 'claimed', previewId: 'preview-1' });
+    })).resolves.toEqual({ status: 'claimed', previewId: 'preview-1', attemptCount: 2 });
     expect(h.current()).toMatchObject({
       status: 'RENDERING', failureCode: null, attemptCount: 2,
       leaseExpiresAt: new Date(NOW.getTime() + PREVIEW_LEASE_MS),
@@ -88,7 +89,7 @@ describe('preview persistence contract', () => {
 
     const expired = harness(row({ status: 'RENDERING', failureCode: null, leaseExpiresAt: new Date(NOW.getTime() - 1) }));
     await expect(expired.repository.claimThumbnailRetry({ userId: 'user-1', generatedCvId: 'cv-1', documentHash: 'hash-1', now: NOW }))
-      .resolves.toEqual({ status: 'claimed', previewId: 'preview-1' });
+      .resolves.toEqual({ status: 'claimed', previewId: 'preview-1', attemptCount: 2 });
     expect(expired.current()?.attemptCount).toBe(2);
   });
 
@@ -129,6 +130,7 @@ describe('preview persistence contract', () => {
     }));
     await expect(ready.repository.completePreview({
       userId: 'user-1', previewId: 'preview-1', documentHash: 'hash-1',
+      attemptCount: 1,
       pageImageKeys: ['page-1.png', 'page-2.png'], pageImageSizes: [100, 110],
     })).resolves.toBe(true);
     expect(ready.current()).toMatchObject({
@@ -139,6 +141,7 @@ describe('preview persistence contract', () => {
     const failed = harness(row({ status: 'RENDERING', failureCode: null }));
     await expect(failed.repository.failPreview({
       userId: 'user-1', previewId: 'preview-1', documentHash: 'hash-1',
+      attemptCount: 1,
       failureCode: 'PREVIEW_STORAGE_FAILED',
     })).resolves.toBe(true);
     expect(failed.current()).toMatchObject({
@@ -147,7 +150,31 @@ describe('preview persistence contract', () => {
 
     await expect(failed.repository.completePreview({
       userId: 'user-2', previewId: 'preview-1', documentHash: 'hash-1',
+      attemptCount: 1,
       pageImageKeys: ['page-1.png'], pageImageSizes: [100],
     })).resolves.toBe(false);
+  });
+
+  it('fences stale thumbnail workers after an expired lease is reclaimed', async () => {
+    const h = harness(row({
+      status: 'RENDERING', failureCode: null, attemptCount: 2,
+      leaseExpiresAt: new Date(NOW.getTime() + PREVIEW_LEASE_MS),
+    }));
+
+    await expect(h.repository.completePreview({
+      userId: 'user-1', previewId: 'preview-1', documentHash: 'hash-1',
+      attemptCount: 1, pageImageKeys: ['stale.png'], pageImageSizes: [50],
+    })).resolves.toBe(false);
+    await expect(h.repository.failPreview({
+      userId: 'user-1', previewId: 'preview-1', documentHash: 'hash-1',
+      attemptCount: 1, failureCode: 'THUMBNAIL_RENDER_FAILED',
+    })).resolves.toBe(false);
+    expect(h.current()).toMatchObject({ status: 'RENDERING', attemptCount: 2 });
+
+    await expect(h.repository.completePreview({
+      userId: 'user-1', previewId: 'preview-1', documentHash: 'hash-1',
+      attemptCount: 2, pageImageKeys: ['page-1.png'], pageImageSizes: [100],
+    })).resolves.toBe(true);
+    expect(h.current()).toMatchObject({ status: 'READY', attemptCount: 2 });
   });
 });
