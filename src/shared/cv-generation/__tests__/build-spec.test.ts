@@ -76,22 +76,60 @@ describe('V2 normalized build assembly', () => {
     }));
   });
 
-  it('uses explicit source order for entities instead of stable hash or entity IDs', () => {
+  it('defaults dated experience to deterministic reverse chronology', () => {
     const { evidence, plan } = fixture();
-    const earlier = recordForOrder('role-z-record', 'role-z', 'Earlier Role', 'First Company', 0);
-    const later = recordForOrder('role-a-record', 'role-a', 'Later Role', 'Second Company', 1);
-    evidence.evidenceById[earlier.id] = earlier;
-    evidence.evidenceById[later.id] = later;
+    const earlier = recordForOrder('role-z-record', 'role-z', 'Earlier Role', 'First Company', 0, '2022-08', '2022-10');
+    const current = recordForOrder('role-current-record', 'role-current', 'Current Role', 'Current Company', 1, '2025-10', undefined, true);
+    const later = recordForOrder('role-a-record', 'role-a', 'Later Role', 'Second Company', 2, '2023-12', '2024-05');
+    const undated = recordForOrder('role-undated-record', 'role-undated', 'Undated Role', 'Unknown Company', 3);
+    for (const item of [earlier, current, later, undated]) evidence.evidenceById[item.id] = item;
     evidence.employment = [
-      { id: 'role-z', sourceEntityId: 'role-z', label: 'Earlier Role', details: { title: 'Earlier Role', employer: 'First Company', sortOrder: 0 }, evidenceIds: [earlier.id] },
-      { id: 'role-a', sourceEntityId: 'role-a', label: 'Later Role', details: { title: 'Later Role', employer: 'Second Company', sortOrder: 1 }, evidenceIds: [later.id] },
+      { id: 'role-z', sourceEntityId: 'role-z', label: 'Earlier Role', details: recordDetails(earlier), evidenceIds: [earlier.id] },
+      { id: 'role-current', sourceEntityId: 'role-current', label: 'Current Role', details: recordDetails(current), evidenceIds: [current.id] },
+      { id: 'role-a', sourceEntityId: 'role-a', label: 'Later Role', details: recordDetails(later), evidenceIds: [later.id] },
+      { id: 'role-undated', sourceEntityId: 'role-undated', label: 'Undated Role', details: recordDetails(undated), evidenceIds: [undated.id] },
     ];
-    plan.includedEvidenceIds = [earlier.id, later.id];
+    plan.includedEvidenceIds = [earlier.id, current.id, later.id, undated.id];
     plan.sectionOrder = ['EXPERIENCE'];
 
     const spec = assembleCvBuildSpec({ generationId: 'g1', evidence, plan, templateId: 'architect', authorityContext: { currentProfileSnapshotId: 'profile-current' } });
     const section = spec.sections.find((item) => item.type === 'EXPERIENCE');
-    expect(section?.items.map((item) => item.title)).toEqual(['Earlier Role', 'Later Role']);
+    expect(section?.items.map((item) => item.title)).toEqual(['Current Role', 'Later Role', 'Earlier Role', 'Undated Role']);
+  });
+
+  it('defaults education to reverse chronology while preserving canonical project order', () => {
+    const { evidence, plan } = fixture();
+    const masters = structuralRecord('masters-record', 'EDUCATION', 'masters', { degree: 'MSc Computing', institution: 'North University', startDate: '2024-09', endDate: '2025-10', sortOrder: 1 });
+    evidence.evidenceById[masters.id] = masters;
+    evidence.education.push({ id: 'masters', sourceEntityId: 'masters', label: 'MSc Computing', details: recordDetails(masters), evidenceIds: [masters.id] });
+    evidence.education[0].details = { ...evidence.education[0].details, startDate: '2019-09', endDate: '2023-07', sortOrder: 0 };
+    const secondProject = structuralRecord('second-project-record', 'PROJECT', 'project-2', { name: 'Second Project', sortOrder: 1 });
+    evidence.evidenceById[secondProject.id] = secondProject;
+    evidence.projects.push({ id: 'project-2', sourceEntityId: 'project-2', label: 'Second Project', details: recordDetails(secondProject), evidenceIds: [secondProject.id] });
+    plan.includedEvidenceIds.push(masters.id, secondProject.id);
+    plan.sectionOrder = ['EDUCATION', 'PROJECTS'];
+
+    const spec = assembleCvBuildSpec({ generationId: 'g1', evidence, plan, templateId: 'architect', authorityContext: { currentProfileSnapshotId: 'profile-current' } });
+    expect(spec.sections.find((item) => item.type === 'EDUCATION')?.items.map((item) => item.degree)).toEqual(['MSc Computing', 'BSc Data Engineering']);
+    expect(spec.sections.find((item) => item.type === 'PROJECTS')?.items.map((item) => item.name)).toEqual(['Lighthouse API', 'Second Project']);
+  });
+
+  it('preserves an explicitly approved entity order ahead of chronology', () => {
+    const { evidence, plan } = fixture();
+    const older = recordForOrder('older-record', 'older-role', 'Approved First', 'First Company', 0, '2020-01', '2021-01');
+    const newer = recordForOrder('newer-record', 'newer-role', 'Approved Second', 'Second Company', 1, '2025-01', undefined, true);
+    for (const item of [older, newer]) evidence.evidenceById[item.id] = item;
+    evidence.employment = [
+      { id: 'older-role', sourceEntityId: 'older-role', label: 'Approved First', details: recordDetails(older), evidenceIds: [older.id] },
+      { id: 'newer-role', sourceEntityId: 'newer-role', label: 'Approved Second', details: recordDetails(newer), evidenceIds: [newer.id] },
+    ];
+    plan.includedEvidenceIds = [older.id, newer.id];
+    plan.sectionOrder = ['EXPERIENCE'];
+    plan.entityOrder = { EXPERIENCE: ['older-role', 'newer-role'] };
+
+    const spec = assembleCvBuildSpec({ generationId: 'g1', evidence, plan, templateId: 'architect' });
+    const section = spec.sections.find((item) => item.type === 'EXPERIENCE');
+    expect(section?.items.map((item) => item.title)).toEqual(['Approved First', 'Approved Second']);
   });
 
   it('validates a rewritten line through its representative and keeps rejected text unchanged', () => {
@@ -106,11 +144,25 @@ describe('V2 normalized build assembly', () => {
   });
 });
 
-function recordForOrder(id: string, entityId: string, title: string, employer: string, sortOrder: number): CandidateEvidenceItem {
+function recordForOrder(id: string, entityId: string, title: string, employer: string, sortOrder: number, startDate?: string, endDate?: string, current?: boolean): CandidateEvidenceItem {
   return {
     id, kind: 'EMPLOYMENT', field: 'record', canonicalText: title,
-    canonicalData: { title, employer, sortOrder },
+    canonicalData: { title, employer, sortOrder, startDate, endDate, current },
     provenance: 'CAREER_PROFILE', preservationTier: 1, requirementIds: [],
     sourceRefs: [{ sourceType: 'CAREER_PROFILE', entityType: 'Experience', entityId, fieldPath: 'record', snapshotId: 'profile-current' }],
   };
+}
+
+function structuralRecord(id: string, kind: CandidateEvidenceItem['kind'], entityId: string, canonicalData: Record<string, unknown>): CandidateEvidenceItem {
+  return {
+    id, kind, field: 'record', canonicalText: id, canonicalData,
+    provenance: 'CAREER_PROFILE', preservationTier: 1, requirementIds: [],
+    sourceRefs: [{ sourceType: 'CAREER_PROFILE', entityType: kind, entityId, fieldPath: 'record', snapshotId: 'profile-current' }],
+  };
+}
+
+function recordDetails(item: CandidateEvidenceItem): Record<string, unknown> {
+  return item.canonicalData && typeof item.canonicalData === 'object' && !Array.isArray(item.canonicalData)
+    ? item.canonicalData as Record<string, unknown>
+    : {};
 }

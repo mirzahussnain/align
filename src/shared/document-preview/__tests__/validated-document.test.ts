@@ -36,7 +36,7 @@ function spec(): CvBuildSpecV2 {
   };
 }
 
-function dependencies(pageCounts: Partial<Record<CvLayoutProfile, number>>) {
+function dependencies(pageCounts: Partial<Record<CvLayoutProfile, number>>, finalPageOccupancy: Partial<Record<CvLayoutProfile, number>> = {}) {
   const generate = vi.fn(
     async (_spec: CvBuildSpecV2, options?: { profile?: CvLayoutProfile }) =>
       Buffer.from(`docx:${options?.profile ?? 'preferred'}`),
@@ -46,7 +46,7 @@ function dependencies(pageCounts: Partial<Record<CvLayoutProfile, number>>) {
   );
   const inspect = vi.fn(async (pdf: Buffer) => {
     const profile = pdf.toString().slice('%PDF-'.length) as CvLayoutProfile;
-    return { pageCount: pageCounts[profile] ?? 3 };
+    return { pageCount: pageCounts[profile] ?? 3, finalPageOccupancy: finalPageOccupancy[profile] ?? 1 };
   });
   const renderPages = vi.fn(async (_pdf: Buffer, count: 1 | 2) =>
     Array.from({ length: count }, (_, index) => Buffer.from(`png:${index + 1}`)),
@@ -100,17 +100,28 @@ describe('validated document layout selection', () => {
     },
   );
 
-  it('accepts a natural two-page preferred layout even if compact would be one page', async () => {
-    const fixture = dependencies({ preferred: 2, compact: 1 });
+  it('evaluates safe compact profiles for an underfilled second page and accepts a readable one-page result', async () => {
+    const fixture = dependencies({ preferred: 2, compact: 1 }, { preferred: 0.18 });
     const result = await renderValidatedDocument({
       spec: spec(),
       traceId: 'generation_2',
       dependencies: fixture.dependencies,
     });
+    expect(result.pageCount).toBe(1);
+    expect(result.profile).toBe('compact');
+    expect(fixture.generate).toHaveBeenCalledTimes(2);
+    expect(fixture.convert).toHaveBeenCalledTimes(2);
+  });
+
+  it('retains the more readable two-page profile when tighter layouts do not reach one page', async () => {
+    const fixture = dependencies(
+      { preferred: 2, compact: 2, 'compact-tight': 2 },
+      { preferred: 0.18, compact: 0.42, 'compact-tight': 0.5 },
+    );
+    const result = await renderValidatedDocument({ spec: spec(), traceId: 'generation_2b', dependencies: fixture.dependencies });
     expect(result.pageCount).toBe(2);
     expect(result.profile).toBe('preferred');
-    expect(fixture.generate).toHaveBeenCalledTimes(1);
-    expect(fixture.convert).toHaveBeenCalledTimes(1);
+    expect(fixture.generate).toHaveBeenCalledTimes(3);
   });
 
   it('returns controlled page-limit failure with every observed count', async () => {

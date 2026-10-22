@@ -47,7 +47,7 @@ function pngDimensions(png: Buffer) {
 
 describe('PDF preview inspection and rasterisation', () => {
   it('reads the actual PDF page count', async () => {
-    await expect(inspectPdf(minimalPdf(2))).resolves.toEqual({ pageCount: 2 });
+    await expect(inspectPdf(minimalPdf(2))).resolves.toEqual({ pageCount: 2, finalPageOccupancy: 0 });
   });
 
   it('renders exactly one bounded PNG for each requested page', async () => {

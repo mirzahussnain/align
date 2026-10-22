@@ -227,6 +227,7 @@ export interface ProposedCvPlan {
   atsStrategy: CvAtsStrategy;
   targetStrategy: CvTargetStrategy;
   sectionOrder: CvPlanSection[];
+  entityOrder?: Partial<Record<'EXPERIENCE' | 'EDUCATION' | 'PROJECTS', string[]>>;
   density: CvDensity;
   targetLength: CvTargetLength;
   includedEvidenceIds: string[];

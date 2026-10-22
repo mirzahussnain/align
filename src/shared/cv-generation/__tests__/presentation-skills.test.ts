@@ -33,8 +33,8 @@ describe('presentation skill normalization', () => {
     const result = normalizePresentationSkills(input());
 
     expect(result.groups).toEqual([
-      { id: 'skill-category:databases', category: 'Databases', skills: [{ id: 'skill-cockroach', name: 'CockroachDB' }] },
       { id: 'skill-category:languages', category: 'Languages', skills: [{ id: 'skill-rust', name: 'Rust' }] },
+      { id: 'skill-category:databases', category: 'Databases', skills: [{ id: 'skill-cockroach', name: 'CockroachDB' }] },
       { id: 'skill-category:skills', category: 'Skills', skills: [{ id: 'skill:svelte', name: 'Svelte' }] },
     ]);
     expect(result.bindings.find(({ nodeId }) => nodeId === 'skill-rust')?.evidenceIds).toEqual([
@@ -46,8 +46,17 @@ describe('presentation skill normalization', () => {
     expect(JSON.stringify(result.groups)).not.toMatch(/Category:|Excerpt:/);
   });
 
-  it('keeps category and skill ordering independent of source order', () => {
-    expect(normalizePresentationSkills(input(true)).groups).toEqual(normalizePresentationSkills(input()).groups);
+  it('preserves canonical category hierarchy instead of alphabetising it', () => {
+    const value = input();
+    value.evidence.skills = [
+      value.evidence.skills[1],
+      value.evidence.skills[3],
+      value.evidence.skills[2],
+      value.evidence.skills[0],
+    ];
+    expect(normalizePresentationSkills(value).groups.map(({ category }) => category)).toEqual([
+      'Languages', 'Databases', 'Skills',
+    ]);
   });
 
   it('uses the category saved by the Career Profile editor for future CV generation', () => {

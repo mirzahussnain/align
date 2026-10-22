@@ -20,6 +20,11 @@ export interface ObservedPageCount {
   pageCount: number;
 }
 
+export interface PdfInspection {
+  pageCount: number;
+  finalPageOccupancy: number;
+}
+
 export class PageValidationError extends Error {
   constructor(
     readonly code: PageValidationFailureCode,
@@ -105,12 +110,22 @@ function unavailable(error: unknown): never {
   throw new PageValidationError('PAGE_VALIDATION_UNAVAILABLE');
 }
 
-export async function inspectPdf(pdf: Buffer): Promise<{ pageCount: number }> {
+export async function inspectPdf(pdf: Buffer): Promise<PdfInspection> {
   let proxy: PdfProxy | undefined;
   try {
     proxy = await openPdf(pdf);
     assertSafePageCount(proxy.numPages);
-    return { pageCount: proxy.numPages };
+    const page = await withTimeout(proxy.getPage(proxy.numPages), PDF_PREVIEW_PARSE_TIMEOUT_MS);
+    const viewport = page.getViewport({ scale: 1 });
+    const content = await withTimeout(page.getTextContent(), PDF_PREVIEW_PARSE_TIMEOUT_MS);
+    const baselines = content.items.flatMap((item) => {
+      if (!('transform' in item) || !Array.isArray(item.transform)) return [];
+      const baseline = item.transform[5];
+      return typeof baseline === 'number' && Number.isFinite(baseline) ? [baseline] : [];
+    });
+    const lowestBaseline = baselines.length ? Math.min(...baselines) : viewport.height;
+    const finalPageOccupancy = Math.max(0, Math.min(1, (viewport.height - lowestBaseline) / viewport.height));
+    return { pageCount: proxy.numPages, finalPageOccupancy };
   } catch (error) {
     return unavailable(error);
   } finally {

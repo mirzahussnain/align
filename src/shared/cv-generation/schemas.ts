@@ -152,6 +152,11 @@ const cvPlanBase = {
   atsStrategy: CvAtsStrategySchema,
   targetStrategy: z.enum(['PROFILE_ONLY', 'JUNIOR_PROJECT_HEAVY', 'EXPERIENCE_FORWARD', 'SENIOR_LEAD', 'CAREER_CHANGER', 'ACADEMIC_RESEARCH', 'CREDENTIAL_HEAVY']),
   sectionOrder: z.array(CvPlanSectionSchema),
+  entityOrder: z.strictObject({
+    EXPERIENCE: z.array(z.string().min(1)).optional(),
+    EDUCATION: z.array(z.string().min(1)).optional(),
+    PROJECTS: z.array(z.string().min(1)).optional(),
+  }).optional(),
   density: z.enum(['COMPACT', 'BALANCED', 'SPACIOUS']),
   targetLength: z.enum(['ONE_PAGE', 'ONE_TO_TWO_PAGES', 'TWO_PAGES']),
   includedEvidenceIds: z.array(z.string().min(1)),

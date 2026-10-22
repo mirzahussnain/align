@@ -31,8 +31,8 @@ export function normalizePresentationSkills(input: PresentationSkillInput): Pres
 
   const bindings: CvEvidenceBinding[] = [];
   const skillAliases = new Map<string, string>();
-  const normalizedSkills: Array<{ id: string; name: string; category: string }> = [];
-  for (const [nameKey, representations] of [...byName.entries()].sort(([left], [right]) => left.localeCompare(right))) {
+  const normalizedSkills: Array<{ id: string; name: string; category: string; order: number }> = [];
+  for (const [nameKey, representations] of byName) {
     const candidates = representations.map(({ skill, evidenceId }): StructuralFieldCandidate<string> => {
       const evidence = input.evidence.evidenceById[evidenceId];
       return {
@@ -55,10 +55,18 @@ export function normalizePresentationSkills(input: PresentationSkillInput): Pres
       return leftCanonical - rightCanonical || left.skill.name.localeCompare(right.skill.name) || left.skill.id.localeCompare(right.skill.id);
     })[0].skill.name.trim();
     const category = selectAuthoritativeField(candidates, input.authorityContext) ?? 'Skills';
+    const positions = representations.map(({ skill, evidenceId }) => ({
+      index: input.evidence.skills.indexOf(skill),
+      canonical: input.evidence.evidenceById[evidenceId]?.provenance !== 'SOURCE_CV',
+    }));
+    const canonicalPositions = positions.filter(({ canonical }) => canonical).map(({ index }) => index);
+    const order = canonicalPositions.length
+      ? Math.min(...canonicalPositions)
+      : Number.MAX_SAFE_INTEGER / 2 + Math.min(...positions.map(({ index }) => index));
     const artifactIds = (input.sparseSkillArtifacts ?? []).filter(({ skillName }) => normalizeIdentityText(skillName) === nameKey).flatMap(({ evidenceIds }) => evidenceIds);
     const evidenceIds = [...new Set([...representations.map(({ evidenceId }) => evidenceId), ...artifactIds])].sort();
     bindings.push({ nodeId: id, evidenceIds });
-    normalizedSkills.push({ id, name: displayName, category });
+    normalizedSkills.push({ id, name: displayName, category, order });
     skillAliases.set(nameKey, id);
     for (const { skill } of representations) {
       skillAliases.set(skill.id, id);
@@ -67,16 +75,16 @@ export function normalizePresentationSkills(input: PresentationSkillInput): Pres
   }
 
   const grouped = new Map<string, { category: string; skills: Array<{ id: string; name: string }> }>();
-  for (const skill of normalizedSkills) {
+  for (const skill of normalizedSkills.sort((left, right) => left.order - right.order || left.id.localeCompare(right.id))) {
     const key = normalizeIdentityText(skill.category);
     const group = grouped.get(key) ?? { category: skill.category, skills: [] };
     group.skills.push({ id: skill.id, name: skill.name });
     grouped.set(key, group);
   }
-  const groups = [...grouped.entries()].sort(([left], [right]) => left.localeCompare(right)).map(([key, group]) => ({
+  const groups = [...grouped.entries()].map(([key, group]) => ({
     id: `skill-category:${key}`,
     category: group.category,
-    skills: group.skills.sort((left, right) => normalizeIdentityText(left.name).localeCompare(normalizeIdentityText(right.name)) || left.id.localeCompare(right.id)),
+    skills: group.skills,
   }));
   return { groups, bindings, skillAliases };
 }

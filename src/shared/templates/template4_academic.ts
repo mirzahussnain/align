@@ -8,6 +8,7 @@ import {
   sectionParagraphs,
   type V2TemplateTheme,
 } from './v2-shared';
+import { formatPhone } from './utils';
 
 const THEME: V2TemplateTheme = {
   accent: '000000',
@@ -26,7 +27,7 @@ export async function generateAcademicTemplate(
     spec.presentation.density,
     options.profile ?? 'preferred',
   );
-  const contact = [spec.identity.email, spec.identity.phone, spec.identity.location]
+  const contact = [spec.identity.email, formatPhone(spec.identity.phone ?? ''), spec.identity.location]
     .filter(Boolean)
     .join(' · ');
   const children: Array<Paragraph | Table> = [

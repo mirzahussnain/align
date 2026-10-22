@@ -21,6 +21,7 @@ export interface NormalizationInput {
   selectedEvidenceIds: Set<string>;
   patches: Map<string, string>;
   authorityContext: NormalizationAuthorityContext;
+  approvedEntityOrder?: Partial<Record<'EXPERIENCE' | 'EDUCATION' | 'PROJECTS', string[]>>;
 }
 
 export interface NormalizedEntitySections {
@@ -187,7 +188,7 @@ function normalizeKind(kind: NormalizableEntityKind, input: NormalizationInput) 
   for (const entity of entities) for (const evidenceId of entity.evidenceIds) {
     if (!evidenceOrder.has(evidenceId)) evidenceOrder.set(evidenceId, evidenceOrder.size);
   }
-  return groupEntityRepresentations(representations).map((group) => {
+  const normalized = groupEntityRepresentations(representations).map((group) => {
     const members = group.representations.map((item) => contexts.get(item.representationId)!).filter(Boolean);
     const id = stablePresentationEntityId(group);
     const evidenceIds = [...new Set(members.flatMap((item) => item.evidenceIds))].sort((left, right) =>
@@ -205,7 +206,37 @@ function normalizeKind(kind: NormalizableEntityKind, input: NormalizationInput) 
       supportKeys: member.evidenceIds,
     })), input.authorityContext, { normalize: (value) => value.toString().padStart(12, '0') });
     return { id, members, evidenceIds, aliases: group.aliases, order };
-  }).sort((left, right) => (left.order ?? Number.MAX_SAFE_INTEGER) - (right.order ?? Number.MAX_SAFE_INTEGER) || left.id.localeCompare(right.id));
+  });
+  const approved = input.approvedEntityOrder?.[kind === 'PROJECT' ? 'PROJECTS' : kind as 'EXPERIENCE' | 'EDUCATION'];
+  const approvedIndex = new Map((approved ?? []).map((id, index) => [id, index]));
+  const explicitIndex = (group: typeof normalized[number]) => {
+    const ids = [group.id, ...group.members.flatMap((member) => [
+      member.entityId, member.sourceEntityId, member.canonicalEntityId,
+    ])].filter((id): id is string => Boolean(id));
+    return Math.min(...ids.map((id) => approvedIndex.get(id) ?? Number.MAX_SAFE_INTEGER));
+  };
+  const dateValue = (group: typeof normalized[number], key: 'startDate' | 'endDate') =>
+    group.members.map((member) => raw(member.details, [key])).find(Boolean);
+  const isCurrent = (group: typeof normalized[number]) =>
+    group.members.some((member) => member.details.current === true);
+  return normalized.sort((left, right) => {
+    if (approved?.length) {
+      const explicit = explicitIndex(left) - explicitIndex(right);
+      if (explicit) return explicit;
+    }
+    if (kind === 'EXPERIENCE' || kind === 'EDUCATION') {
+      const current = Number(isCurrent(right)) - Number(isCurrent(left));
+      if (current) return current;
+      const leftEnd = dateValue(left, 'endDate') ?? dateValue(left, 'startDate') ?? '';
+      const rightEnd = dateValue(right, 'endDate') ?? dateValue(right, 'startDate') ?? '';
+      if (leftEnd !== rightEnd) return rightEnd.localeCompare(leftEnd);
+      const leftStart = dateValue(left, 'startDate') ?? '';
+      const rightStart = dateValue(right, 'startDate') ?? '';
+      if (leftStart !== rightStart) return rightStart.localeCompare(leftStart);
+    }
+    return (left.order ?? Number.MAX_SAFE_INTEGER) - (right.order ?? Number.MAX_SAFE_INTEGER)
+      || left.id.localeCompare(right.id);
+  });
 }
 
 const base = (id: string) => ({ id, lines: [], links: [] });

@@ -30,6 +30,7 @@ export function assembleCvBuildSpec(args: {
     selectedEvidenceIds,
     patches: args.patches ?? new Map(),
     authorityContext: args.authorityContext ?? {},
+    approvedEntityOrder: args.plan.entityOrder,
   };
   const entities = normalizeEntitySections(input);
   const skills = normalizePresentationSkills({ ...input, sparseSkillArtifacts: entities.sparseSkillArtifacts });

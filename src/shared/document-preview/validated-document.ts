@@ -18,7 +18,10 @@ import {
   PageValidationError,
   renderPdfPages,
   type ObservedPageCount,
+  type PdfInspection,
 } from './pdf-preview';
+
+export const UNDERFILLED_FINAL_PAGE_THRESHOLD = 0.3;
 
 export const DOCUMENT_RENDER_CONTRACT_VERSION =
   `gotenberg-${DOCUMENT_RENDERER_VERSION}-libreoffice-v1`;
@@ -35,7 +38,7 @@ export interface RenderDependencies {
     retryBudget?: RendererRetryBudget;
     deadlineAt?: number;
   }) => Promise<Buffer>;
-  inspect?: (pdf: Buffer) => Promise<{ pageCount: number }>;
+  inspect?: (pdf: Buffer) => Promise<PdfInspection>;
   renderPages?: (pdf: Buffer, pageCount: 1 | 2) => Promise<Buffer[]>;
   rendererContractVersion?: string;
 }
@@ -88,6 +91,9 @@ export async function renderValidatedDocument(
   const rendererContractVersion =
     input.dependencies?.rendererContractVersion ?? DOCUMENT_RENDER_CONTRACT_VERSION;
   const observed: ObservedPageCount[] = [];
+  const twoPageCandidates: Array<{ docx: Buffer; pdf: Buffer; profile: CvLayoutProfile }> = [];
+  let accepted: { docx: Buffer; pdf: Buffer; profile: CvLayoutProfile; pageCount: 1 | 2 } | undefined;
+  let seekingOnePage = false;
 
   for (const profile of CV_LAYOUT_PROFILES) {
     const docx = await generate(input.spec, { profile });
@@ -98,37 +104,55 @@ export async function renderValidatedDocument(
       retryBudget: input.retryBudget,
       deadlineAt: input.deadlineAt,
     });
-    const { pageCount } = await inspect(pdf);
+    const { pageCount, finalPageOccupancy } = await inspect(pdf);
     if (!Number.isSafeInteger(pageCount) || pageCount < 1) {
       throw new PageValidationError('PAGE_VALIDATION_UNAVAILABLE', observed);
     }
     observed.push({ profile, pageCount });
     if (!acceptedPageCount(pageCount)) continue;
+    if (pageCount === 1) {
+      accepted = { docx, pdf, profile, pageCount };
+      break;
+    }
+    twoPageCandidates.push({ docx, pdf, profile });
+    if (finalPageOccupancy < UNDERFILLED_FINAL_PAGE_THRESHOLD) {
+      seekingOnePage = true;
+      continue;
+    }
+    if (!seekingOnePage) {
+      accepted = { docx, pdf, profile, pageCount };
+      break;
+    }
+  }
 
+  accepted ??= twoPageCandidates[0]
+    ? { ...twoPageCandidates[0], pageCount: 2 }
+    : undefined;
+  if (accepted) {
     const hash = documentHash(
-      docx,
+      accepted.docx,
       rendererContractVersion,
       CV_TEMPLATE_DEFINITIONS[input.spec.presentation.templateId].version,
     );
     try {
-      const pages = await renderPages(pdf, pageCount);
-      if (pages.length !== pageCount) {
+      const pages = await renderPages(accepted.pdf, accepted.pageCount);
+      if (pages.length !== accepted.pageCount) {
         throw new Error('Thumbnail page count mismatch');
       }
       return {
-        docx,
-        pdf,
-        pageCount,
-        profile,
+        docx: accepted.docx,
+        pdf: accepted.pdf,
+        pageCount: accepted.pageCount,
+        profile: accepted.profile,
         documentHash: hash,
         preview: { status: 'READY', pages },
       };
     } catch {
       return {
-        docx,
-        pdf,
-        pageCount,
-        profile,
+        docx: accepted.docx,
+        pdf: accepted.pdf,
+        pageCount: accepted.pageCount,
+        profile: accepted.profile,
         documentHash: hash,
         preview: {
           status: 'FAILED',

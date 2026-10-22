@@ -39,6 +39,16 @@ interface PresentationEntry {
 }
 
 const singleLine = 240;
+const MAX_GROUPED_ENTRY_LINES = 12;
+
+function estimatedEntryLines(entry: PresentationEntry): number {
+  const wrapped = (value: string) => Math.max(1, Math.ceil(value.length / 95));
+  return 1
+    + Number(Boolean(entry.subtitle || entry.startDate || entry.endDate || entry.current))
+    + Number(Boolean(entry.technologies?.length))
+    + entry.lines.reduce((total, line) => total + wrapped(line.text), 0)
+    + Number(entry.links.length > 0);
+}
 
 export function linkRuns(
   items: CvPresentationLink[],
@@ -87,6 +97,7 @@ function entryParagraphs(
   theme: V2TemplateTheme,
   layout: TemplateLayout,
 ): Paragraph[] {
+  const keepEntryTogether = estimatedEntryLines(entry) <= MAX_GROUPED_ENTRY_LINES;
   const dates = formatDateRangeStyled(
     entry.startDate,
     entry.endDate,
@@ -169,8 +180,9 @@ function entryParagraphs(
   }
   result.push(
     ...entry.lines.map(
-      (line) =>
+      (line, index) =>
         new Paragraph({
+          keepNext: keepEntryTogether && (index < entry.lines.length - 1 || entry.links.length > 0),
           keepLines: true,
           bullet: { level: 0 },
           spacing: { after: layout.spacing.bulletAfter, line: singleLine },

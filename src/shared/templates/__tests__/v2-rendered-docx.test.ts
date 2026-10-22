@@ -38,6 +38,19 @@ describe('V2 rendered DOCX', () => {
     expect(new Set(Object.values(CV_TEMPLATE_RENDERERS)).size).toBe(4);
   });
 
+  it.each(['architect', 'editorial_refined', 'technical_precision', 'academic_latex'] as const)(
+    'applies the shared phone formatter in %s without mutating the build spec',
+    async (templateId) => {
+      const value = spec(templateId);
+      value.identity.phone = '+44 · 7737853800';
+      const original = structuredClone(value);
+      const xml = await (await JSZip.loadAsync(await generateV2Template(value))).file('word/document.xml')!.async('string');
+      expect(xml).toContain('+44 7737 853800');
+      expect(xml).not.toContain('+44 · 7737853800');
+      expect(value).toEqual(original);
+    },
+  );
+
   it.each([
     ['architect', '1B5EA6', 'Arial'],
     ['editorial_refined', '8B4513', 'Georgia'],
@@ -129,6 +142,38 @@ describe('V2 rendered DOCX', () => {
     const xml = await (await JSZip.loadAsync(await generateV2Template(value))).file('word/document.xml')!.async('string');
     expect(xml.match(/<w:numPr>/g)).toHaveLength(1);
     expect(xml.split('Built one coherent evidence line.')).toHaveLength(2);
+  });
+
+  it('keeps a reasonably sized multi-paragraph entry together but lets oversized entries break', async () => {
+    const value = spec('architect');
+    value.sections = [{
+      type: 'PROJECTS',
+      heading: 'Projects',
+      items: [
+        {
+          id: 'bounded',
+          name: 'Kinetix',
+          technologies: ['Next.js'],
+          lines: [
+            { id: 'bounded-1', text: 'Built an evidence-backed workflow with deterministic validation.' },
+            { id: 'bounded-2', text: 'Shipped authenticated document previews and private storage.' },
+          ],
+          links: [{ id: 'bounded-link', label: 'Repository', url: 'https://github.com/alex/kinetix', type: 'PROJECT_REPOSITORY' }],
+        },
+        {
+          id: 'oversized',
+          name: 'Oversized Research',
+          technologies: [],
+          lines: Array.from({ length: 14 }, (_, index) => ({ id: 'long-' + index, text: 'A deliberately long evidence line that must be allowed to paginate naturally without forcing an extra page ' + index + '.' })),
+          links: [],
+        },
+      ],
+    }];
+    const xml = await (await JSZip.loadAsync(await generateV2Template(value))).file('word/document.xml')!.async('string');
+    const bounded = xml.slice(xml.indexOf('Kinetix'), xml.indexOf('Oversized Research'));
+    const oversized = xml.slice(xml.indexOf('Oversized Research'));
+    expect(bounded.match(/<w:keepNext\/>/g)?.length).toBeGreaterThanOrEqual(4);
+    expect(oversized.match(/<w:keepNext\/>/g)?.length ?? 0).toBe(0);
   });
 
   it('fails clearly for an unknown template instead of rendering a generic fallback', async () => {
