@@ -64,8 +64,10 @@ describe('document renderer deployment contract', () => {
     expect(source).not.toMatch(/console\.(log|error)\([^)]*(password|pdf|docx)/iu);
   });
 
-  it('keeps the native PNG renderer outside the Next.js server bundle', () => {
+  it('keeps the Node PDF runtime outside the Next.js server bundle', () => {
     const nextConfig = read('next.config.ts');
-    expect(nextConfig).toMatch(/serverExternalPackages\s*:\s*\[[^\]]*[']@napi-rs\/canvas[']/u);
+    for (const packageName of ['@napi-rs/canvas', 'unpdf', 'pdfjs-dist']) {
+      expect(nextConfig).toContain(`'${packageName}'`);
+    }
   });
 });
