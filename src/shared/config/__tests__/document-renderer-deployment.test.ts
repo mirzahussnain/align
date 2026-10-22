@@ -63,4 +63,9 @@ describe('document renderer deployment contract', () => {
     expect(source).toContain('Times New Roman');
     expect(source).not.toMatch(/console\.(log|error)\([^)]*(password|pdf|docx)/iu);
   });
+
+  it('keeps the native PNG renderer outside the Next.js server bundle', () => {
+    const nextConfig = read('next.config.ts');
+    expect(nextConfig).toMatch(/serverExternalPackages\s*:\s*\[[^\]]*[']@napi-rs\/canvas[']/su);
+  });
 });
