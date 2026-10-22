@@ -1,6 +1,6 @@
 # Project status
 
-> Current implementation snapshot: 20 September 2026.
+> Current implementation snapshot: 22 October 2026.
 
 Align is feature-complete across its main product journeys but is still in the production-readiness phase. The application code supports a full deployment; external services, live credentials, database migration, and production smoke validation remain deployment responsibilities.
 
@@ -36,6 +36,8 @@ Align is feature-complete across its main product journeys but is still in the p
 - Versioned ATS and job-match analysis domains.
 - Evidence-aware job matching and profile snapshots.
 - CV generation/regeneration with provenance checks, bounded repair, DOCX output, and private storage.
+- Four stable template identities with real DOCX-to-PDF rendering, verified one/two-page policy, immutable private PDF/PNG previews, an accessible template carousel, and an authenticated Generated CV gallery/viewer/download flow.
+- Distinct recoverable conversion, page-limit, and thumbnail states with publication and locking safeguards; no legacy preview/backfill layer.
 - Anonymous public ATS demo with abuse protection.
 
 ### Job and company intelligence
@@ -62,7 +64,10 @@ Align is feature-complete across its main product journeys but is still in the p
 5. Apply Prisma migrations through the unpooled database URL.
 6. Run `npm run check:env` and `npm run check:env:live` against production configuration.
 7. Run the full test, typecheck, and production-build gates.
-8. Complete authenticated browser smoke tests for signup/email, onboarding, uploads, analysis, jobs, checkout, portal, and deletion.
+8. Provision and verify the independently secured document renderer described in [its operations runbook](./deployment/document-renderer.md), or keep generation disabled.
+9. Complete authenticated browser smoke tests for signup/email, onboarding, uploads, analysis, jobs, generated-document previews/downloads, checkout, portal, and deletion.
+
+Local rendering is verified against the pinned Gotenberg/LibreOffice image. Oracle Cloud Always Free is only a £0 candidate and remains subject to Oracle capacity, account eligibility, and idle-reclamation constraints. No production endpoint has been verified, so **production document generation remains disabled** until that dependency, TLS/authentication, and the live smoke test are complete. There is no authorised paid fallback.
 
 ## Deliberate boundaries
 
@@ -72,6 +77,7 @@ Align is feature-complete across its main product journeys but is still in the p
 - Redis job-search data is a disposable cache; PostgreSQL holds durable state.
 - There is no general-purpose background-worker or cron subsystem. Cleanup and reconciliation are request-driven or explicitly invoked.
 - Historical audits and plans describe the state and decisions at their date; they are not the current architecture reference.
+- Existing development preview records are disposable; the new system intentionally has no historical conversion or compatibility path.
 
 ## Current references
 
@@ -80,5 +86,6 @@ Align is feature-complete across its main product journeys but is still in the p
 - [Product](../PRODUCT.md)
 - [Design system](../DESIGN.md)
 - [Object storage](./deployment/object-storage.md)
+- [Private document renderer operations](./deployment/document-renderer.md)
 - [Reservation smoke checklist](./RESERVATION_SMOKE.md)
 - [Golden CV review](./STAGE4_GOLDEN_CV_REVIEW.md)

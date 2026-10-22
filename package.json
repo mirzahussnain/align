@@ -18,6 +18,7 @@
     "typecheck": "tsc --noEmit",
     "check:env": "node --experimental-strip-types --no-warnings scripts/check-env.mts",
     "check:env:live": "node --experimental-strip-types --no-warnings scripts/check-env.mts --live",
+    "check:renderer": "node --conditions react-server --env-file=.env.local --experimental-transform-types --no-warnings --import ./scripts/register-alias.mts scripts/check-document-renderer.mts",
     "dev:up": "docker compose up -d && docker compose up -d --wait db minio redis",
     "dev:down": "docker compose down",
     "dev:nuke": "docker compose down -v",
