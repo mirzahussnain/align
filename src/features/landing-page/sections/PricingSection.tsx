@@ -1,123 +1,142 @@
-'use client';
+﻿'use client';
 
 import React from 'react';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
-import { Check, ArrowRight } from 'lucide-react';
-import { PLANS } from '@/shared/constants/plans';
+import { ArrowRight, Check, ChevronDown, Minus } from 'lucide-react';
+import {
+  PUBLIC_PRICING_GROUPS,
+  PUBLIC_PRICING_PLANS,
+} from '@/features/landing-page/pricing-presentation';
 import { cn } from '@/shared/utils/cn';
 
-const PLAN_SECTION_LABELS = {
-  core: 'Included',
-  monthly: 'Monthly allowances',
-  lifetime: 'Lifetime allowances',
-  account: 'Account limits',
-} as const;
-
 export default function PricingSection() {
-  const proPlan = PLANS.find((plan) => plan.id === 'pro');
   return (
     <section
       id="pricing"
-      className="relative py-24 md:py-32 px-4 sm:px-6 lg:px-8 bg-bg-primary z-10 border-t border-border-subtle/40 scroll-mt-24"
+      className="relative z-10 scroll-mt-24 border-t border-border-subtle/40 bg-bg-primary px-4 py-24 sm:px-6 md:py-32 lg:px-8"
     >
-      <div className="max-w-6xl mx-auto relative z-20">
+      <div className="relative z-20 mx-auto max-w-6xl">
         <motion.div
-          initial={{ opacity: 0, y: 20 }}
+          initial={{ opacity: 0, y: 18 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true, margin: '-100px' }}
-          transition={{ duration: 0.6 }}
-          className="text-center mb-16"
+          transition={{ duration: 0.5 }}
+          className="mx-auto mb-14 max-w-2xl text-center md:mb-16"
         >
-          <h2 className="text-[2.5rem] sm:text-5xl md:text-[3.5rem] font-medium text-[#1e293b] tracking-[-0.03em] leading-[1.1] mt-4">
-            Start Free, Upgrade When You&apos;re <span className="text-slate-500">Applying Seriously</span>
+          <h2 className="text-[2.5rem] font-medium leading-[1.08] tracking-[-0.035em] text-[#1e293b] sm:text-5xl md:text-[3.5rem]">
+            Simple pricing for your job search
           </h2>
-          <p className="text-[15px] md:text-[16px] text-slate-500 leading-relaxed mt-6 max-w-2xl mx-auto font-medium">
-            Rule-based ATS analysis is unlimited on both plans. AI-enhanced ATS,
-            Job Match and CV regeneration have separate allowances.
+          <p className="mx-auto mt-5 max-w-xl text-[15px] font-medium leading-relaxed text-slate-500 md:text-base">
+            Start free. Upgrade when you&apos;re ready to apply with confidence.
           </p>
         </motion.div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
-          {PLANS.map((plan, idx) => (
-            <motion.div
+        <div className="grid grid-cols-1 items-stretch gap-6 md:grid-cols-2">
+          {PUBLIC_PRICING_PLANS.map((plan, index) => (
+            <motion.article
               key={plan.id}
-              initial={{ opacity: 0, y: 20 }}
+              aria-label={`${plan.name} plan`}
+              initial={{ opacity: 0, y: 18 }}
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true, margin: '-80px' }}
-              transition={{ duration: 0.5, delay: idx * 0.1 }}
+              transition={{ duration: 0.45, delay: index * 0.08 }}
               className={cn(
-                'glass-card p-8 h-full flex flex-col relative transition-all duration-300 ease-out',
+                'glass-card relative flex h-full flex-col p-7 transition-all duration-300 ease-out sm:p-9',
                 plan.highlight
-                  ? 'border-accent-cyan/50 shadow-[0_20px_45px_rgba(15,23,42,0.08),_0_0_30px_hsla(var(--accent-cyan),0.18)] md:-translate-y-4'
-                  : 'hover:translate-y-[-6px] hover:border-accent-cyan/40'
+                  ? 'border-accent-cyan/50 shadow-[0_20px_45px_rgba(15,23,42,0.08),_0_0_30px_hsla(var(--accent-cyan),0.16)]'
+                  : 'hover:-translate-y-1 hover:border-accent-cyan/35'
               )}
             >
               {plan.highlight && (
-                <span className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-accent-cyan px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-white shadow-lg">
+                <span className="absolute right-6 top-6 rounded-full bg-accent-cyan px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-white shadow-sm sm:right-8 sm:top-8">
                   Most popular
                 </span>
               )}
 
-              <p className="text-xs font-bold uppercase tracking-wider text-text-tertiary">{plan.name}</p>
-
-              <p className="mt-4 text-4xl font-black tracking-tight text-text-primary">
+              <p className="text-sm font-bold text-text-primary">{plan.name}</p>
+              <p className="mt-5 flex items-end gap-1.5 text-5xl font-black tracking-[-0.04em] text-text-primary">
                 {plan.price}
-                <span className="text-sm font-medium text-text-tertiary">{plan.period}</span>
+                <span className="pb-1 text-sm font-medium tracking-normal text-text-tertiary">{plan.period}</span>
               </p>
+              <p className="mt-4 text-sm leading-relaxed text-slate-500">{plan.tagline}</p>
 
-              <p className="mt-3 text-xs text-text-tertiary leading-relaxed">{plan.tagline}</p>
-
-              <div className="mt-7 mb-8 space-y-5">
-                {(Object.keys(PLAN_SECTION_LABELS) as Array<keyof typeof PLAN_SECTION_LABELS>).map((section) => {
-                  const features = plan.sections[section];
-                  if (features.length === 0) return null;
-                  return (
-                    <div key={section}>
-                      <h3 className="text-[10px] font-bold uppercase tracking-[0.14em] text-slate-400">
-                        {PLAN_SECTION_LABELS[section]}
-                      </h3>
-                      <ul className="mt-2.5 flex flex-col gap-2.5">
-                        {features.map((feature) => (
-                          <li key={feature} className="flex items-start gap-2.5 text-[13px] text-slate-600 leading-relaxed">
-                            <Check
-                              className={cn(
-                                'mt-0.5 h-4 w-4 shrink-0',
-                                plan.highlight ? 'text-accent-cyan' : 'text-slate-400'
-                              )}
-                              strokeWidth={2.5}
-                              aria-hidden="true"
-                            />
-                            {feature}
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  );
-                })}
-              </div>
+              <ul className="my-8 flex flex-col gap-3.5" aria-label={`${plan.name} highlights`}>
+                {plan.benefits.map((benefit) => (
+                  <li key={benefit} className="flex items-start gap-3 text-sm leading-6 text-slate-600">
+                    <Check
+                      className={cn('mt-1 h-4 w-4 shrink-0', plan.highlight ? 'text-accent-cyan' : 'text-slate-400')}
+                      strokeWidth={2.5}
+                      aria-hidden="true"
+                    />
+                    <span>{benefit}</span>
+                  </li>
+                ))}
+              </ul>
 
               <Link
                 href="/signup"
                 className={cn(
-                  'mt-auto group flex items-center justify-center gap-2 rounded-full px-5 py-3 text-[13px] font-bold transition-all',
+                  'group mt-auto flex min-h-11 items-center justify-center gap-2 rounded-full px-5 py-3 text-[13px] font-bold transition-all',
                   plan.highlight
-                    ? 'bg-slate-900 text-white hover:bg-slate-800 shadow-xl shadow-slate-900/10'
+                    ? 'bg-slate-900 text-white shadow-xl shadow-slate-900/10 hover:bg-slate-800'
                     : 'border border-slate-200 text-slate-700 hover:border-slate-300 hover:bg-slate-50'
                 )}
               >
-                {plan.id === 'free' ? 'Get started free' : `Choose ${plan.name}`}
-                <ArrowRight size={14} className="group-hover:translate-x-0.5 transition-transform" />
+                {plan.cta}
+                <ArrowRight size={14} className="transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
               </Link>
-            </motion.div>
+            </motion.article>
           ))}
         </div>
 
-        {proPlan && (
-          <p className="mt-10 text-center text-xs text-text-tertiary">
-            Pro is {proPlan.price}{proPlan.period}. There is no annual plan or day pass.
-          </p>
-        )}
+        <details className="group mt-10 overflow-hidden rounded-[1.5rem] border border-slate-200/80 bg-white/70 shadow-sm">
+          <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-5 py-4 text-sm font-bold text-slate-700 transition-colors hover:bg-slate-50/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent-cyan sm:px-7">
+            <span>Compare all plan features</span>
+            <ChevronDown className="h-4 w-4 shrink-0 text-slate-400 transition-transform duration-200 group-open:rotate-180" aria-hidden="true" />
+          </summary>
+
+          <div className="border-t border-slate-200/80 px-4 pb-5 pt-2 sm:px-7 sm:pb-7">
+            <div className="sticky top-0 z-10 grid grid-cols-[minmax(0,1.5fr)_minmax(4.75rem,.65fr)_minmax(4.75rem,.65fr)] gap-x-3 border-b border-slate-200 bg-white/95 px-2 py-3 text-[11px] font-bold uppercase tracking-[0.12em] text-slate-400 backdrop-blur sm:px-3">
+              <span>Allowance</span>
+              <span>Free</span>
+              <span className="text-slate-600">Pro</span>
+            </div>
+
+            {PUBLIC_PRICING_GROUPS.map((group) => {
+              const headingId = `pricing-${group.title.toLowerCase().replaceAll(/[^a-z0-9]+/g, '-')}`;
+              return (
+                <section key={group.title} aria-labelledby={headingId}>
+                  <h3 id={headingId} className="px-2 pb-2 pt-6 text-xs font-bold text-slate-800 sm:px-3">
+                    {group.title}
+                  </h3>
+                  <div className="overflow-hidden rounded-xl border border-slate-200/70 bg-white">
+                    {group.rows.map((item) => {
+                      const unavailable = item.free === 'Not included';
+                      return (
+                        <div
+                          key={item.capability}
+                          className="grid grid-cols-[minmax(0,1.5fr)_minmax(4.75rem,.65fr)_minmax(4.75rem,.65fr)] gap-x-3 border-b border-slate-100 px-3 py-3 text-xs leading-5 last:border-b-0 sm:text-[13px]"
+                        >
+                          <span className="pr-1 font-medium text-slate-600">{item.label}</span>
+                          <span className={cn('flex items-start gap-1.5 text-slate-500', unavailable && 'text-slate-400')}>
+                            {unavailable && <Minus className="mt-1 h-3 w-3 shrink-0" aria-hidden="true" />}
+                            {item.free}
+                          </span>
+                          <span className="font-semibold text-slate-700">{item.pro}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </section>
+              );
+            })}
+          </div>
+        </details>
+
+        <p className="mt-5 text-center text-xs leading-5 text-text-tertiary">
+          Limits reset as shown. You can review plan details before creating an account.
+        </p>
       </div>
     </section>
   );
