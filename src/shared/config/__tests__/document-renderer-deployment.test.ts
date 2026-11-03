@@ -14,6 +14,8 @@ describe('document renderer deployment contract', () => {
     for (const value of [
       'DOCUMENT_RENDERER_ENABLED', 'GOTENBERG_URL', 'GOTENBERG_USERNAME',
       'GOTENBERG_PASSWORD', 'GOTENBERG_EXPECTED_VERSION', 'GOTENBERG_IMAGE_DIGEST',
+      'CF_ACCESS_CLIENT_ID', 'CF_ACCESS_CLIENT_SECRET',
+      'https://align-pdf-renderer.vyndra.tech', 'Cloudflare Access', 'service token',
       'Arial', 'Georgia', 'Trebuchet MS', 'Times New Roman',
       'HTTPS', 'Basic Auth', 'Caddy', 'dynamic egress', 'secret rotation',
     ]) expect(runbook).toContain(value);
@@ -59,6 +61,7 @@ describe('document renderer deployment contract', () => {
     expect(source).toContain('createSafeTemplateSample');
     expect(source).toMatch(/unauthenticated/iu);
     expect(source).toContain('DOCUMENT_RENDERER_VERSION');
+    expect(source).toContain('rendererRequestHeaders');
     expect(source).toContain('Arial');
     expect(source).toContain('Times New Roman');
     expect(source).not.toMatch(/console\.(log|error)\([^)]*(password|pdf|docx)/iu);

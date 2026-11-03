@@ -64,6 +64,19 @@ function authorization(config: DocumentRendererConfig) {
   return `Basic ${Buffer.from(`${config.username}:${config.password}`).toString('base64')}`;
 }
 
+export function rendererRequestHeaders(
+  config: DocumentRendererConfig,
+  additionalHeaders?: HeadersInit,
+) {
+  const headers = new Headers(additionalHeaders);
+  headers.set('Authorization', authorization(config));
+  if (config.cloudflareAccessClientId && config.cloudflareAccessClientSecret) {
+    headers.set('CF-Access-Client-Id', config.cloudflareAccessClientId);
+    headers.set('CF-Access-Client-Secret', config.cloudflareAccessClientSecret);
+  }
+  return headers;
+}
+
 function requestSignal(
   timeoutMs: number,
   parentSignal?: AbortSignal,
@@ -132,10 +145,9 @@ async function sendConversion(
       {
         method: 'POST',
         redirect: 'error',
-        headers: {
-          Authorization: authorization(config),
+        headers: rendererRequestHeaders(config, {
           'Gotenberg-Trace': input.traceId,
-        },
+        }),
         body: form,
         signal: request.signal,
       },
@@ -212,7 +224,7 @@ export async function probeDocumentRenderer(): Promise<{
 }> {
   const config = rendererConfig();
   if (!config.enabled) return { healthy: false, rendererVersion: '' };
-  const headers = { Authorization: authorization(config) };
+  const headers = rendererRequestHeaders(config);
   try {
     const [health, version] = await Promise.all([
       fetch(new URL('/health', config.baseUrl), {
