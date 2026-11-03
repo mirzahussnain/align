@@ -33,6 +33,7 @@ const CONFLICT_COPY: Record<string, string> = {
   UNVERIFIED_LINK:
     'Your CV showed this as a name rather than a full web address, so we worked the address out from it. Please check it.',
   SUMMARY_ALREADY_SET: 'This Career Track already has a professional summary.',
+  CONFLICTING_SKILL_CATEGORY: 'Your CV lists this skill under different specific categories. Choose the category you want to keep.',
 };
 
 /** Labels for the identity fields, matching the server's own. */
@@ -354,6 +355,12 @@ export function ImportReviewStep({
     void apply([{ candidateId: candidate.id, action: 'confirm', edited }], 'Saving confirmed details…');
   }
 
+  function skillCategory(candidate: ImportCandidate): string {
+    const category = (candidate.structuredData as { category?: unknown }).category;
+    const edited = edits[candidate.id]?.category;
+    return edited !== undefined ? edited : (typeof category === 'string' ? category : '');
+  }
+
   const nothingLeft = outstanding.length === 0 && conflicts.length === 0 && personal.length === 0;
 
   return (
@@ -428,7 +435,12 @@ export function ImportReviewStep({
           <PrimaryButton
             onClick={() =>
               apply(
-                outstanding.map((candidate) => ({ candidateId: candidate.id, action: 'confirm' as const })),
+                outstanding.map((candidate) => {
+                  const patch = edits[candidate.id];
+                  return patch
+                    ? { candidateId: candidate.id, action: 'confirm' as const, edited: { ...(candidate.structuredData as Record<string, unknown>), ...patch } }
+                    : { candidateId: candidate.id, action: 'confirm' as const };
+                }),
                 'Saving confirmed details…'
               )
             }
@@ -646,6 +658,14 @@ export function ImportReviewStep({
             {conflicts.map((candidate) => {
               const fields = REQUIRED_FIELD_BY_TYPE[candidate.entityType] ?? [];
               const needsFields = candidate.conflictCode === 'MISSING_REQUIRED_FIELD' && fields.length > 0;
+              const unresolvedContent = candidate.entityType === 'OTHER_EVIDENCE'
+                && candidate.conflictCode === 'AMBIGUOUS_VALUE';
+              const ownerChoices = unresolvedContent
+                ? ((candidate.structuredData as { ownerChoices?: unknown }).ownerChoices ?? [])
+                : [];
+              const owners = Array.isArray(ownerChoices)
+                ? ownerChoices.filter((owner): owner is string => typeof owner === 'string')
+                : [];
               return (
                 <li key={candidate.id} className="rounded-xl border border-amber-200 bg-amber-50 p-3">
                   <p className="text-xs font-semibold text-neutral-900">{candidateTitle(candidate)}</p>
@@ -655,6 +675,24 @@ export function ImportReviewStep({
                   <p className="mt-1 text-[11px] italic text-neutral-500">
                     From your CV: “{candidate.sourceExcerpt}”
                   </p>
+
+                  {unresolvedContent && owners.length > 0 && (
+                    <p className={'mt-3 text-[11px] text-neutral-600'}>
+                      Possible owners: {owners.join(', ')}
+                    </p>
+                  )}
+
+                  {unresolvedContent && (
+                    <div className={'mt-3'}>
+                      <Label htmlFor={candidate.id + '-description'}>Edit unresolved content</Label>
+                      <TextField
+                        id={candidate.id + '-description'}
+                        value={editValue(candidate.id, 'description')}
+                        onChange={(event) => setEdit(candidate.id, 'description', event.target.value)}
+                        placeholder={candidate.sourceExcerpt}
+                      />
+                    </div>
+                  )}
 
                   {needsFields && (
                     <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -672,15 +710,28 @@ export function ImportReviewStep({
                     </div>
                   )}
 
+                  {candidate.entityType === 'SKILL' && (
+                    <div className="mt-3">
+                      <Label htmlFor={candidate.id + '-category'}>Category for {candidateTitle(candidate)}</Label>
+                      <TextField
+                        id={candidate.id + '-category'}
+                        value={skillCategory(candidate)}
+                        onChange={(event) => setEdit(candidate.id, 'category', event.target.value)}
+                      />
+                    </div>
+                  )}
+
                   <div className="mt-3 flex flex-wrap gap-2">
                     <button
                       type="button"
                       onClick={() => confirmWithEdits(candidate)}
-                      disabled={busy}
+                      disabled={busy || (unresolvedContent && !editValue(candidate.id, 'description').trim())}
                       className="inline-flex items-center gap-1.5 rounded-full bg-neutral-900 px-3 py-1.5 text-[11px] font-semibold text-white transition-colors hover:bg-neutral-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-400 disabled:opacity-50"
                     >
                       <Check className="h-3 w-3" aria-hidden="true" />
-                      {needsFields ? 'Save with these details' : 'Add it anyway'}
+                      {unresolvedContent
+                        ? 'Add resolved content'
+                        : needsFields ? 'Save with these details' : 'Add it anyway'}
                     </button>
                     <button
                       type="button"
@@ -747,6 +798,16 @@ export function ImportReviewStep({
                         Skills: {projectTechnologies(candidate).join(', ')}
                       </span>
                     )}
+                    {candidate.entityType === 'SKILL' && (
+                      <span className="mt-2 block">
+                        <Label htmlFor={candidate.id + '-category'}>Category for {candidateTitle(candidate)}</Label>
+                        <TextField
+                          id={candidate.id + '-category'}
+                          value={skillCategory(candidate)}
+                          onChange={(event) => setEdit(candidate.id, 'category', event.target.value)}
+                        />
+                      </span>
+                    )}
                     <span className="mt-0.5 block text-[11px] italic text-neutral-400">
                       “{candidate.sourceExcerpt}”
                     </span>
@@ -754,7 +815,9 @@ export function ImportReviewStep({
                   <span className="flex shrink-0 gap-1">
                     <button
                       type="button"
-                      onClick={() => apply([{ candidateId: candidate.id, action: 'confirm' }], 'Saving…')}
+                      onClick={() => candidate.entityType === 'SKILL'
+                        ? confirmWithEdits(candidate)
+                        : apply([{ candidateId: candidate.id, action: 'confirm' }], 'Saving…')}
                       disabled={busy}
                       aria-label={`Add ${candidateTitle(candidate)}`}
                       className="rounded-full p-1.5 text-emerald-600 transition-colors hover:bg-emerald-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300 disabled:opacity-40"

@@ -73,6 +73,9 @@ export function OnboardingJourney({
     city: string;
     visaStatus: string;
     visaExpiry: string;
+    relocationPreference: 'YES' | 'NO' | 'CONSIDER' | null;
+    maxCommuteMinutes: 15 | 30 | 45 | 60 | 90 | null;
+    preferredWorkStyles: ('REMOTE' | 'HYBRID' | 'ONSITE')[];
   };
   importSession: ImportSession | null;
   evidenceCapacity: CapabilityDecision;
@@ -302,6 +305,9 @@ export function OnboardingJourney({
             city: identity.city,
             visaStatus: identity.visaStatus,
             visaExpiry: identity.visaExpiry,
+            relocationPreference: identity.relocationPreference,
+            maxCommuteMinutes: identity.maxCommuteMinutes,
+            preferredWorkStyles: identity.preferredWorkStyles,
           }}
           onSaved={() => void goTo('FIRST_ACTION')}
           onSkip={() => void goTo('FIRST_ACTION')}

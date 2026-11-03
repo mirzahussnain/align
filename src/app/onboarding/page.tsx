@@ -100,6 +100,9 @@ export default async function OnboardingPage() {
           city: profileData.personal.city,
           visaStatus: profileData.personal.visaStatus,
           visaExpiry: profileData.personal.visaExpiry,
+          relocationPreference: profileData.practicalPreferences.relocationPreference,
+          maxCommuteMinutes: profileData.practicalPreferences.maxCommuteMinutes,
+          preferredWorkStyles: profileData.practicalPreferences.preferredWorkStyles,
         }}
         importSession={
           importSession ? (JSON.parse(JSON.stringify(importSession)) as ImportSession) : null

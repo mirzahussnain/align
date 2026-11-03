@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 vi.mock('@/shared/lib/prisma', () => ({
   prisma: {
     profileIdentity: { findUnique: vi.fn() },
+    profilePracticalFacts: { findUnique: vi.fn() },
     profile: { findFirst: vi.fn() },
   },
 }));
@@ -38,6 +39,7 @@ const storedProfile = {
 beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(prisma.profileIdentity.findUnique).mockResolvedValue(null);
+  vi.mocked(prisma.profilePracticalFacts.findUnique).mockResolvedValue(null);
 });
 
 describe('profile evidence loading', () => {
@@ -55,7 +57,7 @@ describe('profile evidence loading', () => {
       },
     ]);
     expect(loaded.certifications).toEqual([
-      { id: 'cert-1', name: 'Care Certificate', issuer: 'Skills for Care', year: '2025', issueDate: '2025', expiryDate: '', credentialNumber: '', status: 'active', verificationUrl: '', verificationStatus: 'user_confirmed_unverified' },
+      { id: 'cert-1', name: 'Care Certificate', issuer: 'Skills for Care', year: '2025', issueDate: '2025', expiryDate: '', credentialNumber: '', status: 'active', verificationUrl: '', verificationStatus: 'user_confirmed_unverified', evidenceMetadata: [] },
     ]);
     expect(prisma.profile.findFirst).toHaveBeenCalledWith(
       expect.objectContaining({

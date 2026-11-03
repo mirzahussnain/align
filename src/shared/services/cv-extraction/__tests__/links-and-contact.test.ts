@@ -527,6 +527,21 @@ describe('an institution on the line below its qualification', () => {
     expect(entry.description).toBeUndefined();
   });
 
+  it('keeps an inline grade separate from a wrapped institution', () => {
+    const [entry] = education([
+      'BSc Software Engineering - First Class Honours, 3.82/4.0 GPA · Capital University of Science &',
+      'Sep 2019 - Jul 2023',
+      'Technology, Pakistan',
+    ]);
+
+    expect(entry).toMatchObject({
+      degree: 'BSc Software Engineering',
+      university: 'Capital University of Science & Technology, Pakistan',
+      grade: 'First Class Honours, 3.82/4.0 GPA',
+    });
+    expect(entry.description).toBeUndefined();
+  });
+
   it('reads the grade wordings the profile form itself lists', () => {
     for (const [written, expected] of [
       ['Distinction', 'Distinction'],
@@ -648,6 +663,42 @@ describe('project layouts', () => {
     expect(projects.map((entry) => entry.name)).toEqual(['Bus Tracker', 'Invoice Matcher']);
     expect(projects[0].achievements).toEqual(['Tracked 200 vehicles in real time.']);
     expect(projects[1].achievements).toEqual(['Matched 40,000 invoices a day.']);
+  });
+
+  it('suppresses a skill-shaped project only when every carried fact is exactly represented elsewhere', () => {
+    const structured = parseCvStructure([
+      'Sam Iyer',
+      'SKILLS',
+      'Frameworks: Next.js',
+      'PROJECTS',
+      'CareTrack',
+      'Built an accessible patient portal.',
+      'Next.js',
+      'Built an accessible patient portal.',
+    ].join('\n'));
+
+    expect(structured.skills).toEqual([
+      expect.objectContaining({ name: 'Next.js', category: 'Frameworks' }),
+    ]);
+    expect(structured.projects.map(({ name }) => name)).toEqual(['CareTrack']);
+    expect(structured.projects[0].achievements).toEqual(['Built an accessible patient portal.']);
+  });
+
+  it.each([
+    ['unique achievement', ['Next.js', 'Shipped a unique rendering optimisation.']],
+    ['dates', ['Next.js, 2024', 'Built an accessible patient portal.']],
+  ])('keeps a technology-named project with %s', (_case, projectLines) => {
+    const structured = parseCvStructure([
+      'Sam Iyer',
+      'SKILLS',
+      'Frameworks: Next.js',
+      'PROJECTS',
+      'CareTrack',
+      'Built an accessible patient portal.',
+      ...projectLines,
+    ].join('\n'));
+
+    expect(structured.projects.map(({ name }) => name)).toContain('Next.js');
   });
 
   it('reads projects under every heading wording CVs use', () => {

@@ -1,6 +1,6 @@
 # Align architecture
 
-This document describes the architecture implemented in the repository as of 20 September 2026. Dated audits, designs, and implementation plans under `docs/` and `docs/superpowers/` are historical records; this file is the current system reference.
+This document describes the architecture implemented in the repository as of 22 October 2026. Dated audits, designs, and implementation plans under `docs/` and `docs/superpowers/` are historical records; this file is the current system reference.
 
 ## System at a glance
 
@@ -19,6 +19,7 @@ flowchart LR
   N --> E[Resend]
   N --> B[Stripe]
   N --> G[GOV.UK sponsor register]
+  N -->|authenticated HTTPS| X[Private Gotenberg renderer]
 ```
 
 ## Application boundaries
@@ -82,6 +83,7 @@ sequenceDiagram
   participant DB as PostgreSQL
   participant AI as Gemini/Groq
   participant S3 as Object storage
+  participant R as Private renderer
 
   U->>API: Upload or select CV
   API->>P: Verify identity, email, limits
@@ -89,8 +91,12 @@ sequenceDiagram
   API->>S3: Validate/read source file
   API->>AI: Structured analysis request
   AI-->>API: Schema-constrained result
-  API->>DB: Persist result and commit usage
-  API-->>U: Analysis or generated CV
+  API->>R: Convert canonical DOCX with bounded layouts
+  R-->>API: Actually rendered PDF
+  API->>API: Verify 1-2 pages and create thumbnails
+  API->>S3: Store immutable private PDF/PNG artifacts
+  API->>DB: Publish validated version and commit usage
+  API-->>U: Analysis or generated CV preview
 ```
 
 Analysis domains are stored separately so ATS analysis and job matching retain their own inputs, versions, and result contracts. Generation uses canonical profile evidence and provenance checks; unsupported claims are rejected or deterministically repaired within bounded policy.
@@ -100,6 +106,10 @@ Every provider attempt writes best-effort operational telemetry at the AI orches
 Known structured-output limitation: profile/CV reconciliation and CV regeneration perform some domain validation after the orchestrator has accepted syntactically valid JSON. A domain-invalid but syntactically valid response in those flows may therefore stop provider fallback. This hardening pass intentionally preserves that behavior.
 
 Capability reservations protect metered work from double charging. An operation is reserved before provider work, committed after durable success, and released or expires after failure. Request idempotency and PostgreSQL locks handle retries and concurrency.
+
+Generated CVs retain canonical approved content and evidence ordering through every layout attempt. Actual PDF page counts, not document estimates, enforce the policy: naturally fitting one-page output is accepted, two pages are allowed when needed, and content is never stretched, deleted, or truncated to fit. Bounded readable layout profiles may be tried; failure to fit within two pages is a controlled non-publication state. Conversion, page-limit, and thumbnail failures remain distinct and recoverable.
+
+Each immutable document hash has one canonical preview record and one locked render operation. The private PDF and page PNGs are cached once, then reused by the template carousel, Generated CV gallery, viewer, and authenticated PDF download. The architecture has no legacy preview adapters, backfill jobs, or viewport-triggered conversion.
 
 ### Career profiles and evidence
 
@@ -137,6 +147,8 @@ The storage adapter speaks the S3 API and supports MinIO locally and Cloudflare 
 
 Browser CV uploads use short-lived presigned PUT URLs. The server validates size, type signatures, ownership, and upload-intent state before accepting a stored CV record.
 
+Immutable PDF/PNG previews live under the owning user and generated-CV prefix in `S3_BUCKET_REWRITES` and are served only after session and ownership checks.
+
 ### Redis services
 
 Two deliberately separate Redis configurations exist:
@@ -156,6 +168,7 @@ They are not interchangeable. PostgreSQL remains the source of truth; Redis data
 - Account deletion derives identity from the session and cannot cancel an active subscription implicitly.
 - AI output is parsed into explicit schemas and checked against user-approved evidence.
 - External-provider failures use stable application errors and do not mutate durable state prematurely.
+- The document renderer is independently configurable, authenticated over HTTPS, and fails closed; rendering failure can never publish a page-validated CV.
 
 ## Testing strategy
 

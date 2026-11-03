@@ -96,10 +96,10 @@ describe('location', () => {
     expect(assessLocationCompatibility(facts(), { workStyle: 'REMOTE' }).state).toBe('COMPATIBLE');
   });
 
-  it('CONFLICTS only when the profile explicitly refuses relocation', () => {
+  it('does not infer mandatory relocation from a different city', () => {
     expect(
-      assessLocationCompatibility(facts({ homeCity: 'Birmingham', openToRelocation: false }), { city: 'Glasgow' }).state,
-    ).toBe('CONFLICT');
+      assessLocationCompatibility(facts({ homeCity: 'Birmingham', relocationPreference: 'NO' }), { city: 'Glasgow' }).state,
+    ).toBe('UNKNOWN');
   });
 
   it('is UNKNOWN when relocation willingness is simply not recorded', () => {
@@ -114,20 +114,6 @@ describe('location', () => {
     expect(assessment.explanation).toMatch(/cannot be confirmed from your profile/i);
   });
 
-  it('treats a named relocation list as a boundary in both directions', () => {
-    expect(
-      assessLocationCompatibility(
-        facts({ homeCity: 'Birmingham', openToRelocation: true, relocationLocations: ['Manchester'] }),
-        { city: 'Manchester' },
-      ).state,
-    ).toBe('POSSIBLY_COMPATIBLE');
-    expect(
-      assessLocationCompatibility(
-        facts({ homeCity: 'Birmingham', openToRelocation: true, relocationLocations: ['Manchester'] }),
-        { city: 'Aberdeen' },
-      ).state,
-    ).toBe('CONFLICT');
-  });
 
   it('never guesses a commute from a recorded limit alone', () => {
     const result = comparePracticalCompatibility(
@@ -237,10 +223,10 @@ describe('mobility, checks and regulation', () => {
 });
 
 describe('work pattern, shifts and travel', () => {
-  it('conflicts only when a remote-only preference meets an on-site vacancy', () => {
-    expect(itemFor(comparePracticalCompatibility([requirement('ONSITE')], facts({ workPatternPreference: 'REMOTE_ONLY' })), 'REMOTE_ONSITE')?.state).toBe('CONFLICT');
-    expect(itemFor(comparePracticalCompatibility([requirement('ONSITE')], facts({ workPatternPreference: 'HYBRID' })), 'REMOTE_ONSITE')?.state).toBe('CONFIRMED');
-    expect(itemFor(comparePracticalCompatibility([requirement('ONSITE')], facts()), 'REMOTE_ONSITE')?.state).toBe('UNKNOWN');
+  it('treats selected work styles as preferences, not mandatory eligibility', () => {
+    expect(itemFor(comparePracticalCompatibility([requirement('ONSITE')], facts({ preferredWorkStyles: ['REMOTE'] })), 'REMOTE_ONSITE')?.state).toBe('CONFLICT');
+    expect(itemFor(comparePracticalCompatibility([requirement('ONSITE')], facts({ preferredWorkStyles: ['HYBRID', 'ONSITE'] })), 'REMOTE_ONSITE')?.state).toBe('CONFIRMED');
+    expect(itemFor(comparePracticalCompatibility([requirement('ONSITE')], facts()), 'REMOTE_ONSITE')?.state).toBe('NOT_APPLICABLE');
   });
 
   it('compares the specific shift the vacancy names', () => {

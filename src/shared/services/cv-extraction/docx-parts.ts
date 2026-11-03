@@ -1,4 +1,6 @@
 import JSZip from 'jszip';
+import { normaliseUrl } from './links';
+import type { NormalizedDocumentBlock } from './document/types';
 
 /**
  * DOCX header and footer parts.
@@ -267,4 +269,52 @@ export async function readDocxBodyExtras(bytes: Buffer): Promise<{
     );
     return empty;
   }
+}
+
+export interface DocxSupplementalContent {
+  leadingBlocks: NormalizedDocumentBlock[];
+  trailingBlocks: NormalizedDocumentBlock[];
+  fieldLinks: { url: string; visibleText?: string; paragraphText: string }[];
+}
+
+function blocksFromParts(parts: DocxPart[], prefix: string): NormalizedDocumentBlock[] {
+  return parts.flatMap((part, partIndex) =>
+    part.paragraphs.flatMap((paragraph, paragraphIndex) => {
+      const text = paragraph.text.normalize('NFKC').replace(/\s+/g, ' ').trim();
+      if (!text) return [];
+      const links = paragraph.links
+        .map((link) => normaliseUrl(link.url))
+        .filter((url): url is string => Boolean(url));
+      return [{
+        id: `docx-${prefix}-${partIndex}-${paragraphIndex}`,
+        order: 0,
+        text,
+        kind: 'paragraph' as const,
+        ...(part.kind === 'textbox' ? { parentId: `docx-textbox-${partIndex}` } : {}),
+        ...(links.length ? { links: [...new Set(links)] } : {}),
+        ...(paragraph.links.length ? {
+          linkDetails: paragraph.links.flatMap((link) => {
+            const url = normaliseUrl(link.url);
+            return url ? [{ url, ...(link.visibleText ? { visibleText: link.visibleText } : {}) }] : [];
+          }),
+        } : {}),
+      }];
+    })
+  );
+}
+
+/** Read only package surfaces Mammoth does not expose as canonical body HTML. */
+export async function readDocxSupplementalContent(bytes: Buffer): Promise<DocxSupplementalContent> {
+  const [{ headers, footers }, { textBoxes, fieldLinks }] = await Promise.all([
+    readDocxHeadersAndFooters(bytes),
+    readDocxBodyExtras(bytes),
+  ]);
+  return {
+    leadingBlocks: [
+      ...blocksFromParts(headers, 'header'),
+      ...blocksFromParts(textBoxes, 'textbox'),
+    ],
+    trailingBlocks: blocksFromParts(footers, 'footer'),
+    fieldLinks,
+  };
 }

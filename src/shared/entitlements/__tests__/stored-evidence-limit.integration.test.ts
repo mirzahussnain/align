@@ -169,62 +169,6 @@ describe.skipIf(!isLocalDb)('reusable stored-evidence limit — real Postgres', 
     expect(await countStoredEvidence(userId)).toBe(FREE_LIMIT + 5);
   });
 
-  it('does not count application-scoped evidence approvals', async () => {
-    await seedEvidence(2);
-    const cvRevision = await prisma.cvRevision.create({
-      data: {
-        userId,
-        filename: 'evidence-test.pdf',
-        mimeType: 'application/pdf',
-        byteSize: 100,
-        checksum: randomUUID(),
-        extractedText: 'Evidence test CV text.',
-        parserVersion: 'test',
-      },
-    });
-    const jobRevision = await prisma.jobRevision.create({
-      data: {
-        userId,
-        title: 'Evidence test role',
-        company: 'Example employer',
-        description: 'Evidence test vacancy description.',
-        descriptionSource: 'USER_PASTED',
-        descriptionHash: randomUUID(),
-      },
-    });
-    const profileSnapshot = await prisma.careerProfileSnapshot.create({
-      data: {
-        userId,
-        sourceProfileId: profileId,
-        profileLabel: 'Test track',
-        snapshotJson: {},
-        schemaVersion: 1,
-        contentHash: randomUUID(),
-      },
-    });
-    const analysis = await prisma.jobMatch.create({
-      data: {
-        userId,
-        cvRevisionId: cvRevision.id,
-        jobRevisionId: jobRevision.id,
-        profileSnapshotId: profileSnapshot.id,
-        matchScore: 50,
-        resultJson: {},
-        algorithmVersion: 'test',
-        promptVersion: 'test',
-      },
-      select: { id: true },
-    });
-    await prisma.applicationEvidenceContext.create({
-      data: { userId, jobMatchId: analysis.id, profileId, requirementId: 'req-1', kind: 'OTHER', details: {}, approvedAt: new Date() },
-    });
-    await prisma.profileEvidenceApproval.create({
-      data: { userId, jobMatchId: analysis.id, profileId, requirementId: 'req-2', evidenceType: 'other', evidenceId: 'x', snapshot: {} },
-    });
-
     // Approvals are governed by the per-application limit, not this one — and
     // referencing one evidence record from several applications still counts once.
-    expect(await countStoredEvidence(userId)).toBe(2);
-    await prisma.jobMatch.delete({ where: { id: analysis.id } });
-  });
 });

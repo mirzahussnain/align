@@ -110,7 +110,6 @@ type StoredEvidenceCountClient = Pick<Prisma.TransactionClient, 'otherEvidence'>
  * achievement or supporting fact, which `validateStructuredEvidence` explicitly
  * refuses to accept career-history content into. Nothing else is counted —
  * not stored CVs, analyses, generated CVs, ProfileIdentity, application
- * approvals (`ApplicationEvidenceContext` / `ProfileEvidenceApproval`, which
  * have their own per-application limit), nor reconciliation output, which is
  * never persisted. Referencing one evidence record from several applications
  * still counts once, because only the record itself is counted.
@@ -365,86 +364,10 @@ export async function assertStoredSourceCvLimit(
 
 // ── Per-application approval limit ───────────────────────────────────────────
 //
-// `approve_evidence_for_application` is a resource limit counted PER APPLICATION
 // (per analysis), so it cannot use the generic global resource-limit path. The
 // count of "approved evidence items for an application" is every active,
 // application-scoped approval for that analysis: captured application evidence
-// (ApplicationEvidenceContext) plus approved profile-evidence snapshots
-// (ProfileEvidenceApproval). Withdrawing/deleting an approval removes its row and
 // frees a slot; editing an approval never changes the count.
-
-const APPROVAL_CAPABILITY: ProductCapability = 'approve_evidence_for_application';
-
-/** Any client that can count the two application-approval tables (base or tx). */
-type ApprovalCountClient = Pick<
-  Prisma.TransactionClient,
-  'applicationEvidenceContext' | 'profileEvidenceApproval'
->;
-
-async function countApplicationApprovals(
-  client: ApprovalCountClient,
-  userId: string,
-  analysisId: string
-): Promise<number> {
-  const [contexts, approvals] = await Promise.all([
-    client.applicationEvidenceContext.count({ where: { userId, jobMatchId: analysisId } }),
-    client.profileEvidenceApproval.count({ where: { userId, jobMatchId: analysisId } }),
-  ]);
-  return contexts + approvals;
-}
-
-function approvalDecision(plan: PlanId, limit: number, used: number): CapabilityDecision {
-  const remaining = Math.max(0, limit - used);
-  const allowed = remaining > 0;
-  return {
-    capability: APPROVAL_CAPABILITY,
-    plan,
-    mode: 'resource_limit',
-    allowed,
-    limit,
-    used,
-    remaining,
-    reason: allowed ? 'allowed' : 'resource_limit_reached',
-    ...(!allowed && plan === 'FREE' ? { upgradeTarget: 'PRO' as const } : {}),
-  };
-}
-
-function approvalLimitFor(plan: PlanId): number {
-  const entitlement = getPlanEntitlement(plan, APPROVAL_CAPABILITY);
-  return entitlement.mode === 'resource_limit' ? entitlement.limit : Number.POSITIVE_INFINITY;
-}
-
-/**
- * The per-application approval decision for the UI (e.g. "1 of 2 approved"). Reads
- * the effective plan and the live count of active approvals for the analysis.
- */
-export async function getApplicationApprovalDecision(
-  userId: string,
-  analysisId: string
-): Promise<CapabilityDecision> {
-  const plan = await getUserPlan(userId);
-  const used = await countApplicationApprovals(prisma, userId, analysisId);
-  return approvalDecision(plan, approvalLimitFor(plan), used);
-}
-
-/**
- * Enforce the per-application approval cap before a NEW application-scoped
- * approval is created. Throws {@link EntitlementRequiredError} with the canonical
- * decision when the limit is reached; the caller must not mutate approval state.
- * Pass the surrounding transaction client so the count is consistent with the
- * create it guards.
- */
-export async function assertApplicationApprovalLimit(
-  userId: string,
-  analysisId: string,
-  client: ApprovalCountClient = prisma
-): Promise<void> {
-  const plan = await getUserPlan(userId);
-  const limit = approvalLimitFor(plan);
-  if (!Number.isFinite(limit)) return;
-  const used = await countApplicationApprovals(client, userId, analysisId);
-  if (used >= limit) throw new EntitlementRequiredError(approvalDecision(plan, limit, used));
-}
 
 export async function getEntitlementSnapshot(userId: string): Promise<EntitlementSnapshot> {
   const plan = await getUserPlan(userId);

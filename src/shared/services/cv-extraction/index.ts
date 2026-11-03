@@ -1,10 +1,13 @@
 import { CvPipelineError } from './errors';
-import { extractDocx } from './docx';
-import { extractPdf, type RawExtraction } from './pdf';
+import { extractDocxDocument } from './docx';
+import { extractPdfDocument } from './pdf';
 import { detectFormatFromBytes, type CvSourceFormat } from './formats';
 import { hasUsableText } from './text';
-import { CV_PARSER_VERSION, parseCvStructure } from './structured';
-import type { CvExtractionPayload } from './types';
+import { CV_PARSER_VERSION } from './structured';
+import { CvExtractionPayloadSchema, type CvExtractionPayload } from './types';
+import { projectNormalizedDocument } from './document/projection';
+import type { NormalizedDocument } from './document/types';
+import { interpretCvDocument } from './interpreter';
 
 export * from './errors';
 export * from './formats';
@@ -23,9 +26,18 @@ export {
 } from './links';
 export { parseCvDateRange, parseCvDateToken, findDateRange } from './dates';
 
-const EXTRACTORS: Record<CvSourceFormat, (bytes: Buffer) => Promise<RawExtraction>> = {
-  pdf: extractPdf,
-  docx: extractDocx,
+export { projectNormalizedDocument, type DocumentProjection } from './document/projection';
+export type {
+  NormalizedDocument,
+  NormalizedDocumentBlock,
+  NormalizedDocumentKind,
+} from './document/types';
+
+type DocumentExtractor = (bytes: Buffer) => Promise<NormalizedDocument>;
+
+const EXTRACTORS: Record<CvSourceFormat, DocumentExtractor> = {
+  pdf: extractPdfDocument,
+  docx: extractDocxDocument,
 };
 
 export interface CvExtractionResult {
@@ -53,14 +65,18 @@ export async function extractStoredCv(bytes: Buffer): Promise<CvExtractionResult
   const format = detectFormatFromBytes(bytes);
   if (!format) throw new CvPipelineError('UNSUPPORTED_FORMAT');
 
-  const raw = await EXTRACTORS[format](bytes);
-  if (!hasUsableText(raw.text)) throw new CvPipelineError('EMPTY_TEXT');
+  const document = await EXTRACTORS[format](bytes);
+  const projection = projectNormalizedDocument(document);
+  if (!hasUsableText(projection.text)) throw new CvPipelineError('EMPTY_TEXT');
+  const interpretation = interpretCvDocument(document);
+  const structured = CvExtractionPayloadSchema.safeParse(interpretation.payload);
+  if (!structured.success) throw new CvPipelineError('INVALID_PARSER_OUTPUT');
 
   return {
     format,
     parserVersion: CV_PARSER_VERSION,
-    text: raw.text,
-    pageCount: raw.pageCount,
-    structured: parseCvStructure(raw.text, raw.links),
+    text: projection.text,
+    pageCount: document.pageCount,
+    structured: structured.data,
   };
 }

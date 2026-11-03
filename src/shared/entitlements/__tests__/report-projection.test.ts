@@ -19,7 +19,6 @@ const canonical = {
     domainFit: { roleDomain: 'A', candidateDomain: 'B', status: 'partial', overlapAreas: [], detail: 'domain detail', confidence: 0.8, deduction: { points: 1, reason: 'reason' } },
     requirements: Array.from({ length: 5 }, (_, i) => ({ id: `r${i}`, text: `secret requirement ${i}`, importance: 'mandatory', category: i === 4 ? 'eligibility' : 'skill', sourceSection: 'job_description', evidenceRequired: true, status: 'partial', evidence: [{ source: 'cv', text: `secret evidence ${i}` }], confidence: 0.8, deduction: { points: i === 0 ? 17 : 0, reason: 'gap', rubric: 'partial_match' } })),
     tailoredRewrites: [{ original: 'old', suggested: 'PAID SECRET REWRITE', rationale: 'why' }],
-    cv_build_spec: { recommended_template: 'architect', template_rationale: 'PAID SECRET STRATEGY', section_order: ['summary'], lead_project: 'secret project', summary_angle: 'secret angle', skills_to_surface: ['secret skill'], skills_to_deprioritise: [], bullets_to_rewrite: [], visa_note_required: false, cover_letter_angle: 'secret cover' },
   },
 } as CVAnalysisResult;
 
@@ -34,7 +33,6 @@ describe('report projection', () => {
     const json = JSON.stringify(projected);
     expect(projected.jobMatchData?.requirements).toHaveLength(3);
     expect(json).not.toContain('PAID SECRET REWRITE');
-    expect(json).not.toContain('PAID SECRET STRATEGY');
     expect(canonical.jobMatchData?.tailoredRewrites[0]?.suggested).toBe('PAID SECRET REWRITE');
     expect(canonical.jobMatchData?.requirements).toHaveLength(5);
   });

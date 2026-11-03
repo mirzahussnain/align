@@ -11,8 +11,11 @@ vi.mock('@/shared/lib/rate-limit', () => ({
   applyRateLimit: vi.fn(async () => null),
   analysisLimiter: {},
 }));
-vi.mock('@/shared/utils/pdf-parser', () => ({
-  extractTextFromPDF: vi.fn(),
+vi.mock('@/shared/services/cv-extraction/pdf', () => ({
+  extractPdfDocument: vi.fn(),
+}));
+vi.mock('@/shared/services/cv-extraction/document/projection', () => ({
+  projectNormalizedDocument: vi.fn(),
 }));
 vi.mock('@/features/dashboard/data/load-profile', () => ({
   resolveProfileId: vi.fn(async () => 'p1'),
@@ -40,7 +43,13 @@ vi.mock('@/features/dashboard/data/load-profile', () => ({
 
 import { POST } from '@/app/api/analyze/detect/route';
 import { auth } from '@/shared/lib/auth';
-import { extractTextFromPDF } from '@/shared/utils/pdf-parser';
+import { extractPdfDocument } from '@/shared/services/cv-extraction/pdf';
+import { projectNormalizedDocument } from '@/shared/services/cv-extraction/document/projection';
+
+function extracted(text: string) {
+  vi.mocked(extractPdfDocument).mockResolvedValue({ sourceType: 'pdf', pageCount: 1, blocks: [] });
+  vi.mocked(projectNormalizedDocument).mockReturnValue({ text, links: [], lineByBlockId: new Map() });
+}
 
 function detectRequest() {
   const file = new File([new Uint8Array([1, 2, 3, 4])], 'cv.pdf', { type: 'application/pdf' });
@@ -58,10 +67,7 @@ describe('POST /api/analyze/detect', () => {
   it('detects the CV occupation and flags the mismatch against the active Profile', async () => {
     // Warehouse CV while the active Profile targets software → a mismatch the UI
     // must surface before continuing.
-    vi.mocked(extractTextFromPDF).mockResolvedValue({
-      text: loadFixtureCV('warehouse-flt-no-projects'),
-      pageCount: 1,
-    } as never);
+    extracted(loadFixtureCV('warehouse-flt-no-projects'));
 
     const res = await POST(detectRequest());
     expect(res.status).toBe(200);
@@ -88,10 +94,7 @@ describe('POST /api/analyze/detect', () => {
   });
 
   it('reports no mismatch when the CV agrees with the active Profile', async () => {
-    vi.mocked(extractTextFromPDF).mockResolvedValue({
-      text: loadFixtureCV('junior-dev-with-projects'),
-      pageCount: 1,
-    } as never);
+    extracted(loadFixtureCV('junior-dev-with-projects'));
 
     const res = await POST(detectRequest());
     const body = await res.json();
@@ -101,9 +104,26 @@ describe('POST /api/analyze/detect', () => {
   });
 
   it('rejects a PDF with no extractable text', async () => {
-    vi.mocked(extractTextFromPDF).mockResolvedValue({ text: '   ', pageCount: 1 } as never);
+    extracted('   ');
 
     const res = await POST(detectRequest());
     expect(res.status).toBe(400);
+  });
+
+  it('converts the uploaded File to bytes once and projects the shared adapter document', async () => {
+    extracted(loadFixtureCV('junior-dev-with-projects'));
+    const bytes = vi.spyOn(File.prototype, 'arrayBuffer');
+
+    const res = await POST(detectRequest());
+
+    expect(res.status).toBe(200);
+    expect(bytes).toHaveBeenCalledTimes(1);
+    expect(extractPdfDocument).toHaveBeenCalledTimes(1);
+    expect(Buffer.isBuffer(vi.mocked(extractPdfDocument).mock.calls[0][0])).toBe(true);
+    expect(projectNormalizedDocument).toHaveBeenCalledWith(
+      vi.mocked(extractPdfDocument).mock.results[0].value instanceof Promise
+        ? await vi.mocked(extractPdfDocument).mock.results[0].value
+        : expect.anything()
+    );
   });
 });

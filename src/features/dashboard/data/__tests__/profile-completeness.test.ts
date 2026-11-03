@@ -21,6 +21,7 @@ function makeProfile(overrides: {
     profileId: 'p1',
     label: 'Test',
     targetIndustry: '',
+    practicalPreferences: { relocationPreference: null, maxCommuteMinutes: null, preferredWorkStyles: [] },
     personal: {
       label: 'Test',
       fullName: 'Darren Holt',

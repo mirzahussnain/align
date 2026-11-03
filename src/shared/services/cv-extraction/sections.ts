@@ -45,24 +45,26 @@ const SECTION_VOCABULARY: Record<CvSectionId, readonly string[]> = {
   experience: [
     'experience', 'work experience', 'professional experience', 'employment',
     'employment history', 'work history', 'career history', 'relevant experience',
-    'clinical experience', 'professional background',
+    'clinical experience', 'professional background', 'engagements',
+    'research experience',
   ],
   education: [
     'education', 'education and qualifications', 'qualifications',
     'academic background', 'academic qualifications', 'educational background',
-    'education & qualifications', 'academic history',
+    'education & qualifications', 'academic history', 'education & training',
   ],
   skills: [
     'skills', 'core skills', 'key skills', 'technical skills', 'skills and abilities',
     'competencies', 'core competencies', 'areas of expertise', 'expertise',
     'skills & tools', 'technical competencies', 'it skills', 'skills summary',
+    'clinical skills', 'research methods', 'tools', 'professional skills',
   ],
   projects: [
     'projects', 'project', 'key projects', 'selected projects', 'personal projects',
     'personal project', 'project experience', 'portfolio', 'academic projects',
     'academic project', 'projects & portfolio', 'projects and portfolio',
     'side projects', 'technical projects', 'notable projects', 'featured projects',
-    'projects and achievements',
+    'projects and achievements', 'selected work', 'research projects',
   ],
   certifications: [
     'certifications', 'certificates', 'certifications and licences',

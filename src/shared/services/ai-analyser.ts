@@ -20,6 +20,7 @@ import { composeSemanticPrompt, composeJobMatchPrompt } from './prompt-composer'
 import {
   generateJSONFromAI,
   generateJSONFromAIWithProvenance,
+  executeAiTask,
   type AIResultWithProvenance,
 } from './ai-orchestrator';
 import type { AiTelemetryContext } from './ai-telemetry-context';
@@ -116,9 +117,9 @@ export async function getJobMatchFeedbackWithProvenance(
   classification: Classification,
   telemetry: AiTelemetryContext = {}
 ): Promise<AIResultWithProvenance<JobMatchDataV2> | null> {
-  const result = await generateJSONFromAIWithProvenance<JobMatchDataV2Draft>({
+  const result = await executeAiTask<JobMatchDataV2Draft>({
     ...telemetry,
-    capability: 'job_match_analysis',
+    task: 'job_match_analysis',
     prompt: composeJobMatchPrompt(cvText, jobDescription, profile, classification),
     temperature: 0.1,
     thinkingBudget: THINKING_BUDGETS.jobMatch,
@@ -126,7 +127,11 @@ export async function getJobMatchFeedbackWithProvenance(
   });
 
   return result
-    ? { data: normalizeJobMatchDataV2(result.data, cvText), provenance: result.provenance }
+    ? {
+        data: normalizeJobMatchDataV2(result.data, cvText),
+        provenance: result.provenance,
+        requestDiagnostics: result.requestDiagnostics,
+      }
     : null;
 }
 

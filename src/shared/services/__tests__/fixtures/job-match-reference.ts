@@ -179,18 +179,6 @@ export const REFERENCE_JOB_MATCH: JobMatchDataV2 = {
       rationale: 'Surfaces the vector-search and async architecture the JD values, using only evidenced work.',
     },
   ],
-  cv_build_spec: {
-    recommended_template: 'sharp_minimal',
-    template_rationale: 'A clean engineering layout that foregrounds AI project depth.',
-    section_order: ['Summary', 'Projects', 'Experience', 'Skills', 'Education'],
-    lead_project: 'Vystra',
-    summary_angle: 'Full-stack AI engineer with RAG and vector-search delivery experience.',
-    skills_to_surface: ['React', 'TypeScript', 'RAG', 'Vector search', 'FastAPI'],
-    skills_to_deprioritise: ['Unrelated tooling'],
-    bullets_to_rewrite: [],
-    visa_note_required: true,
-    cover_letter_angle: 'Lead with independent AI product delivery and healthcare adjacency.',
-  },
 };
 
 /** Wrong-occupation calibration case: near-total mismatch scores very low. */
@@ -234,16 +222,4 @@ export const WRONG_OCCUPATION_JOB_MATCH: JobMatchDataV2 = {
   matchFeedback: 'No meaningful overlap with this AI engineering role.',
   experienceGap: 'The CV does not evidence software or AI engineering.',
   tailoredRewrites: [],
-  cv_build_spec: {
-    recommended_template: 'sharp_minimal',
-    template_rationale: '',
-    section_order: [],
-    lead_project: '',
-    summary_angle: '',
-    skills_to_surface: [],
-    skills_to_deprioritise: [],
-    bullets_to_rewrite: [],
-    visa_note_required: false,
-    cover_letter_angle: '',
-  },
 };

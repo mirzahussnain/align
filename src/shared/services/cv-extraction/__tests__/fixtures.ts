@@ -3,8 +3,10 @@ import {
   AlignmentType,
   Document,
   ExternalHyperlink,
+  Footer,
   Header,
   HeadingLevel,
+  LevelFormat,
   Packer,
   Paragraph,
   Table,
@@ -76,6 +78,60 @@ export async function docxFromDocxLibrary(): Promise<Buffer> {
   return Packer.toBuffer(document);
 }
 
+/** A semantic DOCX fixture exercising the structures Mammoth exposes as HTML. */
+export async function docxStructuredContent(): Promise<Buffer> {
+  const document = new Document({
+    numbering: {
+      config: [
+        {
+          reference: 'ordered-items',
+          levels: [
+            {
+              level: 0,
+              format: LevelFormat.DECIMAL,
+              text: '%1.',
+              alignment: AlignmentType.LEFT,
+            },
+          ],
+        },
+      ],
+    },
+    sections: [
+      {
+        children: [
+          new Paragraph({ text: 'STRUCTURED CV', heading: HeadingLevel.HEADING_2 }),
+          new Paragraph('Ordinary body paragraph'),
+          new Paragraph({ children: [new TextRun({ text: 'Whole bold paragraph', bold: true })] }),
+          new Paragraph({ children: [new TextRun({ text: 'Whole italic paragraph', italics: true })] }),
+          new Paragraph({ text: 'Parent bullet', bullet: { level: 0 } }),
+          new Paragraph({ text: 'Nested bullet', bullet: { level: 1 } }),
+          new Paragraph({ text: 'First numbered item', numbering: { reference: 'ordered-items', level: 0 } }),
+          new Paragraph({ text: 'Second numbered item', numbering: { reference: 'ordered-items', level: 0 } }),
+          new Table({
+            rows: [
+              new TableRow({
+                children: [
+                  new TableCell({ children: [new Paragraph('Left cell')] }),
+                  new TableCell({ children: [new Paragraph('Right cell')] }),
+                ],
+              }),
+            ],
+          }),
+          new Paragraph({
+            children: [
+              new ExternalHyperlink({
+                children: [new TextRun('Portfolio')],
+                link: 'https://example.com/portfolio',
+              }),
+            ],
+          }),
+        ],
+      },
+    ],
+  });
+  return Packer.toBuffer(document);
+}
+
 /**
  * A .docx whose contact details live in the page HEADER, with clickable labels.
  *
@@ -116,6 +172,9 @@ export async function docxWithHeaderAndHyperlinks(): Promise<Buffer> {
               }),
             ],
           }),
+        },
+        footers: {
+          default: new Footer({ children: [new Paragraph('Confidential footer')] }),
         },
         children: [
           new Paragraph({ text: 'PROFESSIONAL SUMMARY', heading: HeadingLevel.HEADING_2 }),
@@ -347,6 +406,75 @@ export function minimalPdf(lines: (string | PdfLine)[]): Buffer {
   return Buffer.from(pdf, 'binary');
 }
 
+interface PositionedPdfLine {
+  text: string;
+  x: number;
+  y: number;
+  fontSize?: number;
+}
+
+function positionedPdf(lines: PositionedPdfLine[], annotations: string[] = []): Buffer {
+  const content = lines
+    .map(({ text, x, y, fontSize = 12 }) => {
+      const escaped = text.replace(/([()\\])/g, '\\$1');
+      return `BT /F1 ${fontSize} Tf 1 0 0 1 ${x} ${y} Tm (${escaped}) Tj ET`;
+    })
+    .join('\n');
+  const annotationRefs = annotations.map((_, index) => `${6 + index} 0 R`).join(' ');
+  const objects = [
+    '<< /Type /Catalog /Pages 2 0 R >>',
+    '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+    '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R ' +
+      (annotations.length ? `/Annots [${annotationRefs}] ` : '') +
+      '/Resources << /Font << /F1 5 0 R >> >> >>',
+    `<< /Length ${Buffer.byteLength(content)} >>\nstream\n${content}\nendstream`,
+    '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
+    ...annotations,
+  ];
+
+  let pdf = '%PDF-1.4\n';
+  const offsets: number[] = [];
+  objects.forEach((object, index) => {
+    offsets.push(Buffer.byteLength(pdf));
+    pdf += `${index + 1} 0 obj\n${object}\nendobj\n`;
+  });
+  const xrefOffset = Buffer.byteLength(pdf);
+  pdf += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
+  for (const offset of offsets) pdf += `${String(offset).padStart(10, '0')} 00000 n \n`;
+  pdf += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF`;
+  return Buffer.from(pdf, 'binary');
+}
+
+/** Two recurring x bands whose content operators deliberately alternate right/left. */
+export function twoColumnPdf(): Buffer {
+  return positionedPdf([
+    { text: 'Right one', x: 330, y: 720 },
+    { text: 'Left one', x: 72, y: 720 },
+    { text: 'Right two', x: 330, y: 700 },
+    { text: 'Left two', x: 72, y: 700 },
+    { text: 'Right three', x: 330, y: 680 },
+    { text: 'Left three', x: 72, y: 680 },
+    { text: 'Right four', x: 330, y: 660 },
+    { text: 'Left four', x: 72, y: 660 },
+  ]);
+}
+
+/** A valid one-page PDF with no text layer, matching a raster-only upload. */
+export function emptyPdf(): Buffer {
+  return positionedPdf([]);
+}
+
+/** A link annotation placed far away from the page's only text block. */
+export function pdfWithUnplacedLink(): Buffer {
+  return positionedPdf(
+    [{ text: 'Visible text', x: 72, y: 720 }],
+    [
+      '<< /Type /Annot /Subtype /Link /Rect [500 40 590 60] /Border [0 0 0] ' +
+        '/A << /S /URI /URI (https://example.com/unplaced) >> >>',
+    ]
+  );
+}
+
 /**
  * A fillable PDF: the contact details are AcroForm field VALUES and the text
  * layer holds only the blank labels.
@@ -443,4 +571,104 @@ export function realWorldPdfCv(): Buffer {
     'Deployed a distributed application on Azure Virtual Machines using Docker and Nginx.',
     'Configured networking, reverse proxy and PostgreSQL.',
   ]);
+}
+
+/** A genuine two-column CV: career history on the left, skills sidebar on the right. */
+export function twoColumnSidebarCvPdf(): Buffer {
+  return positionedPdf([
+    { text: 'Rosa Mehta', x: 72, y: 740, fontSize: 16 },
+    { text: 'PROFESSIONAL EXPERIENCE', x: 72, y: 710 },
+    { text: 'Service Manager at Borough Support', x: 72, y: 690 },
+    { text: 'Jan 2020 - Present', x: 72, y: 674 },
+    { text: 'Reduced resident response times.', x: 72, y: 656 },
+    { text: 'EDUCATION', x: 72, y: 626 },
+    { text: 'BA Public Administration at North College, 2015 - 2018', x: 72, y: 606 },
+    { text: 'REFERENCES', x: 72, y: 576 },
+    { text: 'Available on request', x: 72, y: 556 },
+    { text: 'CORE COMPETENCIES', x: 450, y: 710 },
+    { text: 'Case Management', x: 450, y: 690 },
+    { text: 'Stakeholder Liaison', x: 450, y: 670 },
+    { text: 'Process Mapping', x: 450, y: 650 },
+    { text: 'LANGUAGES', x: 450, y: 620 },
+    { text: 'English (Native)', x: 450, y: 600 },
+    { text: 'INTERESTS', x: 450, y: 570 },
+    { text: 'Community gardening', x: 450, y: 550 },
+  ]);
+}
+
+/** Employer-first layout plus a table-owned skills category. */
+export async function employerFirstOperationsDocx(): Promise<Buffer> {
+  const document = new Document({
+    sections: [{
+      children: [
+        new Paragraph({ text: 'Morgan Ellis', heading: HeadingLevel.HEADING_1 }),
+        new Paragraph({ text: 'CAREER HISTORY', heading: HeadingLevel.HEADING_2 }),
+        new Paragraph({ children: [new TextRun({ text: 'National Archives Service', bold: true })] }),
+        new Paragraph('Operations Manager'),
+        new Paragraph('Apr 2018 - Dec 2023'),
+        new Paragraph({ text: 'Coordinated three regional service teams.', bullet: { level: 0 } }),
+        new Paragraph({ text: 'EDUCATIONAL BACKGROUND', heading: HeadingLevel.HEADING_2 }),
+        new Paragraph('BSc Operations Management at City University, 2014 - 2017'),
+        new Paragraph({ text: 'AREAS OF EXPERTISE', heading: HeadingLevel.HEADING_2 }),
+        new Table({ rows: [new TableRow({ children: [
+          new TableCell({ children: [new Paragraph('Operations')] }),
+          new TableCell({ children: [new Paragraph('Capacity Planning, Service Design')] }),
+        ] })] }),
+      ],
+    }],
+  });
+  return Packer.toBuffer(document);
+}
+
+/** Unknown research section safety: publications remain reviewable evidence. */
+export async function academicResearchDocx(): Promise<Buffer> {
+  const document = new Document({
+    sections: [{
+      children: [
+        new Paragraph({ text: 'Dr Noor Shah', heading: HeadingLevel.HEADING_1 }),
+        new Paragraph({ text: 'RESEARCH EXPERIENCE', heading: HeadingLevel.HEADING_2 }),
+        new Paragraph('Research Fellow at Coastal Institute, Sep 2019 - Aug 2024'),
+        new Paragraph({ text: 'Synthesised evidence from 42 interviews.', bullet: { level: 0 } }),
+        new Paragraph({ text: 'RESEARCH METHODS', heading: HeadingLevel.HEADING_2 }),
+        new Paragraph('Thematic Analysis, Qualitative Interviews'),
+        new Paragraph({ text: 'PUBLICATIONS', heading: HeadingLevel.HEADING_2 }),
+        new Paragraph('Shah, N. (2023). Coastal resilience in regional planning.'),
+      ],
+    }],
+  });
+  return Packer.toBuffer(document);
+}
+
+const PARITY_LINES = [
+  'Taylor Reed',
+  'PROFESSIONAL SUMMARY',
+  'Finance analyst specialising in reconciliations.',
+  'WORK EXPERIENCE',
+  'Finance Analyst at Northstar Bank, Jan 2021 - Dec 2023',
+  'Reconciled monthly control accounts.',
+  'EDUCATION',
+  'BSc Accounting at Leeds City University, 2017 - 2020',
+  'KEY PROJECTS',
+  'Close Process Review | Excel | Power BI',
+  'Reduced the month-end close by two days.',
+  'SKILLS',
+  'Analysis: Excel, Power BI',
+] as const;
+
+export function equivalentParityPdf(): Buffer {
+  return minimalPdf([...PARITY_LINES]);
+}
+
+export async function equivalentParityDocx(): Promise<Buffer> {
+  const headings = new Set(['PROFESSIONAL SUMMARY', 'WORK EXPERIENCE', 'EDUCATION', 'KEY PROJECTS', 'SKILLS']);
+  const document = new Document({
+    sections: [{
+      children: PARITY_LINES.map((text) => new Paragraph(
+        headings.has(text)
+          ? { text, heading: HeadingLevel.HEADING_2 }
+          : text
+      )),
+    }],
+  });
+  return Packer.toBuffer(document);
 }

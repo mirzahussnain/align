@@ -15,7 +15,11 @@ import { resolveAnalysisContext } from './analysis-context';
 import { getOccupationProfile } from '@/shared/occupations/registry';
 import { analyzeCV } from '@/shared/utils/scoring-engine';
 import { getJobMatchFeedbackWithProvenance } from './ai-analyser';
+import { AiOrchestrationError } from './ai-orchestrator';
+import { AiOperationError } from './ai-failure';
 import { applyStructuredCandidateEvidence } from './job-match-structured-evidence';
+import { storedJobMatchResult } from './stored-job-match';
+import { buildMatchPracticalCompatibility } from './job-match-practical-compatibility';
 
 export interface JobMatchInput {
   userId: string;
@@ -46,8 +50,8 @@ export async function runJobMatch(input: JobMatchInput): Promise<CVAnalysisResul
   if (reservation.status === 'exhausted') throw new EntitlementRequiredError(reservation.decision);
   if (reservation.status === 'conflict') throw new APIError('This operation ID was already used for different input.', 409);
   if (reservation.status === 'recovered' && reservation.reservation.resultRef) {
-    const recovered = await prisma.jobMatch.findFirst({ where: { id: reservation.reservation.resultRef, userId: input.userId } });
-    if (recovered) return { ...(recovered.resultJson as unknown as CVAnalysisResult), analysisId: recovered.id };
+    const recovered = await prisma.jobMatch.findFirst({ where: { id: reservation.reservation.resultRef, userId: input.userId }, include: { cvRevision: true, jobRevision: true } });
+    if (recovered) return storedJobMatchResult(recovered);
     throw new APIError('The previously completed Job Match is no longer available.', 410);
   }
   if (reservation.status !== 'reserved') throw new APIError('Job Match access could not be reserved.', 403);
@@ -57,6 +61,10 @@ export async function runJobMatch(input: JobMatchInput): Promise<CVAnalysisResul
     const profileSnapshot = await createCareerProfileSnapshot({ userId: input.userId, profileId: prepared.request.profileId });
     const snapshotData = profileSnapshot.snapshotJson as unknown as CareerProfileSnapshotData;
     const target = snapshotData.profile.personal;
+    const practicalCompatibility = buildMatchPracticalCompatibility({
+      jobRevision,
+      practicalFacts: snapshotData.practicalFacts,
+    });
     const { context, classification } = await resolveAnalysisContext({
       mode: 'job_match',
       cvText: cv.text,
@@ -86,6 +94,7 @@ export async function runJobMatch(input: JobMatchInput): Promise<CVAnalysisResul
     result.jobMatchData = match;
     result.overallScore = match.matchScore;
     result.aiDetectedIndustry = classification.sector;
+    result.practicalCompatibility = practicalCompatibility;
 
     const row = await prisma.jobMatch.create({
       data: {
@@ -95,8 +104,41 @@ export async function runJobMatch(input: JobMatchInput): Promise<CVAnalysisResul
         profileSnapshotId: profileSnapshot.id,
         requestId: prepared.request.id,
         matchScore: match.matchScore,
-        resultJson: JSON.parse(JSON.stringify(result)) as Prisma.InputJsonValue,
-        algorithmVersion: ANALYSIS_VERSIONS.jobMatchAlgorithm,
+        requirementLedgerJson: JSON.parse(JSON.stringify({
+          schemaVersion: 1,
+          analysisVersion: ANALYSIS_VERSIONS.jobMatchAlgorithm,
+          requirements: match.requirements.map((requirement) => ({
+            id: requirement.id,
+            text: requirement.text,
+            importance: requirement.importance.toUpperCase(),
+            category: requirement.category.toUpperCase(),
+            evidenceRequired: requirement.evidenceRequired,
+            ...(requirement.clusterKey ? { clusterKey: requirement.clusterKey } : {}),
+            ...(requirement.clusterLabel ? { clusterLabel: requirement.clusterLabel } : {}),
+            sourceSection: requirement.sourceSection.toUpperCase(),
+            analysis: {
+              status: requirement.status.toUpperCase(),
+              evidence: requirement.evidence.map((item) => ({ ...item, source: item.source.toUpperCase() })),
+              confidence: requirement.confidence,
+              deduction: { ...requirement.deduction, rubric: requirement.deduction.rubric.toUpperCase() },
+            },
+          })),
+        })) as Prisma.InputJsonValue,
+        requirementLedgerVersion: 1,
+        advisoryJson: JSON.parse(JSON.stringify({
+          schemaVersion: 1,
+          jobTitle: match.jobTitle,
+          jobCompany: match.jobCompany,
+          domainFit: match.domainFit,
+          matchScore: match.matchScore,
+          matchFeedback: match.matchFeedback,
+          experienceGap: match.experienceGap,
+          tailoredRewrites: match.tailoredRewrites,
+        })) as Prisma.InputJsonValue,
+        practicalCompatibilityJson: JSON.parse(JSON.stringify(practicalCompatibility)) as Prisma.InputJsonValue,
+        practicalCompatibilityVersion: 1,
+        advisoryVersion: 1,
+        analysisVersion: ANALYSIS_VERSIONS.jobMatchAlgorithm,
         promptVersion: ANALYSIS_VERSIONS.jobMatchPrompt,
         aiProvider: generated.provenance.provider,
         aiModel: generated.provenance.model,
@@ -108,7 +150,23 @@ export async function runJobMatch(input: JobMatchInput): Promise<CVAnalysisResul
     result.analysisId = row.id;
     return result;
   } catch (error) {
-    await releaseCapability({ userId: input.userId, capability: 'job_match_analysis', operationId: input.operationId, reason: error instanceof APIError ? 'operation_failed' : 'provider_unavailable' });
-    throw error;
+    const failure = error instanceof AiOrchestrationError
+      ? new AiOperationError({
+          capability: 'job_match_analysis',
+          operationId: input.operationId,
+          reason: 'provider_unavailable',
+        })
+      : error;
+    await releaseCapability({
+      userId: input.userId,
+      capability: 'job_match_analysis',
+      operationId: input.operationId,
+      reason: failure instanceof AiOperationError && failure.reason === 'provider_unavailable'
+        ? 'provider_unavailable'
+        : failure instanceof APIError
+          ? 'operation_failed'
+          : 'provider_unavailable',
+    });
+    throw failure;
   }
 }

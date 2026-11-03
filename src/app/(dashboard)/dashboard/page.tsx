@@ -12,6 +12,7 @@ import {
 } from '@/features/dashboard/data/load-profile';
 import { getEntitlementSnapshot } from '@/shared/entitlements/server';
 import { getUsage } from '@/shared/services/usage-meter';
+import { toCvPreviewSummary } from '@/shared/document-preview/preview-view';
 
 export const dynamic = 'force-dynamic';
 
@@ -78,6 +79,7 @@ export default async function DashboardPage({
         jobMatch: { select: { matchScore: true } },
         profileSnapshot: { select: { profileLabel: true } },
         profile: { select: { label: true } },
+        preview: { select: { status: true, failureCode: true, pageCount: true } },
       },
     }),
     loadProfileData(userId, requestedProfile),
@@ -125,6 +127,7 @@ export default async function DashboardPage({
           jobCompany: row.jobRevision?.company ?? null,
           matchScore: row.jobMatch?.matchScore ?? null,
           profileLabel: row.profileSnapshot?.profileLabel ?? row.profile?.label ?? null,
+          preview: toCvPreviewSummary(row.id, row.preview),
         })),
         profile: profileData,
         profiles,

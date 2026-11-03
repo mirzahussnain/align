@@ -452,12 +452,53 @@ describe.skipIf(!isLocalDb)('CV import pipeline — real Postgres', () => {
     });
   });
 
-  describe('a single failing candidate', () => {
-    it('is reported and left proposed, while the rest of the batch still lands', async () => {
-      // The per-candidate transaction exists so one item cannot take the batch
-      // with it. That has to hold for EVERY failure, not only the anticipated
-      // ones: here the profile already holds this skill, so the unique index
-      // refuses a second copy when the user confirms it anyway.
+  describe('idempotent skill confirmation', () => {
+    it('stores one logical skill when project and skills-section evidence repeat it', async () => {
+      await seedExtraction({
+        projects: [{
+          name: 'Release Dashboard',
+          startDate: null,
+          endDate: null,
+          achievements: ['Published delivery health metrics.'],
+          technologies: ['CI/CD', 'Vitest'],
+          ...provenance,
+        }],
+        skills: [
+          { name: 'CI/CD', ...provenance },
+          { name: 'CI/CD', category: 'Testing & Delivery', ...provenance },
+          { name: 'Vitest', category: 'Testing & Delivery', ...provenance },
+        ],
+      });
+
+      const session = await open();
+      expect(session.candidates.filter((candidate) =>
+        candidate.entityType === CvImportEntityType.SKILL &&
+        (candidate.structuredData as { name?: string }).name === 'CI/CD'
+      )).toHaveLength(1);
+
+      const result = await applyCandidateDecisions({
+        userId,
+        sessionId: session.id,
+        decisions: session.candidates
+          .filter((candidate) => candidate.entityType !== CvImportEntityType.IDENTITY_UPDATE)
+          .map((candidate) => ({ candidateId: candidate.id, action: 'confirm' as const })),
+      });
+
+      expect(result.failed).toBe(0);
+      const skills = await prisma.skill.findMany({
+        where: { profileId },
+        include: { skillGroup: true },
+      });
+      expect(skills.map(({ normalizedName }) => normalizedName).sort()).toEqual(['ci/cd', 'vitest']);
+      expect(skills.every(({ skillGroup }) => skillGroup?.category === 'Testing & Delivery')).toBe(true);
+      const project = await prisma.projectEntry.findFirstOrThrow({
+        where: { profileId, name: 'Release Dashboard' },
+        include: { projectSkills: true },
+      });
+      expect(project.projectSkills).toHaveLength(2);
+    });
+
+    it('merges a stale skill candidate while the rest of the batch still lands', async () => {
       await prisma.skill.create({
         data: { profileId, name: 'Wound care', normalizedName: 'wound care' },
       });
@@ -476,38 +517,76 @@ describe.skipIf(!isLocalDb)('CV import pipeline — real Postgres', () => {
         })),
       });
 
-      expect(result.imported).toBe(1);
-      expect(result.failed).toBe(1);
-      expect(result.outcomes.filter((outcome) => outcome.outcome === 'failed')).toHaveLength(1);
-      // The experience still landed, and the skill is still there to review.
+      expect(result.imported).toBe(2);
+      expect(result.failed).toBe(0);
+      expect(result.outcomes.filter((outcome) => outcome.outcome === 'failed')).toHaveLength(0);
       expect(await prisma.experience.count({ where: { profileId } })).toBe(1);
+      expect(await prisma.skill.count({ where: { profileId, normalizedName: 'wound care' } })).toBe(1);
       const reloaded = await loadImportSession(userId, session.id);
       const skill = reloaded.candidates.find(
         (candidate) => candidate.entityType === CvImportEntityType.SKILL
       );
-      expect(skill?.reviewStatus).not.toBe(CvImportReviewStatus.CONFIRMED);
+      expect(skill?.reviewStatus).toBe(CvImportReviewStatus.CONFIRMED);
     });
-  });
 
-  describe('application-scoped evidence', () => {
-    it('creates no application evidence or approvals during import', async () => {
+    it('does not create duplicates or constraint failures across repeated import sessions', async () => {
+      const importOnce = async () => {
+        await seedExtraction({ skills: [{ name: 'TypeScript', category: 'Languages', ...provenance }] });
+        const session = await open();
+        const candidate = session.candidates.find((item) => item.entityType === CvImportEntityType.SKILL)!;
+        return applyCandidateDecisions({
+          userId,
+          sessionId: session.id,
+          decisions: [{ candidateId: candidate.id, action: 'confirm' }],
+        });
+      };
+
+      const first = await importOnce();
+      const second = await importOnce();
+      expect(first.failed).toBe(0);
+      expect(second.failed).toBe(0);
+      expect(await prisma.skill.count({ where: { profileId, normalizedName: 'typescript' } })).toBe(1);
+    });
+
+    it('upgrades a project-created skill when its specific skill candidate is confirmed later', async () => {
       await seedExtraction({
-        experience: [EXPERIENCE],
-        otherEvidence: [{ title: 'Award', description: 'Employee of the year.', ...provenance }],
+        projects: [{
+          name: 'Compiler',
+          startDate: null,
+          endDate: null,
+          achievements: [],
+          technologies: ['TypeScript'],
+          ...provenance,
+        }],
       });
-      const session = await open();
+      const projectSession = await open();
+      const project = projectSession.candidates.find(
+        (candidate) => candidate.entityType === CvImportEntityType.PROJECT
+      )!;
       await applyCandidateDecisions({
         userId,
-        sessionId: session.id,
-        decisions: session.candidates
-          .filter((c) => c.entityType !== CvImportEntityType.IDENTITY_UPDATE)
-          .map((c) => ({ candidateId: c.id, action: 'confirm' as const })),
+        sessionId: projectSession.id,
+        decisions: [{ candidateId: project.id, action: 'confirm' }],
       });
 
-      // CV import populates the Career Profile. An approval is a claim about a
-      // specific vacancy and is never made on the user's behalf.
-      expect(await prisma.applicationEvidenceContext.count({ where: { userId } })).toBe(0);
-      expect(await prisma.profileEvidenceApproval.count({ where: { userId } })).toBe(0);
+      await seedExtraction({ skills: [{ name: 'TypeScript', category: 'Languages', ...provenance }] });
+      const skillSession = await open();
+      const skill = skillSession.candidates.find(
+        (candidate) => candidate.entityType === CvImportEntityType.SKILL
+      )!;
+      const result = await applyCandidateDecisions({
+        userId,
+        sessionId: skillSession.id,
+        decisions: [{ candidateId: skill.id, action: 'confirm' }],
+      });
+
+      expect(result.failed).toBe(0);
+      expect(await prisma.skill.count({ where: { profileId, normalizedName: 'typescript' } })).toBe(1);
+      const canonical = await prisma.skill.findUniqueOrThrow({
+        where: { profileId_normalizedName: { profileId, normalizedName: 'typescript' } },
+        include: { skillGroup: true },
+      });
+      expect(canonical.skillGroup?.category).toBe('Languages');
     });
   });
 

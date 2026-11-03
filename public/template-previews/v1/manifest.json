@@ -1,0 +1,46 @@
+{
+  "version": 1,
+  "sample": "safe-medium-v1",
+  "templates": {
+    "architect": {
+      "file": "/template-previews/v1/architect-page-1.png",
+      "width": 1200,
+      "height": 1697,
+      "pageCount": 2,
+      "layoutProfile": "preferred",
+      "templateVersion": "2",
+      "rendererContractVersion": "gotenberg-8.38.1-libreoffice-v1",
+      "sha256": "5be62f37178734c59222784b455694a7ec9f36e4a4eb92d72c6d59c3b3c66185"
+    },
+    "editorial_refined": {
+      "file": "/template-previews/v1/editorial_refined-page-1.png",
+      "width": 1200,
+      "height": 1697,
+      "pageCount": 2,
+      "layoutProfile": "preferred",
+      "templateVersion": "2",
+      "rendererContractVersion": "gotenberg-8.38.1-libreoffice-v1",
+      "sha256": "44fa96237d787c70d054d01614f26ac71895f9f94c5dd4f736e0165c540ad542"
+    },
+    "technical_precision": {
+      "file": "/template-previews/v1/technical_precision-page-1.png",
+      "width": 1200,
+      "height": 1697,
+      "pageCount": 2,
+      "layoutProfile": "preferred",
+      "templateVersion": "2",
+      "rendererContractVersion": "gotenberg-8.38.1-libreoffice-v1",
+      "sha256": "bfecb0fb3bc6053fbff4d312754e3484839aa84a7605a3e7e74c575758bb7ffd"
+    },
+    "academic_latex": {
+      "file": "/template-previews/v1/academic_latex-page-1.png",
+      "width": 1200,
+      "height": 1697,
+      "pageCount": 2,
+      "layoutProfile": "preferred",
+      "templateVersion": "2",
+      "rendererContractVersion": "gotenberg-8.38.1-libreoffice-v1",
+      "sha256": "c799d4549bb2b544f21a55d032f8792d4278b20d6f18959027237349bd3f4ac2"
+    }
+  }
+}

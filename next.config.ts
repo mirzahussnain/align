@@ -1,7 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  serverExternalPackages: ["pdf-parse"],
+  serverExternalPackages: ['@napi-rs/canvas', 'unpdf', 'pdfjs-dist'],
   outputFileTracingIncludes: {
     "/api/sponsors": ["data/sponsors/*.csv"],
     "/api/companies/*": ["data/sponsors/*.csv"],

@@ -187,10 +187,10 @@ export const ExtractedOtherEvidenceSchema = z.object({
 });
 
 /**
- * Version 2 added links, the split phone fields, project URLs and the summary's
- * own provenance.
+ * Version 3 adds optional review diagnostics while versions 1 and 2 remain
+ * readable without migration.
  */
-export const CV_EXTRACTION_SCHEMA_VERSION = 2;
+export const CV_EXTRACTION_SCHEMA_VERSION = 3;
 
 /**
  * Versions this build can still READ.
@@ -202,10 +202,28 @@ export const CV_EXTRACTION_SCHEMA_VERSION = 2;
  * rather than as corrupt data. New extractions are always written at the current
  * version; nothing upgrades a stored row in place.
  */
-const READABLE_SCHEMA_VERSIONS = [1, 2] as const;
+const READABLE_SCHEMA_VERSIONS = [1, 2, 3] as const;
+
+const ReviewIssueSchema = z.object({
+  code: z.enum([
+    'AMBIGUOUS_SECTION',
+    'AMBIGUOUS_ENTITY_TYPE',
+    'AMBIGUOUS_ENTITY_OWNERSHIP',
+    'AMBIGUOUS_EXPERIENCE_HEADER',
+    'AMBIGUOUS_DATE_OWNERSHIP',
+  ]),
+  blockIds: z.array(z.string().min(1).max(160)).min(1).max(40),
+  candidateIds: z.array(z.string().min(1).max(240)).max(20).optional(),
+  messageKey: z.string().min(1).max(160),
+  excerpt: z.string().trim().min(1).max(400),
+});
 
 export const CvExtractionPayloadSchema = z.object({
-  schemaVersion: z.union([z.literal(READABLE_SCHEMA_VERSIONS[0]), z.literal(READABLE_SCHEMA_VERSIONS[1])]),
+  schemaVersion: z.union([
+    z.literal(READABLE_SCHEMA_VERSIONS[0]),
+    z.literal(READABLE_SCHEMA_VERSIONS[1]),
+    z.literal(READABLE_SCHEMA_VERSIONS[2]),
+  ]),
   identity: ExtractedIdentitySchema,
   headline: line.optional(),
   summary: longText.optional(),
@@ -235,6 +253,7 @@ export const CvExtractionPayloadSchema = z.object({
     .optional(),
   /** Section headings the parser recognised, for the review UI and diagnostics. */
   detectedSections: z.array(z.string().max(120)).max(40),
+  reviewIssues: z.array(ReviewIssueSchema).max(100).optional(),
   experience: z.array(ExtractedExperienceSchema).max(60),
   education: z.array(ExtractedEducationSchema).max(40),
   projects: z.array(ExtractedProjectSchema).max(60),

@@ -60,28 +60,6 @@ export const AISemanticOutputSchema = z.looseObject({
   clichés: stringArray,
 });
 
-const cvBuildSpec = z.looseObject({
-  recommended_template: z.string().catch('sharp_minimal'),
-  template_rationale: z.string().catch(''),
-  section_order: stringArray,
-  lead_project: z.string().catch(''),
-  summary_angle: z.string().catch(''),
-  skills_to_surface: stringArray,
-  skills_to_deprioritise: stringArray,
-  bullets_to_rewrite: z
-    .array(
-      z.looseObject({
-        project_or_role: z.string(),
-        original_label: z.string().catch(''),
-        new_label: z.string().catch(''),
-        new_body: z.string(),
-      })
-    )
-    .catch([]),
-  visa_note_required: z.boolean().catch(false),
-  cover_letter_angle: z.string().catch(''),
-});
-
 const nonNegativePoints = z.coerce.number().int().min(0);
 
 const requirementEvidence = z.looseObject({
@@ -125,6 +103,8 @@ const requirementDraft = z.looseObject({
   ]),
   sourceSection: z.enum(['job_description', 'person_specification']),
   evidenceRequired: z.boolean(),
+  clusterKey: z.string().trim().min(1).max(80).optional(),
+  clusterLabel: z.string().trim().min(1).max(120).optional(),
   status: z.enum(['met', 'partial', 'not_met', 'contradicted', 'unclear']),
   evidence: z.array(requirementEvidence),
   confidence: z.coerce.number().min(0).max(1),
@@ -161,7 +141,6 @@ const jobMatchV2Base = {
       })
     )
     .catch([]),
-  cv_build_spec: cvBuildSpec,
 } as const;
 
 /** Model-facing v2 output. IDs and matchScore are deliberately absent. */

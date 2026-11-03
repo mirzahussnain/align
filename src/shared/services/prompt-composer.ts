@@ -115,24 +115,14 @@ export function composeJobMatchPrompt(
   // sense for technical specialists.
   const depthExamples =
     profile.roleArchetype === 'technical_specialist'
-      ? `- Classical ML (CatBoost, scikit-learn) and deep learning (PyTorch,
-    TensorFlow) are different paradigms even if both are "ML"
-  - Semantic vector search (pgvector) and knowledge graph reasoning
-    (RDF, SPARQL, ontologies) are different disciplines even if both
-    involve "semantic" concepts
-  - Single-cloud deployment and multi-cloud orchestration are different
-    engineering disciplines`
-      : `- Experience with a similar duty in a different setting is a partial
-    match, not a full match — state the setting gap explicitly
-  - A credential of a different class or level than the JD names
-    (e.g. reach truck vs counterbalance, Level 2 vs Level 3) is partial
-  - Supervisory experience is not the same as hands-on delivery of the
-    duty, and vice versa`;
+      ? `- Classical ML (CatBoost/scikit-learn) differs from deep learning (PyTorch/TensorFlow).
+- Vector search (pgvector) differs from knowledge graphs (RDF/SPARQL/ontologies).
+- Single-cloud differs from multi-cloud orchestration.`
+      : `- A similar duty in another setting is partial; name the setting gap.
+- A different credential class/level (reach truck vs counterbalance; Level 2 vs 3) is partial.
+- Supervising a duty differs from hands-on delivery.`;
 
-  return `You are ${profile.persona}, acting as a strict evaluator.
-Your job is to evaluate candidate CVs with zero bias toward the candidate.
-Do not inflate scores. If critical requirements are missing, the score must
-reflect that arithmetically, not as a gestalt impression.
+  return `You are ${profile.persona}, a strict, unbiased evaluator. Do not inflate scores; deductions must arithmetically reflect missing critical requirements.
 
 ${contextBlock(profile, classification)}
 
@@ -150,65 +140,32 @@ Candidate CV:
 ${cvText}
 """
 
-Complete these reasoning steps strictly before producing output:
+Complete these steps before output:
 
 STEP 1 — COMPLETE JD INVENTORY
-Extract every requirement from the JD into ONE canonical requirements array.
-Each requirement must appear exactly once. Include every named skill, tool,
-experience requirement, duty, methodology, qualification, certification,
-licence, eligibility condition, availability condition, location constraint,
-shift or work-pattern requirement, and explicitly named soft skill.
+Create ONE canonical requirements array; Each requirement must appear exactly once. Include every named skill, tool, experience, duty, methodology, qualification, certification, licence, eligibility/availability condition, location constraint, shift or work-pattern requirement, and explicit soft skill. Classify each as mandatory/desirable from JD wording. A stated duty implies required experience to check against the CV.
 
-Classify each requirement internally as MANDATORY or DESIRABLE from the JD's
-own wording. If the JD states a duty, treat the implied experience as a
-requirement and check it against the CV.
+Related requirements may share clusterKey and clusterLabel. Omit otherwise; IDs stay distinct.
 
 STEP 1b — SOURCE SECTION
-Set sourceSection to person_specification only when the item comes from an
-explicit person specification or Essential/Desirable criteria list (common in
-NHS, council, university, and civil-service adverts). Use job_description
-for every other requirement. Do not return a second criteria list.
+sourceSection=person_specification only for an explicit person specification or Essential/Desirable criteria list; otherwise job_description. Never create a second criteria list.
 
 STEP 2 — REQUIREMENT MATCHING (item-level, not category-level)
-For every requirement in the inventory, check the CV individually.
-- Match only at the specific skill, duty, or credential level. A broad claim
-  is NOT a match for a specific named requirement unless the specific thing
-  is named or clearly evidenced in the CV.
-- Put exact, verbatim supporting CV text in the evidence array. Never rewrite
-  evidence and never invent a source location.
-- Use status met, partial, not_met, contradicted, or unclear.
-- contradicted means the CV explicitly conflicts with the requirement;
-  absence alone is not_met or unclear.
-- If JD and CV differ in specificity, classify as partial and explain the gap
-  in deduction.reason.
-- Use an empty evidence array when no supporting evidence exists.
-- Do not skip any inventory item.
+Check every item individually at the specific skill/duty/credential level; broad category claims are insufficient. Evidence must be exact verbatim CV evidence with no invented location. status is met|partial|not_met|contradicted|unclear; contradicted requires explicit conflict, while absence alone is not_met or unclear. Specificity gaps are partial and named in deduction.reason. With no evidence use []; skip nothing.
 
 STEP 3 — DEPTH ASSESSMENT (apply before classifying partials)
-For each partial match, assess the depth of the candidate's evidence:
-- Is the requirement demonstrated in real work or only mentioned?
-- Does the candidate's experience share the same discipline as the JD
-  requirement? For example:
-  ${depthExamples}
-- However: genuinely transferable experience in the same discipline but a
-  different setting deserves credit as a partial match, not a miss.
+For each partial, distinguish demonstrated work from a mention and compare disciplines:
+${depthExamples}
+Transferable work in the same discipline but another setting is partial, not missed.
 
 STEP 4 — DATE ARITHMETIC
-If the role is fixed-term, calculate the exact contract end date from the
-stated start date and duration stated in the JD. Use exact months.
-Compare this against any visa, right-to-work, registration, or eligibility
-constraints visible in or clearly inferable from the CV. State all dates
-explicitly and flag any shortfall in months. Do not approximate.
+For fixed-term roles calculate the exact end date from stated start/duration, then compare with CV-evidenced visa, right-to-work, registration, or eligibility constraints. State dates and any shortfall in exact months.
 
 STEP 5 — DOMAIN FIT
-State the specific domain of the role and the specific domain of the
-candidate's experience. Assess overlap at the duty and discipline level, not
-just the industry level. Reserve MISMATCH for cases where the core discipline
-differs, not where only the application setting differs.
+Name both specific domains and assess duty/discipline overlap. mismatch requires a different core discipline, not merely a different setting.
 
 STEP 6 — DEDUCTION LEDGER
-Assign one non-negative integer deduction to every requirement. Use zero with
-rubric met when no deduction applies. Apply this rubric:
+Give every requirement one non-negative integer deduction; use zero/rubric=met when none applies:
 - Missing MANDATORY requirement (core to role function): -10 to -12 points
 - Missing MANDATORY requirement (supporting): -6 to -8 points
 - Confirmed domain mismatch (different discipline): -12 to -15 points
@@ -217,20 +174,12 @@ rubric met when no deduction applies. Apply this rubric:
 - Partial requirement match (same category, different depth): -3 to -5 points
 - Missing DESIRABLE requirement: -2 points
 
-Internal consistency rules — enforce before finalising:
-- An aligned domain has a zero-point domain deduction
-- A partial domain match has a 4-6 point domain deduction
-- A domain mismatch has a 12-15 point domain deduction
-- A met requirement has a zero-point deduction
-- Every deduction must explain the exact evidence or absence behind it
+Consistency: domain aligned=0, partial=4-6, mismatch=12-15; requirement met=0. Every deduction explains exact evidence or absence.
 - Do NOT calculate or return matchScore. The server owns the final arithmetic.
 - Do NOT generate requirement ids. The server assigns them after validation.
-- Do NOT assign the candidate a seniority label (e.g. "entry-level", "junior",
-  "senior") that the CV does not explicitly evidence. Describe demonstrated
-  experience in grounded terms. Independent or self-employed delivery is real
-  experience — do not dismiss it as a hobby, and do not treat it as equivalent
-  to senior commercial ownership either. When seniority is not evidenced, say
-  it is "not fully evidenced" rather than asserting a level.
+- Never infer seniority labels. Describe evidenced experience; independent/self-employed work is real but not senior commercial ownership. Say "not fully evidenced" when needed.
+
+REQUIRED TOP-LEVEL FIELDS: domainFit, matchFeedback, and experienceGap must all be present and non-null. Never omit any of them.
 
 Produce the following JSON:
 
@@ -245,6 +194,8 @@ Produce the following JSON:
       "category": "qualification | experience | skill | tool | methodology | duty | knowledge | value | credential | eligibility | availability | other",
       "sourceSection": "job_description | person_specification",
       "evidenceRequired": boolean,
+      "clusterKey": "string",
+      "clusterLabel": "string",
       "status": "met | partial | not_met | contradicted | unclear",
       "evidence": [
         {
@@ -282,21 +233,7 @@ Produce the following JSON:
       "rationale": "string — which JD requirement this targets and why",
       "caveat": "string — explicitly state if underlying experience is not fully equivalent to what the JD requires"
     }
-  ],
-  "cv_build_spec": {
-    "recommended_template": "sharp_minimal | editorial_refined | technical_precision",
-    "template_rationale": "string — why this template fits this role/employer",
-    "section_order": ["Education", "Projects", "Experience", "Skills", "Certs"],
-    "lead_project": "string — which project should appear first and why",
-    "summary_angle": "string — 1-2 sentence guidance on what the summary should emphasise",
-    "skills_to_surface": ["string — specific skills to make prominent for this JD"],
-    "skills_to_deprioritise": ["string — skills less relevant that can be shortened"],
-    "bullets_to_rewrite": [
-      { "project_or_role": "string", "original_label": "string", "new_label": "string", "new_body": "string" }
-    ],
-    "visa_note_required": true,
-    "cover_letter_angle": "string — the core argument the cover letter should make"
-  }
+  ]
 }
 
 Return ONLY valid JSON. No markdown. No preamble. No trailing text.`;

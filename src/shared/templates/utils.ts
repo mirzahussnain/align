@@ -42,11 +42,8 @@ export function formatLinkLabel(url: string, type: 'mail' | 'github' | 'linkedin
 export function formatPhone(phone: string): string {
   if (!phone) return '';
   const digits = phone.replace(/\D/g, '');
-  if (digits.startsWith('44') && digits.length >= 11) {
-    const area = digits.slice(2, 4);
-    const mid = digits.slice(4, 7);
-    const end = digits.slice(7);
-    return `+44(${area}) ${mid}-${end}`;
+  if (digits.startsWith('44') && digits.length === 12) {
+    return '+44 ' + digits.slice(2, 6) + ' ' + digits.slice(6);
   }
   return phone;
 }

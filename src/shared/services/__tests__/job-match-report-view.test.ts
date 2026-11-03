@@ -132,10 +132,10 @@ describe('job-match report view — rewrite availability is typed, never inferre
 });
 
 describe('job-match report view — strategy fields are typed', () => {
-  it('Pro exposes available strategy values', () => {
+  it('Pro exposes grounded strategy values and types unavailable legacy fields', () => {
     const view = buildJobMatchReportView(REFERENCE_JOB_MATCH, FULL);
     expect(view.strategy.summaryAngle.status).toBe('available');
-    expect(view.strategy.sectionOrder.status).toBe('available');
+    expect(view.strategy.sectionOrder).toMatchObject({ status: 'insufficient_evidence' });
     expect(view.strategy.locked).toBe(false);
   });
 

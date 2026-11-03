@@ -41,6 +41,11 @@ export async function seedLifecycleUser(options: LifecycleOptions): Promise<Life
   const sourceKey = `users/${userId}/stored-cv/source.pdf`;
   const intentKey = `users/${userId}/stored-cv/intents/pending.pdf`;
   const generatedKey = `users/${userId}/generated/generated.docx`;
+  const previewPdfKey = `users/${userId}/generated/previews/hash/document.pdf`;
+  const previewPageKeys = [
+    `users/${userId}/generated/previews/hash/page-1.png`,
+    `users/${userId}/generated/previews/hash/page-2.png`,
+  ];
   const avatarKey = `avatars/${userId}/avatar.png`;
   createdUsers.add(userId);
 
@@ -107,7 +112,7 @@ export async function seedLifecycleUser(options: LifecycleOptions): Promise<Life
         expiresAt: new Date(Date.now() + 300_000),
       },
     });
-    await prisma.generatedCV.create({
+    const generated = await prisma.generatedCV.create({
       data: {
         userId,
         sourceCvRevisionId: revision.id,
@@ -115,6 +120,20 @@ export async function seedLifecycleUser(options: LifecycleOptions): Promise<Life
         data: {},
         fileKey: generatedKey,
         fileSize: 4,
+      },
+    });
+    await prisma.generatedCvPreview.create({
+      data: {
+        generatedCvId: generated.id,
+        userId,
+        documentHash: 'a'.repeat(64),
+        rendererVersion: 'integration',
+        status: 'READY',
+        pageCount: 2,
+        pdfKey: previewPdfKey,
+        pageImageKeys: previewPageKeys,
+        pdfSize: 100,
+        pageImageSizes: [10, 10],
       },
     });
   }
@@ -151,6 +170,8 @@ export async function seedLifecycleUser(options: LifecycleOptions): Promise<Life
           { bucket: 'uploads', key: sourceKey },
           { bucket: 'uploads', key: intentKey },
           { bucket: 'rewrites', key: generatedKey },
+          { bucket: 'rewrites', key: previewPdfKey },
+          ...previewPageKeys.map((key) => ({ bucket: 'rewrites' as const, key })),
           { bucket: 'avatars', key: avatarKey },
         ]
       : [{ bucket: 'avatars', key: avatarKey }],

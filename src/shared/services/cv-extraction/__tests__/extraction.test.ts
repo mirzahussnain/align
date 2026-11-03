@@ -150,6 +150,7 @@ describe('date reading', () => {
 describe('section detection', () => {
   it('recognises headings by vocabulary, in several wordings', () => {
     expect(matchSectionHeading('WORK EXPERIENCE')).toBe('experience');
+    expect(matchSectionHeading('RESEARCH EXPERIENCE')).toBe('experience');
     expect(matchSectionHeading('Employment History:')).toBe('experience');
     expect(matchSectionHeading('Education & Qualifications')).toBe('education');
     expect(matchSectionHeading('Core Skills')).toBe('skills');
@@ -218,6 +219,20 @@ describe('structured parsing', () => {
     expect(structured.languages).toEqual([
       expect.objectContaining({ language: 'English', proficiency: 'Native' }),
       expect.objectContaining({ language: 'Igbo', proficiency: 'Fluent' }),
+    ]);
+  });
+
+  it('preserves repeated skill representations until category resolution', () => {
+    const structured = parseCvStructure([
+      'Sam Iyer',
+      'SKILLS',
+      'Additional: TypeScript',
+      'Languages: TypeScript',
+    ].join('\n'));
+
+    expect(structured.skills).toEqual([
+      expect.objectContaining({ name: 'TypeScript', category: 'Additional' }),
+      expect.objectContaining({ name: 'TypeScript', category: 'Languages' }),
     ]);
   });
 

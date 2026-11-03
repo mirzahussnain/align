@@ -6,6 +6,8 @@ import { Label, TextField, FieldHint } from '@/features/dashboard/components/pro
 import { VISA_STATUSES, visaRequiresExpiry } from '@/shared/constants/visa-status';
 import { OnboardingShell, PrimaryButton, SecondaryButton } from './OnboardingShell';
 import { saveEligibilityBasics } from '../actions';
+import PracticalPreferencesFields from '@/features/dashboard/components/profile/PracticalPreferencesFields';
+import type { PracticalPreferencesInput } from '@/shared/schemas/practical-preferences';
 
 /**
  * The eligibility facts an early result can actually use.
@@ -29,7 +31,7 @@ export function EligibilityStep({
 }: {
   stageIndex: number;
   totalStages: number;
-  initial: { country: string; city: string; visaStatus: string; visaExpiry: string };
+  initial: { country: string; city: string; visaStatus: string; visaExpiry: string } & PracticalPreferencesInput;
   onSaved: () => void;
   onSkip: () => void;
   onBack: () => void;
@@ -155,6 +157,17 @@ export function EligibilityStep({
             </FieldHint>
           </div>
         )}
+
+        <div className="sm:col-span-2 border-t border-neutral-200 pt-5">
+          <p className="mb-4 text-xs leading-relaxed text-neutral-500">
+            Optional preferences help us explain practical fit separately from your CV score.
+          </p>
+          <PracticalPreferencesFields
+            value={form}
+            onChange={(preferences) => setForm((current) => ({ ...current, ...preferences }))}
+            idPrefix="onboarding"
+          />
+        </div>
       </div>
     </OnboardingShell>
   );

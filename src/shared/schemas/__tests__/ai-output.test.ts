@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   AISemanticOutputSchema,
   AIClassificationSchema,
+  AIJobMatchV2RawSchema,
   JobMatchDataV2Schema,
   parseStoredJobMatchData,
 } from '../ai-output';
@@ -83,18 +84,6 @@ const goodStoredJobMatch = {
   matchFeedback: 'Strong fit',
   experienceGap: '',
   tailoredRewrites: [],
-  cv_build_spec: {
-    recommended_template: 'sharp_minimal',
-    template_rationale: '',
-    section_order: ['Experience', 'Skills'],
-    lead_project: '',
-    summary_angle: '',
-    skills_to_surface: ['SQL'],
-    skills_to_deprioritise: [],
-    bullets_to_rewrite: [],
-    visa_note_required: false,
-    cover_letter_angle: '',
-  },
 } as const;
 
 describe('stored JobMatchDataV2', () => {
@@ -108,6 +97,29 @@ describe('stored JobMatchDataV2', () => {
     delete versionless.schemaVersion;
     expect(parseStoredJobMatchData(versionless)).toBeNull();
   });
+});
+
+describe('raw JobMatchDataV2 provider contract', () => {
+  const { matchScore: _serverOwnedScore, ...goodRawJobMatch } = goodStoredJobMatch;
+
+  it.each(['domainFit', 'matchFeedback', 'experienceGap'] as const)(
+    'rejects provider output missing required field %s',
+    (field) => {
+      const incomplete: Record<string, unknown> = { ...goodRawJobMatch };
+      delete incomplete[field];
+
+      expect(AIJobMatchV2RawSchema.safeParse(incomplete).success).toBe(false);
+    }
+  );
+
+  it.each(['domainFit', 'matchFeedback', 'experienceGap'] as const)(
+    'rejects provider output with null required field %s',
+    (field) => {
+      expect(
+        AIJobMatchV2RawSchema.safeParse({ ...goodRawJobMatch, [field]: null }).success
+      ).toBe(false);
+    }
+  );
 });
 
 describe('AIClassificationSchema', () => {

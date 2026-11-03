@@ -250,46 +250,46 @@ function listField(
 }
 
 function buildStrategy(data: JobMatchDataV2, access: ReportViewAccess): StrategyView {
-  const spec = data.cv_build_spec;
   const canSee = access.rewriteStrategy;
+  const supportedSkills = data.requirements.filter((item) => item.status === 'met' && (item.category === 'skill' || item.category === 'tool')).map((item) => item.text);
   return {
     recommendedTemplate: stringField(
-      spec?.recommended_template,
+      undefined,
       canSee,
       'No template recommendation was produced for this analysis.'
     ),
     templateRationale: stringField(
-      spec?.template_rationale,
+      undefined,
       canSee,
       'No template rationale was produced for this analysis.'
     ),
     leadProject: stringField(
-      spec?.lead_project,
+      undefined,
       canSee,
       'No verified lead project could be identified from your CV.'
     ),
     summaryAngle: stringField(
-      spec?.summary_angle,
+      data.matchFeedback,
       canSee,
       'No grounded summary angle could be produced from the available evidence.'
     ),
     coverLetterAngle: stringField(
-      spec?.cover_letter_angle,
+      undefined,
       canSee,
       'No cover-letter angle was produced for this analysis.'
     ),
     skillsToSurface: listField(
-      spec?.skills_to_surface,
+      supportedSkills,
       canSee,
       'No skills to surface were identified from your evidenced experience.'
     ),
     skillsToDeprioritise: listField(
-      spec?.skills_to_deprioritise,
+      [],
       canSee,
       'No skills to deprioritise were identified for this role.'
     ),
     sectionOrder: listField(
-      spec?.section_order,
+      [],
       canSee,
       'No section-order recommendation was produced for this analysis.'
     ),

@@ -13,42 +13,42 @@ datasource db {
 }
 
 model User {
-  id            String    @id
-  name          String
-  email         String
-  emailVerified Boolean   @default(false)
-  image         String?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-  onboardedAt   DateTime?
+  id                 String    @id
+  name               String
+  email              String
+  emailVerified      Boolean   @default(false)
+  image              String?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+  onboardedAt        DateTime?
   welcomeEmailSentAt DateTime?
-  sessions      Session[]
-  accounts      Account[]
+  sessions           Session[]
+  accounts           Account[]
 
-  identity                    ProfileIdentity?
-  practicalFacts              ProfilePracticalFacts?
-  profiles                    Profile[]
-  atsAnalyses                 AtsAnalysis[]
-  jobMatches                  JobMatch[]
-  cvRevisions                 CvRevision[]
-  jobRevisions                JobRevision[]
-  careerProfileSnapshots      CareerProfileSnapshot[]
-  generatedCVs                GeneratedCV[]
-  usage                       UsageCounter[]
-  capabilityReservations      CapabilityReservation[]
-  aiUsageEvents               AiUsageEvent[]
-  applicationEvidenceContexts ApplicationEvidenceContext[]
-  profileEvidenceApprovals    ProfileEvidenceApproval[]
-  billingAccount              BillingAccount?
-  storedCvs                   StoredCv[]
-  cvUploadIntents             CvUploadIntent[]
-  cvImportSessions            CvImportSession[]
-  cvImportCandidates          CvImportCandidate[]
-  onboardingState             OnboardingState?
-  savedJobs                   SavedJob[]
-  jobMatchRequests            JobMatchRequest[]
-  claimedAnonymousAtsResults  AnonymousAtsResult[]
-  importedJobSnapshots        JobSnapshot[]                @relation("ImportedJobSnapshots")
+  identity                   ProfileIdentity?
+  practicalFacts             ProfilePracticalFacts?
+  profiles                   Profile[]
+  atsAnalyses                AtsAnalysis[]
+  jobMatches                 JobMatch[]
+  cvRevisions                CvRevision[]
+  jobRevisions               JobRevision[]
+  careerProfileSnapshots     CareerProfileSnapshot[]
+  generatedCVs               GeneratedCV[]
+  generatedCvPreviews        GeneratedCvPreview[]
+  cvGenerations              CvGeneration[]
+  usage                      UsageCounter[]
+  capabilityReservations     CapabilityReservation[]
+  aiUsageEvents              AiUsageEvent[]
+  billingAccount             BillingAccount?
+  storedCvs                  StoredCv[]
+  cvUploadIntents            CvUploadIntent[]
+  cvImportSessions           CvImportSession[]
+  cvImportCandidates         CvImportCandidate[]
+  onboardingState            OnboardingState?
+  savedJobs                  SavedJob[]
+  jobMatchRequests           JobMatchRequest[]
+  claimedAnonymousAtsResults AnonymousAtsResult[]
+  importedJobSnapshots       JobSnapshot[]           @relation("ImportedJobSnapshots")
 
   @@unique([email])
   @@map("user")
@@ -233,14 +233,19 @@ model ProfileIdentity {
 }
 
 /**
- * How the candidate is willing to attend a workplace. Distinct from a vacancy's
- * `workStyle`: this is a stated preference, never derived from a CV.
+ * Optional candidate preferences. These are stated choices, never inferred
+ * from a CV or from the candidate's current location.
  */
-enum WorkPatternPreference {
-  REMOTE_ONLY
+enum RelocationPreference {
+  YES
+  NO
+  CONSIDER
+}
+
+enum WorkStylePreference {
+  REMOTE
   HYBRID
   ONSITE
-  FLEXIBLE
 }
 
 /**
@@ -285,11 +290,11 @@ model ProfilePracticalFacts {
   mayRequireSponsorshipLater Boolean?
 
   // Location and work pattern. Home location itself is ProfileIdentity.city/state.
-  openToRelocation      Boolean?
-  relocationLocations   String[]               @default([])
-  maxCommuteMinutes     Int?
-  workPatternPreference WorkPatternPreference?
-  maxOnsiteDaysPerWeek  Int?
+  relocationPreference RelocationPreference?
+  relocationLocations  String[]              @default([])
+  maxCommuteMinutes    Int?
+  preferredWorkStyles  WorkStylePreference[] @default([])
+  maxOnsiteDaysPerWeek Int?
 
   // Mobility
   drivingLicenceHeld  Boolean?
@@ -359,26 +364,26 @@ model Profile {
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
 
-  experience                  Experience[]
-  projects                    ProjectEntry[]
-  education                   Education[]
-  skillGroups                 SkillGroup[]
-  skills                      Skill[]
-  certifications              Certification[]
-  trainings                   Training[]
-  licences                    Licence[]
-  professionalRegistrations   ProfessionalRegistration[]
-  languages                   Language[]
-  volunteering                Volunteering[]
-  otherEvidence               OtherEvidence[]
-  applicationEvidenceContexts ApplicationEvidenceContext[]
-  profileEvidenceApprovals    ProfileEvidenceApproval[]
-  generatedCVs                GeneratedCV[]
-  atsAnalyses                 AtsAnalysis[]
-  careerProfileSnapshots      CareerProfileSnapshot[]
-  savedJobs                   SavedJob[]
-  jobMatchRequests            JobMatchRequest[]
-  cvImportSessions            CvImportSession[]
+  experience                Experience[]
+  projects                  ProjectEntry[]
+  openSourceContributions   OpenSourceContribution[]
+  education                 Education[]
+  skillGroups               SkillGroup[]
+  skills                    Skill[]
+  certifications            Certification[]
+  trainings                 Training[]
+  licences                  Licence[]
+  professionalRegistrations ProfessionalRegistration[]
+  languages                 Language[]
+  volunteering              Volunteering[]
+  otherEvidence             OtherEvidence[]
+  generatedCVs              GeneratedCV[]
+  cvGenerations             CvGeneration[]
+  atsAnalyses               AtsAnalysis[]
+  careerProfileSnapshots    CareerProfileSnapshot[]
+  savedJobs                 SavedJob[]
+  jobMatchRequests          JobMatchRequest[]
+  cvImportSessions          CvImportSession[]
 
   @@unique([userId, label])
   @@index([userId])
@@ -410,13 +415,13 @@ enum EmploymentType {
 }
 
 model Experience {
-  id           String          @id @default(cuid())
-  profileId    String
-  profile      Profile         @relation(fields: [profileId], references: [id], onDelete: Cascade)
-  jobTitle     String
-  company      String
-  location     String?
-  type         EmploymentType?
+  id               String          @id @default(cuid())
+  profileId        String
+  profile          Profile         @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  jobTitle         String
+  company          String
+  location         String?
+  type             EmploymentType?
   /**
    * Month precision, stored ISO as `YYYY-MM`.
    * Deliberately not DateTime: a CV never shows a day, and a DateTime would
@@ -424,66 +429,69 @@ model Experience {
    * text sorts correctly as a string and formats to "Jan 2022" at render time,
    * which the old free-text column could not do — it stored whatever was typed.
    */
-  startDate    String
+  startDate        String
   /**
    * Null while `current` is true — an ongoing role has no end date.
    */
-  endDate      String?
+  endDate          String?
   /**
    * "I still work here". Kept as its own flag rather than a magic endDate value
    * so the CV can render "Present" and a date comparison never has to parse it.
    */
-  current      Boolean         @default(false)
-  achievements Json[]
-  sortOrder    Int             @default(0)
+  current          Boolean         @default(false)
+  achievements     Json[]
+  evidenceMetadata Json            @default("[]")
+  sortOrder        Int             @default(0)
 
   @@index([profileId])
   @@map("experience")
 }
 
 model ProjectEntry {
-  id            String         @id @default(cuid())
-  profileId     String
-  profile       Profile        @relation(fields: [profileId], references: [id], onDelete: Cascade)
-  name          String
-  liveUrl       String?
-  repositoryUrl String?
+  id               String         @id @default(cuid())
+  profileId        String
+  profile          Profile        @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  name             String
+  liveUrl          String?
+  repositoryUrl    String?
   /**
    * `YYYY-MM`, as on Experience — but optional on both ends. Plenty of side
    * projects have no meaningful start or finish, and forcing a date there
    * produces invented ones.
    */
-  startDate     String?
-  endDate       String?
-  achievements  Json[]
-  sortOrder     Int            @default(0)
-  projectSkills ProjectSkill[]
+  startDate        String?
+  endDate          String?
+  achievements     Json[]
+  evidenceMetadata Json           @default("[]")
+  sortOrder        Int            @default(0)
+  projectSkills    ProjectSkill[]
 
   @@index([profileId])
   @@map("project_entry")
 }
 
 model Education {
-  id          String  @id @default(cuid())
-  profileId   String
-  profile     Profile @relation(fields: [profileId], references: [id], onDelete: Cascade)
-  degree      String
-  university  String
+  id               String  @id @default(cuid())
+  profileId        String
+  profile          Profile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  degree           String
+  university       String
   /**
    * `YYYY-MM`, as on Experience. Optional — an exact qualification title plus
    * institution is enough to save a valid record; a missing date means "not
    * provided", never "failed" or "gap". International/historic qualifications
    * frequently have no reliable month, and forcing one invents data.
    */
-  startDate   String?
+  startDate        String?
   /**
    * Null while `current` is true, i.e. still studying.
    */
-  endDate     String?
-  current     Boolean @default(false)
-  grade       String?
-  description String?
-  sortOrder   Int     @default(0)
+  endDate          String?
+  current          Boolean @default(false)
+  grade            String?
+  description      String?
+  evidenceMetadata Json    @default("[]")
+  sortOrder        Int     @default(0)
 
   @@index([profileId])
   @@map("education")
@@ -585,78 +593,28 @@ model Certification {
   status             String?
   verificationUrl    String?
   verificationStatus String?
+  evidenceMetadata   Json    @default("[]")
 
   @@index([profileId])
   @@map("certification")
 }
 
-enum ProfileEvidenceKind {
-  SKILL_TOOL
-  EMPLOYMENT
-  PROJECT
-  EDUCATION
-  TRAINING
-  CERTIFICATION
-  LICENCE
-  REGISTRATION
-  LANGUAGE
-  VOLUNTEERING
-  OTHER
-}
-
-model ProfileEvidenceApproval {
-  id              String   @id @default(cuid())
-  userId          String
-  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  jobMatchId      String
-  jobMatch        JobMatch @relation(fields: [jobMatchId], references: [id], onDelete: Cascade)
-  profileId       String?
-  profile         Profile? @relation(fields: [profileId], references: [id], onDelete: SetNull)
-  requirementId   String
-  evidenceType    String
-  evidenceId      String
-  snapshot        Json
-  snapshotVersion Int      @default(1)
-  approvedAt      DateTime @default(now())
-
-  @@index([userId, jobMatchId, requirementId])
-  @@index([profileId])
-  @@map("profile_evidence_approval")
-}
-
-model ApplicationEvidenceContext {
-  id            String              @id @default(cuid())
-  userId        String
-  user          User                @relation(fields: [userId], references: [id], onDelete: Cascade)
-  jobMatchId    String
-  jobMatch      JobMatch            @relation(fields: [jobMatchId], references: [id], onDelete: Cascade)
-  profileId     String?
-  profile       Profile?            @relation(fields: [profileId], references: [id], onDelete: SetNull)
-  requirementId String
-  kind          ProfileEvidenceKind
-  details       Json
-  approvedAt    DateTime
-  createdAt     DateTime            @default(now())
-
-  @@index([userId, jobMatchId, requirementId])
-  @@map("application_evidence_context")
-}
-
 model Training {
-  id        String  @id @default(cuid())
-  profileId String
-  profile   Profile @relation(fields: [profileId], references: [id], onDelete: Cascade)
-  course    String
+  id               String  @id @default(cuid())
+  profileId        String
+  profile          Profile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  course           String
   // Provider optional: training evidence stays valid when the provider is
   // unknown or omitted. Missing means "not provided", not "unverified".
-  provider  String?
-  field     String?
+  provider         String?
+  field            String?
   // Lifecycle status optional: a missing status is "unknown", never inferred as
   // completed or in-progress.
-  status    String?
-  startDate String?
-  endDate   String?
-  result    String?
+  status           String?
+  startDate        String?
+  endDate          String?
+  result           String?
+  evidenceMetadata Json    @default("[]")
 
   @@index([profileId])
   @@map("training")
@@ -719,38 +677,60 @@ model Language {
 }
 
 model Volunteering {
-  id           String   @id @default(cuid())
-  profileId    String
-  profile      Profile  @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  id               String   @id @default(cuid())
+  profileId        String
+  profile          Profile  @relation(fields: [profileId], references: [id], onDelete: Cascade)
   // Organisation and role are enough to save a valid record. A contribution
   // strengthens the evidence but is optional — its absence never invalidates
   // the role. endDate null = current, consistent with Experience.
-  organisation String
-  role         String
-  startDate    String?
-  endDate      String?
-  contribution String?
-  skillsTools  String[]
-  outcome      String?
+  organisation     String
+  role             String
+  startDate        String?
+  endDate          String?
+  contribution     String?
+  skillsTools      String[]
+  outcome          String?
+  evidenceMetadata Json     @default("[]")
 
   @@index([profileId])
   @@map("volunteering")
 }
 
 model OtherEvidence {
-  id          String  @id @default(cuid())
-  profileId   String
-  profile     Profile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  id               String  @id @default(cuid())
+  profileId        String
+  profile          Profile @relation(fields: [profileId], references: [id], onDelete: Cascade)
   // Title plus description (the evidence content) are required. `context` is
   // the optional free-text category/routing hint, not a mandatory field.
-  title       String
-  context     String?
-  description String
-  period      String?
-  outcome     String?
+  title            String
+  context          String?
+  description      String
+  period           String?
+  outcome          String?
+  evidenceMetadata Json    @default("[]")
 
   @@index([profileId])
   @@map("other_evidence")
+}
+
+model OpenSourceContribution {
+  id               String   @id @default(cuid())
+  profileId        String
+  profile          Profile  @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  projectName      String
+  role             String?
+  repositoryUrl    String?
+  projectUrl       String?
+  startDate        String?
+  endDate          String?
+  description      String?
+  contributions    Json[]
+  technologies     String[]
+  evidenceMetadata Json     @default("[]")
+  sortOrder        Int      @default(0)
+
+  @@index([profileId])
+  @@map("open_source_contribution")
 }
 
 // Persists a full CVAnalysisResult run (src/shared/types/cv.ts). The general
@@ -779,9 +759,10 @@ model CvRevision {
   sourceObjectDeletedAt DateTime?
   createdAt             DateTime      @default(now())
 
-  atsAnalyses  AtsAnalysis[]
-  jobMatches   JobMatch[]
-  generatedCVs GeneratedCV[]
+  atsAnalyses   AtsAnalysis[]
+  jobMatches    JobMatch[]
+  generatedCVs  GeneratedCV[]
+  cvGenerations CvGeneration[]
 
   @@index([userId, createdAt])
   @@index([storedCvId])
@@ -839,8 +820,9 @@ model JobRevision {
   sponsorshipMetadataJson Json?
   createdAt               DateTime             @default(now())
 
-  jobMatches   JobMatch[]
-  generatedCVs GeneratedCV[]
+  jobMatches    JobMatch[]
+  generatedCVs  GeneratedCV[]
+  cvGenerations CvGeneration[]
 
   @@index([jobSnapshotId])
   @@index([userId, createdAt])
@@ -867,8 +849,10 @@ model CareerProfileSnapshot {
   contentHash      String
   createdAt        DateTime @default(now())
 
-  jobMatches   JobMatch[]
-  generatedCVs GeneratedCV[]
+  jobMatches              JobMatch[]
+  generatedCVs            GeneratedCV[]
+  matchCvGenerations      CvGeneration[] @relation("CvGenerationMatchProfileSnapshot")
+  generationCvGenerations CvGeneration[] @relation("CvGenerationCurrentProfileSnapshot")
 
   @@index([userId, createdAt])
   @@index([sourceProfileId])
@@ -879,34 +863,219 @@ model CareerProfileSnapshot {
  * Candidate-to-vacancy result over three exact immutable inputs.
  */
 model JobMatch {
-  id                String                @id @default(cuid())
-  userId            String
-  user              User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
-  cvRevisionId      String
-  cvRevision        CvRevision            @relation(fields: [cvRevisionId], references: [id], onDelete: Restrict)
-  jobRevisionId     String
-  jobRevision       JobRevision           @relation(fields: [jobRevisionId], references: [id], onDelete: Restrict)
-  profileSnapshotId String
-  profileSnapshot   CareerProfileSnapshot @relation(fields: [profileSnapshotId], references: [id], onDelete: Restrict)
-  requestId         String?               @unique
-  request           JobMatchRequest?      @relation(fields: [requestId], references: [id], onDelete: SetNull)
-  matchScore        Int
-  resultJson        Json
-  algorithmVersion  String
-  promptVersion     String
-  aiProvider        String?
-  aiModel           String?
-  createdAt         DateTime              @default(now())
+  id                            String                @id @default(cuid())
+  userId                        String
+  user                          User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  cvRevisionId                  String
+  cvRevision                    CvRevision            @relation(fields: [cvRevisionId], references: [id], onDelete: Restrict)
+  jobRevisionId                 String
+  jobRevision                   JobRevision           @relation(fields: [jobRevisionId], references: [id], onDelete: Restrict)
+  profileSnapshotId             String
+  profileSnapshot               CareerProfileSnapshot @relation(fields: [profileSnapshotId], references: [id], onDelete: Restrict)
+  requestId                     String?               @unique
+  request                       JobMatchRequest?      @relation(fields: [requestId], references: [id], onDelete: SetNull)
+  matchScore                    Int
+  practicalCompatibilityJson    Json?
+  practicalCompatibilityVersion Int                   @default(1)
+  requirementLedgerJson         Json?
+  requirementLedgerVersion      Int                   @default(1)
+  advisoryJson                  Json?
+  advisoryVersion               Int                   @default(1)
+  analysisVersion               String?
+  promptVersion                 String
+  aiProvider                    String?
+  aiModel                       String?
+  createdAt                     DateTime              @default(now())
 
-  generatedCVs                GeneratedCV[]
-  applicationEvidenceContexts ApplicationEvidenceContext[]
-  profileEvidenceApprovals    ProfileEvidenceApproval[]
+  generatedCVs  GeneratedCV[]
+  cvGenerations CvGeneration[]
 
   @@index([userId, createdAt])
   @@index([cvRevisionId])
   @@index([jobRevisionId])
   @@index([profileSnapshotId])
   @@map("job_match")
+}
+
+enum CvGenerationSourceMode {
+  JOB_MATCH
+  CAREER_PROFILE
+}
+
+enum CvAtsStrategy {
+  STANDARD
+  COMPOSITE
+}
+
+enum CvGenerationStatus {
+  DRAFT
+  RECONCILING
+  EVIDENCE_REVIEW
+  PLAN_PROPOSED
+  PLAN_APPROVED
+  GENERATING
+  COMPLETED
+  GENERATION_FAILED
+}
+
+enum GeneratedCvPreviewStatus {
+  PENDING
+  RENDERING
+  READY
+  FAILED
+}
+
+enum GeneratedCvPreviewFailureCode {
+  THUMBNAIL_RENDER_FAILED
+  PREVIEW_STORAGE_FAILED
+  PREVIEW_LEASE_EXPIRED
+}
+
+enum CvGenerationSnapshotReason {
+  INITIAL
+  PROFILE_REFRESH
+  HITL_REUSABLE
+  HITL_APPLICATION_ONLY
+}
+
+enum CvPlanRevisionKind {
+  PROPOSED
+  APPROVED
+}
+
+enum CvEvidenceEntityKind {
+  EXPERIENCE
+  PROJECT
+  EDUCATION
+  CERTIFICATION
+  TRAINING
+  VOLUNTEERING
+  OPEN_SOURCE
+  OTHER
+}
+
+enum CvEvidencePersistenceScope {
+  CAREER_PROFILE_AND_APPLICATION
+  APPLICATION_ONLY
+}
+
+model CvGeneration {
+  id                           String                 @id @default(cuid())
+  userId                       String
+  user                         User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  operationId                  String
+  sourceMode                   CvGenerationSourceMode
+  status                       CvGenerationStatus     @default(DRAFT)
+  atsStrategy                  CvAtsStrategy          @default(STANDARD)
+  profileId                    String?
+  profile                      Profile?               @relation(fields: [profileId], references: [id], onDelete: SetNull)
+  jobMatchId                   String?
+  jobMatch                     JobMatch?              @relation(fields: [jobMatchId], references: [id], onDelete: Restrict)
+  storedCvId                   String?
+  storedCv                     StoredCv?              @relation(fields: [storedCvId], references: [id], onDelete: Restrict)
+  sourceExtractionId           String?
+  sourceExtraction             CvExtraction?          @relation(fields: [sourceExtractionId], references: [id], onDelete: Restrict)
+  sourceCvRevisionId           String?
+  sourceCvRevision             CvRevision?            @relation(fields: [sourceCvRevisionId], references: [id], onDelete: Restrict)
+  matchProfileSnapshotId       String?
+  matchProfileSnapshot         CareerProfileSnapshot? @relation("CvGenerationMatchProfileSnapshot", fields: [matchProfileSnapshotId], references: [id], onDelete: Restrict)
+  generationProfileSnapshotId  String?
+  generationProfileSnapshot    CareerProfileSnapshot? @relation("CvGenerationCurrentProfileSnapshot", fields: [generationProfileSnapshotId], references: [id], onDelete: Restrict)
+  jobRevisionId                String?
+  jobRevision                  JobRevision?           @relation(fields: [jobRevisionId], references: [id], onDelete: Restrict)
+  requirementLedgerVersion     Int?
+  analysisVersion              String?
+  targetContextJson            Json?
+  template                     String?
+  currentSnapshotVersion       Int                    @default(0)
+  currentReconciliationVersion Int                    @default(0)
+  failureCode                  String?
+  generationLeaseToken         String?
+  generationLeaseExpiresAt     DateTime?
+  generationAttemptCount       Int                    @default(0)
+  validatedAiCheckpoint        Json?
+  createdAt                    DateTime               @default(now())
+  updatedAt                    DateTime               @updatedAt
+
+  evidenceSnapshots   CvGenerationEvidenceSnapshot[]
+  reconciliations     CvRequirementReconciliation[]
+  planRevisions       CvPlanRevision[]
+  applicationEvidence CvApplicationEvidence[]
+  generatedCv         GeneratedCV?
+
+  @@unique([userId, operationId])
+  @@index([userId, createdAt])
+  @@index([jobMatchId])
+  @@index([profileId])
+  @@map("cv_generation")
+}
+
+model CvGenerationEvidenceSnapshot {
+  id            String                     @id @default(cuid())
+  generationId  String
+  generation    CvGeneration               @relation(fields: [generationId], references: [id], onDelete: Cascade)
+  version       Int
+  reason        CvGenerationSnapshotReason
+  snapshotJson  Json
+  schemaVersion Int
+  contentHash   String
+  createdAt     DateTime                   @default(now())
+
+  @@unique([generationId, version])
+  @@index([generationId, createdAt])
+  @@map("cv_generation_evidence_snapshot")
+}
+
+model CvRequirementReconciliation {
+  id                 String       @id @default(cuid())
+  generationId       String
+  generation         CvGeneration @relation(fields: [generationId], references: [id], onDelete: Cascade)
+  version            Int
+  snapshotVersion    Int
+  reconciliationJson Json
+  schemaVersion      Int
+  contentHash        String
+  createdAt          DateTime     @default(now())
+
+  @@unique([generationId, version])
+  @@index([generationId, createdAt])
+  @@map("cv_requirement_reconciliation")
+}
+
+model CvPlanRevision {
+  id            String             @id @default(cuid())
+  generationId  String
+  generation    CvGeneration       @relation(fields: [generationId], references: [id], onDelete: Cascade)
+  version       Int
+  kind          CvPlanRevisionKind
+  planJson      Json
+  schemaVersion Int
+  contentHash   String
+  createdAt     DateTime           @default(now())
+
+  @@unique([generationId, version])
+  @@index([generationId, kind, createdAt])
+  @@map("cv_plan_revision")
+}
+
+model CvApplicationEvidence {
+  id               String                     @id @default(cuid())
+  generationId     String
+  generation       CvGeneration               @relation(fields: [generationId], references: [id], onDelete: Cascade)
+  evidenceId       String
+  entityKind       CvEvidenceEntityKind
+  entityId         String?
+  persistenceScope CvEvidencePersistenceScope @default(APPLICATION_ONLY)
+  evidenceJson     Json
+  requirementIds   String[]
+  sourceRefsJson   Json
+  schemaVersion    Int
+  approvedAt       DateTime                   @default(now())
+  createdAt        DateTime                   @default(now())
+
+  @@unique([generationId, evidenceId])
+  @@index([generationId, entityKind])
+  @@map("cv_application_evidence")
 }
 
 enum AnonymousAtsStatus {
@@ -1127,24 +1296,24 @@ model JobSnapshot {
 // describes only the bounded vacancies observed from Align's integrated sources
 // at one point in time; it is not a claim about the complete labour market.
 model CareerMarketSnapshot {
-  id                 String   @id @default(cuid())
-  marketKey          String
-  roleQuery          String
-  locationQuery      String
-  normalizedRole     String
-  normalizedLocation String
-  providerCoverage   Json
-  sampleSize         Int
-  samplingStartedAt  DateTime
-  samplingCompletedAt DateTime
-  generatedAt        DateTime @default(now())
-  expiresAt          DateTime
-  calculationVersion String
+  id                   String   @id @default(cuid())
+  marketKey            String
+  roleQuery            String
+  locationQuery        String
+  normalizedRole       String
+  normalizedLocation   String
+  providerCoverage     Json
+  sampleSize           Int
+  samplingStartedAt    DateTime
+  samplingCompletedAt  DateTime
+  generatedAt          DateTime @default(now())
+  expiresAt            DateTime
+  calculationVersion   String
   salaryDisclosedCount Int
   salaryEligibleCount  Int
-  dataQuality        Json
-  metrics            Json
-  createdAt          DateTime @default(now())
+  dataQuality          Json
+  metrics              Json
+  createdAt            DateTime @default(now())
 
   @@index([marketKey, generatedAt(sort: Desc)])
   @@index([expiresAt])
@@ -1421,22 +1590,38 @@ model CapabilityReservation {
  * and raw provider errors.
  */
 model AiUsageEvent {
-  id               String   @id @default(cuid())
-  userId           String?
-  user             User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
-  operationId      String?
-  capability       String
-  provider         String
-  model            String
-  inputTokens      Int?
-  outputTokens     Int?
-  latencyMs        Int
-  success          Boolean
-  errorCode        String?
-  fallbackUsed     Boolean
-  attemptNumber    Int
-  estimatedCostUsd Decimal? @db.Decimal(12, 8)
-  createdAt        DateTime @default(now())
+  id                     String   @id @default(cuid())
+  userId                 String?
+  user                   User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  operationId            String?
+  capability             String
+  provider               String
+  model                   String
+  inputTokens            Int?
+  outputTokens           Int?
+  actualTotalTokens      Int?
+  latencyMs              Int
+  success                Boolean
+  errorCode              String?
+  providerFailureReason  String?
+  upstreamStatusCode     Int?
+  fallbackUsed           Boolean
+  attemptNumber          Int
+  providerCandidateNumber Int?
+  providerAttemptNumber  Int?
+  retryNumber            Int?
+  backoffMs              Int?
+  outcome                String?
+  preflightOutcome       String?
+  estimatedInputTokens   Int?
+  maxOutputTokens        Int?
+  estimatedRequestTokens Int?
+  requestBudgetTokens    Int?
+  safetyMarginTokens     Int?
+  requestHeadroomTokens  Int?
+  requestOverflowTokens  Int?
+  estimatedCostUsd       Decimal? @db.Decimal(12, 8)
+  createdAt              DateTime @default(now())
 
   @@index([createdAt])
   @@index([capability, createdAt])
@@ -1452,6 +1637,8 @@ model GeneratedCV {
   id                  String                 @id @default(cuid())
   userId              String
   user                User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  cvGenerationId      String?                @unique
+  cvGeneration        CvGeneration?          @relation(fields: [cvGenerationId], references: [id], onDelete: SetNull)
   jobMatchId          String?
   jobMatch            JobMatch?              @relation(fields: [jobMatchId], references: [id], onDelete: SetNull)
   sourceCvRevisionId  String?
@@ -1487,6 +1674,7 @@ model GeneratedCV {
    * Bytes of the archived DOCX, so quota is computed without listing R2.
    */
   fileSize            Int?
+  preview             GeneratedCvPreview?
   createdAt           DateTime               @default(now())
 
   @@index([userId])
@@ -1497,6 +1685,31 @@ model GeneratedCV {
   @@index([parentGeneratedCvId])
   @@index([profileId])
   @@map("generated_cv")
+}
+
+model GeneratedCvPreview {
+  id              String                         @id @default(cuid())
+  generatedCvId   String                         @unique
+  generatedCv     GeneratedCV                    @relation(fields: [generatedCvId], references: [id], onDelete: Cascade)
+  userId          String
+  user            User                           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  documentHash    String
+  rendererVersion String
+  status          GeneratedCvPreviewStatus       @default(PENDING)
+  failureCode     GeneratedCvPreviewFailureCode?
+  pageCount       Int?
+  pdfKey          String?
+  pageImageKeys   String[]                       @default([])
+  pdfSize         Int?
+  pageImageSizes  Int[]                          @default([])
+  attemptCount    Int                            @default(0)
+  leaseExpiresAt  DateTime?
+  createdAt       DateTime                       @default(now())
+  updatedAt       DateTime                       @updatedAt
+
+  @@index([userId, documentHash])
+  @@index([status, leaseExpiresAt])
+  @@map("generated_cv_preview")
 }
 
 model Session {
@@ -1629,6 +1842,7 @@ model StoredCv {
   extractions    CvExtraction[]
   importSessions CvImportSession[]
   revisions      CvRevision[]
+  cvGenerations  CvGeneration[]
   uploadIntents  CvUploadIntent[]
 
   @@unique([userId, checksum])
@@ -1646,18 +1860,18 @@ enum CvUploadIntentStatus {
 }
 
 model CvUploadIntent {
-  id       String @id @default(cuid())
-  userId   String
-  user     User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id        String @id @default(cuid())
+  userId    String
+  user      User   @relation(fields: [userId], references: [id], onDelete: Cascade)
   objectKey String @unique
 
-  originalFilename String
-  expectedMimeType String
+  originalFilename  String
+  expectedMimeType  String
   expectedSizeBytes Int
-  status CvUploadIntentStatus @default(PENDING)
-  expiresAt DateTime
-  completedAt DateTime?
-  failureCode String?
+  status            CvUploadIntentStatus @default(PENDING)
+  expiresAt         DateTime
+  completedAt       DateTime?
+  failureCode       String?
 
   storedCvId String?
   storedCv   StoredCv? @relation(fields: [storedCvId], references: [id], onDelete: SetNull)
@@ -1722,6 +1936,7 @@ model CvExtraction {
   importSessions CvImportSession[]
   candidates     CvImportCandidate[]
   revisions      CvRevision[]
+  cvGenerations  CvGeneration[]
 
   @@unique([storedCvId, parserVersion, attempt])
   @@index([storedCvId, status])

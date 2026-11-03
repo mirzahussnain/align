@@ -34,6 +34,8 @@ import {
   type ExtractedTraining,
   type ExtractedVolunteering,
 } from './types';
+import { interpretCvDocument } from './interpreter';
+import type { NormalizedDocumentBlock } from './document/types';
 
 /**
  * Deterministic structured reading of a CV.
@@ -49,7 +51,12 @@ import {
  * and unmetered, so a user out of AI quota can still import their CV.
  */
 
-export const CV_PARSER_VERSION = `cv-extract@1.${CV_EXTRACTION_SCHEMA_VERSION}`;
+/**
+ * Parser behavior changes independently from the stored payload schema. Keep
+ * this explicit so a bug fix that changes extracted evidence invalidates the
+ * deterministic extraction cache without pretending the JSON shape changed.
+ */
+export const CV_PARSER_VERSION = 'cv-extract@2.4';
 
 const BULLET = /^[-*•▪◦●·‣–—]\s+/;
 const EMAIL = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/;
@@ -274,6 +281,7 @@ interface DatedEntry {
   achievements: string[];
   line: number;
   excerpt: string;
+  source: string;
 }
 
 /**
@@ -372,6 +380,7 @@ function readDatedEntries(lines: { index: number; text: string }[]): DatedEntry[
       achievements: [],
       line: remainder ? index : heading?.index ?? index,
       excerpt: sourceExcerpt(remainder ? text : `${source} ${text}`),
+      source,
     });
   }
 
@@ -478,20 +487,45 @@ function splitGrade(text: string): { grade?: string; rest: string } {
 
 function readEducation(sectioned: SectionedCv): ExtractedEducation[] {
   return readDatedEntries(linesForSection(sectioned, 'education')).map((entry) => {
+    const headerFacts = entry.source
+      .split(/\s+[–—-]\s+|\s*[|·•]\s*/u)
+      .map(tidy)
+      .filter(Boolean);
+    let degree = entry.title;
+    let university = entry.company;
+    let inlineGrade: string | undefined;
+    if (headerFacts.length > 1) {
+      degree = headerFacts[0];
+      university = undefined;
+      for (const fact of headerFacts.slice(1)) {
+        const classified = splitGrade(fact);
+        if (classified.grade && !classified.rest) {
+          inlineGrade = [inlineGrade, classified.grade].filter(Boolean).join(', ');
+        } else if (!university) {
+          university = fact;
+        }
+      }
+    }
+
     // Only the FIRST detail is considered. That is the segment that came off the
     // institution line, where a classification is written; a grade appearing
     // three bullets down is part of a sentence, not the award.
-    const [first, ...others] = entry.achievements;
+    let [first, ...others] = entry.achievements;
+    if (university?.trim().endsWith('&') && first && !/[.!?]$/u.test(first)) {
+      university = `${university} ${first}`;
+      first = others[0];
+      others = others.slice(1);
+    }
     const { grade, rest } = first ? splitGrade(first) : { grade: undefined, rest: '' };
     const description = [rest, ...others].filter(Boolean).join(' ');
 
     return {
-      degree: entry.title,
-      ...(entry.company ? { university: entry.company } : {}),
+      degree,
+      ...(university ? { university } : {}),
       startDate: entry.startDate,
       endDate: entry.endDate,
       current: entry.current,
-      ...(grade ? { grade } : {}),
+      ...(inlineGrade || grade ? { grade: [inlineGrade, grade].filter(Boolean).join(', ') } : {}),
       ...(description ? { description } : {}),
       excerpt: entry.excerpt,
       sourceLocation: locate(sectioned, entry.line),
@@ -785,7 +819,6 @@ function readVolunteering(sectioned: SectionedCv): ExtractedVolunteering[] {
  */
 function readSkills(sectioned: SectionedCv): ExtractedSkill[] {
   const skills: ExtractedSkill[] = [];
-  const seen = new Set<string>();
 
   for (const { index, text } of linesForSection(sectioned, 'skills')) {
     const stripped = stripBullet(text);
@@ -799,9 +832,6 @@ function readSkills(sectioned: SectionedCv): ExtractedSkill[] {
       if (!name || name.length > 60) continue;
       // Needs a letter, and must not be a sentence fragment.
       if (!/\p{L}/u.test(name) || name.split(/\s+/).length > 6) continue;
-      const key = name.toLowerCase();
-      if (seen.has(key)) continue;
-      seen.add(key);
       skills.push({
         name,
         ...(category ? { category } : {}),
@@ -812,6 +842,42 @@ function readSkills(sectioned: SectionedCv): ExtractedSkill[] {
   }
 
   return skills;
+}
+
+function normalizedExtractedIdentity(value: string): string {
+  return value.normalize('NFKC').trim().replace(/\s+/gu, ' ').toLocaleLowerCase('en-GB');
+}
+
+/**
+ * Remove only the parser artefact we can prove is redundant: a source-only
+ * project whose entire identity is also a skill and whose carried facts already
+ * occur verbatim on another project. Unique facts or project-specific fields
+ * keep the row, even when its name is a technology.
+ */
+function suppressRedundantSkillProjects(
+  projects: ExtractedProject[],
+  skills: ExtractedSkill[]
+): ExtractedProject[] {
+  const skillNames = new Set(skills.map(({ name }) => normalizedExtractedIdentity(name)));
+  return projects.filter((project, projectIndex) => {
+    if (!skillNames.has(normalizedExtractedIdentity(project.name))) return true;
+    if (
+      project.repositoryUrl ||
+      project.liveUrl ||
+      project.sourceLinks?.length ||
+      project.startDate ||
+      project.endDate ||
+      project.technologies?.length
+    ) return true;
+    return !project.achievements.every((achievement) =>
+      projects.some((other, otherIndex) =>
+        otherIndex !== projectIndex &&
+        other.achievements.some((candidate) =>
+          normalizedExtractedIdentity(candidate) === normalizedExtractedIdentity(achievement)
+        )
+      )
+    );
+  });
 }
 
 /** Credential-style sections: one entry per line, "Name — Issuer, dates". */
@@ -985,8 +1051,11 @@ function contactLinks(sectioned: SectionedCv, links: ExtractedLink[]): Extracted
  * the review step handles, whereas a thrown error would lose the stored CV the
  * user already uploaded.
  */
-export function parseCvStructure(text: string, documentLinks: ExtractedLink[] = []): CvExtractionPayload {
-  const sectioned = sectionCv(text);
+export function parseSectionedCvStructure(
+  text: string,
+  sectioned: SectionedCv,
+  documentLinks: ExtractedLink[] = []
+): CvExtractionPayload {
   const links = collectLinks(text, sectioned, documentLinks);
   const { identity, headline, derivedIdentity } = readIdentity(
     sectioned.head,
@@ -994,6 +1063,8 @@ export function parseCvStructure(text: string, documentLinks: ExtractedLink[] = 
   );
   const summary = readSummary(sectioned);
 
+  const skills = readSkills(sectioned);
+  const projects = suppressRedundantSkillProjects(readProjects(sectioned, links), skills);
   const payload: CvExtractionPayload = {
     ...emptyExtractionPayload(),
     identity,
@@ -1006,8 +1077,8 @@ export function parseCvStructure(text: string, documentLinks: ExtractedLink[] = 
     detectedSections: [...new Set(sectioned.sections.map((section) => section.heading))].slice(0, 40),
     experience: readExperience(sectioned),
     education: readEducation(sectioned),
-    projects: readProjects(sectioned, links),
-    skills: readSkills(sectioned),
+    projects,
+    skills,
     certifications: readCredentials(sectioned, 'certifications'),
     training: readTraining(sectioned),
     licences: readCredentials(sectioned, 'licences'),
@@ -1031,4 +1102,48 @@ export function parseCvStructure(text: string, documentLinks: ExtractedLink[] = 
     result.error.issues.slice(0, 10).map((issue) => `${issue.path.join('.')}:${issue.code}`).join(', ')
   );
   return emptyExtractionPayload();
+}
+
+/** Text-only compatibility reader used solely by parseCvStructure. */
+export function parseProjectedCvStructure(
+  text: string,
+  documentLinks: ExtractedLink[] = []
+): CvExtractionPayload {
+  return parseSectionedCvStructure(text, sectionCv(text), documentLinks);
+}
+
+/** Compatibility-only text entry point; production ingestion passes blocks directly. */
+export function parseCvStructure(text: string, documentLinks: ExtractedLink[] = []): CvExtractionPayload {
+  const blocks: NormalizedDocumentBlock[] = text.split('\n').flatMap((lineText, order) => {
+    const trimmed = lineText.trim();
+    if (!trimmed) return [];
+    const lineLinks = documentLinks.filter((link) => link.line === order);
+    return [{
+      id: `compat-${order}`,
+      order,
+      text: trimmed,
+      kind: 'paragraph' as const,
+      ...(lineLinks.length ? {
+        links: lineLinks.map((link) => link.url),
+        linkDetails: lineLinks.map((link) => ({
+          url: link.url,
+          ...(link.visibleText ? { visibleText: link.visibleText } : {}),
+        })),
+      } : {}),
+    }];
+  });
+  for (const [index, link] of documentLinks.filter((candidate) => candidate.line === undefined).entries()) {
+    blocks.push({
+      id: `compat-link-${index}`,
+      order: blocks.length,
+      text: '',
+      kind: 'unknown',
+      links: [link.url],
+      linkDetails: [{
+        url: link.url,
+        ...(link.visibleText ? { visibleText: link.visibleText } : {}),
+      }],
+    });
+  }
+  return interpretCvDocument({ sourceType: 'docx', pageCount: null, blocks }).payload;
 }

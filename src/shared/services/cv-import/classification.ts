@@ -43,16 +43,9 @@ export function isCanonicalProfileEntity(entityType: CvImportEntityType): boolea
 /**
  * Application-scoped evidence is deliberately absent from this enum.
  *
- * CV import populates the CAREER PROFILE. `ApplicationEvidenceContext` and
- * `ProfileEvidenceApproval` are vacancy-specific and are created only when a
  * user approves evidence against a particular application, which import must
  * never do on their behalf — an approval is a claim about a specific job.
  */
-export const IMPORT_NEVER_CREATES = [
-  'ApplicationEvidenceContext',
-  'ProfileEvidenceApproval',
-] as const;
-
 /** Human-facing group labels for the review summary. */
 export const ENTITY_TYPE_LABELS: Record<CvImportEntityType, { one: string; many: string }> = {
   IDENTITY_UPDATE: { one: 'contact detail', many: 'contact details' },
@@ -128,6 +121,8 @@ export const IMPORT_CONFLICT_CODES = [
    * the real hyperlink disagreed, so a handle shows intent, not an address.
    */
   'UNVERIFIED_LINK',
+  /** The same logical skill was listed under multiple equally specific headings. */
+  'CONFLICTING_SKILL_CATEGORY',
 ] as const;
 
 export type ImportConflictCode = (typeof IMPORT_CONFLICT_CODES)[number];

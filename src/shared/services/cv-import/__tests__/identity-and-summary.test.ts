@@ -21,6 +21,7 @@ function profileWith(personal: Partial<ProfileData['personal']> = {}): ProfileDa
     profileId: 'p1',
     label: 'Track',
     targetIndustry: '',
+    practicalPreferences: { relocationPreference: null, maxCommuteMinutes: null, preferredWorkStyles: [] },
     personal: {
       label: 'Track',
       fullName: 'Amara Okafor',

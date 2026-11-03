@@ -291,7 +291,7 @@ export default function ManualProfileWizard({
         <div hidden={current.key !== 'skills'}>
           <SkillsForm ref={skillsRef} initial={initial.skills} embedded />
         </div>
-        <div hidden={current.key !== 'eligibility'}><ManualEligibilityStep ref={eligibilityRef} initial={initial.personal} /></div>
+        <div hidden={current.key !== 'eligibility'}><ManualEligibilityStep ref={eligibilityRef} initial={{ ...initial.personal, ...initial.practicalPreferences }} /></div>
       </OnboardingShell>
 
       <WizardToast message={toast} onClose={() => setToast('')} />

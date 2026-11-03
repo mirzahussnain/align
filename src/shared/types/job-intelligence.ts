@@ -45,6 +45,7 @@ export type VacancyRequirementCategory =
   | 'DRIVING_LICENCE'
   | 'OWN_VEHICLE'
   | 'ONSITE'
+  | 'RELOCATION'
   | 'TRAVEL'
   // Stated shift pattern. Extracted deterministically like every other category
   // so the practical comparison has a vacancy-side fact to compare a recorded

@@ -49,6 +49,12 @@ describe('contact link presentation (§9)', () => {
 });
 
 describe('contact detail line (§9)', () => {
+  it('formats UK mobile numbers without changing the source value', () => {
+    const source = '+44 · 7737853800';
+    expect(formatPhone(source)).toBe('+44 7737 853800');
+    expect(source).toBe('+44 · 7737853800');
+  });
+
   it('builds a blank-stripped parts list and honours the visa toggle', () => {
     const contact = { phone: '+44 7000 000000', location: 'London, UK', visaStatus: 'British citizen' };
     expect(contactDetailParts(contact)).toEqual([formatPhone('+44 7000 000000'), 'London, UK', 'British citizen']);

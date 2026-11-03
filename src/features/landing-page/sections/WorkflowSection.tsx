@@ -6,6 +6,7 @@ import { motion } from 'framer-motion';
 import { WorkflowNode } from '@/shared/components/ui/WorkflowNode';
 import { LaptopMockup } from '@/shared/components/ui/LaptopMockup';
 import { WORKFLOW_NODES, WORKFLOW_PATHS, WORKFLOW_PULSES } from '@/shared/constants/workflow';
+import { MobileWorkflowSignals } from './MobileWorkflowSignals';
 
 export default function WorkflowSection() {
   return (
@@ -49,6 +50,8 @@ export default function WorkflowSection() {
 
         {/* Workflow Diagram & Laptop Mockup Area */}
         <div className="relative mt-24 w-full max-w-[1200px] mx-auto h-[600px] lg:h-auto lg:aspect-[12/8] flex items-center justify-center">
+          <MobileWorkflowSignals />
+
           {/* Extended 45-deg SVG Lines to frame the wider laptop and reach edges */}
           <svg className="absolute inset-0 w-full h-full hidden lg:block pointer-events-none z-0 overflow-visible" viewBox="0 0 1200 800" fill="none" xmlns="http://www.w3.org/2000/svg">
             

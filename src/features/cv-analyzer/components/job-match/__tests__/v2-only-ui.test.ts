@@ -4,8 +4,7 @@ import { join } from 'node:path';
 
 const JOB_MATCH_UI = join(process.cwd(), 'src/features/cv-analyzer/components/job-match');
 const WIZARDS = [
-  join(process.cwd(), 'src/features/cv-rewrite/components/RewriteWizardModal.tsx'),
-  join(process.cwd(), 'src/features/cv-rewrite/components/GenerateCvWizardModal.tsx'),
+  join(process.cwd(), 'src/features/cv-generation/components/CvGenerationWizard.tsx'),
 ];
 
 function sourceFiles(directory: string, files: string[] = []): string[] {

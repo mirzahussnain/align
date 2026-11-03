@@ -117,6 +117,9 @@ const DATE_FRAGMENT = new RegExp(
 export interface DateFragmentMatch extends ParsedDateRange {
   /** The matched text, so the caller can strip it and keep the rest. */
   matched: string;
+  /** Exact half-open source span of `matched` within the input line. */
+  startIndex: number;
+  endIndex: number;
 }
 
 /** Find and parse the first date range in a line. Null when there is none. */
@@ -125,5 +128,10 @@ export function findDateRange(line: string): DateFragmentMatch | null {
   if (!match) return null;
   const parsed = parseCvDateRange(match[0]);
   if (!parsed.start) return null;
-  return { ...parsed, matched: match[0] };
+  return {
+    ...parsed,
+    matched: match[0],
+    startIndex: match.index,
+    endIndex: match.index + match[0].length,
+  };
 }

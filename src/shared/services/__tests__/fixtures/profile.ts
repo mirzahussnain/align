@@ -13,6 +13,7 @@ export function makeProfile(overrides: Partial<ProfileData> = {}): ProfileData {
     profileId: 'profile-a',
     label: 'Default',
     targetIndustry: '',
+    practicalPreferences: { relocationPreference: null, maxCommuteMinutes: null, preferredWorkStyles: [] },
     personal: PERSONAL,
     experience: [],
     projects: [],

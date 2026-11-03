@@ -1,14 +1,18 @@
 import { describe, expect, it } from 'vitest';
 import { CvImportEntityType, CvImportReviewStatus } from '@/generated/prisma/client';
 import type { ProfileData } from '@/features/dashboard/data/load-profile';
-import { buildImportCandidates } from '../candidates';
+import { buildImportCandidates, resolveSkillCategory } from '../candidates';
 import {
   consumesReusableEvidenceAllowance,
   isCanonicalProfileEntity,
   isBulkConfirmable,
   CANONICAL_PROFILE_ENTITY_TYPES,
 } from '../classification';
-import { emptyExtractionPayload, type CvExtractionPayload } from '../../cv-extraction/types';
+import {
+  CvExtractionPayloadSchema,
+  emptyExtractionPayload,
+  type CvExtractionPayload,
+} from '../../cv-extraction/types';
 
 /**
  * Turning an extraction into proposals: what becomes a candidate, what is
@@ -20,6 +24,7 @@ function emptyProfile(overrides: Partial<ProfileData> = {}): ProfileData {
     profileId: 'p1',
     label: 'Track',
     targetIndustry: '',
+    practicalPreferences: { relocationPreference: null, maxCommuteMinutes: null, preferredWorkStyles: [] },
     personal: {
       label: 'Track',
       fullName: 'Amara Okafor',
@@ -101,6 +106,71 @@ describe('entity classification', () => {
 });
 
 describe('proposals', () => {
+  it('keeps schema versions 1 and 2 readable and round-trips optional review issues', () => {
+    for (const schemaVersion of [1, 2]) {
+      expect(CvExtractionPayloadSchema.safeParse({
+        ...emptyExtractionPayload(),
+        schemaVersion,
+        reviewIssues: undefined,
+      }).success).toBe(true);
+    }
+    const issue = {
+      code: 'AMBIGUOUS_ENTITY_OWNERSHIP' as const,
+      blockIds: ['b7'],
+      candidateIds: ['PROJECT:align', 'PROJECT:kinetix'],
+      messageKey: 'cvImport.review.ambiguousEntityOwnership',
+      excerpt: 'Reduced latency by 20%.',
+    };
+    expect(CvExtractionPayloadSchema.parse({
+      ...emptyExtractionPayload(),
+      reviewIssues: [issue],
+    }).reviewIssues).toEqual([issue]);
+  });
+
+  it('projects an entity-bound issue onto only the referenced candidate', () => {
+    const candidates = build(extraction({
+      projects: [
+        { name: 'Align', startDate: null, endDate: null, achievements: [], ...provenance },
+        { name: 'Kinetix', startDate: null, endDate: null, achievements: [], ...provenance },
+      ],
+      reviewIssues: [{
+        code: 'AMBIGUOUS_ENTITY_TYPE',
+        blockIds: ['b4'],
+        candidateIds: ['PROJECT:align'],
+        messageKey: 'cvImport.review.ambiguousEntityType',
+        excerpt: 'Align',
+      }],
+    }));
+    const align = candidates.find((item) => item.structuredData.name === 'Align');
+    const kinetix = candidates.find((item) => item.structuredData.name === 'Kinetix');
+    expect(align).toMatchObject({ reviewStatus: CvImportReviewStatus.CONFLICT, conflictCode: 'AMBIGUOUS_VALUE' });
+    expect(align?.confidence).toBeLessThan(1);
+    expect(kinetix?.conflictCode).toBeNull();
+  });
+
+  it('projects unowned content once with its excerpt and candidate owner choices', () => {
+    const candidates = build(extraction({
+      reviewIssues: [{
+        code: 'AMBIGUOUS_ENTITY_OWNERSHIP',
+        blockIds: ['b7'],
+        candidateIds: ['PROJECT:align', 'PROJECT:kinetix'],
+        messageKey: 'cvImport.review.ambiguousEntityOwnership',
+        excerpt: 'Reduced latency by 20%.',
+      }],
+    }));
+    expect(candidates).toEqual([
+      expect.objectContaining({
+        entityType: CvImportEntityType.OTHER_EVIDENCE,
+        reviewStatus: CvImportReviewStatus.CONFLICT,
+        conflictCode: 'AMBIGUOUS_VALUE',
+        sourceExcerpt: 'Reduced latency by 20%.',
+        structuredData: expect.objectContaining({
+          ownerChoices: ['PROJECT:align', 'PROJECT:kinetix'],
+        }),
+      }),
+    ]);
+  });
+
   it('proposes new records rather than importing them', () => {
     const [candidate] = build(extraction({ experience: [EXPERIENCE] }));
     expect(candidate.entityType).toBe(CvImportEntityType.EXPERIENCE);
@@ -133,6 +203,68 @@ describe('proposals', () => {
   it('collapses a CV that lists the same thing twice', () => {
     const candidates = build(extraction({ experience: [EXPERIENCE, { ...EXPERIENCE }] }));
     expect(candidates).toHaveLength(1);
+  });
+
+  it('groups raw skill representations by identity and lets a specific category beat Additional', () => {
+    const candidates = build(extraction({ skills: [
+      { name: 'TypeScript', category: 'Additional', ...provenance },
+      { name: ' typescript ', category: 'Languages', ...provenance },
+    ] }));
+    const skills = candidates.filter(({ entityType }) => entityType === CvImportEntityType.SKILL);
+
+    expect(skills).toHaveLength(1);
+    expect(skills[0].structuredData).toMatchObject({ name: 'TypeScript', category: 'Languages' });
+    expect(skills[0].reviewStatus).toBe(CvImportReviewStatus.PROPOSED);
+  });
+
+  it('resolves skill category independently of extraction order', () => {
+    const representations = [
+      { name: 'TypeScript', category: 'Additional', ...provenance },
+      { name: 'typescript', category: 'Languages', ...provenance },
+    ];
+    const category = (skills: typeof representations) =>
+      build(extraction({ skills }))[0].structuredData.category;
+
+    expect(category(representations)).toBe('Languages');
+    expect(category([...representations].reverse())).toBe('Languages');
+  });
+
+  it('surfaces conflicting specific skill categories instead of choosing the first', () => {
+    const [candidate] = build(extraction({ skills: [
+      { name: 'TypeScript', category: 'Languages', ...provenance },
+      { name: 'typescript', category: 'Tools', ...provenance },
+    ] }));
+
+    expect(candidate.reviewStatus).toBe(CvImportReviewStatus.CONFLICT);
+    expect(candidate.conflictCode).toBe('CONFLICTING_SKILL_CATEGORY');
+    expect(candidate.structuredData).toMatchObject({ name: 'TypeScript', category: 'Languages' });
+  });
+
+  it('keeps the saved Career Profile category authoritative over imported categories', () => {
+    const profile = emptyProfile({ skills: [{
+      id: 'group-1',
+      category: 'User edited category',
+      skills: ['TypeScript'],
+      skillItems: [{ id: 'skill-1', name: 'TypeScript' }],
+    }] });
+    const [candidate] = build(extraction({ skills: [
+      { name: 'TypeScript', category: 'Additional', ...provenance },
+      { name: 'typescript', category: 'Languages', ...provenance },
+    ] }), profile);
+
+    expect(candidate.reviewStatus).toBe(CvImportReviewStatus.DUPLICATE);
+    expect(candidate.structuredData).toMatchObject({ name: 'TypeScript', category: 'User edited category' });
+  });
+
+  it('uses a canonical taxonomy category when available and otherwise falls back to Additional Skills', () => {
+    expect(resolveSkillCategory({
+      taxonomyCategory: 'Programming Languages',
+      extractedCategories: ['Tools', 'Additional'],
+    })).toEqual({ category: 'Programming Languages', conflict: false });
+    expect(resolveSkillCategory({ extractedCategories: [undefined, 'Additional'] })).toEqual({
+      category: 'Additional Skills',
+      conflict: false,
+    });
   });
 });
 

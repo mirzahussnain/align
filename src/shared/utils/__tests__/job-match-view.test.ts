@@ -60,18 +60,6 @@ const v2: JobMatchDataV2 = {
   matchFeedback: 'Strong fit',
   experienceGap: 'Mentoring',
   tailoredRewrites: [],
-  cv_build_spec: {
-    recommended_template: 'sharp_minimal',
-    template_rationale: '',
-    section_order: ['Experience'],
-    lead_project: '',
-    summary_angle: '',
-    skills_to_surface: [],
-    skills_to_deprioritise: [],
-    bullets_to_rewrite: [],
-    visa_note_required: false,
-    cover_letter_angle: '',
-  },
 };
 
 describe('v2 job-match view', () => {

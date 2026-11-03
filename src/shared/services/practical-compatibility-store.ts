@@ -125,12 +125,12 @@ export async function buildConfirmedCandidateFacts(
     ...(identity?.city ? { homeCity: identity.city } : {}),
     ...(identity?.state ? { homeRegion: identity.state } : {}),
     ...(identity?.country ? { homeCountry: identity.country } : {}),
-    ...(practical?.openToRelocation !== null && practical?.openToRelocation !== undefined
-      ? { openToRelocation: practical.openToRelocation }
+    ...(practical?.relocationPreference !== null && practical?.relocationPreference !== undefined
+      ? { relocationPreference: practical.relocationPreference }
       : {}),
     ...(practical?.relocationLocations?.length ? { relocationLocations: practical.relocationLocations } : {}),
     ...(practical?.maxCommuteMinutes != null ? { maxCommuteMinutes: practical.maxCommuteMinutes } : {}),
-    ...(practical?.workPatternPreference ? { workPatternPreference: practical.workPatternPreference } : {}),
+    ...(practical?.preferredWorkStyles?.length ? { preferredWorkStyles: practical.preferredWorkStyles } : {}),
     ...(practical?.maxOnsiteDaysPerWeek != null ? { maxOnsiteDaysPerWeek: practical.maxOnsiteDaysPerWeek } : {}),
 
     // The explicit answer wins; the structured licence list is the fallback.

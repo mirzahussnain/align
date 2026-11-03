@@ -20,7 +20,6 @@ export const PRODUCT_CAPABILITIES = [
   'additional_career_profiles',
   'profile_evidence_storage',
   'human_evidence_capture',
-  'approve_evidence_for_application',
   'reuse_evidence_across_applications',
   'application_history',
   'stored_source_cvs',
@@ -117,11 +116,9 @@ const partial = (accessLevel: string): CapabilityEntitlement => ({ mode: 'partia
  * `cv_import_reconciliation` is the AI comparison of an IMPORTED CV against an
  * EXISTING Career Profile, run during CV import. It is deliberately separate from
  * `profile_reconciliation`, which compares stored profile evidence against a
- * job-match requirement ledger (/api/cv/profile-bridge) and requires a job-match
  * analysis. Two different operations with two different inputs get two different
  * capabilities so exhausting one never silently blocks the other.
  *
- * `approve_evidence_for_application` is a `resource_limit` counted PER APPLICATION
  * (per analysis), not globally — Free may approve 2 evidence items per
  * application, Pro is effectively unrestricted. The count is enforced
  * server-side over active approvals for the analysis; the generic snapshot
@@ -147,7 +144,6 @@ export const PLAN_ENTITLEMENTS = {
     additional_career_profiles: resourceLimit(1),
     profile_evidence_storage: resourceLimit(25),
     human_evidence_capture: quota(5),
-    approve_evidence_for_application: resourceLimit(2),
     reuse_evidence_across_applications: partial('limited'),
     application_history: partial('recent'),
     stored_source_cvs: resourceLimit(3),
@@ -176,7 +172,6 @@ export const PLAN_ENTITLEMENTS = {
     additional_career_profiles: resourceLimit(3),
     profile_evidence_storage: resourceLimit(500),
     human_evidence_capture: quota(100),
-    approve_evidence_for_application: resourceLimit(1000),
     reuse_evidence_across_applications: enabled(),
     application_history: partial('full'),
     stored_source_cvs: resourceLimit(25),

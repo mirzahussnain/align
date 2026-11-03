@@ -126,6 +126,18 @@ const CHECKS: Check[] = [
         : 'must be a redis:// or rediss:// URL (this is NOT the Upstash REST URL)',
   },
 
+  {
+    name: 'DOCUMENT_RENDERER_ENABLED',
+    required: false,
+    note: "Set to 'true' only after the protected renderer passes its smoke contract",
+    validate: (v) => (v === 'true' || v === 'false' ? undefined : "must be 'true' or 'false'"),
+  },
+  { name: 'GOTENBERG_URL', required: false, note: 'Private/protected renderer origin' },
+  { name: 'GOTENBERG_USERNAME', required: false, note: 'Renderer Basic-auth username (server-only)' },
+  { name: 'GOTENBERG_PASSWORD', required: false, note: 'Renderer Basic-auth password (server-only)' },
+  { name: 'GOTENBERG_EXPECTED_VERSION', required: false, note: 'Expected Gotenberg version' },
+  { name: 'GOTENBERG_IMAGE_DIGEST', required: false, note: 'Tested production image digest' },
+
   // ── Billing (Stripe) ─────────────────────────────────────────────────────────
   // Optional in Stage 1: the app runs without them; only Stripe-specific paths
   // (checkout/webhooks/portal, none of which are live yet) require them. The
@@ -218,7 +230,48 @@ if (process.env.STRIPE_SECRET_KEY) {
   }
 }
 
+for (const name of [
+  'NEXT_PUBLIC_GOTENBERG_URL',
+  'NEXT_PUBLIC_GOTENBERG_USERNAME',
+  'NEXT_PUBLIC_GOTENBERG_PASSWORD',
+  'NEXT_PUBLIC_GOTENBERG_EXPECTED_VERSION',
+  'NEXT_PUBLIC_GOTENBERG_IMAGE_DIGEST',
+]) {
+  if (process.env[name]) {
+    errors.push(`${name} must not expose renderer configuration to browsers`);
+  }
+}
+
+if (process.env.DOCUMENT_RENDERER_ENABLED === 'true') {
+  for (const name of [
+    'GOTENBERG_URL',
+    'GOTENBERG_USERNAME',
+    'GOTENBERG_PASSWORD',
+    'GOTENBERG_EXPECTED_VERSION',
+  ]) {
+    if (!process.env[name]) {
+      errors.push(`${name} is required when document rendering is enabled`);
+    }
+  }
+  if (
+    process.env.GOTENBERG_EXPECTED_VERSION &&
+    process.env.GOTENBERG_EXPECTED_VERSION !== '8.38.1'
+  ) {
+    errors.push('GOTENBERG_EXPECTED_VERSION must be 8.38.1');
+  }
+}
+
 if (process.env.NODE_ENV === 'production') {
+  if (process.env.DOCUMENT_RENDERER_ENABLED === 'true') {
+    if (!process.env.GOTENBERG_URL?.startsWith('https://')) {
+      errors.push('GOTENBERG_URL must use https:// in production');
+    }
+    if (!process.env.GOTENBERG_IMAGE_DIGEST) {
+      errors.push('GOTENBERG_IMAGE_DIGEST is required when document rendering is enabled');
+    } else if (!/^sha256:[a-f0-9]{64}$/iu.test(process.env.GOTENBERG_IMAGE_DIGEST)) {
+      errors.push('GOTENBERG_IMAGE_DIGEST must be a sha256 registry digest');
+    }
+  }
   errors.push(...aiProviderEnvironmentErrors(process.env));
   if (!process.env.RESEND_API_KEY) {
     errors.push('RESEND_API_KEY is required in production for lifecycle email delivery');

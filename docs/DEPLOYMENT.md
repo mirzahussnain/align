@@ -16,6 +16,7 @@ flowchart TB
   Web --> Jobs[Adzuna / Reed / Jooble / NHS Jobs]
   Web --> Mail[Resend]
   Web --> Pay[Stripe]
+  Web -->|HTTPS + Basic Auth| Render[Private document renderer]
   Browser --> Web
   Browser -->|presigned PUT| R2
   Pay -->|signed webhook| Web
@@ -120,6 +121,21 @@ Create all three buckets before deployment:
 
 See [Object storage deployment](./deployment/object-storage.md) for the exact CORS command and privacy model.
 
+### Private document renderer
+
+Document generation requires an independently deployed, authenticated Gotenberg/LibreOffice service. It is not hosted inside Vercel and it must not expose an unauthenticated conversion route. Keep `DOCUMENT_RENDERER_ENABLED=false` until its DNS, TLS, credentials, pinned image, fonts, resource limits, and full smoke check are verified.
+
+| Variable | Requirement | Notes |
+| --- | --- | --- |
+| `DOCUMENT_RENDERER_ENABLED` | Required feature gate | `false` until the production renderer passes every gate |
+| `GOTENBERG_URL` | Required when enabled | Protected HTTPS Caddy endpoint |
+| `GOTENBERG_USERNAME` | Required when enabled | Server-only Basic Auth identity |
+| `GOTENBERG_PASSWORD` | Required when enabled | High-entropy server-only secret |
+| `GOTENBERG_EXPECTED_VERSION` | Required when enabled | `8.38.1` |
+| `GOTENBERG_IMAGE_DIGEST` | Required when enabled | Real-render-tested pinned base digest |
+
+The £0 production candidate and its capacity limitations are documented in [Private document renderer operations](./deployment/document-renderer.md). No paid hosting assumption or public fallback is permitted.
+
 ### Stripe
 
 | Variable | Requirement | Notes |
@@ -190,6 +206,13 @@ S3_BUCKET_REWRITES=align-cv-rewrites
 S3_BUCKET_AVATARS=align-users
 S3_PUBLIC_URL_AVATARS=https://avatars.align.vyndra.tech
 
+DOCUMENT_RENDERER_ENABLED=false
+GOTENBERG_URL=https://<protected-renderer-host>
+GOTENBERG_USERNAME=<renderer-user>
+GOTENBERG_PASSWORD=<renderer-secret>
+GOTENBERG_EXPECTED_VERSION=8.38.1
+GOTENBERG_IMAGE_DIGEST=sha256:2098722190575dbd975d8abf02e4ce83ffe20783114c5cc56f1b2ac309e6a083
+
 STRIPE_SECRET_KEY=sk_live_...
 STRIPE_WEBHOOK_SECRET=whsec_...
 NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_live_...
@@ -216,9 +239,12 @@ Run with the production variables loaded:
 ```bash
 npm run check:env
 npm run check:env:live
+npm run check:renderer
 ```
 
 `check:env:live` uploads a probe, signs and fetches it, confirms unsigned access is rejected by the private bucket, confirms avatars are publicly readable, and deletes the probe.
+
+Run `check:renderer` only when the protected renderer variables are loaded. It uses synthetic data to verify authentication, health, version, page count, text preservation, and all four required fonts. A failure keeps document generation disabled.
 
 ### 3. Apply migrations
 
@@ -267,6 +293,7 @@ Use [Reservation and reliability smoke tests](./RESERVATION_SMOKE.md) for metere
 - Application rollback must remain compatible with already-applied migrations. Prefer forward fixes when a migration has reached production.
 - Do not delete R2 objects or database rows as part of a normal code rollback.
 - Redis can be emptied without durable data loss, but active job-search continuation tokens will expire.
+- The renderer is stateless. Disable its feature flag before rollback and preserve already-verified immutable R2 artifacts.
 - Rotate a leaked auth, provider, email, storage, or billing secret immediately and redeploy every runtime that held it.
 - Preserve Stripe webhook delivery history and billing receipts while diagnosing access discrepancies.
 

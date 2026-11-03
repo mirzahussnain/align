@@ -65,7 +65,7 @@ next-env.d.ts
 .kilo/
 .kilocode/
 .cursor/
-docs/superpowers/
+/docs/superpowers/
 
 # OS files
 Thumbs.db
