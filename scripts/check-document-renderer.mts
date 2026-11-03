@@ -4,7 +4,12 @@ import { extractText, getDocumentProxy } from 'unpdf';
 import { TEMPLATE_IDS, CV_TEMPLATE_DEFINITIONS } from '@/shared/constants/templates';
 import { createSafeTemplateSample } from '@/shared/document-preview/template-sample';
 import { inspectPdf } from '@/shared/document-preview/pdf-preview';
-import { convertDocxToPdf, createRendererRetryBudget } from '@/shared/document-preview/renderer-client';
+import {
+  convertDocxToPdf,
+  createRendererRetryBudget,
+  rendererRequestInit,
+  rendererRequestHeaders,
+} from '@/shared/document-preview/renderer-client';
 import {
   DOCUMENT_RENDERER_VERSION,
   rendererConfig,
@@ -40,14 +45,25 @@ if (renderer.imageDigest && renderer.imageDigest !== TESTED_BASE_DIGEST) {
 const endpoint = (path: string) => new URL(path, `${renderer.baseUrl.toString().replace(/\/$/u, '')}/`);
 // Gotenberg deliberately leaves /health available for infrastructure probes;
 // verify that an application/API route is protected instead.
-const unauthenticated = await fetch(endpoint('version'), { signal: AbortSignal.timeout(10_000) });
+const accessOnlyHeaders = rendererRequestHeaders(renderer);
+accessOnlyHeaders.delete('Authorization');
+const unauthenticated = await fetch(endpoint('version'), {
+  headers: accessOnlyHeaders,
+  redirect: 'error',
+  signal: AbortSignal.timeout(10_000),
+});
 if (unauthenticated.status !== 401) throw new Error('Renderer unauthenticated API access was not denied');
 
-const authorization = `Basic ${Buffer.from(`${renderer.username}:${renderer.password}`).toString('base64')}`;
-const authenticatedHeaders = { Authorization: authorization };
+const authenticatedHeaders = rendererRequestHeaders(renderer);
 const [healthResponse, versionResponse] = await Promise.all([
-  fetch(endpoint('health'), { headers: authenticatedHeaders, signal: AbortSignal.timeout(10_000) }),
-  fetch(endpoint('version'), { headers: authenticatedHeaders, signal: AbortSignal.timeout(10_000) }),
+  fetch(endpoint('health'), rendererRequestInit(renderer, {
+    headers: authenticatedHeaders,
+    signal: AbortSignal.timeout(10_000),
+  })),
+  fetch(endpoint('version'), rendererRequestInit(renderer, {
+    headers: authenticatedHeaders,
+    signal: AbortSignal.timeout(10_000),
+  })),
 ]);
 if (!healthResponse.ok) throw new Error(`Authenticated renderer health returned ${healthResponse.status}`);
 const health = await healthResponse.json() as { status?: string; details?: { libreoffice?: { status?: string } } };

@@ -18,7 +18,7 @@ function temporaryProject(envLocal: string) {
 }
 
 function isolatedEnvironment(overrides: Partial<NodeJS.ProcessEnv> = {}) {
-  const environment = { ...process.env, ...overrides };
+  const environment = { ...process.env };
   delete environment.DIRECT_URL;
   delete environment.STRIPE_SECRET_KEY;
   delete environment.STRIPE_WEBHOOK_SECRET;
@@ -26,7 +26,30 @@ function isolatedEnvironment(overrides: Partial<NodeJS.ProcessEnv> = {}) {
   delete environment.NEXT_PUBLIC_GOTENBERG_PASSWORD;
   delete environment.NEXT_PUBLIC_GOTENBERG_USERNAME;
   delete environment.NEXT_PUBLIC_GOTENBERG_URL;
-  return environment;
+  delete environment.NEXT_PUBLIC_CF_ACCESS_CLIENT_ID;
+  delete environment.NEXT_PUBLIC_CF_ACCESS_CLIENT_SECRET;
+  delete environment.CF_ACCESS_CLIENT_ID;
+  delete environment.CF_ACCESS_CLIENT_SECRET;
+  return { ...environment, ...overrides };
+}
+
+function validNonProductionEnvironment(overrides: Partial<NodeJS.ProcessEnv> = {}) {
+  return isolatedEnvironment({
+    NODE_ENV: 'test',
+    DATABASE_URL: 'postgresql://external.example/align',
+    BETTER_AUTH_SECRET: 'x'.repeat(32),
+    BETTER_AUTH_URL: 'https://example.test',
+    S3_ENDPOINT: 'https://storage.example.test',
+    S3_ACCESS_KEY_ID: 'test-access-key',
+    S3_SECRET_ACCESS_KEY: 'test-secret-key',
+    S3_REGION: 'test-region',
+    S3_FORCE_PATH_STYLE: 'true',
+    S3_BUCKET_UPLOADS: 'uploads',
+    S3_BUCKET_REWRITES: 'rewrites',
+    S3_BUCKET_AVATARS: 'avatars',
+    S3_PUBLIC_URL_AVATARS: 'https://avatars.example.test',
+    ...overrides,
+  });
 }
 
 function assertPrismaUrl(cwd: string, environment: NodeJS.ProcessEnv, expected: string) {
@@ -139,5 +162,74 @@ describe('manual environment loading', () => {
     expect(result.stderr).toContain('GOTENBERG_PASSWORD is required');
     expect(result.stderr).toContain('GOTENBERG_EXPECTED_VERSION is required');
     expect(result.stderr).toContain('GOTENBERG_IMAGE_DIGEST is required');
+    expect(result.stderr).toContain('CF_ACCESS_CLIENT_ID and CF_ACCESS_CLIENT_SECRET are both required');
+  });
+
+  test('the environment validator rejects an incomplete remote Cloudflare Access pair without echoing it', () => {
+    const cwd = temporaryProject('DATABASE_URL=postgresql://localhost/local-fallback\n');
+    const environment = validNonProductionEnvironment({
+      DOCUMENT_RENDERER_ENABLED: 'true',
+      GOTENBERG_URL: 'https://align-pdf-renderer.vyndra.tech',
+      GOTENBERG_USERNAME: 'align-renderer',
+      GOTENBERG_PASSWORD: 'renderer-secret',
+      GOTENBERG_EXPECTED_VERSION: '8.38.1',
+      CF_ACCESS_CLIENT_ID: 'renderer-service-token.access',
+    });
+
+    const result = spawnSync(
+      process.execPath,
+      ['--experimental-strip-types', '--no-warnings', checkEnvScript],
+      { cwd, env: environment, encoding: 'utf8' },
+    );
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain(
+      'CF_ACCESS_CLIENT_ID and CF_ACCESS_CLIENT_SECRET are both required for a remote document renderer',
+    );
+    expect(result.stderr).not.toContain(environment.CF_ACCESS_CLIENT_ID);
+  });
+
+  test('the environment validator rejects whitespace-only remote Cloudflare Access credentials', () => {
+    const cwd = temporaryProject('DATABASE_URL=postgresql://localhost/local-fallback\n');
+    const environment = validNonProductionEnvironment({
+      DOCUMENT_RENDERER_ENABLED: 'true',
+      GOTENBERG_URL: 'https://align-pdf-renderer.vyndra.tech',
+      GOTENBERG_USERNAME: 'align-renderer',
+      GOTENBERG_PASSWORD: 'renderer-secret',
+      GOTENBERG_EXPECTED_VERSION: '8.38.1',
+      CF_ACCESS_CLIENT_ID: 'renderer-service-token.access',
+      CF_ACCESS_CLIENT_SECRET: '   ',
+    });
+
+    const result = spawnSync(
+      process.execPath,
+      ['--experimental-strip-types', '--no-warnings', checkEnvScript],
+      { cwd, env: environment, encoding: 'utf8' },
+    );
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain(
+      'CF_ACCESS_CLIENT_ID and CF_ACCESS_CLIENT_SECRET are both required for a remote document renderer',
+    );
+  });
+
+  test('the environment validator keeps local Docker rendering compatible without Cloudflare Access', () => {
+    const cwd = temporaryProject('DATABASE_URL=postgresql://localhost/local-fallback\n');
+    const environment = validNonProductionEnvironment({
+      DOCUMENT_RENDERER_ENABLED: 'true',
+      GOTENBERG_URL: 'http://127.0.0.1:3001',
+      GOTENBERG_USERNAME: 'align-renderer',
+      GOTENBERG_PASSWORD: 'local-renderer-change-me',
+      GOTENBERG_EXPECTED_VERSION: '8.38.1',
+    });
+
+    const result = spawnSync(
+      process.execPath,
+      ['--experimental-strip-types', '--no-warnings', checkEnvScript],
+      { cwd, env: environment, encoding: 'utf8' },
+    );
+
+    expect(result.status).toBe(0);
+    expect(result.stderr).not.toContain('CF_ACCESS_CLIENT');
   });
 });

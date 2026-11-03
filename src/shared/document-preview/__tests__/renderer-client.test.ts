@@ -7,6 +7,8 @@ import {
   convertDocxToPdf,
   DocumentConversionError,
   MAX_DOCX_BYTES,
+  probeDocumentRenderer,
+  rendererRequestInit,
 } from '../renderer-client';
 import {
   RendererConfigurationError,
@@ -24,6 +26,10 @@ function setEnabledRenderer(environment: 'development' | 'production' = 'develop
   process.env.GOTENBERG_PASSWORD = 'a-high-entropy-test-secret';
   process.env.GOTENBERG_EXPECTED_VERSION = '8.38.1';
   process.env.GOTENBERG_IMAGE_DIGEST = 'sha256:' + 'a'.repeat(64);
+  if (environment === 'production') {
+    process.env.CF_ACCESS_CLIENT_ID = 'renderer-service-token.access';
+    process.env.CF_ACCESS_CLIENT_SECRET = 'cloudflare-service-token-secret';
+  }
 }
 
 function pdfResponse(body = '%PDF-1.7\nfixture') {
@@ -61,6 +67,24 @@ describe('renderer configuration', () => {
     );
   });
 
+  it('requires both Cloudflare Access credentials for a remote renderer', () => {
+    process.env.GOTENBERG_URL = 'https://align-pdf-renderer.vyndra.tech';
+    process.env.CF_ACCESS_CLIENT_ID = 'renderer-service-token.access';
+    delete process.env.CF_ACCESS_CLIENT_SECRET;
+    expect(() => rendererConfig()).toThrowError(
+      'CF_ACCESS_CLIENT_ID and CF_ACCESS_CLIENT_SECRET are both required for a remote document renderer',
+    );
+  });
+
+  it('rejects a remote renderer when both Cloudflare Access credentials are absent', () => {
+    process.env.GOTENBERG_URL = 'https://align-pdf-renderer.vyndra.tech';
+    delete process.env.CF_ACCESS_CLIENT_ID;
+    delete process.env.CF_ACCESS_CLIENT_SECRET;
+    expect(() => rendererConfig()).toThrowError(
+      'CF_ACCESS_CLIENT_ID and CF_ACCESS_CLIENT_SECRET are both required for a remote document renderer',
+    );
+  });
+
   it('rejects a non-HTTPS enabled production endpoint', () => {
     setEnabledRenderer('production');
     process.env.GOTENBERG_URL = 'http://renderer.example.test';
@@ -68,6 +92,8 @@ describe('renderer configuration', () => {
   });
 
   it('accepts authenticated loopback and private service URLs outside production', () => {
+    delete process.env.CF_ACCESS_CLIENT_ID;
+    delete process.env.CF_ACCESS_CLIENT_SECRET;
     expect(rendererConfig().baseUrl.toString()).toBe('http://127.0.0.1:3001/');
     process.env.GOTENBERG_URL = 'http://gotenberg:3000';
     expect(rendererConfig().baseUrl.hostname).toBe('gotenberg');
@@ -79,9 +105,30 @@ describe('renderer configuration', () => {
       expect.objectContaining({ code: 'RENDERER_UNAVAILABLE' }),
     );
   });
+
+  it('rejects Cloudflare Access credentials in NEXT_PUBLIC variables', () => {
+    process.env.NEXT_PUBLIC_CF_ACCESS_CLIENT_SECRET = 'public-secret';
+    expect(() => rendererConfig()).toThrowError(
+      expect.objectContaining({ code: 'RENDERER_UNAVAILABLE' }),
+    );
+  });
 });
 
 describe('private Gotenberg client', () => {
+  it('forces authenticated renderer requests to reject redirects', () => {
+    process.env.GOTENBERG_URL = 'https://align-pdf-renderer.vyndra.tech';
+    process.env.CF_ACCESS_CLIENT_ID = 'renderer-service-token.access';
+    process.env.CF_ACCESS_CLIENT_SECRET = 'cloudflare-service-token-secret';
+
+    const init = rendererRequestInit(rendererConfig(), { redirect: 'follow' });
+
+    expect(init.redirect).toBe('error');
+    expect(new Headers(init.headers).get('authorization')).toMatch(/^Basic /u);
+    expect(new Headers(init.headers).get('cf-access-client-secret')).toBe(
+      'cloudflare-service-token-secret',
+    );
+  });
+
   it('sends a bounded authenticated multipart request with a constant filename', async () => {
     const request = vi.fn(async (_url: string | URL, init?: RequestInit) => {
       const body = init?.body as FormData;
@@ -93,6 +140,8 @@ describe('private Gotenberg client', () => {
         'Basic ' + Buffer.from('align-renderer:a-high-entropy-test-secret').toString('base64'),
       );
       expect(new Headers(init?.headers).get('gotenberg-trace')).toBe('generation_123');
+      expect(new Headers(init?.headers).get('cf-access-client-id')).toBeNull();
+      expect(new Headers(init?.headers).get('cf-access-client-secret')).toBeNull();
       return pdfResponse();
     });
     vi.stubGlobal('fetch', request);
@@ -107,6 +156,51 @@ describe('private Gotenberg client', () => {
     expect(String(request.mock.calls[0]?.[0])).toBe(
       'http://127.0.0.1:3001/forms/libreoffice/convert',
     );
+  });
+
+  it('sends Basic and Cloudflare Access authentication to the remote conversion endpoint', async () => {
+    process.env.GOTENBERG_URL = 'https://align-pdf-renderer.vyndra.tech';
+    process.env.CF_ACCESS_CLIENT_ID = 'renderer-service-token.access';
+    process.env.CF_ACCESS_CLIENT_SECRET = 'cloudflare-service-token-secret';
+    const request = vi.fn(async (_url: string | URL, init?: RequestInit) => {
+      const headers = new Headers(init?.headers);
+      expect(headers.get('authorization')).toBe(
+        'Basic ' + Buffer.from('align-renderer:a-high-entropy-test-secret').toString('base64'),
+      );
+      expect(headers.get('cf-access-client-id')).toBe('renderer-service-token.access');
+      expect(headers.get('cf-access-client-secret')).toBe('cloudflare-service-token-secret');
+      return pdfResponse();
+    });
+    vi.stubGlobal('fetch', request);
+
+    await expect(convertDocxToPdf({
+      docx: Buffer.from('docx'),
+      traceId: 'generation_remote',
+    })).resolves.toBeInstanceOf(Buffer);
+    expect(String(request.mock.calls[0]?.[0])).toBe(
+      'https://align-pdf-renderer.vyndra.tech/forms/libreoffice/convert',
+    );
+  });
+
+  it('uses both authentication layers for remote health and version probes', async () => {
+    setEnabledRenderer('production');
+    process.env.GOTENBERG_URL = 'https://align-pdf-renderer.vyndra.tech';
+    const request = vi.fn(async (url: string | URL, init?: RequestInit) => {
+      const headers = new Headers(init?.headers);
+      expect(headers.get('authorization')).toMatch(/^Basic /u);
+      expect(headers.get('cf-access-client-id')).toBe('renderer-service-token.access');
+      expect(headers.get('cf-access-client-secret')).toBe('cloudflare-service-token-secret');
+      return String(url).endsWith('/health')
+        ? new Response('{status:up}', { status: 200 })
+        : new Response('Gotenberg 8.38.1', { status: 200 });
+    });
+    vi.stubGlobal('fetch', request);
+
+    await expect(probeDocumentRenderer()).resolves.toEqual({
+      healthy: true,
+      rendererVersion: 'Gotenberg 8.38.1',
+    });
+    expect(request).toHaveBeenCalledTimes(2);
   });
 
   it('rejects PII-shaped trace IDs before sending bytes', async () => {
@@ -198,6 +292,24 @@ describe('private Gotenberg client', () => {
     ).rejects.toBeInstanceOf(DocumentConversionError);
     expect(request).toHaveBeenCalledTimes(1);
     expect(logger).not.toHaveBeenCalled();
+  });
+
+  it('does not expose remote response bodies or Cloudflare credentials on HTTP failure', async () => {
+    process.env.GOTENBERG_URL = 'https://align-pdf-renderer.vyndra.tech';
+    process.env.CF_ACCESS_CLIENT_ID = 'renderer-service-token.access';
+    process.env.CF_ACCESS_CLIENT_SECRET = 'cloudflare-service-token-secret';
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(
+      new Response('cloudflare policy detail', { status: 403 }),
+    ));
+
+    await expect(convertDocxToPdf({
+      docx: Buffer.from('docx'),
+      traceId: 'generation_access_denied',
+    })).rejects.toMatchObject({
+      status: 403,
+      retryable: false,
+      message: expect.not.stringMatching(/cloudflare policy detail|cloudflare-service-token-secret/iu),
+    });
   });
 
   it('rejects invalid PDF responses without retrying or exposing the body', async () => {

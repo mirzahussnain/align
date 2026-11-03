@@ -30,6 +30,19 @@ type Check = {
 const url = (value: string) =>
   /^https?:\/\//.test(value) ? undefined : 'must start with http:// or https://';
 
+function isLocalRenderer(rawUrl: string) {
+  try {
+    const hostname = new URL(rawUrl).hostname.toLowerCase();
+    return hostname === 'localhost'
+      || hostname.endsWith('.localhost')
+      || hostname === 'gotenberg'
+      || hostname === '[::1]'
+      || /^127(?:\.\d{1,3}){3}$/u.test(hostname);
+  } catch {
+    return false;
+  }
+}
+
 const CHECKS: Check[] = [
   // ── Database ───────────────────────────────────────────────────────────────
   {
@@ -135,6 +148,8 @@ const CHECKS: Check[] = [
   { name: 'GOTENBERG_URL', required: false, note: 'Private/protected renderer origin' },
   { name: 'GOTENBERG_USERNAME', required: false, note: 'Renderer Basic-auth username (server-only)' },
   { name: 'GOTENBERG_PASSWORD', required: false, note: 'Renderer Basic-auth password (server-only)' },
+  { name: 'CF_ACCESS_CLIENT_ID', required: false, note: 'Cloudflare Access service-token client ID (server-only)' },
+  { name: 'CF_ACCESS_CLIENT_SECRET', required: false, note: 'Cloudflare Access service-token client secret (server-only)' },
   { name: 'GOTENBERG_EXPECTED_VERSION', required: false, note: 'Expected Gotenberg version' },
   { name: 'GOTENBERG_IMAGE_DIGEST', required: false, note: 'Tested production image digest' },
 
@@ -236,6 +251,8 @@ for (const name of [
   'NEXT_PUBLIC_GOTENBERG_PASSWORD',
   'NEXT_PUBLIC_GOTENBERG_EXPECTED_VERSION',
   'NEXT_PUBLIC_GOTENBERG_IMAGE_DIGEST',
+  'NEXT_PUBLIC_CF_ACCESS_CLIENT_ID',
+  'NEXT_PUBLIC_CF_ACCESS_CLIENT_SECRET',
 ]) {
   if (process.env[name]) {
     errors.push(`${name} must not expose renderer configuration to browsers`);
@@ -258,6 +275,18 @@ if (process.env.DOCUMENT_RENDERER_ENABLED === 'true') {
     process.env.GOTENBERG_EXPECTED_VERSION !== '8.38.1'
   ) {
     errors.push('GOTENBERG_EXPECTED_VERSION must be 8.38.1');
+  }
+  if (
+    process.env.GOTENBERG_URL
+    && !isLocalRenderer(process.env.GOTENBERG_URL)
+    && (
+      !process.env.CF_ACCESS_CLIENT_ID?.trim()
+      || !process.env.CF_ACCESS_CLIENT_SECRET?.trim()
+    )
+  ) {
+    errors.push(
+      'CF_ACCESS_CLIENT_ID and CF_ACCESS_CLIENT_SECRET are both required for a remote document renderer',
+    );
   }
 }
 

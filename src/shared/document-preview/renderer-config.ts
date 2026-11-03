@@ -17,6 +17,8 @@ export interface DocumentRendererConfig {
   baseUrl: URL;
   username: string;
   password: string;
+  cloudflareAccessClientId: string;
+  cloudflareAccessClientSecret: string;
   rendererVersion: string;
   imageDigest: string;
   timeoutMs: 50_000;
@@ -28,10 +30,21 @@ const publicRendererVariables = [
   'NEXT_PUBLIC_GOTENBERG_PASSWORD',
   'NEXT_PUBLIC_GOTENBERG_EXPECTED_VERSION',
   'NEXT_PUBLIC_GOTENBERG_IMAGE_DIGEST',
+  'NEXT_PUBLIC_CF_ACCESS_CLIENT_ID',
+  'NEXT_PUBLIC_CF_ACCESS_CLIENT_SECRET',
 ] as const;
 
 function unavailable(message: string): never {
   throw new RendererConfigurationError(message);
+}
+
+function isLocalRenderer(baseUrl: URL) {
+  const hostname = baseUrl.hostname.toLowerCase();
+  return hostname === 'localhost'
+    || hostname.endsWith('.localhost')
+    || hostname === 'gotenberg'
+    || hostname === '[::1]'
+    || /^127(?:\.\d{1,3}){3}$/u.test(hostname);
 }
 
 export function rendererConfig(
@@ -59,6 +72,8 @@ export function rendererConfig(
 
   const username = environment.GOTENBERG_USERNAME?.trim() ?? '';
   const password = environment.GOTENBERG_PASSWORD?.trim() ?? '';
+  const cloudflareAccessClientId = environment.CF_ACCESS_CLIENT_ID?.trim() ?? '';
+  const cloudflareAccessClientSecret = environment.CF_ACCESS_CLIENT_SECRET?.trim() ?? '';
   const rendererVersion = environment.GOTENBERG_EXPECTED_VERSION?.trim() ?? '';
   const imageDigest = environment.GOTENBERG_IMAGE_DIGEST?.trim() ?? '';
 
@@ -75,6 +90,14 @@ export function rendererConfig(
       missing.push('GOTENBERG_IMAGE_DIGEST');
     }
     if (missing.length) unavailable(`${missing.join(', ')} required when document rendering is enabled`);
+    if (
+      !isLocalRenderer(baseUrl)
+      && (!cloudflareAccessClientId || !cloudflareAccessClientSecret)
+    ) {
+      unavailable(
+        'CF_ACCESS_CLIENT_ID and CF_ACCESS_CLIENT_SECRET are both required for a remote document renderer',
+      );
+    }
     if (baseUrl.username || baseUrl.password) {
       unavailable('GOTENBERG_URL must not contain credentials');
     }
@@ -100,6 +123,8 @@ export function rendererConfig(
     baseUrl,
     username,
     password,
+    cloudflareAccessClientId,
+    cloudflareAccessClientSecret,
     rendererVersion,
     imageDigest,
     timeoutMs: DOCUMENT_RENDERER_TIMEOUT_MS,

@@ -128,9 +128,11 @@ Document generation requires an independently deployed, authenticated Gotenberg/
 | Variable | Requirement | Notes |
 | --- | --- | --- |
 | `DOCUMENT_RENDERER_ENABLED` | Required feature gate | `false` until the production renderer passes every gate |
-| `GOTENBERG_URL` | Required when enabled | Protected HTTPS Caddy endpoint |
+| `GOTENBERG_URL` | Required when enabled | `https://align-pdf-renderer.vyndra.tech` in production |
 | `GOTENBERG_USERNAME` | Required when enabled | Server-only Basic Auth identity |
 | `GOTENBERG_PASSWORD` | Required when enabled | High-entropy server-only secret |
+| `CF_ACCESS_CLIENT_ID` | Required for a remote renderer | Cloudflare Access service-token client ID; server-only |
+| `CF_ACCESS_CLIENT_SECRET` | Required for a remote renderer | Matching Cloudflare Access service-token secret; server-only |
 | `GOTENBERG_EXPECTED_VERSION` | Required when enabled | `8.38.1` |
 | `GOTENBERG_IMAGE_DIGEST` | Required when enabled | Real-render-tested pinned base digest |
 
@@ -207,9 +209,11 @@ S3_BUCKET_AVATARS=align-users
 S3_PUBLIC_URL_AVATARS=https://avatars.align.vyndra.tech
 
 DOCUMENT_RENDERER_ENABLED=false
-GOTENBERG_URL=https://<protected-renderer-host>
+GOTENBERG_URL=https://align-pdf-renderer.vyndra.tech
 GOTENBERG_USERNAME=<renderer-user>
 GOTENBERG_PASSWORD=<renderer-secret>
+CF_ACCESS_CLIENT_ID=<cloudflare-access-service-token-client-id>
+CF_ACCESS_CLIENT_SECRET=<cloudflare-access-service-token-secret>
 GOTENBERG_EXPECTED_VERSION=8.38.1
 GOTENBERG_IMAGE_DIGEST=sha256:2098722190575dbd975d8abf02e4ce83ffe20783114c5cc56f1b2ac309e6a083
 
@@ -220,6 +224,8 @@ STRIPE_PRO_MONTHLY_PRICE_ID=price_...
 ```
 
 Do not store this block with real values in the repository. Use the deployment platform's encrypted environment settings. Variables prefixed with `NEXT_PUBLIC_` are compiled into browser bundles and require a rebuild when changed.
+
+For Vercel, obtain the renderer values as follows: the renderer operator supplies `GOTENBERG_USERNAME` and `GOTENBERG_PASSWORD` from the Basic Auth configuration shared by Caddy/Gotenberg; Cloudflare Zero Trust supplies `CF_ACCESS_CLIENT_ID` and the one-time-visible `CF_ACCESS_CLIENT_SECRET` when an Access service token is created for the renderer application. Store all four only as encrypted server-side Vercel variables. Never create `NEXT_PUBLIC_` copies.
 
 ## Release procedure
 

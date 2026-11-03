@@ -4,7 +4,7 @@ Align renders generated DOCX documents through an independently deployed Gotenbe
 
 ## Current deployment status and production gate
 
-Local Docker Compose rendering is implemented and verified. No production renderer or production endpoint is currently provisioned. Keep `DOCUMENT_RENDERER_ENABLED=false` in Vercel until every deployment and smoke-test step below succeeds. When it is false, document generation fails closed before publication; the rest of Align remains available.
+Local Docker Compose rendering is implemented and verified. The production hostname is `https://align-pdf-renderer.vyndra.tech`, protected by Cloudflare Access, but it is not considered application-verified until the credentialed smoke test and real end-to-end conversion gates below pass. Keep `DOCUMENT_RENDERER_ENABLED=false` in Vercel until every gate succeeds. When it is false, document generation fails closed before publication; the rest of Align remains available.
 
 Oracle Cloud Always Free is a feasible £0 candidate, not guaranteed capacity or an operational commitment. Align has no paid fallback. If a suitable instance cannot be obtained and retained at £0, production document generation remains disabled while local development and validation continue.
 
@@ -24,17 +24,19 @@ LibreOffice pagination can differ from Microsoft Word because their layout engin
 
 ```mermaid
 flowchart LR
-  V[Vercel application] -->|HTTPS + Basic Auth| C[Caddy reverse proxy]
+  V[Vercel application] -->|HTTPS + Access service token + Basic Auth| A[Cloudflare Access]
+  A --> C[Caddy reverse proxy]
   C -->|loopback/private network + Basic Auth| G[Gotenberg]
   G --> L[LibreOffice]
   V -->|private S3 API| R[(Cloudflare R2)]
 ```
 
-- Give the VM a DNS name and valid TLS certificate. Vercel must use only its `HTTPS` URL.
+- Vercel must use only `https://align-pdf-renderer.vyndra.tech`.
+- Protect that hostname with a Cloudflare Access service-auth policy. Create a dedicated service token for Align; do not use a user token or a token shared with another application.
 - Put Caddy in front of Gotenberg for TLS termination, request-size/rate controls, and a second Basic Auth boundary. Gotenberg also retains its own API Basic Auth configuration.
 - Bind Gotenberg to loopback or a private Docker network; expose only Caddy's ports 80/443 through the cloud firewall/NSG. Port 3000 must not be internet-accessible.
 - Vercel uses dynamic egress addresses on the current deployment tier, so an IP allow-list is not a sufficient or generally feasible primary control. Authentication and TLS are mandatory; an allow-list may be added only when stable egress is separately provided.
-- Use a unique high-entropy renderer credential, store it only in Vercel encrypted variables and the VM secret environment, and perform secret rotation immediately after suspected exposure. Rotate by accepting a new credential, updating Vercel, smoke testing, then removing the old credential.
+- Use unique high-entropy Basic Auth and Cloudflare Access credentials. Store them only in Vercel encrypted variables and their respective origin/Cloudflare secret stores. Perform secret rotation by accepting a new credential, updating Vercel, smoke testing, then removing the old credential.
 - Never use a `NEXT_PUBLIC_` renderer variable. Never log credentials, document bytes, extracted text, CV content, or signed object URLs.
 - Disable Gotenberg's `downloadFrom` and debug routes, and do not enable Chromium or other conversion modules that Align does not use. The only application conversion path is the authenticated LibreOffice form route.
 
@@ -43,11 +45,15 @@ The server-only application variables are:
 | Variable | Production rule |
 | --- | --- |
 | `DOCUMENT_RENDERER_ENABLED` | Set `true` only after all gates pass; otherwise `false` |
-| `GOTENBERG_URL` | Protected public `https://` Caddy endpoint; no trailing path |
+| `GOTENBERG_URL` | Exact value `https://align-pdf-renderer.vyndra.tech` |
 | `GOTENBERG_USERNAME` | Unique server-only Basic Auth identity |
 | `GOTENBERG_PASSWORD` | High-entropy server-only secret |
+| `CF_ACCESS_CLIENT_ID` | Client ID from Cloudflare Zero Trust → Access → Service Auth → Service Tokens |
+| `CF_ACCESS_CLIENT_SECRET` | Matching service-token secret, shown by Cloudflare only when the token is created |
 | `GOTENBERG_EXPECTED_VERSION` | `8.38.1` |
 | `GOTENBERG_IMAGE_DIGEST` | Tested base digest shown above |
+
+These are the exact eight Vercel variables required for remote production rendering. `DOCUMENT_RENDERER_ENABLED` is the application gate; `GOTENBERG_URL` is the fixed hostname above; the renderer deployment operator supplies the Basic Auth username/password from the Caddy/Gotenberg configuration; Cloudflare Zero Trust supplies the service-token ID/secret; the expected version and image digest are pinned by this repository. Configure them for the Vercel environments that render documents (Production, and Preview only if preview deployments are intentionally allowed). None may use a `NEXT_PUBLIC_` prefix.
 
 ## Resource and request bounds
 
@@ -81,6 +87,8 @@ GOTENBERG_PASSWORD=local-renderer-change-me
 GOTENBERG_EXPECTED_VERSION=8.38.1
 ```
 
+Do not set `CF_ACCESS_CLIENT_ID` or `CF_ACCESS_CLIENT_SECRET` for this loopback/Docker configuration. The application requires the pair only when the configured renderer is remote.
+
 Then run:
 
 ```bash
@@ -105,9 +113,9 @@ Do not select a paid shape, boot volume, load balancer, reserved public IP, supp
 1. In the tenancy home region, attempt to create Ubuntu LTS on `VM.Standard.A1.Flex` with 2 OCPU and 12 GiB, using only resources explicitly marked Always Free. Stop if the console shows any non-zero forecast.
 2. Create an NSG/firewall allowing inbound SSH only from the operator's current address and inbound 80/443 for Caddy. Deny inbound Gotenberg port 3000. Apply unattended security updates.
 3. Create an unprivileged deployment user, install Docker Engine and the Compose plugin, and disable password SSH login after key access is confirmed.
-4. Point the renderer DNS record to the instance. Configure Caddy to obtain and renew TLS, enforce the body/rate limits, require Basic Auth, and proxy to the Docker-private Gotenberg service.
+4. Point `align-pdf-renderer.vyndra.tech` to the instance through proxied Cloudflare DNS. Configure Caddy to obtain and renew TLS, enforce the body/rate limits, require Basic Auth, and proxy to the Docker-private Gotenberg service. Create a Cloudflare Access service-auth application and policy for the hostname.
 5. Clone or copy the exact release, build `docker/gotenberg/Dockerfile`, run the local smoke check from the VM network, push the custom image to a private registry if the host will not build releases, and pin the tested custom image digest in Compose.
-6. Set the six server-only renderer variables in Vercel. Run `npm run check:renderer` from a network path equivalent to production and confirm unauthenticated requests receive 401.
+6. Create a dedicated Cloudflare Access service token and immediately store its ID and one-time-visible secret in Vercel as `CF_ACCESS_CLIENT_ID` and `CF_ACCESS_CLIENT_SECRET`. Set all eight server-only renderer variables in Vercel. Run `npm run check:renderer` from a network path equivalent to production; the check crosses Cloudflare Access with the service token and confirms that omitting Basic Auth still receives 401.
 7. Only after a real end-to-end generation stores private artifacts and returns an ownership-scoped preview may `DOCUMENT_RENDERER_ENABLED=true` be deployed.
 
 If capacity, stable availability, DNS, TLS, authentication, or the smoke checks cannot be verified, leave the flag false and report the outstanding dependency. Do not substitute an open public conversion service.
