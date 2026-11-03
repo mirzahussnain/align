@@ -8,6 +8,7 @@ import {
   DocumentConversionError,
   MAX_DOCX_BYTES,
   probeDocumentRenderer,
+  rendererRequestInit,
 } from '../renderer-client';
 import {
   RendererConfigurationError,
@@ -114,6 +115,20 @@ describe('renderer configuration', () => {
 });
 
 describe('private Gotenberg client', () => {
+  it('forces authenticated renderer requests to reject redirects', () => {
+    process.env.GOTENBERG_URL = 'https://align-pdf-renderer.vyndra.tech';
+    process.env.CF_ACCESS_CLIENT_ID = 'renderer-service-token.access';
+    process.env.CF_ACCESS_CLIENT_SECRET = 'cloudflare-service-token-secret';
+
+    const init = rendererRequestInit(rendererConfig(), { redirect: 'follow' });
+
+    expect(init.redirect).toBe('error');
+    expect(new Headers(init.headers).get('authorization')).toMatch(/^Basic /u);
+    expect(new Headers(init.headers).get('cf-access-client-secret')).toBe(
+      'cloudflare-service-token-secret',
+    );
+  });
+
   it('sends a bounded authenticated multipart request with a constant filename', async () => {
     const request = vi.fn(async (_url: string | URL, init?: RequestInit) => {
       const body = init?.body as FormData;

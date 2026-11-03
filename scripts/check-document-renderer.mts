@@ -7,6 +7,7 @@ import { inspectPdf } from '@/shared/document-preview/pdf-preview';
 import {
   convertDocxToPdf,
   createRendererRetryBudget,
+  rendererRequestInit,
   rendererRequestHeaders,
 } from '@/shared/document-preview/renderer-client';
 import {
@@ -55,8 +56,14 @@ if (unauthenticated.status !== 401) throw new Error('Renderer unauthenticated AP
 
 const authenticatedHeaders = rendererRequestHeaders(renderer);
 const [healthResponse, versionResponse] = await Promise.all([
-  fetch(endpoint('health'), { headers: authenticatedHeaders, signal: AbortSignal.timeout(10_000) }),
-  fetch(endpoint('version'), { headers: authenticatedHeaders, signal: AbortSignal.timeout(10_000) }),
+  fetch(endpoint('health'), rendererRequestInit(renderer, {
+    headers: authenticatedHeaders,
+    signal: AbortSignal.timeout(10_000),
+  })),
+  fetch(endpoint('version'), rendererRequestInit(renderer, {
+    headers: authenticatedHeaders,
+    signal: AbortSignal.timeout(10_000),
+  })),
 ]);
 if (!healthResponse.ok) throw new Error(`Authenticated renderer health returned ${healthResponse.status}`);
 const health = await healthResponse.json() as { status?: string; details?: { libreoffice?: { status?: string } } };

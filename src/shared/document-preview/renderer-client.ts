@@ -77,6 +77,17 @@ export function rendererRequestHeaders(
   return headers;
 }
 
+export function rendererRequestInit(
+  config: DocumentRendererConfig,
+  init: RequestInit = {},
+): RequestInit {
+  return {
+    ...init,
+    redirect: 'error',
+    headers: rendererRequestHeaders(config, init.headers),
+  };
+}
+
 function requestSignal(
   timeoutMs: number,
   parentSignal?: AbortSignal,
@@ -142,15 +153,14 @@ async function sendConversion(
   try {
     response = await fetch(
       new URL('/forms/libreoffice/convert', config.baseUrl),
-      {
+      rendererRequestInit(config, {
         method: 'POST',
-        redirect: 'error',
-        headers: rendererRequestHeaders(config, {
+        headers: {
           'Gotenberg-Trace': input.traceId,
-        }),
+        },
         body: form,
         signal: request.signal,
-      },
+      }),
     );
   } catch (error) {
     if (request.signal.aborted) {
@@ -224,19 +234,14 @@ export async function probeDocumentRenderer(): Promise<{
 }> {
   const config = rendererConfig();
   if (!config.enabled) return { healthy: false, rendererVersion: '' };
-  const headers = rendererRequestHeaders(config);
   try {
     const [health, version] = await Promise.all([
-      fetch(new URL('/health', config.baseUrl), {
-        headers,
-        redirect: 'error',
+      fetch(new URL('/health', config.baseUrl), rendererRequestInit(config, {
         signal: AbortSignal.timeout(config.timeoutMs),
-      }),
-      fetch(new URL('/version', config.baseUrl), {
-        headers,
-        redirect: 'error',
+      })),
+      fetch(new URL('/version', config.baseUrl), rendererRequestInit(config, {
         signal: AbortSignal.timeout(config.timeoutMs),
-      }),
+      })),
     ]);
     if (!health.ok || !version.ok) {
       return { healthy: false, rendererVersion: '' };

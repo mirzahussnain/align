@@ -61,7 +61,7 @@ describe('document renderer deployment contract', () => {
     expect(source).toContain('createSafeTemplateSample');
     expect(source).toMatch(/unauthenticated/iu);
     expect(source).toContain('DOCUMENT_RENDERER_VERSION');
-    expect(source).toContain('rendererRequestHeaders');
+    expect(source).toContain('rendererRequestInit');
     expect(source).toContain('Arial');
     expect(source).toContain('Times New Roman');
     expect(source).not.toMatch(/console\.(log|error)\([^)]*(password|pdf|docx)/iu);

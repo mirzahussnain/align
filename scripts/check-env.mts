@@ -279,7 +279,10 @@ if (process.env.DOCUMENT_RENDERER_ENABLED === 'true') {
   if (
     process.env.GOTENBERG_URL
     && !isLocalRenderer(process.env.GOTENBERG_URL)
-    && (!process.env.CF_ACCESS_CLIENT_ID || !process.env.CF_ACCESS_CLIENT_SECRET)
+    && (
+      !process.env.CF_ACCESS_CLIENT_ID?.trim()
+      || !process.env.CF_ACCESS_CLIENT_SECRET?.trim()
+    )
   ) {
     errors.push(
       'CF_ACCESS_CLIENT_ID and CF_ACCESS_CLIENT_SECRET are both required for a remote document renderer',

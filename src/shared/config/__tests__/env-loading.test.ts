@@ -18,7 +18,7 @@ function temporaryProject(envLocal: string) {
 }
 
 function isolatedEnvironment(overrides: Partial<NodeJS.ProcessEnv> = {}) {
-  const environment = { ...process.env, ...overrides };
+  const environment = { ...process.env };
   delete environment.DIRECT_URL;
   delete environment.STRIPE_SECRET_KEY;
   delete environment.STRIPE_WEBHOOK_SECRET;
@@ -30,7 +30,7 @@ function isolatedEnvironment(overrides: Partial<NodeJS.ProcessEnv> = {}) {
   delete environment.NEXT_PUBLIC_CF_ACCESS_CLIENT_SECRET;
   delete environment.CF_ACCESS_CLIENT_ID;
   delete environment.CF_ACCESS_CLIENT_SECRET;
-  return environment;
+  return { ...environment, ...overrides };
 }
 
 function validNonProductionEnvironment(overrides: Partial<NodeJS.ProcessEnv> = {}) {
@@ -187,6 +187,30 @@ describe('manual environment loading', () => {
       'CF_ACCESS_CLIENT_ID and CF_ACCESS_CLIENT_SECRET are both required for a remote document renderer',
     );
     expect(result.stderr).not.toContain(environment.CF_ACCESS_CLIENT_ID);
+  });
+
+  test('the environment validator rejects whitespace-only remote Cloudflare Access credentials', () => {
+    const cwd = temporaryProject('DATABASE_URL=postgresql://localhost/local-fallback\n');
+    const environment = validNonProductionEnvironment({
+      DOCUMENT_RENDERER_ENABLED: 'true',
+      GOTENBERG_URL: 'https://align-pdf-renderer.vyndra.tech',
+      GOTENBERG_USERNAME: 'align-renderer',
+      GOTENBERG_PASSWORD: 'renderer-secret',
+      GOTENBERG_EXPECTED_VERSION: '8.38.1',
+      CF_ACCESS_CLIENT_ID: 'renderer-service-token.access',
+      CF_ACCESS_CLIENT_SECRET: '   ',
+    });
+
+    const result = spawnSync(
+      process.execPath,
+      ['--experimental-strip-types', '--no-warnings', checkEnvScript],
+      { cwd, env: environment, encoding: 'utf8' },
+    );
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain(
+      'CF_ACCESS_CLIENT_ID and CF_ACCESS_CLIENT_SECRET are both required for a remote document renderer',
+    );
   });
 
   test('the environment validator keeps local Docker rendering compatible without Cloudflare Access', () => {
