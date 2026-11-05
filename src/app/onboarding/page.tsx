@@ -70,7 +70,7 @@ export default async function OnboardingPage() {
     : 0;
 
   return (
-    <main className="min-h-screen bg-neutral-50">
+    <main className="h-[100dvh] overflow-hidden bg-neutral-50">
       <OnboardingJourney
         // Serialised because the state carries Date fields, which cannot cross
         // the server/client boundary as-is.

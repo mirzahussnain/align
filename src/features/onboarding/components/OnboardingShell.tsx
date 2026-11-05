@@ -221,7 +221,7 @@ export function OnboardingExperience({
           className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_14%_18%,rgba(82,207,226,0.11),transparent_28%),radial-gradient(circle_at_86%_86%,rgba(14,165,233,0.06),transparent_30%)]"
         />
 
-        <div className="relative mx-auto grid min-h-[100dvh] max-w-[1480px] overflow-hidden bg-white shadow-[0_24px_90px_rgba(31,41,55,0.13)] lg:h-[calc(100dvh-2.5rem)] lg:min-h-0 lg:grid-cols-[minmax(300px,0.8fr)_minmax(0,1.65fr)] lg:rounded-2xl xl:h-[calc(100dvh-3.5rem)]">
+        <div className="relative mx-auto grid h-[100dvh] min-h-0 max-w-[1480px] overflow-hidden bg-white shadow-[0_24px_90px_rgba(31,41,55,0.13)] lg:h-[calc(100dvh-2.5rem)] lg:grid-cols-[minmax(300px,0.8fr)_minmax(0,1.65fr)] lg:rounded-2xl xl:h-[calc(100dvh-3.5rem)]">
           <aside className="relative hidden overflow-hidden bg-slate-900 px-8 py-8 text-white lg:flex lg:flex-col xl:px-10 xl:py-10">
             <div aria-hidden="true" className="pointer-events-none absolute -right-28 -top-24 h-80 w-80 rounded-full bg-cyan-300/10 blur-3xl" />
             <div aria-hidden="true" className="pointer-events-none absolute -bottom-40 -left-28 h-96 w-96 rounded-full bg-cyan-500/10 blur-3xl" />
