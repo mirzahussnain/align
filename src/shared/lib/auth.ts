@@ -114,7 +114,7 @@ export const authOptions = {
     after: createAuthMiddleware(async (ctx) => {
       const user = ctx.context.newSession?.user ?? ctx.context.session?.user;
       if (!user) return;
-      if (ctx.path === '/callback/google') {
+      if (ctx.path === '/callback/:id' && ctx.params.id === 'google') {
         await bestEffort(() => sendWelcomeEmailOnce(user));
       }
       if (ctx.path === '/change-password') {
