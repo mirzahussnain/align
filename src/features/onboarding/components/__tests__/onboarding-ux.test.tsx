@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { CapabilityDecision } from '@/shared/entitlements/registry';
-import { OnboardingShell } from '../OnboardingShell';
+import { OnboardingExperience, OnboardingShell } from '../OnboardingShell';
 import { GoalStep } from '../GoalStep';
 import { CvSourceStep } from '../CvSourceStep';
 import { FirstActionStep } from '../FirstActionStep';
@@ -71,6 +71,32 @@ describe('goal screen', () => {
 });
 
 describe('onboarding progress', () => {
+  it('keeps the mobile header fixed while long step content scrolls inside the viewport', () => {
+    const { container } = render(
+      <OnboardingExperience
+        stage={'CV_SOURCE'}
+        stages={['GOAL', 'CV_SOURCE', 'COMPLETE']}
+        stageIndex={1}
+      >
+        <div style={{ height: 1600 }}>Long onboarding step</div>
+      </OnboardingExperience>
+    );
+
+    const frame = container.querySelector('.grid');
+    const taskPanel = container.querySelector('section');
+    const mobileHeader = taskPanel?.querySelector('header');
+    const scrollPane = mobileHeader?.nextElementSibling;
+    const frameClasses = frame?.className.split(/\s+/) ?? [];
+
+    expect(frameClasses).toContain('h-[100dvh]');
+    expect(frameClasses).toContain('min-h-0');
+    expect(frameClasses).toContain('lg:h-[calc(100dvh-2.5rem)]');
+    expect(taskPanel?.className).toContain('min-h-0');
+    expect(taskPanel?.className).toContain('overflow-hidden');
+    expect(scrollPane?.className).toContain('overflow-y-auto');
+    expect(scrollPane?.previousElementSibling).toBe(mobileHeader);
+  });
+
   it('describes journey progress and never claims profile completeness', () => {
     const { container } = render(
       <OnboardingShell stageIndex={1} totalStages={9} title="Upload your CV">
