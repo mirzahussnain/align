@@ -103,4 +103,21 @@ describe('Better Auth lifecycle configuration', () => {
       authOptions.emailVerification?.afterEmailVerification?.(user)
     ).resolves.toBeUndefined();
   });
+
+  it('sends the welcome email after the Google OAuth callback route', async () => {
+    const afterHook = authOptions.hooks?.after as unknown as (ctx: {
+      path: string;
+      params: Record<string, string>;
+      context: { newSession: { user: typeof user }; session: null };
+    }) => Promise<void>;
+
+    await afterHook({
+      path: '/callback/:id',
+      params: { id: 'google' },
+      context: { newSession: { user }, session: null },
+    });
+
+    expect(mocks.sendWelcomeEmailOnce).toHaveBeenCalledOnce();
+    expect(mocks.sendWelcomeEmailOnce).toHaveBeenCalledWith(user);
+  });
 });
