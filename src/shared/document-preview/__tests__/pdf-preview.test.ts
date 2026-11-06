@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
+  classifyPdfParserFailure,
   inspectPdf,
   MAX_PREVIEW_PDF_PAGES,
   renderPdfPages,
 } from '../pdf-preview';
+import { __setDocumentPipelineLogSink } from '../diagnostics';
 
 function minimalPdf(pageCount: number): Buffer {
   const pageObjectStart = 3;
@@ -46,6 +48,18 @@ function pngDimensions(png: Buffer) {
 }
 
 describe('PDF preview inspection and rasterisation', () => {
+  it('classifies a missing PDF.js worker without retaining the module path', () => {
+    const failure = classifyPdfParserFailure(new Error(
+      'Setting up fake worker failed: Cannot find module /private/runtime/pdf.worker.mjs',
+    ));
+
+    expect(failure).toMatchObject({
+      code: 'PAGE_VALIDATION_UNAVAILABLE',
+      category: 'dependency_missing',
+    });
+    expect(failure.message).not.toContain('/private/runtime');
+  });
+
   it('reads the actual PDF page count', async () => {
     await expect(inspectPdf(minimalPdf(2))).resolves.toEqual({ pageCount: 2, finalPageOccupancy: 0 });
   });
@@ -69,6 +83,30 @@ describe('PDF preview inspection and rasterisation', () => {
     await expect(inspectPdf(Buffer.from('not a PDF'))).rejects.toMatchObject({
       code: 'PAGE_VALIDATION_UNAVAILABLE',
     });
+  });
+
+  it('records the safe failing parser stage without logging document contents', async () => {
+    const records: Array<Record<string, unknown>> = [];
+    const restore = __setDocumentPipelineLogSink((record) => records.push(record));
+    try {
+      await expect(
+        inspectPdf(Buffer.from('private candidate content'), {
+          traceId: 'generation_safe_trace',
+        }),
+      ).rejects.toMatchObject({ code: 'PAGE_VALIDATION_UNAVAILABLE' });
+    } finally {
+      restore();
+    }
+
+    expect(records).toEqual([{
+      evt: 'document_pipeline_stage_failed',
+      severity: 'error',
+      traceId: 'generation_safe_trace',
+      stage: 'pdf_open',
+      category: 'invalid_pdf',
+      durationMs: expect.any(Number),
+    }]);
+    expect(JSON.stringify(records)).not.toMatch(/private candidate content|%PDF-|credential/iu);
   });
 
   it('rejects page counts above the safe parser ceiling before raster fan-out', async () => {

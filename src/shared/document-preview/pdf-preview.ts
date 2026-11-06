@@ -4,6 +4,7 @@ import {
   getDocumentProxy,
   renderPageAsImage,
 } from 'unpdf';
+import { logDocumentPipelineEvent } from './diagnostics';
 
 export const MAX_PREVIEW_PDF_PAGES = 10;
 export const PDF_PREVIEW_PARSE_TIMEOUT_MS = 15_000;
@@ -25,10 +26,22 @@ export interface PdfInspection {
   finalPageOccupancy: number;
 }
 
+export interface PdfInspectionContext {
+  traceId?: string;
+}
+
+export type PdfValidationErrorCategory =
+  | 'dependency_missing'
+  | 'invalid_pdf'
+  | 'page_count_out_of_range'
+  | 'parser_error'
+  | 'timeout';
+
 export class PageValidationError extends Error {
   constructor(
     readonly code: PageValidationFailureCode,
     readonly observed: ObservedPageCount[] = [],
+    readonly category: PdfValidationErrorCategory = 'parser_error',
   ) {
     super(
       code === 'PAGE_LIMIT_EXCEEDED'
@@ -53,7 +66,7 @@ function ensurePdfJs() {
 function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
   return new Promise<T>((resolve, reject) => {
     const timer = setTimeout(
-      () => reject(new PageValidationError('PAGE_VALIDATION_UNAVAILABLE')),
+      () => reject(new PageValidationError('PAGE_VALIDATION_UNAVAILABLE', [], 'timeout')),
       timeoutMs,
     );
     promise.then(
@@ -71,7 +84,7 @@ function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
 
 function assertPdfBytes(pdf: Buffer) {
   if (pdf.length < 5 || pdf.subarray(0, 5).toString('ascii') !== '%PDF-') {
-    throw new PageValidationError('PAGE_VALIDATION_UNAVAILABLE');
+    throw new PageValidationError('PAGE_VALIDATION_UNAVAILABLE', [], 'invalid_pdf');
   }
 }
 
@@ -81,7 +94,7 @@ function assertSafePageCount(pageCount: number) {
     pageCount < 1 ||
     pageCount > MAX_PREVIEW_PDF_PAGES
   ) {
-    throw new PageValidationError('PAGE_VALIDATION_UNAVAILABLE');
+    throw new PageValidationError('PAGE_VALIDATION_UNAVAILABLE', [], 'page_count_out_of_range');
   }
 }
 
@@ -105,18 +118,40 @@ async function cleanup(proxy: PdfProxy | undefined) {
   }
 }
 
-function unavailable(error: unknown): never {
-  if (error instanceof PageValidationError) throw error;
-  throw new PageValidationError('PAGE_VALIDATION_UNAVAILABLE');
+export function classifyPdfParserFailure(error: unknown): PageValidationError {
+  if (error instanceof PageValidationError) return error;
+  const code = typeof error === 'object' && error !== null && 'code' in error
+    ? String(error.code)
+    : '';
+  const message = error instanceof Error ? error.message : '';
+  const dependencyMissing = code === 'ERR_MODULE_NOT_FOUND'
+    || /cannot find module|setting up fake worker failed/iu.test(message);
+  return new PageValidationError(
+    'PAGE_VALIDATION_UNAVAILABLE',
+    [],
+    dependencyMissing ? 'dependency_missing' : 'parser_error',
+  );
 }
 
-export async function inspectPdf(pdf: Buffer): Promise<PdfInspection> {
+function unavailable(error: unknown): PageValidationError {
+  return classifyPdfParserFailure(error);
+}
+
+export async function inspectPdf(
+  pdf: Buffer,
+  context: PdfInspectionContext = {},
+): Promise<PdfInspection> {
+  const startedAt = Date.now();
+  let stage = 'pdf_open';
   let proxy: PdfProxy | undefined;
   try {
     proxy = await openPdf(pdf);
+    stage = 'pdf_page_count';
     assertSafePageCount(proxy.numPages);
+    stage = 'pdf_page_load';
     const page = await withTimeout(proxy.getPage(proxy.numPages), PDF_PREVIEW_PARSE_TIMEOUT_MS);
     const viewport = page.getViewport({ scale: 1 });
+    stage = 'pdf_text_extract';
     const content = await withTimeout(page.getTextContent(), PDF_PREVIEW_PARSE_TIMEOUT_MS);
     const baselines = content.items.flatMap((item) => {
       if (!('transform' in item) || !Array.isArray(item.transform)) return [];
@@ -125,9 +160,27 @@ export async function inspectPdf(pdf: Buffer): Promise<PdfInspection> {
     });
     const lowestBaseline = baselines.length ? Math.min(...baselines) : viewport.height;
     const finalPageOccupancy = Math.max(0, Math.min(1, (viewport.height - lowestBaseline) / viewport.height));
-    return { pageCount: proxy.numPages, finalPageOccupancy };
+    const result = { pageCount: proxy.numPages, finalPageOccupancy };
+    if (context.traceId) {
+      logDocumentPipelineEvent('document_pipeline_stage_completed', {
+        traceId: context.traceId,
+        stage: 'pdf_validation',
+        category: 'page_count_verified',
+        durationMs: Date.now() - startedAt,
+      });
+    }
+    return result;
   } catch (error) {
-    return unavailable(error);
+    const normalized = unavailable(error);
+    if (context.traceId) {
+      logDocumentPipelineEvent('document_pipeline_stage_failed', {
+        traceId: context.traceId,
+        stage,
+        category: normalized.category,
+        durationMs: Date.now() - startedAt,
+      });
+    }
+    throw normalized;
   } finally {
     await cleanup(proxy);
   }
@@ -174,7 +227,7 @@ export async function renderPdfPages(
     }
     return pages;
   } catch (error) {
-    return unavailable(error);
+    throw unavailable(error);
   } finally {
     await cleanup(proxy);
   }

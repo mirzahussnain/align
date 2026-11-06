@@ -14,6 +14,7 @@ import {
   RendererConfigurationError,
   rendererConfig,
 } from '../renderer-config';
+import { __setDocumentPipelineLogSink } from '../diagnostics';
 
 const originalEnvironment = { ...process.env };
 
@@ -115,6 +116,30 @@ describe('renderer configuration', () => {
 });
 
 describe('private Gotenberg client', () => {
+  it('records disabled renderer configuration without exposing configuration values', async () => {
+    delete process.env.DOCUMENT_RENDERER_ENABLED;
+    const records: Array<Record<string, unknown>> = [];
+    const restore = __setDocumentPipelineLogSink((record) => records.push(record));
+    try {
+      await expect(convertDocxToPdf({
+        docx: Buffer.from('private docx content'),
+        traceId: 'generation_disabled',
+      })).rejects.toMatchObject({ code: 'RENDERER_UNAVAILABLE' });
+    } finally {
+      restore();
+    }
+
+    expect(records).toEqual([{
+      evt: 'document_pipeline_stage_failed',
+      severity: 'error',
+      traceId: 'generation_disabled',
+      stage: 'renderer_configuration',
+      category: 'disabled',
+      durationMs: expect.any(Number),
+    }]);
+    expect(JSON.stringify(records)).not.toMatch(/private docx content|GOTENBERG_/u);
+  });
+
   it('forces authenticated renderer requests to reject redirects', () => {
     process.env.GOTENBERG_URL = 'https://align-pdf-renderer.vyndra.tech';
     process.env.CF_ACCESS_CLIENT_ID = 'renderer-service-token.access';
@@ -179,6 +204,37 @@ describe('private Gotenberg client', () => {
     })).resolves.toBeInstanceOf(Buffer);
     expect(String(request.mock.calls[0]?.[0])).toBe(
       'https://align-pdf-renderer.vyndra.tech/forms/libreoffice/convert',
+    );
+  });
+
+  it('records a safe successful upstream boundary before local PDF validation', async () => {
+    process.env.GOTENBERG_URL = 'https://align-pdf-renderer.vyndra.tech';
+    process.env.CF_ACCESS_CLIENT_ID = 'renderer-service-token.access';
+    process.env.CF_ACCESS_CLIENT_SECRET = 'cloudflare-service-token-secret';
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(pdfResponse()));
+    const records: Array<Record<string, unknown>> = [];
+    const restore = __setDocumentPipelineLogSink((record) => records.push(record));
+
+    try {
+      await convertDocxToPdf({
+        docx: Buffer.from('private docx content'),
+        traceId: 'generation_observed',
+      });
+    } finally {
+      restore();
+    }
+
+    expect(records).toEqual([{
+      evt: 'document_pipeline_stage_completed',
+      severity: 'info',
+      traceId: 'generation_observed',
+      stage: 'gotenberg_conversion',
+      category: 'pdf_response',
+      upstreamStatus: 200,
+      durationMs: expect.any(Number),
+    }]);
+    expect(JSON.stringify(records)).not.toMatch(
+      /private docx content|cloudflare-service-token-secret|a-high-entropy-test-secret/iu,
     );
   });
 
@@ -291,7 +347,10 @@ describe('private Gotenberg client', () => {
       }),
     ).rejects.toBeInstanceOf(DocumentConversionError);
     expect(request).toHaveBeenCalledTimes(1);
-    expect(logger).not.toHaveBeenCalled();
+    expect(logger).toHaveBeenCalledOnce();
+    expect(JSON.stringify(logger.mock.calls)).not.toMatch(
+      /private renderer detail|a-high-entropy-test-secret/iu,
+    );
   });
 
   it('does not expose remote response bodies or Cloudflare credentials on HTTP failure', async () => {

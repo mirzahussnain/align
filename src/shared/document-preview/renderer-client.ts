@@ -4,6 +4,7 @@ import {
   RendererConfigurationError,
   type DocumentRendererConfig,
 } from './renderer-config';
+import { logDocumentPipelineEvent } from './diagnostics';
 
 export const MAX_DOCX_BYTES = 10 * 1024 * 1024;
 
@@ -132,10 +133,21 @@ async function sendConversion(
   input: ConvertDocxInput,
   config: DocumentRendererConfig,
 ): Promise<Buffer> {
+  const startedAt = Date.now();
+  const logFailure = (category: string, upstreamStatus?: number) => {
+    logDocumentPipelineEvent('document_pipeline_stage_failed', {
+      traceId: input.traceId,
+      stage: 'gotenberg_conversion',
+      category,
+      durationMs: Date.now() - startedAt,
+      upstreamStatus,
+    });
+  };
   const remaining = input.deadlineAt === undefined
     ? config.timeoutMs
     : Math.min(config.timeoutMs, input.deadlineAt - Date.now());
   if (remaining <= 0) {
+    logFailure('deadline_exceeded');
     throw new DocumentConversionError('Document-rendering deadline exceeded', true);
   }
 
@@ -164,9 +176,11 @@ async function sendConversion(
     );
   } catch (error) {
     if (request.signal.aborted) {
+      logFailure('timeout_or_cancelled');
       throw new DocumentConversionError('Document renderer timed out or was cancelled', true);
     }
     if (error instanceof TypeError) {
+      logFailure('network_error');
       throw new DocumentConversionError(
         'Document renderer network request failed',
         true,
@@ -174,12 +188,14 @@ async function sendConversion(
         true,
       );
     }
+    logFailure('request_error');
     throw new DocumentConversionError('Document renderer request failed', false);
   } finally {
     request.dispose();
   }
 
   if (!response.ok) {
+    logFailure('upstream_http', response.status);
     throw new DocumentConversionError(
       `Document renderer returned HTTP ${response.status}`,
       retryableStatus(response.status),
@@ -189,12 +205,27 @@ async function sendConversion(
   }
   const contentType = response.headers.get('content-type')?.split(';', 1)[0]?.trim();
   if (contentType !== 'application/pdf') {
+    logFailure('unexpected_content_type', response.status);
     throw new DocumentConversionError('Document renderer returned a non-PDF response', false);
   }
-  const pdf = Buffer.from(await response.arrayBuffer());
+  let pdf: Buffer;
+  try {
+    pdf = Buffer.from(await response.arrayBuffer());
+  } catch {
+    logFailure('response_read_error', response.status);
+    throw new DocumentConversionError('Document renderer response could not be read', true);
+  }
   if (pdf.length < 5 || pdf.subarray(0, 5).toString('ascii') !== '%PDF-') {
+    logFailure('invalid_pdf_response', response.status);
     throw new DocumentConversionError('Document renderer returned invalid PDF bytes', false);
   }
+  logDocumentPipelineEvent('document_pipeline_stage_completed', {
+    traceId: input.traceId,
+    stage: 'gotenberg_conversion',
+    category: 'pdf_response',
+    durationMs: Date.now() - startedAt,
+    upstreamStatus: response.status,
+  });
   return pdf;
 }
 
@@ -206,16 +237,31 @@ export async function convertDocxToPdf(input: ConvertDocxInput): Promise<Buffer>
     throw new DocumentConversionError('DOCX exceeds the renderer input limit', false, 413);
   }
 
+  const configurationStartedAt = Date.now();
   let config: DocumentRendererConfig;
   try {
     config = rendererConfig();
   } catch (error) {
     if (error instanceof RendererConfigurationError) {
+      logDocumentPipelineEvent('document_pipeline_stage_failed', {
+        traceId: input.traceId,
+        stage: 'renderer_configuration',
+        category: 'invalid_configuration',
+        durationMs: Date.now() - configurationStartedAt,
+      });
       throw new RendererUnavailableError();
     }
     throw error;
   }
-  if (!config.enabled) throw new RendererUnavailableError();
+  if (!config.enabled) {
+    logDocumentPipelineEvent('document_pipeline_stage_failed', {
+      traceId: input.traceId,
+      stage: 'renderer_configuration',
+      category: 'disabled',
+      durationMs: Date.now() - configurationStartedAt,
+    });
+    throw new RendererUnavailableError();
+  }
 
   const retryBudget = input.retryBudget ?? createRendererRetryBudget(1);
   for (;;) {

@@ -78,6 +78,7 @@ describe('document renderer deployment contract', () => {
   it('traces the PDF.js font assets needed to validate generated CV pages', () => {
     const includes = nextConfig.outputFileTracingIncludes as Record<string, string[]>;
     const requiredAssets = [
+      'node_modules/pdfjs-dist/legacy/build/pdf.worker.mjs',
       'node_modules/pdfjs-dist/standard_fonts/**/*',
       'node_modules/pdfjs-dist/cmaps/**/*',
     ];

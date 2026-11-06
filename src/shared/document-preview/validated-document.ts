@@ -19,6 +19,7 @@ import {
   renderPdfPages,
   type ObservedPageCount,
   type PdfInspection,
+  type PdfInspectionContext,
 } from './pdf-preview';
 
 export const UNDERFILLED_FINAL_PAGE_THRESHOLD = 0.3;
@@ -38,7 +39,7 @@ export interface RenderDependencies {
     retryBudget?: RendererRetryBudget;
     deadlineAt?: number;
   }) => Promise<Buffer>;
-  inspect?: (pdf: Buffer) => Promise<PdfInspection>;
+  inspect?: (pdf: Buffer, context?: PdfInspectionContext) => Promise<PdfInspection>;
   renderPages?: (pdf: Buffer, pageCount: 1 | 2) => Promise<Buffer[]>;
   rendererContractVersion?: string;
 }
@@ -104,7 +105,9 @@ export async function renderValidatedDocument(
       retryBudget: input.retryBudget,
       deadlineAt: input.deadlineAt,
     });
-    const { pageCount, finalPageOccupancy } = await inspect(pdf);
+    const { pageCount, finalPageOccupancy } = await inspect(pdf, {
+      traceId: input.traceId,
+    });
     if (!Number.isSafeInteger(pageCount) || pageCount < 1) {
       throw new PageValidationError('PAGE_VALIDATION_UNAVAILABLE', observed);
     }
