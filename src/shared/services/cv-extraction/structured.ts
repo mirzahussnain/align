@@ -3,6 +3,7 @@ import {
   firstHeadingLine,
   headingAt,
   linesForSection,
+  sectionIdAt,
   sectionCv,
   type CvSectionId,
   type SectionedCv,
@@ -56,7 +57,7 @@ import type { NormalizedDocumentBlock } from './document/types';
  * this explicit so a bug fix that changes extracted evidence invalidates the
  * deterministic extraction cache without pretending the JSON shape changed.
  */
-export const CV_PARSER_VERSION = 'cv-extract@2.4';
+export const CV_PARSER_VERSION = 'cv-extract@2.5';
 
 const BULLET = /^[-*•▪◦●·‣–—]\s+/;
 const EMAIL = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/;
@@ -944,8 +945,31 @@ function readLanguages(sectioned: SectionedCv): ExtractedLanguage[] {
  * confirms it. Career-history sections never route here.
  */
 function readOtherEvidence(sectioned: SectionedCv) {
-  return linesForSection(sectioned, 'achievements')
-    .map(({ index, text }) => ({ index, text: stripBullet(text) }))
+  const entries: Array<{ index: number; text: string; sectionLine: number }> = [];
+
+  for (const section of sectioned.sections.filter(
+    ({ id }) => id === 'achievements' || id === 'research-interests'
+  )) {
+    for (const line of section.lines) {
+      const text = stripBullet(line.text);
+      if (!text) continue;
+      const previous = entries.at(-1);
+      const continuesPrevious =
+        previous?.sectionLine === section.headingLine &&
+        /^\p{Ll}/u.test(text) &&
+        !BULLET.test(line.text) &&
+        !/[.!?]$/u.test(previous.text);
+
+      if (continuesPrevious && previous) {
+        previous.text = `${previous.text} ${text}`;
+      } else {
+        entries.push({ index: line.index, text, sectionLine: section.headingLine });
+      }
+    }
+  }
+
+  return entries
+    .sort((left, right) => left.index - right.index)
     .filter(({ text }) => text.length >= 12)
     .map(({ index, text }) => ({
       title: sourceExcerpt(text, 80),
@@ -1036,7 +1060,11 @@ function contactLinks(sectioned: SectionedCv, links: ExtractedLink[]): Extracted
     if (link.line !== undefined) {
       // Placed outside the contact block: only a labelled personal site is
       // rescued, and only as a website.
-      return labelClaimsPersonalSite(link.visibleText) && classifyLinkUrl(link.url) === 'web';
+      const textLabel = sectionIdAt(sectioned, link.line) === 'links'
+        ? link.surroundingText
+        : undefined;
+      return labelClaimsPersonalSite(link.visibleText ?? textLabel)
+        && classifyLinkUrl(link.url) === 'web';
     }
     const kind = classifyLinkUrl(link.url);
     return kind === 'linkedin_profile' || kind === 'github_profile' || kind === 'email';

@@ -340,6 +340,86 @@ describe('CV extraction acceptance matrix', () => {
     expect(report.reviewIssues).toEqual([]);
     expect(report.destructiveGuesses).toEqual([]);
   });
+  it('keeps academic CV sections in their intended profile entities', async () => {
+    const { structured } = await extractAcceptance(minimalPdf([
+      'Hussnain Ali',
+      'Applied AI & Software Engineering | Prospective Doctoral Researcher',
+      'RESEARCH PROFILE',
+      'Applied AI and software engineering graduate interested in reliable ML and LLM systems.',
+      'RESEARCH INTERESTS',
+      'AI Engineering | Applied Machine Learning |',
+      'for AI and explainable systems',
+      'RESEARCH EXPERIENCE',
+      "Master's Dissertation Research | Ulster University | 2025",
+      'Evaluated machine-learning models for stroke-risk prediction.',
+      'SELECTED AI & SOFTWARE ENGINEERING PROJECTS',
+      'Vystra - AI Semantic Video Search SaaS',
+      'Independent project | Next.js | FastAPI',
+      'Built semantic video retrieval with embeddings and RAG.',
+      'CereSafe - Explainable Stroke Risk Prediction Platform',
+      'MSc-linked applied ML project | Next.js | SHAP',
+      'Integrated a trained risk model with explainability outputs.',
+      'Align - ATS & Job-Matching Platform',
+      'Independent project | TypeScript | PostgreSQL',
+      'Built weighted job matching and CV generation workflows.',
+      'SOFTWARE ENGINEERING & SYSTEMS EXPERIENCE',
+      'Independent Software Engineer | Birmingham, UK | Oct 2025 - Present',
+      'Built production AI-enabled applications and data pipelines.',
+      'AWARDS & ACADEMIC RECOGNITION',
+      'Ulster University MSc Distinction (72%).',
+      'First Place - Open House Software Competition for reusable software',
+      'modules.',
+      "Dean's List Recognition",
+      'Research Scholarship',
+      'RESEARCH READINESS & ADDITIONAL INFORMATION',
+      'Open to relocation for doctoral research.',
+      'SELECTED LINKS',
+      'Portfolio: hussnainali.me',
+      'Hussnain Ali | Academic CV | 2',
+      'HOBBIES',
+      'Landscape Photography',
+    ]), 'Hussnain Ali', [
+      'Vystra - AI Semantic Video Search SaaS',
+      'CereSafe - Explainable Stroke Risk Prediction Platform',
+      'Align - ATS & Job-Matching Platform',
+    ]);
+
+    expect(structured.detectedSections).toEqual([
+      'RESEARCH PROFILE',
+      'RESEARCH INTERESTS',
+      'RESEARCH EXPERIENCE',
+      'SELECTED AI & SOFTWARE ENGINEERING PROJECTS',
+      'SOFTWARE ENGINEERING & SYSTEMS EXPERIENCE',
+      'AWARDS & ACADEMIC RECOGNITION',
+      'RESEARCH READINESS & ADDITIONAL INFORMATION',
+      'SELECTED LINKS',
+      'HOBBIES',
+    ]);
+    expect(structured.summary).toBe(
+      'Applied AI and software engineering graduate interested in reliable ML and LLM systems.'
+    );
+    expect(structured.experience.map(({ jobTitle }) => jobTitle)).toEqual([
+      expect.stringMatching(/^Master.s Dissertation Research$/),
+      'Independent Software Engineer',
+    ]);
+    expect(structured.projects.map(({ name }) => name)).toEqual([
+      'Vystra - AI Semantic Video Search SaaS',
+      'CereSafe - Explainable Stroke Risk Prediction Platform',
+      'Align - ATS & Job-Matching Platform',
+    ]);
+    expect(structured.otherEvidence.map(({ description }) => description)).toEqual([
+      'AI Engineering | Applied Machine Learning | for AI and explainable systems',
+      'Ulster University MSc Distinction (72%).',
+      'First Place - Open House Software Competition for reusable software modules.',
+      expect.stringMatching(/^Dean.s List Recognition$/),
+      'Research Scholarship',
+      'Open to relocation for doctoral research.',
+    ]);
+    expect(structured.identity.website).toBe('https://hussnainali.me');
+    expect(structured.skills.map(({ name }) => name)).not.toContain(
+      'RESEARCH READINESS & ADDITIONAL INFORMATION'
+    );
+  });
 
   it('keeps employer-first operations facts and table-owned skill categories', async () => {
     const { structured, report } = await extractAcceptance(await employerFirstOperationsDocx(), 'Morgan Ellis');

@@ -158,13 +158,16 @@ function canStartPlainProject(
   block: NormalizedDocumentBlock,
   previous: NormalizedDocumentBlock | undefined,
   next: NormalizedDocumentBlock | undefined,
+  following: NormalizedDocumentBlock | undefined,
   isFirst: boolean
 ): boolean {
   if (isDetail(block)) return false;
   if (isFirst) return true;
   if (findDateRange(block.text)) return true;
   if (linksOf(block).some(isProjectLink)) return true;
-  return Boolean(previous && isDetail(previous) && (!next || isDetail(next)));
+  return Boolean(
+    previous && isDetail(previous) && (!next || isDetail(next) || isMetadataRow(next, following))
+  );
 }
 
 function isMetadataRow(
@@ -195,6 +198,7 @@ function readGroup(
     const block = blocks[index];
     const previous = blocks[index - 1];
     const next = blocks[index + 1];
+    const following = blocks[index + 2];
     const blockLinks = linksOf(block);
     if (open && isLinkOnlyBlock(block, blockLinks)) {
       open.blocks.push(block);
@@ -203,7 +207,7 @@ function readGroup(
     }
     const embeddedIdentity = !allowUnlinkedIdentity && isStyledPeer(block) && blockLinks.some(isProjectLink);
     const independentIdentity = allowUnlinkedIdentity && (
-      isStyledPeer(block) || canStartPlainProject(block, previous, next, projects.length === 0)
+      isStyledPeer(block) || canStartPlainProject(block, previous, next, following, projects.length === 0)
     );
 
     if (embeddedIdentity || independentIdentity) {

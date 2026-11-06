@@ -24,6 +24,8 @@ export type CvSectionId =
   | 'volunteering'
   | 'achievements'
   | 'interests'
+  | 'research-interests'
+  | 'links'
   | 'references';
 
 /**
@@ -41,12 +43,15 @@ const SECTION_VOCABULARY: Record<CvSectionId, readonly string[]> = {
     'about', 'career objective', 'objective', 'personal statement',
     'career summary', 'executive summary', 'overview', 'professional overview',
     'career overview', 'summary of qualifications', 'profile summary',
+    'research profile',
   ],
   experience: [
     'experience', 'work experience', 'professional experience', 'employment',
     'employment history', 'work history', 'career history', 'relevant experience',
     'clinical experience', 'professional background', 'engagements',
     'research experience',
+    'software engineering & systems experience',
+    'software engineering and systems experience',
   ],
   education: [
     'education', 'education and qualifications', 'qualifications',
@@ -65,6 +70,8 @@ const SECTION_VOCABULARY: Record<CvSectionId, readonly string[]> = {
     'academic project', 'projects & portfolio', 'projects and portfolio',
     'side projects', 'technical projects', 'notable projects', 'featured projects',
     'projects and achievements', 'selected work', 'research projects',
+    'selected ai & software engineering projects',
+    'selected ai and software engineering projects',
   ],
   certifications: [
     'certifications', 'certificates', 'certifications and licences',
@@ -88,9 +95,16 @@ const SECTION_VOCABULARY: Record<CvSectionId, readonly string[]> = {
   achievements: [
     'achievements', 'key achievements', 'accomplishments', 'awards',
     'awards and honours', 'honours', 'awards & achievements',
+    'awards & academic recognition', 'awards and academic recognition',
+    'research readiness & additional information',
+    'research readiness and additional information',
   ],
-  interests: ['interests', 'hobbies', 'hobbies and interests', 'personal interests'],
+  interests: [
+    'interests', 'hobbies', 'hobbies and interests', 'personal interests',
+  ],
+  'research-interests': ['research interests'],
   references: ['references', 'referees'],
+  links: ['links', 'selected links', 'portfolio links', 'online profiles'],
 };
 
 const HEADINGS: { phrase: string; id: CvSectionId }[] = Object.entries(SECTION_VOCABULARY)
