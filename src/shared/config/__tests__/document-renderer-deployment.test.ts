@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
+import nextConfig from '../../../../next.config';
 
 const root = process.cwd();
 const read = (file: string) => readFileSync(path.join(root, file), 'utf8');
@@ -72,5 +73,16 @@ describe('document renderer deployment contract', () => {
     for (const packageName of ['@napi-rs/canvas', 'unpdf', 'pdfjs-dist']) {
       expect(nextConfig).toContain(`'${packageName}'`);
     }
+  });
+
+  it('traces the PDF.js font assets needed to validate generated CV pages', () => {
+    const includes = nextConfig.outputFileTracingIncludes as Record<string, string[]>;
+    const requiredAssets = [
+      'node_modules/pdfjs-dist/standard_fonts/**/*',
+      'node_modules/pdfjs-dist/cmaps/**/*',
+    ];
+
+    expect(includes['/api/cv-generations/*/generate']).toEqual(requiredAssets);
+    expect(includes['/api/cv/*/preview']).toEqual(requiredAssets);
   });
 });

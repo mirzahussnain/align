@@ -87,4 +87,46 @@ describe('CV generation evidence reconciliation grouping', () => {
       sectionOrder: ['PROFILE', 'PROJECTS', 'SKILLS'],
     });
   });
+
+  it('retries generation without reapproving an immutable plan', async () => {
+    const plan: ProposedCvPlan = {
+      schemaVersion: 1, sourceMode: 'CAREER_PROFILE', atsStrategy: 'STANDARD', targetStrategy: 'PROFILE_ONLY',
+      sectionOrder: ['PROFILE', 'SKILLS'], density: 'SPACIOUS', targetLength: 'ONE_PAGE',
+      includedEvidenceIds: [], optionalEvidenceIds: [], omittedEvidence: [],
+      professionalLinkIds: [], projectLinkIds: [], coveredRequirementIds: [], unresolvedRequirementIds: [],
+    };
+    let generationAttempts = 0;
+    const response = (body: unknown, status = 200) => Promise.resolve(new Response(JSON.stringify(body), {
+      status, headers: { 'Content-Type': 'application/json' },
+    }));
+    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith('/api/cv-generations')) return response({ generationId: 'generation-retry', gaps: [], evidence: emptyCandidateEvidence(), remaining: 0 }, 201);
+      if (url.endsWith('/plan')) return response({ plan });
+      if (url.endsWith('/approve')) return response({ plan });
+      if (url.endsWith('/generate')) {
+        generationAttempts += 1;
+        if (generationAttempts === 1) return response({
+          error: { code: 'RENDERER_UNAVAILABLE', message: 'Document rendering is temporarily unavailable.', retryable: true },
+        }, 503);
+        return Promise.resolve(new Response(new Blob(['docx'])));
+      }
+      throw new Error(`Unhandled request: ${url}`);
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    const user = userEvent.setup();
+    render(<CvGenerationWizard isOpen onClose={vi.fn()} profileComplete activeProfileId="profile-1" />);
+
+    await user.click(screen.getByRole('button', { name: /start reconciliation/i }));
+    await user.click(await screen.findByRole('button', { name: 'Review CV plan' }));
+    await user.click(screen.getByRole('button', { name: 'Choose template' }));
+    await user.click(screen.getByRole('button', { name: 'Approve plan and generate' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Document rendering is temporarily unavailable.');
+    await user.click(screen.getByRole('button', { name: 'Retry generation' }));
+    await screen.findByRole('heading', { name: 'Your CV is ready' });
+
+    expect(fetchMock.mock.calls.filter(([url]) => String(url).endsWith('/approve'))).toHaveLength(1);
+    expect(fetchMock.mock.calls.filter(([url]) => String(url).endsWith('/generate'))).toHaveLength(2);
+  });
 });

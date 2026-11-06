@@ -18,7 +18,7 @@ import { DEFAULT_TEMPLATE_ID, type TemplateId } from '@/shared/constants/templat
 import EvidenceReconciliationStep from './EvidenceReconciliationStep';
 import TemplateCarousel from './TemplateCarousel';
 
-type Step = 'SOURCE' | 'GAPS' | 'REVIEW' | 'DESIGN' | 'GENERATING' | 'DONE';
+type Step = 'SOURCE' | 'GAPS' | 'REVIEW' | 'DESIGN' | 'GENERATING' | 'GENERATION_FAILED' | 'DONE';
 
 interface Props {
   isOpen: boolean;
@@ -51,10 +51,23 @@ function wizardStepFor(step: Step): number {
   if (step === 'REVIEW' || step === 'DESIGN') return 3;
   return 4;
 }
+
+function responseErrorMessage(payload: unknown, fallback: string) {
+  if (!payload || typeof payload !== 'object') return fallback;
+  const body = payload as { message?: unknown; error?: unknown };
+  if (typeof body.message === 'string') return body.message;
+  if (typeof body.error === 'string') return body.error;
+  if (body.error && typeof body.error === 'object' && 'message' in body.error) {
+    const message = (body.error as { message?: unknown }).message;
+    if (typeof message === 'string') return message;
+  }
+  return fallback;
+}
+
 async function jsonRequest<T>(url: string, init?: RequestInit): Promise<T> {
   const response = await fetch(url, init);
   const payload = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(typeof payload?.message === 'string' ? payload.message : 'The request could not be completed.');
+  if (!response.ok) throw new Error(responseErrorMessage(payload, 'The request could not be completed.'));
   return payload as T;
 }
 
@@ -139,20 +152,27 @@ export default function CvGenerationWizard({
   async function approvePlan() {
     if (!generationId || !plan) return;
     setMainBusy(true); setError(null);
+    let planIsApproved = step === 'GENERATION_FAILED';
     try {
-      await jsonRequest(`/api/cv-generations/${generationId}/approve`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ template, excludedOptionalEvidenceIds: excludedOptional, sectionOrder }),
-      });
+      if (!planIsApproved) {
+        await jsonRequest(`/api/cv-generations/${generationId}/approve`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ template, excludedOptionalEvidenceIds: excludedOptional, sectionOrder }),
+        });
+        planIsApproved = true;
+      }
       setStep('GENERATING');
       const response = await fetch(`/api/cv-generations/${generationId}/generate`, { method: 'POST' });
       if (!response.ok) {
         const payload = await response.json().catch(() => ({}));
-        throw new Error(typeof payload?.message === 'string' ? payload.message : 'CV generation failed.');
+        throw new Error(responseErrorMessage(payload, 'CV generation failed.'));
       }
       const blob = await response.blob();
       const url = URL.createObjectURL(blob); setDownloadUrl(url); setStep('DONE'); onGenerated?.();
-    } catch (cause) { setError(cause instanceof Error ? cause.message : 'CV generation failed.'); setStep('DESIGN'); }
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'CV generation failed.');
+      setStep(planIsApproved ? 'GENERATION_FAILED' : 'DESIGN');
+    }
     finally { setMainBusy(false); }
   }
 
@@ -196,10 +216,11 @@ export default function CvGenerationWizard({
 
           {step === 'DESIGN' && <div className="min-w-0 space-y-6"><div><h3 className="text-lg font-bold text-text-primary">Choose the presentation</h3><p className="mt-1 text-sm text-text-secondary">Templates change layout, not the approved evidence selection.</p></div><TemplateCarousel template={template} onTemplateChange={setTemplate} /><div className="flex gap-3 rounded-2xl border border-accent-cyan/30 bg-accent-cyan/10 p-4 text-sm text-text-primary"><ShieldCheck className="mt-0.5 h-5 w-5 shrink-0" /><p><strong>Evidence-safe generation:</strong> wording may be tightened for the target, but unsupported claims, invented metrics, and guaranteed ATS outcomes are not permitted.</p></div></div>}
           {step === 'GENERATING' && <div className="flex min-h-64 flex-col items-center justify-center text-center"><Loader2 className="h-8 w-8 animate-spin text-accent-cyan" /><h3 className="mt-5 text-lg font-bold text-text-primary">Building your approved CV</h3><p className="mt-2 max-w-md text-sm text-text-secondary">Rewriting approved evidence, validating preservation, and rendering the document.</p></div>}
+          {step === 'GENERATION_FAILED' && <div className="flex min-h-64 flex-col items-center justify-center text-center"><h3 className="text-lg font-bold text-text-primary">Generation paused</h3><p className="mt-2 max-w-md text-sm text-text-secondary">Your CV plan is approved and saved. Retry generation without approving or changing the plan again.</p></div>}
           {step === 'DONE' && <div className="flex min-h-64 flex-col items-center justify-center text-center"><span className="flex h-12 w-12 items-center justify-center rounded-full bg-success/10 text-success"><Check /></span><h3 className="mt-5 text-xl font-bold text-text-primary">Your CV is ready</h3><p className="mt-2 text-sm text-text-secondary">The saved document was built from the plan you approved.</p>{downloadUrl && <a href={downloadUrl} download="CV.docx" className="mt-5 inline-flex items-center gap-2 rounded-full bg-brand-primary px-5 py-3 text-sm font-bold text-bg-secondary"><Download size={16} />Download DOCX</a>}</div>}
         </div>
 
-        {!['GENERATING', 'DONE'].includes(step) && <footer className="flex items-center justify-between border-t border-border-subtle bg-bg-primary px-5 py-4 sm:px-7"><button type="button" onClick={() => setStep(step === 'DESIGN' ? 'REVIEW' : step === 'REVIEW' ? 'GAPS' : 'SOURCE')} disabled={step === 'SOURCE' || mainBusy} className="inline-flex items-center gap-1 text-sm font-semibold text-text-secondary disabled:invisible"><ChevronLeft size={16} />Back</button>{step === 'SOURCE' ? <Button onClick={startSession} isLoading={mainBusy} disabled={sourceMode === 'JOB_MATCH' ? !jobMatchId : !activeProfileId}>Start reconciliation</Button> : step === 'GAPS' ? <Button onClick={createPlan} isLoading={mainBusy}>Review CV plan</Button> : step === 'REVIEW' ? <Button onClick={() => setStep('DESIGN')}>Choose template</Button> : <Button onClick={approvePlan} isLoading={mainBusy}>Approve plan and generate</Button>}</footer>}
+        {!['GENERATING', 'DONE'].includes(step) && <footer className="flex items-center justify-between border-t border-border-subtle bg-bg-primary px-5 py-4 sm:px-7"><button type="button" onClick={() => setStep(step === 'DESIGN' ? 'REVIEW' : step === 'REVIEW' ? 'GAPS' : 'SOURCE')} disabled={step === 'SOURCE' || step === 'GENERATION_FAILED' || mainBusy} className="inline-flex items-center gap-1 text-sm font-semibold text-text-secondary disabled:invisible"><ChevronLeft size={16} />Back</button>{step === 'SOURCE' ? <Button onClick={startSession} isLoading={mainBusy} disabled={sourceMode === 'JOB_MATCH' ? !jobMatchId : !activeProfileId}>Start reconciliation</Button> : step === 'GAPS' ? <Button onClick={createPlan} isLoading={mainBusy}>Review CV plan</Button> : step === 'REVIEW' ? <Button onClick={() => setStep('DESIGN')}>Choose template</Button> : <Button onClick={approvePlan} isLoading={mainBusy}>{step === 'GENERATION_FAILED' ? 'Retry generation' : 'Approve plan and generate'}</Button>}</footer>}
         {step === 'DONE' && <footer className="flex justify-end border-t border-border-subtle bg-bg-primary px-5 py-4 sm:px-7"><Button variant="outline" onClick={resetAndClose}>Close</Button></footer>}
       </section>
     </div>
